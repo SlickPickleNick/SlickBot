@@ -1,82 +1,47 @@
-# Project Plan
+# SlickBot Project Plan
 
-## Product direction
+## Goal
 
-SlickBot is a single-server all-in-one Discord management bot that can eventually become a selected-server/public bot.
+Build SlickBot as a bot-only all-in-one Discord server management system for the SlickPickleNick Discord server.
 
-The first version is bot-only. No dashboard is included yet.
+The initial goal is not to build a public SaaS bot or dashboard. The first version should be stable, easy to deploy on Railway, and configurable through Discord slash commands.
 
-## Core design rules
+## Foundation Principles
 
-- Use slash commands, buttons, modals, and embeds where possible.
-- Use ephemeral responses for setup, permissions, moderation lookups, and private controls.
-- Use Permission Teams for all command/module permissions.
-- Keep every module independently configurable.
-- Store server data in the database, not JSON files.
-- Use batched logs for noisy events.
-- Use immediate logs for critical moderation/security events.
+- Use a TitanBot-style JavaScript runtime foundation to avoid TypeScript build failures during early development.
+- Keep the code modular so features can be added one module at a time.
+- Use PostgreSQL for durable storage.
+- Use ephemeral responses for configuration and sensitive command output.
+- Use Permission Teams for command/module access.
+- Use batched logs to reduce log-channel spam.
 
-## Included foundation modules
+## Core Systems
 
-- Permissions
-- Logging
-- Module Registry
+- Permission Teams
+- Module registry
+- Logging system
+- Batched log queue
+- Audit logs
+- Slash command deployment
+- Railway health endpoint
 
-## Future modules
+## Future Modules
 
 - Moderation
-- Case Management
-- User Notes
-- Advanced Tickets
-- Ticket Transcripts
-- Reports
+- User notes
+- Case management
+- Tickets
+- Ticket transcripts
 - Applications
 - Appeals
-- Welcome and Auto Roles
-- Reaction/Button Roles
-- Server Stats
-- Leveling/XP
+- Scheduled messages
+- Welcome system
+- Auto roles
+- Reaction/button roles
 - Giveaways
 - Birthdays
-- Scheduled Messages
-- Join-to-Create Voice
-- Custom Commands
-- Utility Tools
-
-## Permission Team examples
-
-- Bot Owners
-- Admin Team
-- Moderator Team
-- Senior Moderators
-- Ticket Staff
-- Application Reviewers
-- Giveaway Managers
-- Voice Managers
-- Command Managers
-
-## Sample action keys
-
-```text
-permissions.manage
-modules.manage
-logging.configure
-moderation.warn
-moderation.timeout
-moderation.ban
-moderation.massBan
-cases.view
-cases.edit
-notes.view
-notes.create
-tickets.claim
-tickets.close
-applications.review
-applications.approve
-appeals.review
-appeals.approve
-giveaways.create
-giveaways.reroll
-scheduledMessages.create
-customCommands.create
-```
+- Leveling
+- Server stats
+- Join-to-create voice
+- Custom commands
+- Utility tools

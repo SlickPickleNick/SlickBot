@@ -1,9 +1,7 @@
-node_modules
-dist
-.env
-.env.*
 .git
-.gitignore
-README.local.md
-npm-debug.log*
-Dockerfile.*
+.github
+node_modules
+npm-debug.log
+.env
+.DS_Store
+*.zip

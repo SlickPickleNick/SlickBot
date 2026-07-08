@@ -1,8 +1,5 @@
-node_modules
+node_modules/
 .env
-.env.*
-!.env.example
-dist
 .DS_Store
-npm-debug.log*
-transcripts/*.txt
+*.log
+transcripts/

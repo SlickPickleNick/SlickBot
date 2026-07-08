@@ -1,35 +1,21 @@
 {
   "name": "slickbot",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "description": "SlickBot all-in-one Discord server management bot foundation.",
-  "type": "module",
+  "main": "src/index.js",
   "engines": {
     "node": ">=22.12.0"
   },
   "scripts": {
-    "dev": "tsx watch src/bot.ts",
-    "build": "prisma generate && tsc",
-    "start": "npm run db:push && node dist/bot.js",
-    "deploy:commands": "tsx src/deploy-commands.ts",
-    "db:generate": "prisma generate",
-    "db:push": "prisma db push --accept-data-loss",
-    "db:migrate": "prisma migrate dev",
-    "db:studio": "prisma studio",
-    "typecheck": "tsc --noEmit",
-    "start:bot": "node dist/bot.js",
-    "railway:start": "npm run db:push && node dist/bot.js"
+    "start": "node src/index.js",
+    "deploy:commands": "node src/deployCommands.js",
+    "db:init": "node src/services/initDatabase.js"
   },
   "dependencies": {
-    "@prisma/client": "^6.14.0",
     "discord.js": "^14.22.1",
-    "dotenv": "^16.4.7"
-  },
-  "devDependencies": {
-    "@types/node": "^22.13.14",
-    "prisma": "^6.14.0",
-    "tsx": "^4.20.5",
-    "typescript": "^5.9.2"
+    "dotenv": "^16.4.7",
+    "pg": "^8.13.3"
   },
   "packageManager": "npm@10.9.2"
 }
