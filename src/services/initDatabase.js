@@ -179,6 +179,142 @@ async function initDatabase() {
     );
   `);
 
+
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS ticket_configs (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT UNIQUE NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      category_id TEXT,
+      log_channel_id TEXT,
+      staff_role_id TEXT,
+      ticket_limit INTEGER NOT NULL DEFAULT 1,
+      transcript_enabled BOOLEAN NOT NULL DEFAULT true,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS tickets (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      ticket_number INTEGER NOT NULL,
+      channel_id TEXT NOT NULL,
+      opener_user_id TEXT NOT NULL,
+      opener_user_tag TEXT,
+      claimed_by_user_id TEXT,
+      type TEXT NOT NULL DEFAULT 'Admin Support',
+      subject TEXT NOT NULL,
+      details TEXT,
+      status TEXT NOT NULL DEFAULT 'OPEN',
+      priority TEXT NOT NULL DEFAULT 'NORMAL',
+      close_reason TEXT,
+      closed_by_user_id TEXT,
+      transcript_sent BOOLEAN NOT NULL DEFAULT false,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      closed_at TIMESTAMPTZ,
+      UNIQUE(guild_id, ticket_number)
+    );
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS report_configs (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT UNIQUE NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      review_channel_id TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS reports (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      report_number INTEGER NOT NULL,
+      reporter_user_id TEXT NOT NULL,
+      reporter_user_tag TEXT,
+      target_user_id TEXT,
+      target_user_tag TEXT,
+      report_type TEXT NOT NULL DEFAULT 'General Report',
+      message_link TEXT,
+      details TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'OPEN',
+      reviewed_by_user_id TEXT,
+      reviewed_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(guild_id, report_number)
+    );
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS application_types (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      description TEXT,
+      review_channel_id TEXT,
+      pending_role_id TEXT,
+      approved_role_id TEXT,
+      auto_assign_approved_role BOOLEAN NOT NULL DEFAULT false,
+      enabled BOOLEAN NOT NULL DEFAULT true,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(guild_id, name)
+    );
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS application_submissions (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      submission_number INTEGER NOT NULL,
+      application_type_id TEXT NOT NULL REFERENCES application_types(id) ON DELETE CASCADE,
+      application_name TEXT NOT NULL,
+      applicant_user_id TEXT NOT NULL,
+      applicant_user_tag TEXT,
+      answers JSONB,
+      status TEXT NOT NULL DEFAULT 'PENDING',
+      reviewed_by_user_id TEXT,
+      reviewed_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(guild_id, submission_number)
+    );
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS appeal_configs (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT UNIQUE NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      review_channel_id TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS appeals (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      appeal_number INTEGER NOT NULL,
+      appellant_user_id TEXT NOT NULL,
+      appellant_user_tag TEXT,
+      case_number INTEGER,
+      reason TEXT NOT NULL,
+      details TEXT,
+      status TEXT NOT NULL DEFAULT 'PENDING',
+      reviewed_by_user_id TEXT,
+      reviewed_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(guild_id, appeal_number)
+    );
+  `);
+
   await query(`
     CREATE TABLE IF NOT EXISTS audit_logs (
       id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
@@ -203,6 +339,13 @@ async function initDatabase() {
   await query(`CREATE INDEX IF NOT EXISTS idx_moderation_cases_guild_target ON moderation_cases(guild_id, target_user_id, created_at DESC);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_moderation_cases_guild_number ON moderation_cases(guild_id, case_number);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_user_notes_guild_target ON user_notes(guild_id, target_user_id, created_at DESC);`);
+
+  await query(`CREATE INDEX IF NOT EXISTS idx_tickets_guild_status ON tickets(guild_id, status, created_at DESC);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_tickets_channel ON tickets(guild_id, channel_id);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_reports_guild_status ON reports(guild_id, status, created_at DESC);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_application_types_guild ON application_types(guild_id, name);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_application_submissions_guild_status ON application_submissions(guild_id, status, created_at DESC);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_appeals_guild_status ON appeals(guild_id, status, created_at DESC);`);
 }
 
 if (require.main === module) {

@@ -32,7 +32,13 @@ const LogModuleCatalog = Object.freeze([
   {
     key: 'tickets',
     label: 'Tickets',
-    description: 'Ticket activity when the ticket module is added.',
+    description: 'Ticket opens, claims, priority changes, closes, and transcript activity.',
+    defaultDelivery: 'IMMEDIATE'
+  },
+  {
+    key: 'reports',
+    label: 'Reports',
+    description: 'User-submitted reports and staff report decisions.',
     defaultDelivery: 'IMMEDIATE'
   },
   {
@@ -79,10 +85,22 @@ const LogEventCatalog = Object.freeze([
   { key: 'voice-leave', moduleKey: 'voice', label: 'Voice Leaves', description: 'Users leaving voice channels.', defaultDelivery: 'IMMEDIATE' },
   { key: 'voice-move', moduleKey: 'voice', label: 'Voice Moves', description: 'Users moving between voice channels.', defaultDelivery: 'IMMEDIATE' },
 
-  { key: 'tickets', moduleKey: 'tickets', label: 'Tickets', description: 'Future ticket activity.', defaultDelivery: 'IMMEDIATE' },
-  { key: 'applications', moduleKey: 'applications', label: 'Applications', description: 'Future application activity.', defaultDelivery: 'IMMEDIATE' },
-  { key: 'appeals', moduleKey: 'appeals', label: 'Appeals', description: 'Future appeal activity.', defaultDelivery: 'IMMEDIATE' },
-  { key: 'scheduled-messages', moduleKey: 'scheduled-messages', label: 'Scheduled Messages', description: 'Future scheduled announcement activity.', defaultDelivery: 'IMMEDIATE' }
+  { key: 'ticket-open', moduleKey: 'tickets', label: 'Ticket Opened', description: 'A user opened a support ticket.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'ticket-claim', moduleKey: 'tickets', label: 'Ticket Claimed', description: 'A staff member claimed a ticket.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'ticket-priority', moduleKey: 'tickets', label: 'Ticket Priority', description: 'A ticket priority changed.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'ticket-close', moduleKey: 'tickets', label: 'Ticket Closed', description: 'A ticket was closed.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'ticket-transcript', moduleKey: 'tickets', label: 'Ticket Transcript', description: 'A ticket transcript was generated.', defaultDelivery: 'IMMEDIATE' },
+
+  { key: 'report-submit', moduleKey: 'reports', label: 'Report Submitted', description: 'A user submitted a report.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'report-review', moduleKey: 'reports', label: 'Report Reviewed', description: 'Staff reviewed a report.', defaultDelivery: 'IMMEDIATE' },
+
+  { key: 'application-submit', moduleKey: 'applications', label: 'Application Submitted', description: 'A user submitted an application.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'application-review', moduleKey: 'applications', label: 'Application Reviewed', description: 'Staff reviewed an application.', defaultDelivery: 'IMMEDIATE' },
+
+  { key: 'appeal-submit', moduleKey: 'appeals', label: 'Appeal Submitted', description: 'A user submitted an appeal.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'appeal-review', moduleKey: 'appeals', label: 'Appeal Reviewed', description: 'Staff reviewed an appeal.', defaultDelivery: 'IMMEDIATE' },
+
+  { key: 'scheduled-messages', moduleKey: 'scheduled-messages', label: 'Scheduled Messages', description: 'Scheduled announcement activity.', defaultDelivery: 'IMMEDIATE' }
 ]);
 
 const StarterLogModuleKeys = Object.freeze(['core', 'moderation']);

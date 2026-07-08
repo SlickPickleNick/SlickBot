@@ -1,85 +1,70 @@
 # SlickBot Project Plan
 
-## Current Version: v0.2.1
+## Current Version
 
-SlickBot is a bot-only all-in-one Discord management system for the SlickPickleNick server. It is intentionally built for one server first, while preserving a database structure that can support selected external servers later.
+`v0.3.0`
 
 ## Current Foundation
 
-- JavaScript runtime
-- discord.js v14
-- PostgreSQL through `pg`
+- JavaScript + Discord.js
+- PostgreSQL using `pg`
 - Railway Docker deployment
-- Slash commands
+- Railway health endpoint
+- Slash command auto-deploy support
+- Privileged gateway intents enabled
+- Ephemeral/private command responses
+- Polished embed/button/select menu UI
+- Permission Teams
+- Module manager
+- Module-based logging
+- Moderation, case management, and user notes
+- Tickets, reports, applications, and appeals
+
+## Version Roadmap
+
+### v0.1.x — Foundation
+
+- Bot startup
+- Railway deployment
+- PostgreSQL startup initialization
+- Slash command deployment
 - Permission Teams
 - Module toggles
-- Ephemeral/private responses
-- Styled embeds/buttons/select menus
-- Module-based log routing
-- Event-level log overrides
-- Batched logging support
-- Bot presence/status controls
-- Moderation cases
-- Private staff user notes
+- Bot status/activity controls
+- Interactive setup UI
 
-## Design Direction
+### v0.2.x — Moderation + Logging
 
-SlickBot responses should feel like a dark creator command center: polished embeds, compact metadata, clear hierarchy, interactive controls, and fewer plain text lists.
+- Module-based logging
+- Moderation actions
+- Case management
+- User notes
 
-## v0.2.1 Scope
+### v0.3.x — Support Workflows
 
-### Added / Updated
-
-- Logging now uses module-style groups instead of requiring every event to be routed individually.
-- Configured log modules default to immediate delivery.
-- Event-specific overrides can still be configured when needed.
-- Added `log_module_settings` database table.
-- Existing event settings remain supported for backwards compatibility.
-- Member logging now includes nickname changes and role changes.
-- Voice logging now uses specific event keys for joins, leaves, and moves.
-- Logging panel now summarizes modules and event overrides.
-
-## Current Log Modules
-
-- `core`
-- `moderation`
-- `member`
-- `message`
-- `voice`
-- `tickets`
-- `applications`
-- `appeals`
-- `scheduled-messages`
-
-## v0.3.0 Recommended Scope
-
-### Tickets, Reports, Applications, Appeals
-
-- Advanced ticket system
-- Ticket limits
-- Claiming
-- Priority
-- Transcript `.txt` export
+- Ticket system
+- Ticket transcripts
 - Report system
 - Application system
 - Appeals system
+- Public launcher panels
+- Staff review buttons
 
-## v0.4.0 Recommended Scope
-
-### Community Systems
+### v0.4.x — Community Basics
 
 - Welcome messages
 - Auto roles
 - Reaction/button roles
+
+### v0.5.x — Engagement
+
 - Giveaways
 - Birthdays
 - Scheduled messages
 
-## v0.5.0 Recommended Scope
+### v0.6.x — Advanced Server Tools
 
-### Advanced Systems
-
-- Leveling and XP
+- Leveling
 - Server stats
 - Join-to-create voice
-- Custom command creation
+- Custom commands

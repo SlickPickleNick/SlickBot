@@ -7,6 +7,7 @@ const ActionKeys = Object.freeze({
   LoggingView: 'logging.view',
   StatusView: 'status.view',
   StatusManage: 'status.manage',
+
   ModerationPanel: 'moderation.panel',
   ModerationWarn: 'moderation.warn',
   ModerationTimeout: 'moderation.timeout',
@@ -16,7 +17,29 @@ const ActionKeys = Object.freeze({
   CasesView: 'cases.view',
   CasesManage: 'cases.manage',
   UserNotesView: 'user-notes.view',
-  UserNotesManage: 'user-notes.manage'
+  UserNotesManage: 'user-notes.manage',
+
+  TicketsConfigure: 'tickets.configure',
+  TicketsPanel: 'tickets.panel',
+  TicketsManage: 'tickets.manage',
+  TicketsClaim: 'tickets.claim',
+  TicketsClose: 'tickets.close',
+
+  ReportsConfigure: 'reports.configure',
+  ReportsPanel: 'reports.panel',
+  ReportsReview: 'reports.review',
+
+  ApplicationsConfigure: 'applications.configure',
+  ApplicationsPanel: 'applications.panel',
+  ApplicationsReview: 'applications.review',
+  ApplicationsApprove: 'applications.approve',
+  ApplicationsDeny: 'applications.deny',
+
+  AppealsConfigure: 'appeals.configure',
+  AppealsPanel: 'appeals.panel',
+  AppealsReview: 'appeals.review',
+  AppealsApprove: 'appeals.approve',
+  AppealsDeny: 'appeals.deny'
 });
 
 const defaultTeamPermissions = [
@@ -37,7 +60,25 @@ const defaultTeamPermissions = [
   ActionKeys.CasesView,
   ActionKeys.CasesManage,
   ActionKeys.UserNotesView,
-  ActionKeys.UserNotesManage
+  ActionKeys.UserNotesManage,
+  ActionKeys.TicketsConfigure,
+  ActionKeys.TicketsPanel,
+  ActionKeys.TicketsManage,
+  ActionKeys.TicketsClaim,
+  ActionKeys.TicketsClose,
+  ActionKeys.ReportsConfigure,
+  ActionKeys.ReportsPanel,
+  ActionKeys.ReportsReview,
+  ActionKeys.ApplicationsConfigure,
+  ActionKeys.ApplicationsPanel,
+  ActionKeys.ApplicationsReview,
+  ActionKeys.ApplicationsApprove,
+  ActionKeys.ApplicationsDeny,
+  ActionKeys.AppealsConfigure,
+  ActionKeys.AppealsPanel,
+  ActionKeys.AppealsReview,
+  ActionKeys.AppealsApprove,
+  ActionKeys.AppealsDeny
 ];
 
 module.exports = {

@@ -2,11 +2,11 @@
 
 SlickBot is a custom all-in-one Discord server management bot for the SlickPickleNick community.
 
-This version uses the working TitanBot-style JavaScript foundation: Discord.js, PostgreSQL, Railway Docker deployment, interactive embeds, buttons, and select menus.
+This version uses the working TitanBot-style JavaScript foundation: Discord.js, PostgreSQL, Railway Docker deployment, interactive embeds, buttons, select menus, and modals.
 
 ## Version
 
-`v0.2.1`
+`v0.3.0`
 
 ## Included Modules
 
@@ -29,8 +29,6 @@ This version uses the working TitanBot-style JavaScript foundation: Discord.js, 
 
 ### Logging
 
-Updated in `v0.2.1`:
-
 - Module-based logging setup
 - Event-level overrides when needed
 - Immediate log delivery by default for configured log modules
@@ -43,21 +41,20 @@ Important: Discord log messages are only posted when the related log module or e
 
 ### Log Modules
 
-SlickBot now organizes logs into these groups:
+SlickBot organizes logs into these groups:
 
 - `core` — system, setup, module config, permission teams, bot status
 - `moderation` — moderation actions, cases, user notes
 - `member` — joins, leaves, nickname changes, role changes, member updates
 - `message` — message edits and deletions
 - `voice` — voice joins, leaves, and moves
-- `tickets` — future ticket activity
-- `applications` — future application activity
-- `appeals` — future appeal activity
+- `tickets` — ticket opens, claims, priority changes, closes, and transcripts
+- `reports` — report submissions and staff review actions
+- `applications` — application submissions and review actions
+- `appeals` — appeal submissions and review actions
 - `scheduled-messages` — future scheduled message activity
 
 ### Moderation, Cases, and User Notes
-
-Included from `v0.2.0`:
 
 - `/mod panel`
 - `/mod warn`
@@ -75,6 +72,46 @@ Included from `v0.2.0`:
 - `/note remove`
 
 Moderation actions create case records automatically. User notes are private staff records and are only shown through ephemeral command responses.
+
+### Tickets
+
+- `/ticket manager`
+- `/ticket setup`
+- `/ticket panel`
+- `/ticket open`
+- `/ticket claim`
+- `/ticket priority`
+- `/ticket close`
+
+Tickets create private channels by default. Ticket close generates a `.txt` transcript and sends it to the configured ticket log channel when transcripts are enabled.
+
+### Reports
+
+- `/report manager`
+- `/report setup`
+- `/report panel`
+- `/report user`
+- `/report issue`
+
+Reports can be submitted from slash commands or from a public report panel. Staff review cards include Resolve and Dismiss buttons.
+
+### Applications
+
+- `/application manager`
+- `/application setup`
+- `/application panel`
+- `/application apply`
+
+Applications support configurable application types, review channels, pending roles, approved roles, and optional auto-assignment on approval. Public application panels open a modal-based form.
+
+### Appeals
+
+- `/appeal manager`
+- `/appeal setup`
+- `/appeal panel`
+- `/appeal submit`
+
+Appeals can be submitted from slash commands or from a public appeal panel. Staff review cards include Approve and Deny buttons.
 
 ## Railway Variables
 
@@ -135,23 +172,49 @@ No noisy member, message, or voice logs are routed by default. To enable those g
 /logging set-channel module:voice channel:#voice-logs
 ```
 
+To enable the v0.3.0 support workflow logs:
+
+```text
+/logging set-channel module:tickets channel:#ticket-logs
+/logging set-channel module:reports channel:#report-logs
+/logging set-channel module:applications channel:#application-logs
+/logging set-channel module:appeals channel:#appeal-logs
+```
+
 All configured log modules default to immediate delivery. To batch a module:
 
 ```text
 /logging module-mode module:voice delivery:BATCHED interval_seconds:300
 ```
 
-To override one event inside a module:
+## Support Workflow Setup
+
+Tickets:
 
 ```text
-/logging event-mode event:message-edit delivery:BATCHED interval_seconds:300
-/logging event-channel event:member-roles channel:#role-logs
+/ticket setup category:#tickets log_channel:#ticket-logs staff_role:@Moderators ticket_limit:1 transcripts:true
+/ticket panel channel:#support type:Admin Support
 ```
 
-To remove an event override and return it to the parent module behavior:
+Reports:
 
 ```text
-/logging clear-event event:member-roles
+/report setup review_channel:#staff-reports
+/report panel channel:#support
+```
+
+Applications:
+
+```text
+/application setup type:Moderator review_channel:#mod-apps pending_role:@Applicant approved_role:@Trial-Mod auto_assign:true
+/application panel type:Moderator channel:#apply
+```
+
+Appeals:
+
+```text
+/appeal setup review_channel:#appeals
+/appeal panel channel:#support
 ```
 
 ## Permission Teams
@@ -173,34 +236,11 @@ Example:
 /team allow team:Moderator Team action_key:moderation.warn
 /team allow team:Moderator Team action_key:moderation.timeout
 /team allow team:Moderator Team action_key:cases.view
-/team allow team:Moderator Team action_key:user-notes.view
-```
-
-## Permission Action Keys
-
-Moderation:
-
-```text
-moderation.panel
-moderation.warn
-moderation.timeout
-moderation.kick
-moderation.ban
-moderation.massban
-```
-
-Cases:
-
-```text
-cases.view
-cases.manage
-```
-
-User notes:
-
-```text
-user-notes.view
-user-notes.manage
+/team allow team:Moderator Team action_key:tickets.claim
+/team allow team:Moderator Team action_key:tickets.close
+/team allow team:Moderator Team action_key:reports.review
+/team allow team:Moderator Team action_key:applications.review
+/team allow team:Moderator Team action_key:appeals.review
 ```
 
 ## Deployment Notes
@@ -217,11 +257,3 @@ README.md
 ```
 
 It should not be nested inside another `slickbot/` folder.
-
-Railway should build using the included Dockerfile and start with:
-
-```text
-npm start
-```
-
-The app exposes a health endpoint using Railway's `PORT` variable.

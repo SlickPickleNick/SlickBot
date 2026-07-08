@@ -209,10 +209,20 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
   const actionKey = typeof command.getActionKey === 'function' ? command.getActionKey(interaction) : command.actionKey;
   const moduleKey = typeof command.getModuleKey === 'function' ? command.getModuleKey(interaction) : command.moduleKey;
-  const permissionResult = await permissions.checkInteraction(interaction, actionKey, moduleKey);
-  if (!permissionResult.allowed) {
-    await replyPrivate(interaction, permissionResult.reason || 'You do not have permission to use this command.');
-    return;
+
+  if (typeof command.isPublic === 'function' && command.isPublic(interaction)) {
+    await permissions.ensureGuildConfig(interaction.guildId, interaction.guild ? interaction.guild.name : null);
+    const moduleEnabled = await permissions.isModuleEnabled(interaction.guildId, moduleKey);
+    if (!moduleEnabled) {
+      await replyPrivate(interaction, `The ${moduleKey} module is disabled.`);
+      return;
+    }
+  } else {
+    const permissionResult = await permissions.checkInteraction(interaction, actionKey, moduleKey);
+    if (!permissionResult.allowed) {
+      await replyPrivate(interaction, permissionResult.reason || 'You do not have permission to use this command.');
+      return;
+    }
   }
 
   try {

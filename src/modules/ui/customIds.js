@@ -5,6 +5,7 @@ const CustomIds = Object.freeze({
   SetupStatus: 'slickbot:setup:status',
   SetupTeams: 'slickbot:setup:teams',
   SetupModeration: 'slickbot:setup:moderation',
+  SetupSupport: 'slickbot:setup:support',
 
   ModulesSelect: 'slickbot:modules:select',
   ModulesRefresh: 'slickbot:modules:refresh',
@@ -20,7 +21,33 @@ const CustomIds = Object.freeze({
   StatusClear: 'slickbot:status:clear',
 
   ModerationRefresh: 'slickbot:moderation:refresh',
-  CasesRefresh: 'slickbot:cases:refresh'
+  CasesRefresh: 'slickbot:cases:refresh',
+
+  SupportRefresh: 'slickbot:support:refresh',
+  TicketsRefresh: 'slickbot:tickets:refresh',
+  TicketOpen: 'slickbot:ticket:open',
+  TicketClaim: 'slickbot:ticket:claim',
+  TicketClose: 'slickbot:ticket:close',
+
+  ReportsRefresh: 'slickbot:reports:refresh',
+  ReportOpen: 'slickbot:report:open',
+  ReportResolvePrefix: 'slickbot:report:resolve:',
+  ReportDismissPrefix: 'slickbot:report:dismiss:',
+
+  ApplicationsRefresh: 'slickbot:applications:refresh',
+  ApplicationApplyPrefix: 'slickbot:application:apply:',
+  ApplicationApprovePrefix: 'slickbot:application:approve:',
+  ApplicationDenyPrefix: 'slickbot:application:deny:',
+
+  AppealsRefresh: 'slickbot:appeals:refresh',
+  AppealOpen: 'slickbot:appeal:open',
+  AppealApprovePrefix: 'slickbot:appeal:approve:',
+  AppealDenyPrefix: 'slickbot:appeal:deny:',
+
+  TicketModal: 'slickbot:modal:ticket',
+  ReportModal: 'slickbot:modal:report',
+  AppealModal: 'slickbot:modal:appeal',
+  ApplicationModalPrefix: 'slickbot:modal:application:'
 });
 
 module.exports = { CustomIds };

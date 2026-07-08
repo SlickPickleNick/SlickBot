@@ -10,6 +10,7 @@ const {
   formatEnabled
 } = require('./uiService');
 const { CustomIds } = require('./customIds');
+const { buildSupportPanel } = require('../support/supportUi');
 const { LogModuleCatalog, LogEventCatalog, getEventsForModule } = require('../logging/logEventCatalog');
 
 async function ensureDefaultModules(guildId) {
@@ -65,11 +66,12 @@ async function buildSetupPanel(guildId, guildName = null) {
     createPanelButton(CustomIds.SetupModules, 'Modules', ButtonStyle.Primary, '🧩'),
     createPanelButton(CustomIds.SetupLogging, 'Logging', ButtonStyle.Secondary, '📋'),
     createPanelButton(CustomIds.SetupModeration, 'Moderation', ButtonStyle.Secondary, '🛡️'),
-    createPanelButton(CustomIds.SetupStatus, 'Status', ButtonStyle.Secondary, '🟣'),
-    createPanelButton(CustomIds.SetupTeams, 'Teams', ButtonStyle.Secondary, '👥')
+    createPanelButton(CustomIds.SetupSupport, 'Support', ButtonStyle.Secondary, '🎟️'),
+    createPanelButton(CustomIds.SetupStatus, 'Status', ButtonStyle.Secondary, '🟣')
   ]);
 
   const rowTwo = createButtonRow([
+    createPanelButton(CustomIds.SetupTeams, 'Teams', ButtonStyle.Secondary, '👥'),
     createPanelButton(CustomIds.SetupRefresh, 'Refresh', ButtonStyle.Secondary, '🔄')
   ]);
 
