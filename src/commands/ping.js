@@ -2,6 +2,7 @@ const { SlashCommandBuilder } = require('discord.js');
 const { ModuleKeys } = require('../modules/moduleRegistry');
 const { ActionKeys } = require('../modules/permissions/actionKeys');
 const { replyPrivate } = require('../utils/reply');
+const { createBaseEmbed, SlickBotColors } = require('../modules/ui/uiService');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -10,6 +11,11 @@ module.exports = {
   actionKey: ActionKeys.BotPing,
   moduleKey: ModuleKeys.PERMISSIONS,
   async execute(interaction) {
-    await replyPrivate(interaction, `SlickBot is online. Latency: ${interaction.client.ws.ping}ms`);
+    const embed = createBaseEmbed({
+      title: 'SlickBot Online',
+      description: `Gateway latency: **${interaction.client.ws.ping}ms**`,
+      color: SlickBotColors.SUCCESS
+    });
+    await replyPrivate(interaction, { embeds: [embed] });
   }
 };

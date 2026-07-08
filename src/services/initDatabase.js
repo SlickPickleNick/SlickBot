@@ -75,6 +75,20 @@ async function initDatabase() {
     );
   `);
 
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS bot_presence_settings (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT UNIQUE NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      status TEXT NOT NULL DEFAULT 'online',
+      activity_type TEXT NOT NULL DEFAULT 'NONE',
+      activity_text TEXT,
+      activity_url TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
   await query(`
     CREATE TABLE IF NOT EXISTS log_settings (
       id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
@@ -123,6 +137,7 @@ async function initDatabase() {
   await query(`CREATE INDEX IF NOT EXISTS idx_command_permissions_action ON command_permissions(guild_id, action_key);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_log_queue_pending ON log_queue_items(guild_id, event_key, flushed_at);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_audit_logs_guild_created ON audit_logs(guild_id, created_at);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_bot_presence_guild ON bot_presence_settings(guild_id);`);
 }
 
 if (require.main === module) {

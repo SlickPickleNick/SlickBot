@@ -4,11 +4,13 @@ const { ActionKeys } = require('../modules/permissions/actionKeys');
 const { LogDeliveryMode } = require('../modules/logging/loggingService');
 const { replyPrivate } = require('../utils/reply');
 const { query } = require('../services/db');
+const { buildLoggingPanel } = require('../modules/ui/panels');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('logging')
     .setDescription('Configure or test SlickBot logging.')
+    .addSubcommand((subcommand) => subcommand.setName('panel').setDescription('Open the interactive logging center.'))
     .addSubcommand((subcommand) =>
       subcommand
         .setName('set-channel')
@@ -61,6 +63,11 @@ module.exports = {
 
     await ctx.permissions.ensureGuildConfig(interaction.guildId, interaction.guild ? interaction.guild.name : null);
 
+    if (subcommand === 'panel') {
+      await replyPrivate(interaction, await buildLoggingPanel(interaction.guildId));
+      return;
+    }
+
     if (subcommand === 'set-channel') {
       const channel = interaction.options.getChannel('channel', true);
       await query(
@@ -68,7 +75,7 @@ module.exports = {
         [channel.id, interaction.guildId]
       );
 
-      await replyPrivate(interaction, `Default log channel set to <#${channel.id}>.`);
+      await replyPrivate(interaction, await buildLoggingPanel(interaction.guildId));
       return;
     }
 
@@ -91,7 +98,7 @@ module.exports = {
         [interaction.guildId, eventKey, delivery, channel ? channel.id : null, intervalSeconds, delivery !== LogDeliveryMode.DISABLED]
       );
 
-      await replyPrivate(interaction, `Log event \`${eventKey}\` set to **${delivery}**.`);
+      await replyPrivate(interaction, await buildLoggingPanel(interaction.guildId));
       return;
     }
 
@@ -104,13 +111,13 @@ module.exports = {
         actorUserId: interaction.user.id
       });
 
-      await replyPrivate(interaction, 'Test log sent or queued, depending on the current logging mode.');
+      await replyPrivate(interaction, await buildLoggingPanel(interaction.guildId));
       return;
     }
 
     if (subcommand === 'flush') {
-      const count = await ctx.logger.flushGuildBatches(interaction.guildId);
-      await replyPrivate(interaction, `Flushed ${count} queued log item${count === 1 ? '' : 's'}.`);
+      await ctx.logger.flushGuildBatches(interaction.guildId);
+      await replyPrivate(interaction, await buildLoggingPanel(interaction.guildId));
     }
   }
 };

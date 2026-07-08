@@ -3,11 +3,12 @@ const { ModuleKeys, defaultModules } = require('../modules/moduleRegistry');
 const { ActionKeys } = require('../modules/permissions/actionKeys');
 const { replyPrivate } = require('../utils/reply');
 const { query } = require('../services/db');
+const { buildSetupPanel } = require('../modules/ui/panels');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('setup')
-    .setDescription('Initialize SlickBot for this server.')
+    .setDescription('Open the SlickBot setup center for this server.')
     .addChannelOption((option) =>
       option
         .setName('log_channel')
@@ -47,17 +48,10 @@ module.exports = {
       actionKey: ActionKeys.Setup,
       targetType: 'GuildConfig',
       targetId: interaction.guildId,
-      summary: 'SlickBot setup completed.'
+      summary: 'SlickBot setup center opened.',
+      metadata: { logChannelId: logChannel ? logChannel.id : null }
     });
 
-    await replyPrivate(
-      interaction,
-      [
-        'SlickBot setup complete.',
-        logChannel ? `Default log channel: <#${logChannel.id}>` : 'Default log channel was not changed.',
-        'Core modules enabled: PERMISSIONS, LOGGING.',
-        'Created/updated the Bot Owners team and added you to it.'
-      ].join('\n')
-    );
+    await replyPrivate(interaction, await buildSetupPanel(interaction.guildId, interaction.guild ? interaction.guild.name : null));
   }
 };

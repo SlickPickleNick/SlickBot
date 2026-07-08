@@ -2,6 +2,7 @@ const { SlashCommandBuilder } = require('discord.js');
 const { ModuleKeys } = require('../modules/moduleRegistry');
 const { ActionKeys, defaultTeamPermissions } = require('../modules/permissions/actionKeys');
 const { replyPrivate } = require('../utils/reply');
+const { createBaseEmbed, SlickBotColors } = require('../modules/ui/uiService');
 const { query } = require('../services/db');
 
 module.exports = {
@@ -66,7 +67,7 @@ module.exports = {
         );
       }
 
-      await replyPrivate(interaction, `Team **${name}** created/updated.`);
+      await replyPrivate(interaction, { embeds: [createBaseEmbed({ title: 'Permission Team Saved', description: `Team **${name}** created/updated.`, color: SlickBotColors.SUCCESS })] });
       return;
     }
 
@@ -76,7 +77,7 @@ module.exports = {
       const team = await getTeam(interaction.guildId, teamName);
 
       if (!team) {
-        await replyPrivate(interaction, `Team **${teamName}** was not found.`);
+        await replyPrivate(interaction, { embeds: [createBaseEmbed({ title: 'Team Not Found', description: `Team **${teamName}** was not found.`, color: SlickBotColors.WARNING })] });
         return;
       }
 
@@ -87,12 +88,12 @@ module.exports = {
            ON CONFLICT (team_id, role_id) DO NOTHING`,
           [team.id, role.id]
         );
-        await replyPrivate(interaction, `Added ${role} to **${teamName}**.`);
+        await replyPrivate(interaction, { embeds: [createBaseEmbed({ title: 'Role Added to Team', description: `Added ${role} to **${teamName}**.`, color: SlickBotColors.SUCCESS })] });
         return;
       }
 
       await query(`DELETE FROM permission_team_roles WHERE team_id = $1 AND role_id = $2`, [team.id, role.id]);
-      await replyPrivate(interaction, `Removed ${role} from **${teamName}**.`);
+      await replyPrivate(interaction, { embeds: [createBaseEmbed({ title: 'Role Removed from Team', description: `Removed ${role} from **${teamName}**.`, color: SlickBotColors.INFO })] });
       return;
     }
 
@@ -102,7 +103,7 @@ module.exports = {
       const team = await getTeam(interaction.guildId, teamName);
 
       if (!team) {
-        await replyPrivate(interaction, `Team **${teamName}** was not found.`);
+        await replyPrivate(interaction, { embeds: [createBaseEmbed({ title: 'Team Not Found', description: `Team **${teamName}** was not found.`, color: SlickBotColors.WARNING })] });
         return;
       }
 
@@ -114,7 +115,7 @@ module.exports = {
         [interaction.guildId, team.id, actionKey]
       );
 
-      await replyPrivate(interaction, `Allowed **${teamName}** to use \`${actionKey}\`.`);
+      await replyPrivate(interaction, { embeds: [createBaseEmbed({ title: 'Team Permission Added', description: `Allowed **${teamName}** to use \`${actionKey}\`.`, color: SlickBotColors.SUCCESS })] });
       return;
     }
 
@@ -133,14 +134,14 @@ module.exports = {
       );
 
       if (teams.rowCount === 0) {
-        await replyPrivate(interaction, 'No teams found. Run `/setup` first.');
+        await replyPrivate(interaction, { embeds: [createBaseEmbed({ title: 'No Teams Found', description: 'Run `/setup` first to create the Bot Owners team.', color: SlickBotColors.WARNING })] });
         return;
       }
 
       const output = teams.rows
         .map((team) => `**${team.name}** — ${team.role_count} role(s), ${team.user_count} user(s)${team.description ? `\n${team.description}` : ''}`)
         .join('\n\n');
-      await replyPrivate(interaction, output);
+      await replyPrivate(interaction, { embeds: [createBaseEmbed({ title: 'SlickBot Permission Teams', description: output, color: SlickBotColors.INFO })] });
     }
   }
 };

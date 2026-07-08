@@ -4,7 +4,9 @@ const ActionKeys = Object.freeze({
   TeamsManage: 'permissions.teams.manage',
   ModulesManage: 'permissions.modules.manage',
   LoggingConfigure: 'logging.configure',
-  LoggingView: 'logging.view'
+  LoggingView: 'logging.view',
+  StatusView: 'status.view',
+  StatusManage: 'status.manage'
 });
 
 const defaultTeamPermissions = [
@@ -13,7 +15,9 @@ const defaultTeamPermissions = [
   ActionKeys.TeamsManage,
   ActionKeys.ModulesManage,
   ActionKeys.LoggingConfigure,
-  ActionKeys.LoggingView
+  ActionKeys.LoggingView,
+  ActionKeys.StatusView,
+  ActionKeys.StatusManage
 ];
 
 module.exports = {

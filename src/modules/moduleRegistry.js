@@ -1,5 +1,6 @@
 const ModuleKeys = Object.freeze({
   LOGGING: 'LOGGING',
+  STATUS: 'STATUS',
   PERMISSIONS: 'PERMISSIONS',
   MODERATION: 'MODERATION',
   TICKETS: 'TICKETS',
@@ -17,11 +18,12 @@ const ModuleKeys = Object.freeze({
   UTILITY: 'UTILITY'
 });
 
-const coreModules = [ModuleKeys.PERMISSIONS, ModuleKeys.LOGGING];
+const coreModules = [ModuleKeys.PERMISSIONS, ModuleKeys.LOGGING, ModuleKeys.STATUS];
 
 const defaultModules = [
   { key: ModuleKeys.PERMISSIONS, enabled: true },
   { key: ModuleKeys.LOGGING, enabled: true },
+  { key: ModuleKeys.STATUS, enabled: true },
   { key: ModuleKeys.MODERATION, enabled: false },
   { key: ModuleKeys.TICKETS, enabled: false },
   { key: ModuleKeys.APPLICATIONS, enabled: false },

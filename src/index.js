@@ -1,4 +1,4 @@
-const { Client, Events, GatewayIntentBits } = require('discord.js');
+const { Client, Events, GatewayIntentBits, Partials } = require('discord.js');
 const { env, shouldAutoDeployCommands } = require('./config/env');
 const { commandMap } = require('./commands');
 const { deployCommands } = require('./deployCommands');
@@ -8,20 +8,37 @@ const { startHealthServer } = require('./services/healthServer');
 const { replyPrivate } = require('./utils/reply');
 const { PermissionService } = require('./modules/permissions/permissionService');
 const { LoggingService } = require('./modules/logging/loggingService');
+const { StatusService } = require('./modules/status/statusService');
+const { handleComponentInteraction } = require('./services/interactionRouter');
 
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildVoiceStates
-  ]
+    GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.GuildModeration,
+    GatewayIntentBits.GuildPresences,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.GuildMessageReactions,
+    GatewayIntentBits.GuildVoiceStates,
+    GatewayIntentBits.MessageContent
+  ],
+  partials: [Partials.Channel, Partials.Message, Partials.Reaction, Partials.User, Partials.GuildMember]
 });
 
 const permissions = new PermissionService();
 const logger = new LoggingService(client);
+const status = new StatusService(client);
 const healthServer = startHealthServer(client);
 
 client.once(Events.ClientReady, async (readyClient) => {
   console.log(`SlickBot logged in as ${readyClient.user.tag}.`);
+
+  if (env.DISCORD_GUILD_ID) {
+    await permissions.ensureGuildConfig(env.DISCORD_GUILD_ID, readyClient.guilds.cache.get(env.DISCORD_GUILD_ID)?.name || null);
+    await status.applySavedPresence(env.DISCORD_GUILD_ID);
+  } else {
+    await status.applySavedPresence(null);
+  }
 
   const flushMs = env.LOG_BATCH_FLUSH_SECONDS * 1000;
   setInterval(() => {
@@ -40,8 +57,110 @@ client.on(Events.GuildCreate, async (guild) => {
   });
 });
 
+
+client.on(Events.GuildMemberAdd, async (member) => {
+  await logger.log({
+    guildId: member.guild.id,
+    eventKey: 'member-join',
+    title: 'Member Joined',
+    body: `${member.user.tag} (${member.id}) joined the server.`,
+    metadata: { userId: member.id, bot: member.user.bot }
+  }).catch((error) => console.error('Failed to log member join:', error));
+});
+
+client.on(Events.GuildMemberRemove, async (member) => {
+  await logger.log({
+    guildId: member.guild.id,
+    eventKey: 'member-leave',
+    title: 'Member Left',
+    body: `${member.user?.tag || member.id} (${member.id}) left the server.`,
+    metadata: { userId: member.id, bot: member.user?.bot || false }
+  }).catch((error) => console.error('Failed to log member leave:', error));
+});
+
+client.on(Events.MessageDelete, async (message) => {
+  if (!message.guild || message.author?.bot) return;
+  await logger.log({
+    guildId: message.guild.id,
+    eventKey: 'message-delete',
+    title: 'Message Deleted',
+    body: [
+      `Channel: <#${message.channelId}>`,
+      `Author: ${message.author ? `${message.author.tag} (${message.author.id})` : 'Unknown'}`,
+      `Content: ${message.content || '[No content available]'}`
+    ].join('\n'),
+    metadata: {
+      channelId: message.channelId,
+      authorId: message.author?.id || null,
+      messageId: message.id
+    }
+  }).catch((error) => console.error('Failed to log message delete:', error));
+});
+
+client.on(Events.MessageUpdate, async (oldMessage, newMessage) => {
+  if (!newMessage.guild || newMessage.author?.bot) return;
+  const oldContent = oldMessage.content || '[No previous content available]';
+  const newContent = newMessage.content || '[No new content available]';
+  if (oldContent === newContent) return;
+
+  await logger.log({
+    guildId: newMessage.guild.id,
+    eventKey: 'message-edit',
+    title: 'Message Edited',
+    body: [
+      `Channel: <#${newMessage.channelId}>`,
+      `Author: ${newMessage.author ? `${newMessage.author.tag} (${newMessage.author.id})` : 'Unknown'}`,
+      `Before: ${oldContent}`,
+      `After: ${newContent}`
+    ].join('\n'),
+    metadata: {
+      channelId: newMessage.channelId,
+      authorId: newMessage.author?.id || null,
+      messageId: newMessage.id
+    }
+  }).catch((error) => console.error('Failed to log message edit:', error));
+});
+
+client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
+  const guildId = newState.guild.id || oldState.guild.id;
+  const user = newState.member?.user || oldState.member?.user;
+  if (!guildId || user?.bot) return;
+
+  const oldChannelId = oldState.channelId;
+  const newChannelId = newState.channelId;
+  if (oldChannelId === newChannelId) return;
+
+  let action = 'Voice Channel Moved';
+  let body = `${user ? `${user.tag} (${user.id})` : 'Unknown user'} moved from <#${oldChannelId}> to <#${newChannelId}>.`;
+
+  if (!oldChannelId && newChannelId) {
+    action = 'Voice Channel Joined';
+    body = `${user ? `${user.tag} (${user.id})` : 'Unknown user'} joined <#${newChannelId}>.`;
+  } else if (oldChannelId && !newChannelId) {
+    action = 'Voice Channel Left';
+    body = `${user ? `${user.tag} (${user.id})` : 'Unknown user'} left <#${oldChannelId}>.`;
+  }
+
+  await logger.log({
+    guildId,
+    eventKey: 'voice',
+    title: action,
+    body,
+    metadata: {
+      userId: user?.id || null,
+      oldChannelId,
+      newChannelId
+    }
+  }).catch((error) => console.error('Failed to log voice state:', error));
+});
+
 client.on(Events.InteractionCreate, async (interaction) => {
-  if (!interaction.isChatInputCommand()) return;
+  if (!interaction.isChatInputCommand()) {
+    await handleComponentInteraction(interaction, { client, permissions, logger, status }).catch((error) => {
+      console.error('Component interaction failed:', error);
+    });
+    return;
+  }
 
   const command = commandMap.get(interaction.commandName);
   if (!command) {
@@ -59,7 +178,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
     await command.execute(interaction, {
       client,
       permissions,
-      logger
+      logger,
+      status
     });
   } catch (error) {
     console.error(`Command failed: ${interaction.commandName}`, error);

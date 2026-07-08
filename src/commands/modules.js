@@ -3,13 +3,16 @@ const { ModuleKeys, defaultModules, isCoreModule } = require('../modules/moduleR
 const { ActionKeys } = require('../modules/permissions/actionKeys');
 const { replyPrivate } = require('../utils/reply');
 const { query } = require('../services/db');
+const { buildModulesPanel } = require('../modules/ui/panels');
+const { createBaseEmbed, SlickBotColors } = require('../modules/ui/uiService');
 
 const moduleChoices = Object.values(ModuleKeys).map((moduleKey) => ({ name: moduleKey, value: moduleKey }));
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('modules')
-    .setDescription('View or manage SlickBot modules.')
+    .setDescription('Open or manage SlickBot modules.')
+    .addSubcommand((subcommand) => subcommand.setName('panel').setDescription('Open the interactive module manager.'))
     .addSubcommand((subcommand) => subcommand.setName('list').setDescription('List all module states.'))
     .addSubcommand((subcommand) =>
       subcommand
@@ -39,20 +42,21 @@ module.exports = {
       );
     }
 
-    if (subcommand === 'list') {
-      const modules = await query(
-        `SELECT module_key, enabled FROM module_configs WHERE guild_id = $1 ORDER BY module_key ASC`,
-        [interaction.guildId]
-      );
-      const output = modules.rows.map((moduleConfig) => `${moduleConfig.enabled ? '✅' : '⬜'} ${moduleConfig.module_key}`).join('\n');
-      await replyPrivate(interaction, output || 'No modules found. Run `/setup` first.');
+    if (subcommand === 'panel' || subcommand === 'list') {
+      await replyPrivate(interaction, await buildModulesPanel(interaction.guildId));
       return;
     }
 
     const moduleKey = interaction.options.getString('module', true);
 
     if (isCoreModule(moduleKey) && subcommand === 'disable') {
-      await replyPrivate(interaction, `${moduleKey} is a core module and cannot be disabled.`);
+      await replyPrivate(interaction, {
+        embeds: [createBaseEmbed({
+          title: 'Core Module Locked',
+          description: `**${moduleKey}** is a core module and cannot be disabled.`,
+          color: SlickBotColors.WARNING
+        })]
+      });
       return;
     }
 
@@ -74,6 +78,6 @@ module.exports = {
       summary: `${moduleKey} module ${enabled ? 'enabled' : 'disabled'}.`
     });
 
-    await replyPrivate(interaction, `${moduleKey} module ${enabled ? 'enabled' : 'disabled'}.`);
+    await replyPrivate(interaction, await buildModulesPanel(interaction.guildId));
   }
 };

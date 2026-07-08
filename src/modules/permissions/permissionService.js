@@ -63,7 +63,7 @@ class PermissionService {
   }
 
   async isModuleEnabled(guildId, moduleKey) {
-    if (moduleKey === ModuleKeys.PERMISSIONS || moduleKey === ModuleKeys.LOGGING) return true;
+    if (moduleKey === ModuleKeys.PERMISSIONS || moduleKey === ModuleKeys.LOGGING || moduleKey === ModuleKeys.STATUS) return true;
 
     const result = await query(
       `SELECT enabled FROM module_configs WHERE guild_id = $1 AND module_key = $2 LIMIT 1`,
