@@ -15,7 +15,7 @@ This starter includes the v0.1 foundation:
 
 - TypeScript + discord.js
 - Prisma + PostgreSQL
-- Railway-ready deployment files
+- Railway-ready Docker deployment files
 - Slash command registration
 - Ephemeral/private command responses
 - Permission Teams
@@ -80,7 +80,17 @@ Recommended repo name:
 slickbot
 ```
 
-Push this project to GitHub.
+Push the **contents of this project folder** to GitHub. Your GitHub repo root must directly contain:
+
+```text
+package.json
+Dockerfile
+railway.json
+prisma/
+src/
+```
+
+Do not upload this as `slickbot/slickbot/package.json` or Railway will not detect the Node/Docker project correctly.
 
 ### 3. Create a Railway project
 
@@ -110,16 +120,15 @@ NODE_ENV=production
 
 The exact Postgres service name in Railway may differ. If your database service is not named `Postgres`, use the matching Railway variable reference.
 
-### 5. Initialize the database
+### 5. Database setup
 
-After the service has its `DATABASE_URL`, run this once from Railway shell or locally with the production database URL:
+The production start command runs:
 
 ```bash
-npm install
-npx prisma db push
+prisma db push && node dist/bot.js
 ```
 
-For early development, `prisma db push` is fine. Once the schema stabilizes, switch to Prisma migrations.
+That means Railway will apply the current Prisma schema to the connected PostgreSQL database before starting the bot. This is acceptable for the early v0.1 stage. Once the schema stabilizes, switch to Prisma migrations.
 
 ### 6. Start command
 
@@ -129,19 +138,52 @@ Railway should use:
 npm start
 ```
 
-The included `railway.json` sets:
+The included `railway.json` forces Railway to use the included Dockerfile instead of relying on automatic Node detection:
 
 ```json
 {
   "build": {
-    "builder": "NIXPACKS",
-    "buildCommand": "npm run build"
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "Dockerfile"
   },
   "deploy": {
     "startCommand": "npm start"
   }
 }
 ```
+
+
+## Railway troubleshooting
+
+### `npm: command not found`
+
+This usually means Railway did not detect the project root correctly, or it is not building from the folder that contains `package.json` and `Dockerfile`. The fixed version of this project includes a Dockerfile so Railway uses a known Node image with npm already installed.
+
+Confirm the GitHub repo root contains:
+
+```text
+package.json
+Dockerfile
+railway.json
+prisma/
+src/
+```
+
+If your repo root only contains a folder named `slickbot`, move the files inside that folder up to the repository root.
+
+### Build fails before the bot starts
+
+Check that these Railway variables are set on the bot service before deploy:
+
+```text
+DISCORD_TOKEN
+DISCORD_CLIENT_ID
+DISCORD_GUILD_ID
+DATABASE_URL
+BOT_OWNER_IDS
+```
+
+`DATABASE_URL` should point to the Railway PostgreSQL service.
 
 ## First Discord setup
 
