@@ -10,7 +10,7 @@ const {
   formatEnabled
 } = require('./uiService');
 const { CustomIds } = require('./customIds');
-const { LogEventCatalog } = require('../logging/logEventCatalog');
+const { LogModuleCatalog, LogEventCatalog, getEventsForModule } = require('../logging/logEventCatalog');
 
 async function ensureDefaultModules(guildId) {
   for (const moduleConfig of defaultModules) {
@@ -35,7 +35,7 @@ async function buildSetupPanel(guildId, guildName = null) {
     [guildId]
   );
   const configuredLogs = await query(
-    `SELECT COUNT(*)::int AS count FROM log_settings WHERE guild_id = $1 AND enabled = true AND channel_id IS NOT NULL`,
+    `SELECT COUNT(*)::int AS count FROM log_module_settings WHERE guild_id = $1 AND enabled = true AND channel_id IS NOT NULL`,
     [guildId]
   );
   const cases = await query(
@@ -53,10 +53,10 @@ async function buildSetupPanel(guildId, guildName = null) {
       '**System Snapshot**',
       `Modules Enabled: **${enabledCount}/${modules.rowCount}**`,
       `Permission Teams: **${teams.rows[0]?.count || 0}**`,
-      `Configured Log Events: **${configuredLogs.rows[0]?.count || 0}**`,
+      `Configured Log Modules: **${configuredLogs.rows[0]?.count || 0}**`,
       `Moderation Cases: **${cases.rows[0]?.count || 0}**`,
       '',
-      'Use the controls below to open setup panels. Event logs only post when that specific event has a channel configured.'
+      'Use the controls below to open setup panels. Logs only post when the related log module or event override has a configured channel.'
     ].join('\n'),
     color: SlickBotColors.PRIMARY
   });
@@ -119,7 +119,14 @@ async function buildModulesPanel(guildId) {
 }
 
 async function buildLoggingPanel(guildId) {
-  const settings = await query(
+  const moduleSettings = await query(
+    `SELECT module_key, delivery_mode, channel_id, enabled, batch_interval_seconds
+     FROM log_module_settings
+     WHERE guild_id = $1
+     ORDER BY module_key ASC`,
+    [guildId]
+  );
+  const eventSettings = await query(
     `SELECT event_key, delivery_mode, channel_id, enabled, batch_interval_seconds
      FROM log_settings
      WHERE guild_id = $1
@@ -131,24 +138,42 @@ async function buildLoggingPanel(guildId) {
     [guildId]
   );
 
-  const settingsByKey = new Map(settings.rows.map((row) => [row.event_key, row]));
-  const catalogLines = LogEventCatalog.map((event) => {
-    const row = settingsByKey.get(event.key);
+  const moduleSettingsByKey = new Map(moduleSettings.rows.map((row) => [row.module_key, row]));
+  const eventSettingsByKey = new Map(eventSettings.rows.map((row) => [row.event_key, row]));
+
+  const moduleLines = LogModuleCatalog.map((logModule) => {
+    const row = moduleSettingsByKey.get(logModule.key);
+    const eventCount = getEventsForModule(logModule.key).length;
     if (!row || !row.channel_id || row.enabled === false) {
-      return `• **${event.label}** \`${event.key}\` — Not configured`;
+      return `• **${logModule.label}** ` + '`' + logModule.key + '`' + ` — Not configured · ${eventCount} event(s)`;
     }
-    return `• **${event.label}** \`${event.key}\` — ${row.delivery_mode} → <#${row.channel_id}>`;
+    return `• **${logModule.label}** ` + '`' + logModule.key + '`' + ` — ${row.delivery_mode || 'IMMEDIATE'} → <#${row.channel_id}> · ${eventCount} event(s)`;
   }).join('\n');
+
+  const overrides = eventSettings.rows.filter((row) => row.channel_id || row.delivery_mode || row.enabled === false);
+  const overrideLines = overrides.length
+    ? overrides.slice(0, 10).map((row) => {
+      const event = LogEventCatalog.find((item) => item.key === row.event_key);
+      const parts = [];
+      if (row.enabled === false) parts.push('Disabled');
+      if (row.delivery_mode) parts.push(row.delivery_mode);
+      if (row.channel_id) parts.push(`→ <#${row.channel_id}>`);
+      return `• **${event?.label || row.event_key}** ` + '`' + row.event_key + '`' + ` — ${parts.join(' ') || 'Override saved'}`;
+    }).join('\n')
+    : 'No event overrides configured. Events currently follow their module settings.';
 
   const embed = createBaseEmbed({
     title: 'SlickBot Logging Center',
     description: [
       `Queued Batched Logs: **${queued.rows[0]?.count || 0}**`,
       '',
-      '**Event Routing**',
-      catalogLines,
+      '**Log Modules**',
+      moduleLines,
       '',
-      'Logs are only sent when an event-specific channel is configured. Use `/logging set-channel` and `/logging mode` to route logs.'
+      '**Event Overrides**',
+      overrideLines,
+      '',
+      'Configure the main groups with `/logging set-channel`. Use `/logging event-mode` or `/logging event-channel` only when one event needs different behavior.'
     ].join('\n'),
     color: SlickBotColors.INFO
   });

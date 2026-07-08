@@ -1,6 +1,6 @@
 # SlickBot Project Plan
 
-## Current Version: v0.2.0
+## Current Version: v0.2.1
 
 SlickBot is a bot-only all-in-one Discord management system for the SlickPickleNick server. It is intentionally built for one server first, while preserving a database structure that can support selected external servers later.
 
@@ -15,8 +15,9 @@ SlickBot is a bot-only all-in-one Discord management system for the SlickPickleN
 - Module toggles
 - Ephemeral/private responses
 - Styled embeds/buttons/select menus
-- Event-specific log routing
-- Batched logging
+- Module-based log routing
+- Event-level log overrides
+- Batched logging support
 - Bot presence/status controls
 - Moderation cases
 - Private staff user notes
@@ -25,32 +26,30 @@ SlickBot is a bot-only all-in-one Discord management system for the SlickPickleN
 
 SlickBot responses should feel like a dark creator command center: polished embeds, compact metadata, clear hierarchy, interactive controls, and fewer plain text lists.
 
-## v0.2.0 Scope
+## v0.2.1 Scope
 
-### Added
+### Added / Updated
 
-- Event-specific log channel routing
-- Silent behavior when no event-specific log channel is configured
-- Starter log routing through `/setup log_channel`
-- Moderation module enabled for new setups
-- `/mod panel`
-- `/mod warn`
-- `/mod timeout`
-- `/mod kick`
-- `/mod ban`
-- `/mod massban`
-- `/case panel`
-- `/case view`
-- `/case user`
-- `/case close`
-- `/case reopen`
-- `/note add`
-- `/note list`
-- `/note remove`
-- Moderation case database table
-- User note database table
-- Moderation center interactive panel
-- Recent cases interactive panel
+- Logging now uses module-style groups instead of requiring every event to be routed individually.
+- Configured log modules default to immediate delivery.
+- Event-specific overrides can still be configured when needed.
+- Added `log_module_settings` database table.
+- Existing event settings remain supported for backwards compatibility.
+- Member logging now includes nickname changes and role changes.
+- Voice logging now uses specific event keys for joins, leaves, and moves.
+- Logging panel now summarizes modules and event overrides.
+
+## Current Log Modules
+
+- `core`
+- `moderation`
+- `member`
+- `message`
+- `voice`
+- `tickets`
+- `applications`
+- `appeals`
+- `scheduled-messages`
 
 ## v0.3.0 Recommended Scope
 

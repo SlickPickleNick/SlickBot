@@ -4,7 +4,7 @@ const { ActionKeys } = require('../modules/permissions/actionKeys');
 const { replyPrivate } = require('../utils/reply');
 const { query } = require('../services/db');
 const { buildSetupPanel } = require('../modules/ui/panels');
-const { StarterLogEventKeys, getLogEvent } = require('../modules/logging/logEventCatalog');
+const { StarterLogModuleKeys, getLogModule } = require('../modules/logging/logEventCatalog');
 const { botOwnerIds } = require('../config/env');
 
 module.exports = {
@@ -14,7 +14,7 @@ module.exports = {
     .addChannelOption((option) =>
       option
         .setName('log_channel')
-        .setDescription('Optional channel for core/admin event logs. No noisy logs are routed by default.')
+        .setDescription('Optional channel for core and moderation log modules. No noisy modules are routed by default.')
         .addChannelTypes(ChannelType.GuildText)
         .setRequired(false)
     ),
@@ -31,18 +31,18 @@ module.exports = {
         [logChannel.id, interaction.guildId]
       );
 
-      for (const eventKey of StarterLogEventKeys) {
-        const event = getLogEvent(eventKey);
+      for (const moduleKey of StarterLogModuleKeys) {
+        const logModule = getLogModule(moduleKey);
         await query(
-          `INSERT INTO log_settings (guild_id, event_key, delivery_mode, channel_id, enabled)
+          `INSERT INTO log_module_settings (guild_id, module_key, delivery_mode, channel_id, enabled)
            VALUES ($1, $2, $3, $4, true)
-           ON CONFLICT (guild_id, event_key)
+           ON CONFLICT (guild_id, module_key)
            DO UPDATE SET
              channel_id = EXCLUDED.channel_id,
              enabled = true,
              delivery_mode = EXCLUDED.delivery_mode,
              updated_at = NOW()`,
-          [interaction.guildId, eventKey, event?.defaultDelivery || 'IMMEDIATE', logChannel.id]
+          [interaction.guildId, moduleKey, logModule?.defaultDelivery || 'IMMEDIATE', logChannel.id]
         );
       }
     }
@@ -68,7 +68,7 @@ module.exports = {
       targetType: 'GuildConfig',
       targetId: interaction.guildId,
       summary: 'SlickBot setup center opened.',
-      metadata: { starterLogChannelId: logChannel?.id || null }
+      metadata: { starterLogModuleChannelId: logChannel?.id || null }
     });
 
     await ctx.logger.log({
@@ -77,9 +77,9 @@ module.exports = {
       title: 'SlickBot Setup Updated',
       body: [
         `Updated By: <@${interaction.user.id}>`,
-        logChannel ? `Starter Log Channel: <#${logChannel.id}>` : 'No log channel was changed.'
+        logChannel ? `Starter Log Channel: <#${logChannel.id}>` : 'No log module channel was changed.'
       ].join('\n'),
-      metadata: { actorUserId: interaction.user.id, starterLogChannelId: logChannel?.id || null }
+      metadata: { actorUserId: interaction.user.id, starterLogModuleChannelId: logChannel?.id || null }
     });
 
     await replyPrivate(interaction, await buildSetupPanel(interaction.guildId, interaction.guild ? interaction.guild.name : null));

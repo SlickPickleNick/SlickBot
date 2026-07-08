@@ -90,11 +90,27 @@ async function initDatabase() {
   `);
 
   await query(`
+    CREATE TABLE IF NOT EXISTS log_module_settings (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      module_key TEXT NOT NULL,
+      delivery_mode TEXT NOT NULL DEFAULT 'IMMEDIATE',
+      channel_id TEXT,
+      batch_interval_seconds INTEGER NOT NULL DEFAULT 300,
+      max_batch_items INTEGER NOT NULL DEFAULT 25,
+      enabled BOOLEAN NOT NULL DEFAULT true,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(guild_id, module_key)
+    );
+  `);
+
+  await query(`
     CREATE TABLE IF NOT EXISTS log_settings (
       id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
       guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
       event_key TEXT NOT NULL,
-      delivery_mode TEXT NOT NULL DEFAULT 'BATCHED',
+      delivery_mode TEXT,
       channel_id TEXT,
       batch_interval_seconds INTEGER NOT NULL DEFAULT 300,
       max_batch_items INTEGER NOT NULL DEFAULT 25,
@@ -105,11 +121,15 @@ async function initDatabase() {
     );
   `);
 
+  await query(`ALTER TABLE log_settings ALTER COLUMN delivery_mode DROP NOT NULL;`).catch(() => {});
+  await query(`ALTER TABLE log_settings ALTER COLUMN delivery_mode DROP DEFAULT;`).catch(() => {});
+
   await query(`
     CREATE TABLE IF NOT EXISTS log_queue_items (
       id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
       guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
       event_key TEXT NOT NULL,
+      module_key TEXT,
       title TEXT NOT NULL,
       body TEXT NOT NULL,
       metadata JSONB,
@@ -117,6 +137,8 @@ async function initDatabase() {
       flushed_at TIMESTAMPTZ
     );
   `);
+
+  await query(`ALTER TABLE log_queue_items ADD COLUMN IF NOT EXISTS module_key TEXT;`);
 
 
 
@@ -174,6 +196,7 @@ async function initDatabase() {
 
   await query(`CREATE INDEX IF NOT EXISTS idx_module_configs_guild ON module_configs(guild_id);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_command_permissions_action ON command_permissions(guild_id, action_key);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_log_module_settings_guild ON log_module_settings(guild_id, module_key);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_log_queue_pending ON log_queue_items(guild_id, event_key, flushed_at);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_audit_logs_guild_created ON audit_logs(guild_id, created_at);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_bot_presence_guild ON bot_presence_settings(guild_id);`);

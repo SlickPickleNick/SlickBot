@@ -6,7 +6,7 @@ This version uses the working TitanBot-style JavaScript foundation: Discord.js, 
 
 ## Version
 
-`v0.2.0`
+`v0.2.1`
 
 ## Included Modules
 
@@ -29,18 +29,35 @@ This version uses the working TitanBot-style JavaScript foundation: Discord.js, 
 
 ### Logging
 
-- Event-specific logging channels
-- Immediate log delivery
-- Batched log delivery
+Updated in `v0.2.1`:
+
+- Module-based logging setup
+- Event-level overrides when needed
+- Immediate log delivery by default for configured log modules
+- Optional batched delivery by module or event
 - Manual batch flushing
 - Internal audit log table
 - No fallback spam behavior
 
-Important: Discord log messages are only posted when that specific event has a configured channel. If `message-delete` does not have a channel configured, message delete logs will not be sent. The internal audit log still stores important bot actions where applicable.
+Important: Discord log messages are only posted when the related log module or event override has a configured channel. If the `message` log module is not configured, message edit/delete logs will not be sent.
+
+### Log Modules
+
+SlickBot now organizes logs into these groups:
+
+- `core` — system, setup, module config, permission teams, bot status
+- `moderation` — moderation actions, cases, user notes
+- `member` — joins, leaves, nickname changes, role changes, member updates
+- `message` — message edits and deletions
+- `voice` — voice joins, leaves, and moves
+- `tickets` — future ticket activity
+- `applications` — future application activity
+- `appeals` — future appeal activity
+- `scheduled-messages` — future scheduled message activity
 
 ### Moderation, Cases, and User Notes
 
-New in `v0.2.0`:
+Included from `v0.2.0`:
 
 - `/mod panel`
 - `/mod warn`
@@ -105,44 +122,37 @@ After deploying, run:
 /status view
 ```
 
-When you use `/setup log_channel`, SlickBot configures the selected channel for core/admin event logs only:
+When you use `/setup log_channel`, SlickBot configures the selected channel for these starter log modules:
 
-- `system`
-- `setup`
-- `module-config`
-- `permission-team`
-- `status`
+- `core`
 - `moderation`
-- `cases`
-- `user-notes`
 
-No noisy event logs are routed by default. To route message, member, or voice logs, use:
+No noisy member, message, or voice logs are routed by default. To enable those groups, use:
 
 ```text
-/logging set-channel event:message-delete channel:#message-logs
-/logging set-channel event:voice channel:#voice-logs
-/logging mode event:voice delivery:BATCHED interval_seconds:300
+/logging set-channel module:member channel:#member-logs
+/logging set-channel module:message channel:#message-logs
+/logging set-channel module:voice channel:#voice-logs
 ```
 
-## Available Log Events
+All configured log modules default to immediate delivery. To batch a module:
 
-- `system`
-- `setup`
-- `module-config`
-- `permission-team`
-- `status`
-- `moderation`
-- `cases`
-- `user-notes`
-- `member-join`
-- `member-leave`
-- `message-delete`
-- `message-edit`
-- `voice`
-- `tickets`
-- `applications`
-- `appeals`
-- `scheduled-messages`
+```text
+/logging module-mode module:voice delivery:BATCHED interval_seconds:300
+```
+
+To override one event inside a module:
+
+```text
+/logging event-mode event:message-edit delivery:BATCHED interval_seconds:300
+/logging event-channel event:member-roles channel:#role-logs
+```
+
+To remove an event override and return it to the parent module behavior:
+
+```text
+/logging clear-event event:member-roles
+```
 
 ## Permission Teams
 
@@ -166,7 +176,7 @@ Example:
 /team allow team:Moderator Team action_key:user-notes.view
 ```
 
-## New Permission Action Keys
+## Permission Action Keys
 
 Moderation:
 

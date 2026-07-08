@@ -80,6 +80,43 @@ client.on(Events.GuildMemberRemove, async (member) => {
   }).catch((error) => console.error('Failed to log member leave:', error));
 });
 
+client.on(Events.GuildMemberUpdate, async (oldMember, newMember) => {
+  if (newMember.user?.bot) return;
+
+  if (oldMember.nickname !== newMember.nickname) {
+    await logger.log({
+      guildId: newMember.guild.id,
+      eventKey: 'member-nickname',
+      title: 'Nickname Changed',
+      body: [
+        `Member: ${newMember.user.tag} (${newMember.id})`,
+        `Before: ${oldMember.nickname || oldMember.user.username}`,
+        `After: ${newMember.nickname || newMember.user.username}`
+      ].join('\n'),
+      metadata: { userId: newMember.id, before: oldMember.nickname, after: newMember.nickname }
+    }).catch((error) => console.error('Failed to log nickname change:', error));
+  }
+
+  const oldRoleIds = new Set(oldMember.roles.cache.keys());
+  const newRoleIds = new Set(newMember.roles.cache.keys());
+  const addedRoles = [...newRoleIds].filter((roleId) => !oldRoleIds.has(roleId));
+  const removedRoles = [...oldRoleIds].filter((roleId) => !newRoleIds.has(roleId));
+
+  if (addedRoles.length || removedRoles.length) {
+    await logger.log({
+      guildId: newMember.guild.id,
+      eventKey: 'member-roles',
+      title: 'Member Roles Updated',
+      body: [
+        `Member: ${newMember.user.tag} (${newMember.id})`,
+        addedRoles.length ? `Added: ${addedRoles.map((roleId) => `<@&${roleId}>`).join(', ')}` : null,
+        removedRoles.length ? `Removed: ${removedRoles.map((roleId) => `<@&${roleId}>`).join(', ')}` : null
+      ].filter(Boolean).join('\n'),
+      metadata: { userId: newMember.id, addedRoles, removedRoles }
+    }).catch((error) => console.error('Failed to log member role change:', error));
+  }
+});
+
 client.on(Events.MessageDelete, async (message) => {
   if (!message.guild || message.author?.bot) return;
   await logger.log({
@@ -145,7 +182,7 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
 
   await logger.log({
     guildId,
-    eventKey: 'voice',
+    eventKey: action === 'Voice Channel Joined' ? 'voice-join' : action === 'Voice Channel Left' ? 'voice-leave' : 'voice-move',
     title: action,
     body,
     metadata: {
