@@ -1,6 +1,6 @@
 # SlickBot
 
-## v0.3.1 Hotfix
+## v0.3.2 Hotfix
 
 This version fixes the Discord command registration error from v0.3.0 where `/appeal submit` had an optional option before a required option. Discord requires required slash-command options to appear before optional options.
 
@@ -13,7 +13,7 @@ This version uses the working TitanBot-style JavaScript foundation: Discord.js, 
 
 ## Version
 
-`v0.3.1`
+`v0.3.2`
 
 ## Included Modules
 
@@ -179,7 +179,7 @@ No noisy member, message, or voice logs are routed by default. To enable those g
 /logging set-channel module:voice channel:#voice-logs
 ```
 
-To enable the v0.3.1 support workflow logs:
+To enable the v0.3.2 support workflow logs:
 
 ```text
 /logging set-channel module:tickets channel:#ticket-logs
@@ -264,3 +264,9 @@ README.md
 ```
 
 It should not be nested inside another `slickbot/` folder.
+
+## v0.3.2 Railway install fix
+
+This package changes the Docker dependency step from `npm install --omit=dev` to `npm ci --omit=dev` using the committed `package-lock.json`. It also adds `.npmrc` settings to force the public npm registry and disable audit/fund/progress output during Railway builds.
+
+If Railway previously appeared stuck at `RUN npm install --omit=dev`, replace the repo contents with this version and redeploy.
