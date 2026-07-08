@@ -26,13 +26,19 @@ const CustomIds = Object.freeze({
   SupportRefresh: 'slickbot:support:refresh',
   TicketsRefresh: 'slickbot:tickets:refresh',
   TicketOpen: 'slickbot:ticket:open',
+  TicketOpenTypePrefix: 'slickbot:ticket:open-type:',
   TicketClaim: 'slickbot:ticket:claim',
   TicketClose: 'slickbot:ticket:close',
+  TicketCloseReason: 'slickbot:ticket:close-reason',
+  TicketEscalate: 'slickbot:ticket:escalate',
 
   ReportsRefresh: 'slickbot:reports:refresh',
   ReportOpen: 'slickbot:report:open',
+  ReportClaimPrefix: 'slickbot:report:claim:',
   ReportResolvePrefix: 'slickbot:report:resolve:',
   ReportDismissPrefix: 'slickbot:report:dismiss:',
+  ReportDetailsPrefix: 'slickbot:report:details:',
+  ReportOpenTicketPrefix: 'slickbot:report:ticket:',
 
   ApplicationsRefresh: 'slickbot:applications:refresh',
   ApplicationApplyPrefix: 'slickbot:application:apply:',
@@ -43,10 +49,16 @@ const CustomIds = Object.freeze({
   AppealOpen: 'slickbot:appeal:open',
   AppealApprovePrefix: 'slickbot:appeal:approve:',
   AppealDenyPrefix: 'slickbot:appeal:deny:',
+  AppealApproveReasonPrefix: 'slickbot:appeal:approve-reason:',
+  AppealDenyReasonPrefix: 'slickbot:appeal:deny-reason:',
 
+  TicketModalPrefix: 'slickbot:modal:ticket:',
   TicketModal: 'slickbot:modal:ticket',
+  TicketCloseReasonModal: 'slickbot:modal:ticket-close-reason',
   ReportModal: 'slickbot:modal:report',
+  ReportDetailsModalPrefix: 'slickbot:modal:report-details:',
   AppealModal: 'slickbot:modal:appeal',
+  AppealReasonModalPrefix: 'slickbot:modal:appeal-reason:',
   ApplicationModalPrefix: 'slickbot:modal:application:'
 });
 

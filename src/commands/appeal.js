@@ -16,8 +16,9 @@ module.exports = {
     .addSubcommand((subcommand) =>
       subcommand
         .setName('setup')
-        .setDescription('Set the appeal review channel.')
+        .setDescription('Set appeal review settings.')
         .addChannelOption((option) => option.setName('review_channel').setDescription('Private staff appeal review channel.').addChannelTypes(ChannelType.GuildText).setRequired(true))
+        .addBooleanOption((option) => option.setName('dm_decision').setDescription('DM users when their appeal is approved or denied.').setRequired(false))
     )
     .addSubcommand((subcommand) =>
       subcommand
@@ -48,36 +49,24 @@ module.exports = {
     const subcommand = interaction.options.getSubcommand();
     await ctx.permissions.ensureGuildConfig(interaction.guildId, interaction.guild ? interaction.guild.name : null);
 
-    if (subcommand === 'manager') {
-      await replyPrivate(interaction, await buildAppealsPanel(interaction.guildId));
-      return;
-    }
+    if (subcommand === 'manager') return replyPrivate(interaction, await buildAppealsPanel(interaction.guildId));
 
     if (subcommand === 'setup') {
       const channel = interaction.options.getChannel('review_channel', true);
-      await appeals.updateConfig(interaction.guildId, channel.id);
+      const config = await appeals.updateConfig(interaction.guildId, { reviewChannelId: channel.id, dmDecisionEnabled: interaction.options.getBoolean('dm_decision') || false });
       await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'setup', title: 'Appeal Settings Updated', body: `Appeal review channel set to <#${channel.id}> by ${interaction.user.tag}.`, actorUserId: interaction.user.id }).catch(() => {});
-      await replyPrivate(interaction, { embeds: [createSuccessEmbed('Appeal System Configured', `Review channel set to <#${channel.id}>.`)] });
-      return;
+      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Appeal System Configured', [`Review Channel: <#${channel.id}>`, `DM Decisions: **${config.dm_decision_enabled ? 'Enabled' : 'Disabled'}**`].join('\n'))] });
     }
 
     if (subcommand === 'panel') {
       const channel = interaction.options.getChannel('channel') || interaction.channel;
       await channel.send(buildPublicAppealPanel());
-      await replyPrivate(interaction, { embeds: [createSuccessEmbed('Appeal Panel Posted', `Panel posted in <#${channel.id}>.`)] });
-      return;
+      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Appeal Panel Posted', `Panel posted in <#${channel.id}>.`)] });
     }
 
     if (subcommand === 'submit') {
-      const appeal = await appeals.submitAppeal({
-        interaction,
-        client: ctx.client,
-        logger: ctx.logger,
-        caseNumber: interaction.options.getInteger('case_number') || null,
-        reason: interaction.options.getString('reason', true),
-        details: interaction.options.getString('details') || null
-      });
-      await replyPrivate(interaction, { embeds: [createSuccessEmbed('Appeal Submitted', `Appeal #${appeal.appeal_number} was sent to staff.`)] });
+      const appeal = await appeals.submitAppeal({ interaction, client: ctx.client, logger: ctx.logger, caseNumber: interaction.options.getInteger('case_number') || null, reason: interaction.options.getString('reason', true), details: interaction.options.getString('details') || null });
+      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Appeal Submitted', `Appeal #${appeal.appeal_number} was sent to staff.`)] });
     }
   }
 };

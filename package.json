@@ -1,8 +1,8 @@
 {
   "name": "slickbot",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "private": true,
-  "description": "SlickBot all-in-one Discord server management bot with support workflows, command validation, module-based logging, moderation cases, and optimized Railway Docker dependency installs.",
+  "description": "SlickBot all-in-one Discord server management bot with expanded support workflows, DM applications, ticket types, report claiming, appeal decision DMs, module-based logging, and optimized Railway deployment.",
   "main": "src/index.js",
   "engines": {
     "node": ">=22.12.0"

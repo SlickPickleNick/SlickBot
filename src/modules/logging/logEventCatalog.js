@@ -90,10 +90,14 @@ const LogEventCatalog = Object.freeze([
   { key: 'ticket-priority', moduleKey: 'tickets', label: 'Ticket Priority', description: 'A ticket priority changed.', defaultDelivery: 'IMMEDIATE' },
   { key: 'ticket-close', moduleKey: 'tickets', label: 'Ticket Closed', description: 'A ticket was closed.', defaultDelivery: 'IMMEDIATE' },
   { key: 'ticket-transcript', moduleKey: 'tickets', label: 'Ticket Transcript', description: 'A ticket transcript was generated.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'ticket-escalate', moduleKey: 'tickets', label: 'Ticket Escalated', description: 'A ticket was escalated to a higher review role or team.', defaultDelivery: 'IMMEDIATE' },
 
   { key: 'report-submit', moduleKey: 'reports', label: 'Report Submitted', description: 'A user submitted a report.', defaultDelivery: 'IMMEDIATE' },
   { key: 'report-review', moduleKey: 'reports', label: 'Report Reviewed', description: 'Staff reviewed a report.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'report-claim', moduleKey: 'reports', label: 'Report Claimed', description: 'Staff claimed an open report.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'report-note', moduleKey: 'reports', label: 'Report Details Added', description: 'Staff added review details to a report.', defaultDelivery: 'IMMEDIATE' },
 
+  { key: 'application-start', moduleKey: 'applications', label: 'Application Started', description: 'A user started a DM-based application.', defaultDelivery: 'IMMEDIATE' },
   { key: 'application-submit', moduleKey: 'applications', label: 'Application Submitted', description: 'A user submitted an application.', defaultDelivery: 'IMMEDIATE' },
   { key: 'application-review', moduleKey: 'applications', label: 'Application Reviewed', description: 'Staff reviewed an application.', defaultDelivery: 'IMMEDIATE' },
 

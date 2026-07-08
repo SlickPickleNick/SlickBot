@@ -8,10 +8,16 @@ const {
 const { CustomIds } = require('../ui/customIds');
 const { query } = require('../../services/db');
 
+function parseJson(value, fallback) {
+  if (!value) return fallback;
+  if (typeof value === 'object') return value;
+  try { return JSON.parse(value); } catch { return fallback; }
+}
+
 async function buildSupportPanel(guildId) {
   const [tickets, reports, apps, appeals] = await Promise.all([
     query(`SELECT COUNT(*)::int AS count FROM tickets WHERE guild_id = $1 AND status = 'OPEN'`, [guildId]).catch(() => ({ rows: [{ count: 0 }] })),
-    query(`SELECT COUNT(*)::int AS count FROM reports WHERE guild_id = $1 AND status = 'OPEN'`, [guildId]).catch(() => ({ rows: [{ count: 0 }] })),
+    query(`SELECT COUNT(*)::int AS count FROM reports WHERE guild_id = $1 AND status IN ('OPEN','CLAIMED')`, [guildId]).catch(() => ({ rows: [{ count: 0 }] })),
     query(`SELECT COUNT(*)::int AS count FROM application_submissions WHERE guild_id = $1 AND status = 'PENDING'`, [guildId]).catch(() => ({ rows: [{ count: 0 }] })),
     query(`SELECT COUNT(*)::int AS count FROM appeals WHERE guild_id = $1 AND status = 'PENDING'`, [guildId]).catch(() => ({ rows: [{ count: 0 }] }))
   ]);
@@ -21,11 +27,11 @@ async function buildSupportPanel(guildId) {
     description: [
       '**Support Workflow Snapshot**',
       `Open Tickets: **${tickets.rows[0]?.count || 0}**`,
-      `Open Reports: **${reports.rows[0]?.count || 0}**`,
+      `Active Reports: **${reports.rows[0]?.count || 0}**`,
       `Pending Applications: **${apps.rows[0]?.count || 0}**`,
       `Pending Appeals: **${appeals.rows[0]?.count || 0}**`,
       '',
-      'Use the controls below to open support workflow panels. Public panels can be posted with `/ticket panel`, `/report panel`, `/application panel`, and `/appeal panel`.'
+      'Use the controls below to open workflow panels. Public panels can be posted with `/ticket panel`, `/report panel`, `/application panel`, and `/appeal panel`.'
     ].join('\n'),
     color: SlickBotColors.PRIMARY
   });
@@ -43,12 +49,17 @@ async function buildSupportPanel(guildId) {
 
 async function buildTicketsPanel(guildId) {
   const config = await query(`SELECT * FROM ticket_configs WHERE guild_id = $1 LIMIT 1`, [guildId]).catch(() => ({ rows: [] }));
-  const counts = await query(
-    `SELECT status, COUNT(*)::int AS count FROM tickets WHERE guild_id = $1 GROUP BY status`,
-    [guildId]
-  ).catch(() => ({ rows: [] }));
+  const counts = await query(`SELECT status, COUNT(*)::int AS count FROM tickets WHERE guild_id = $1 GROUP BY status`, [guildId]).catch(() => ({ rows: [] }));
+  const types = await query(`SELECT * FROM ticket_types WHERE guild_id = $1 ORDER BY name ASC`, [guildId]).catch(() => ({ rows: [] }));
   const byStatus = Object.fromEntries(counts.rows.map((row) => [row.status, row.count]));
   const cfg = config.rows[0];
+
+  const typeLines = types.rows.length
+    ? types.rows.map((type) => {
+      const questions = parseJson(type.questions, []);
+      return `• **${type.name}** — ${type.enabled ? 'Enabled' : 'Disabled'} · Questions: **${questions.length || 0}** · Review: ${type.staff_role_id ? `<@&${type.staff_role_id}>` : type.staff_team_id ? 'Team' : 'Default'}`;
+    }).join('\n')
+    : 'No ticket types configured yet. Use `/ticket type-setup`.';
 
   const embed = createBaseEmbed({
     title: 'Ticket Manager',
@@ -56,20 +67,22 @@ async function buildTicketsPanel(guildId) {
       `Open Tickets: **${byStatus.OPEN || 0}**`,
       `Closed Tickets: **${byStatus.CLOSED || 0}**`,
       '',
-      '**Configuration**',
+      '**Default Configuration**',
       `Category: ${cfg?.category_id ? `<#${cfg.category_id}>` : 'Not set'}`,
       `Staff Role: ${cfg?.staff_role_id ? `<@&${cfg.staff_role_id}>` : 'Not set'}`,
       `Ticket Log: ${cfg?.log_channel_id ? `<#${cfg.log_channel_id}>` : 'Not set'}`,
-      `User Limit: **${cfg?.ticket_limit || 1}** open ticket(s)`,
-      `Transcripts: **${cfg?.transcript_enabled === false ? 'Disabled' : 'Enabled'}**`,
+      `Naming: \`${cfg?.naming_format || 'ticket-{username}-{number}'}\``,
       '',
-      'Use `/ticket setup` to configure this module and `/ticket panel` to post a public ticket launcher.'
+      '**Ticket Types**',
+      typeLines,
+      '',
+      'Use `/ticket type-setup` and `/ticket question-add` to customize ticket buttons and intake questions.'
     ].join('\n'),
     color: SlickBotColors.INFO
   });
 
   const row = createButtonRow([
-    createPanelButton(CustomIds.TicketOpen, 'Open Ticket', ButtonStyle.Primary, '🎟️'),
+    createPanelButton(CustomIds.TicketOpen, 'Open Default', ButtonStyle.Primary, '🎟️'),
     createPanelButton(CustomIds.TicketsRefresh, 'Refresh', ButtonStyle.Secondary, '🔄'),
     createPanelButton(CustomIds.SupportRefresh, 'Back', ButtonStyle.Secondary, '↩️')
   ]);
@@ -87,12 +100,15 @@ async function buildReportsPanel(guildId) {
     title: 'Report Manager',
     description: [
       `Open Reports: **${byStatus.OPEN || 0}**`,
+      `Claimed Reports: **${byStatus.CLAIMED || 0}**`,
       `Resolved Reports: **${byStatus.RESOLVED || 0}**`,
       `Dismissed Reports: **${byStatus.DISMISSED || 0}**`,
       '',
       `Review Channel: ${cfg?.review_channel_id ? `<#${cfg.review_channel_id}>` : 'Not set'}`,
+      `Ping Role: ${cfg?.ping_role_id ? `<@&${cfg.ping_role_id}>` : 'Not set'}`,
+      `Ping Team: ${cfg?.ping_team_id ? 'Configured' : 'Not set'}`,
       '',
-      'Use `/report setup` to set the review channel and `/report panel` to post a public report launcher.'
+      'Reports can be claimed, resolved, dismissed, updated with details, or converted into a follow-up ticket.'
     ].join('\n'),
     color: SlickBotColors.INFO
   });
@@ -111,7 +127,10 @@ async function buildApplicationsPanel(guildId) {
   const pending = await query(`SELECT COUNT(*)::int AS count FROM application_submissions WHERE guild_id = $1 AND status = 'PENDING'`, [guildId]).catch(() => ({ rows: [{ count: 0 }] }));
 
   const typeLines = types.rowCount
-    ? types.rows.map((type) => `• **${type.name}** — ${type.enabled ? 'Enabled' : 'Disabled'} · Review: ${type.review_channel_id ? `<#${type.review_channel_id}>` : 'Not set'}`).join('\n')
+    ? await Promise.all(types.rows.map(async (type) => {
+      const questions = await query(`SELECT COUNT(*)::int AS count FROM application_questions WHERE application_type_id = $1`, [type.id]).catch(() => ({ rows: [{ count: 0 }] }));
+      return `• **${type.name}** — ${type.enabled ? 'Enabled' : 'Disabled'} · Questions: **${questions.rows[0]?.count || 0}** · Review: ${type.review_channel_id ? `<#${type.review_channel_id}>` : 'Not set'}`;
+    })).then((lines) => lines.join('\n'))
     : 'No application types configured yet. Use `/application setup`. A default Moderator type is created during setup.';
 
   const embed = createBaseEmbed({
@@ -122,17 +141,14 @@ async function buildApplicationsPanel(guildId) {
       '**Application Types**',
       typeLines,
       '',
-      'Use `/application setup` to configure roles and review channels. Use `/application panel` to post a public application launcher.'
+      'Applications now run through DM. SlickBot asks custom questions one at a time, records each response, then submits the completed application to the review channel.'
     ].join('\n'),
     color: SlickBotColors.INFO
   });
 
   const buttons = [createPanelButton(CustomIds.ApplicationsRefresh, 'Refresh', ButtonStyle.Secondary, '🔄')];
-  if (types.rows[0]) {
-    buttons.unshift(createPanelButton(`${CustomIds.ApplicationApplyPrefix}${types.rows[0].id}`, `Apply: ${types.rows[0].name}`.slice(0, 80), ButtonStyle.Primary, '📝'));
-  }
+  if (types.rows[0]) buttons.unshift(createPanelButton(`${CustomIds.ApplicationApplyPrefix}${types.rows[0].id}`, `Apply: ${types.rows[0].name}`.slice(0, 80), ButtonStyle.Primary, '📝'));
   buttons.push(createPanelButton(CustomIds.SupportRefresh, 'Back', ButtonStyle.Secondary, '↩️'));
-
   return { embeds: [embed], components: [createButtonRow(buttons.slice(0, 5))] };
 }
 
@@ -150,8 +166,9 @@ async function buildAppealsPanel(guildId) {
       `Denied Appeals: **${byStatus.DENIED || 0}**`,
       '',
       `Review Channel: ${cfg?.review_channel_id ? `<#${cfg.review_channel_id}>` : 'Not set'}`,
+      `DM Decisions: **${cfg?.dm_decision_enabled ? 'Enabled' : 'Disabled'}**`,
       '',
-      'Use `/appeal setup` to set the review channel and `/appeal panel` to post a public appeal launcher.'
+      'Appeal reviewers can approve/deny immediately or open a decision reason modal.'
     ].join('\n'),
     color: SlickBotColors.INFO
   });
@@ -165,43 +182,35 @@ async function buildAppealsPanel(guildId) {
   return { embeds: [embed], components: [row] };
 }
 
-function buildPublicTicketPanel(type = 'Admin Support') {
+async function buildPublicTicketPanel(types = []) {
+  const enabledTypes = types.filter((type) => type.enabled !== false).slice(0, 5);
   const embed = createBaseEmbed({
-    title: `${type} Tickets`,
-    description: 'Need help? Select **Open Ticket** below and SlickBot will create a private support channel for you.',
+    title: 'Open a Ticket',
+    description: enabledTypes.length
+      ? 'Select the ticket type that best matches what you need. SlickBot will ask the configured questions and create a private support channel.'
+      : 'Need help? Select **Open Ticket** below and SlickBot will create a private support channel for you.',
     color: SlickBotColors.PRIMARY,
     footer: 'SlickBot Tickets'
   });
-  return { embeds: [embed], components: [createButtonRow([createPanelButton(CustomIds.TicketOpen, 'Open Ticket', ButtonStyle.Primary, '🎟️')])] };
+
+  const buttons = enabledTypes.length
+    ? enabledTypes.map((type) => createPanelButton(`${CustomIds.TicketOpenTypePrefix}${type.id}`, type.label || type.name, ButtonStyle.Primary, '🎟️'))
+    : [createPanelButton(CustomIds.TicketOpen, 'Open Ticket', ButtonStyle.Primary, '🎟️')];
+  return { embeds: [embed], components: [createButtonRow(buttons)] };
 }
 
 function buildPublicReportPanel() {
-  const embed = createBaseEmbed({
-    title: 'Submit a Report',
-    description: 'Use this panel to privately report a concern to the staff team.',
-    color: SlickBotColors.WARNING,
-    footer: 'SlickBot Reports'
-  });
+  const embed = createBaseEmbed({ title: 'Submit a Report', description: 'Use this panel to privately report a concern to the staff team.', color: SlickBotColors.WARNING, footer: 'SlickBot Reports' });
   return { embeds: [embed], components: [createButtonRow([createPanelButton(CustomIds.ReportOpen, 'Submit Report', ButtonStyle.Danger, '🚩')])] };
 }
 
 function buildPublicApplicationPanel(type) {
-  const embed = createBaseEmbed({
-    title: `${type.name} Application`,
-    description: type.description || 'Use this panel to submit an application for review.',
-    color: SlickBotColors.PRIMARY,
-    footer: 'SlickBot Applications'
-  });
+  const embed = createBaseEmbed({ title: `${type.name} Application`, description: type.description || 'Use this panel to start a DM-based application.', color: SlickBotColors.PRIMARY, footer: 'SlickBot Applications' });
   return { embeds: [embed], components: [createButtonRow([createPanelButton(`${CustomIds.ApplicationApplyPrefix}${type.id}`, 'Start Application', ButtonStyle.Primary, '📝')])] };
 }
 
 function buildPublicAppealPanel() {
-  const embed = createBaseEmbed({
-    title: 'Submit an Appeal',
-    description: 'Use this panel to submit an appeal for staff review. Include the case number if you have one.',
-    color: SlickBotColors.INFO,
-    footer: 'SlickBot Appeals'
-  });
+  const embed = createBaseEmbed({ title: 'Submit an Appeal', description: 'Use this panel to submit an appeal for staff review.', color: SlickBotColors.INFO, footer: 'SlickBot Appeals' });
   return { embeds: [embed], components: [createButtonRow([createPanelButton(CustomIds.AppealOpen, 'Submit Appeal', ButtonStyle.Primary, '⚖️')])] };
 }
 

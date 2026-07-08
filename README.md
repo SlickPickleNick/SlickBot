@@ -1,19 +1,33 @@
 # SlickBot
 
-## v0.3.2 Hotfix
-
-This version fixes the Discord command registration error from v0.3.0 where `/appeal submit` had an optional option before a required option. Discord requires required slash-command options to appear before optional options.
-
-This version also adds command payload validation before command deployment, so future option-order issues fail with a clear local validation message before Discord rejects the command list.
-
-
 SlickBot is a custom all-in-one Discord server management bot for the SlickPickleNick community.
 
-This version uses the working TitanBot-style JavaScript foundation: Discord.js, PostgreSQL, Railway Docker deployment, interactive embeds, buttons, select menus, and modals.
+This version keeps the working TitanBot-style JavaScript foundation: Discord.js, PostgreSQL, Railway Docker deployment, interactive embeds, buttons, select menus, and modals.
 
 ## Version
 
-`v0.3.2`
+`v0.3.3`
+
+## v0.3.3 Support Workflow Expansion
+
+This update expands the support workflow modules without changing the working Railway deployment foundation from v0.3.2.
+
+### Added / Improved
+
+- DM-based applications with custom questions
+- Application questions are sent one at a time in DM
+- Application responses are recorded and submitted after the final answer
+- Ticket types with separate panel buttons
+- Custom ticket questions per ticket type
+- Ticket naming formats, such as `ticket-{username}-{number}` or `{type}-{username}-{number}`
+- Ticket escalation to a configured role or Permission Team
+- Ticket control embed now includes a Close With Reason button
+- Report claiming
+- Report Add Details button
+- Report Open Ticket button for staff follow-up
+- Report setup can ping a role and/or Permission Team when a report is submitted
+- Appeal setup can enable DM decision notices
+- Appeal decision buttons now support optional decision reasons
 
 ## Included Modules
 
@@ -44,81 +58,149 @@ This version uses the working TitanBot-style JavaScript foundation: Discord.js, 
 - Internal audit log table
 - No fallback spam behavior
 
-Important: Discord log messages are only posted when the related log module or event override has a configured channel. If the `message` log module is not configured, message edit/delete logs will not be sent.
+Discord log messages are only posted when the related log module or event override has a configured channel.
 
 ### Log Modules
-
-SlickBot organizes logs into these groups:
 
 - `core` — system, setup, module config, permission teams, bot status
 - `moderation` — moderation actions, cases, user notes
 - `member` — joins, leaves, nickname changes, role changes, member updates
 - `message` — message edits and deletions
 - `voice` — voice joins, leaves, and moves
-- `tickets` — ticket opens, claims, priority changes, closes, and transcripts
-- `reports` — report submissions and staff review actions
-- `applications` — application submissions and review actions
+- `tickets` — ticket opens, claims, priority changes, escalations, closes, and transcripts
+- `reports` — report submissions, claims, notes, and decisions
+- `applications` — DM application starts, submissions, and review actions
 - `appeals` — appeal submissions and review actions
 - `scheduled-messages` — future scheduled message activity
 
-### Moderation, Cases, and User Notes
-
-- `/mod panel`
-- `/mod warn`
-- `/mod timeout`
-- `/mod kick`
-- `/mod ban`
-- `/mod massban`
-- `/case panel`
-- `/case view`
-- `/case user`
-- `/case close`
-- `/case reopen`
-- `/note add`
-- `/note list`
-- `/note remove`
-
-Moderation actions create case records automatically. User notes are private staff records and are only shown through ephemeral command responses.
+## Support Workflow Setup
 
 ### Tickets
 
-- `/ticket manager`
-- `/ticket setup`
-- `/ticket panel`
-- `/ticket open`
-- `/ticket claim`
-- `/ticket priority`
-- `/ticket close`
+Default settings:
 
-Tickets create private channels by default. Ticket close generates a `.txt` transcript and sends it to the configured ticket log channel when transcripts are enabled.
+```text
+/ticket setup category:#tickets log_channel:#ticket-logs staff_role:@Moderators ticket_limit:1 transcripts:true naming_format:ticket-{username}-{number}
+```
+
+Create ticket types:
+
+```text
+/ticket type-setup name:Admin Support label:Admin Support staff_role:@Moderators escalated_role:@Senior-Mods naming_format:admin-{username}-{number}
+/ticket type-setup name:Giveaway Claim label:Giveaway Claim staff_role:@Giveaway-Team naming_format:claim-{username}-{number}
+```
+
+Add ticket questions:
+
+```text
+/ticket question-add type:Admin Support question:What do you need help with? required:true
+/ticket question-add type:Giveaway Claim question:Which giveaway did you win? required:true
+```
+
+Post a panel with ticket-type buttons:
+
+```text
+/ticket panel channel:#support
+```
+
+Inside a ticket, staff can use:
+
+```text
+/ticket claim
+/ticket escalate reason:Needs senior review
+/ticket close reason:Issue resolved
+```
+
+The ticket embed also includes interactive buttons for Claim, Escalate, and Close With Reason.
 
 ### Reports
 
-- `/report manager`
-- `/report setup`
-- `/report panel`
-- `/report user`
-- `/report issue`
+Setup:
 
-Reports can be submitted from slash commands or from a public report panel. Staff review cards include Resolve and Dismiss buttons.
+```text
+/report setup review_channel:#staff-reports ping_role:@Moderators
+/report setup review_channel:#staff-reports ping_team:Moderator Team
+/report panel channel:#support
+```
+
+Reports now support:
+
+- Claim
+- Resolve
+- Dismiss
+- Add Details
+- Open Ticket
+
+Claiming changes the report status to `CLAIMED`, but the report remains open until resolved or dismissed.
 
 ### Applications
 
-- `/application manager`
-- `/application setup`
-- `/application panel`
-- `/application apply`
+Setup:
 
-Applications support configurable application types, review channels, pending roles, approved roles, and optional auto-assignment on approval. Public application panels open a modal-based form.
+```text
+/application setup type:Moderator review_channel:#mod-apps pending_role:@Applicant approved_role:@Trial-Mod auto_assign:true
+```
+
+Add custom DM questions:
+
+```text
+/application question-add type:Moderator question:Why do you want to become a moderator? required:true order:1
+/application question-add type:Moderator question:What moderation experience do you have? required:true order:2
+/application question-add type:Moderator question:What is your weekly availability? required:false order:3
+/application question-list type:Moderator
+```
+
+Post the application panel:
+
+```text
+/application panel type:Moderator channel:#apply
+```
+
+Users can also start from command:
+
+```text
+/application apply type:Moderator
+```
+
+SlickBot will DM the user each question one at a time, record each reply, and submit the completed application to the review channel.
 
 ### Appeals
 
-- `/appeal manager`
-- `/appeal setup`
-- `/appeal panel`
-- `/appeal submit`
+Setup:
 
-Appeals can be submitted from slash commands or from a public appeal panel. Staff review cards include Approve and Deny buttons.
+```text
+/appeal setup review_channel:#appeals dm_decision:true
+/appeal panel channel:#support
+```
+
+Appeal reviewers can approve or deny immediately, or use the `Approve + Reason` and `Deny + Reason` buttons to include an optional decision reason. If `dm_decision` is enabled, SlickBot DMs the user with the decision.
+
+## First Setup Commands
+
+After deploying, run:
+
+```text
+/setup log_channel:#staff-logs
+/modules panel
+/logging panel
+/mod panel
+/status view
+```
+
+To enable support workflow logs:
+
+```text
+/logging set-channel module:tickets channel:#ticket-logs
+/logging set-channel module:reports channel:#report-logs
+/logging set-channel module:applications channel:#application-logs
+/logging set-channel module:appeals channel:#appeal-logs
+```
+
+All configured log modules default to immediate delivery. To batch a module:
+
+```text
+/logging module-mode module:voice delivery:BATCHED interval_seconds:300
+```
 
 ## Railway Variables
 
@@ -154,76 +236,6 @@ OWNER_IDS=
 POSTGRES_URL=
 ```
 
-## First Setup Commands
-
-After deploying, run:
-
-```text
-/setup log_channel:#staff-logs
-/modules panel
-/logging panel
-/mod panel
-/status view
-```
-
-When you use `/setup log_channel`, SlickBot configures the selected channel for these starter log modules:
-
-- `core`
-- `moderation`
-
-No noisy member, message, or voice logs are routed by default. To enable those groups, use:
-
-```text
-/logging set-channel module:member channel:#member-logs
-/logging set-channel module:message channel:#message-logs
-/logging set-channel module:voice channel:#voice-logs
-```
-
-To enable the v0.3.2 support workflow logs:
-
-```text
-/logging set-channel module:tickets channel:#ticket-logs
-/logging set-channel module:reports channel:#report-logs
-/logging set-channel module:applications channel:#application-logs
-/logging set-channel module:appeals channel:#appeal-logs
-```
-
-All configured log modules default to immediate delivery. To batch a module:
-
-```text
-/logging module-mode module:voice delivery:BATCHED interval_seconds:300
-```
-
-## Support Workflow Setup
-
-Tickets:
-
-```text
-/ticket setup category:#tickets log_channel:#ticket-logs staff_role:@Moderators ticket_limit:1 transcripts:true
-/ticket panel channel:#support type:Admin Support
-```
-
-Reports:
-
-```text
-/report setup review_channel:#staff-reports
-/report panel channel:#support
-```
-
-Applications:
-
-```text
-/application setup type:Moderator review_channel:#mod-apps pending_role:@Applicant approved_role:@Trial-Mod auto_assign:true
-/application panel type:Moderator channel:#apply
-```
-
-Appeals:
-
-```text
-/appeal setup review_channel:#appeals
-/appeal panel channel:#support
-```
-
 ## Permission Teams
 
 The Bot Owners team gets all current action keys during setup. Other teams can be configured with:
@@ -240,9 +252,6 @@ Example:
 /team create name:Moderator Team description:MODS and SENIOR MODS
 /team add-role team:Moderator Team role:@MODS
 /team add-role team:Moderator Team role:@SENIOR MODS
-/team allow team:Moderator Team action_key:moderation.warn
-/team allow team:Moderator Team action_key:moderation.timeout
-/team allow team:Moderator Team action_key:cases.view
 /team allow team:Moderator Team action_key:tickets.claim
 /team allow team:Moderator Team action_key:tickets.close
 /team allow team:Moderator Team action_key:reports.review
@@ -265,8 +274,6 @@ README.md
 
 It should not be nested inside another `slickbot/` folder.
 
-## v0.3.2 Railway install fix
+## Railway Install Path
 
-This package changes the Docker dependency step from `npm install --omit=dev` to `npm ci --omit=dev` using the committed `package-lock.json`. It also adds `.npmrc` settings to force the public npm registry and disable audit/fund/progress output during Railway builds.
-
-If Railway previously appeared stuck at `RUN npm install --omit=dev`, replace the repo contents with this version and redeploy.
+This package keeps the v0.3.2 Railway install fix: Docker uses `npm ci --omit=dev` with the committed lockfile and `.npmrc` forces the public npm registry.

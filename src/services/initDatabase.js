@@ -315,6 +315,78 @@ async function initDatabase() {
     );
   `);
 
+
+
+  await query(`ALTER TABLE ticket_configs ADD COLUMN IF NOT EXISTS naming_format TEXT NOT NULL DEFAULT 'ticket-{username}-{number}';`).catch(() => {});
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS ticket_types (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      label TEXT,
+      description TEXT,
+      category_id TEXT,
+      log_channel_id TEXT,
+      staff_role_id TEXT,
+      staff_team_id TEXT REFERENCES permission_teams(id) ON DELETE SET NULL,
+      escalated_role_id TEXT,
+      escalated_team_id TEXT REFERENCES permission_teams(id) ON DELETE SET NULL,
+      ticket_limit INTEGER NOT NULL DEFAULT 1,
+      transcript_enabled BOOLEAN NOT NULL DEFAULT true,
+      naming_format TEXT NOT NULL DEFAULT 'ticket-{username}-{number}',
+      questions JSONB,
+      enabled BOOLEAN NOT NULL DEFAULT true,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(guild_id, name)
+    );
+  `);
+
+  await query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS ticket_type_id TEXT;`).catch(() => {});
+  await query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS reviewer_role_id TEXT;`).catch(() => {});
+  await query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS escalated_to_role_id TEXT;`).catch(() => {});
+  await query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS escalated_by_user_id TEXT;`).catch(() => {});
+  await query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS escalated_at TIMESTAMPTZ;`).catch(() => {});
+
+  await query(`ALTER TABLE report_configs ADD COLUMN IF NOT EXISTS ping_role_id TEXT;`).catch(() => {});
+  await query(`ALTER TABLE report_configs ADD COLUMN IF NOT EXISTS ping_team_id TEXT REFERENCES permission_teams(id) ON DELETE SET NULL;`).catch(() => {});
+  await query(`ALTER TABLE reports ADD COLUMN IF NOT EXISTS claimed_by_user_id TEXT;`).catch(() => {});
+  await query(`ALTER TABLE reports ADD COLUMN IF NOT EXISTS review_notes TEXT;`).catch(() => {});
+  await query(`ALTER TABLE reports ADD COLUMN IF NOT EXISTS linked_ticket_id TEXT;`).catch(() => {});
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS application_questions (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      application_type_id TEXT NOT NULL REFERENCES application_types(id) ON DELETE CASCADE,
+      question_text TEXT NOT NULL,
+      required BOOLEAN NOT NULL DEFAULT true,
+      display_order INTEGER NOT NULL DEFAULT 1,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS application_sessions (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      application_type_id TEXT NOT NULL REFERENCES application_types(id) ON DELETE CASCADE,
+      applicant_user_id TEXT NOT NULL,
+      applicant_user_tag TEXT,
+      current_index INTEGER NOT NULL DEFAULT 0,
+      answers JSONB,
+      status TEXT NOT NULL DEFAULT 'ACTIVE',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      completed_at TIMESTAMPTZ
+    );
+  `);
+
+  await query(`ALTER TABLE appeal_configs ADD COLUMN IF NOT EXISTS dm_decision_enabled BOOLEAN NOT NULL DEFAULT false;`).catch(() => {});
+  await query(`ALTER TABLE appeals ADD COLUMN IF NOT EXISTS decision_reason TEXT;`).catch(() => {});
+
+
   await query(`
     CREATE TABLE IF NOT EXISTS audit_logs (
       id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
@@ -339,6 +411,11 @@ async function initDatabase() {
   await query(`CREATE INDEX IF NOT EXISTS idx_moderation_cases_guild_target ON moderation_cases(guild_id, target_user_id, created_at DESC);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_moderation_cases_guild_number ON moderation_cases(guild_id, case_number);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_user_notes_guild_target ON user_notes(guild_id, target_user_id, created_at DESC);`);
+
+
+  await query(`CREATE INDEX IF NOT EXISTS idx_ticket_types_guild ON ticket_types(guild_id, name);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_application_questions_type ON application_questions(application_type_id, display_order);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_application_sessions_active ON application_sessions(applicant_user_id, status, updated_at DESC);`);
 
   await query(`CREATE INDEX IF NOT EXISTS idx_tickets_guild_status ON tickets(guild_id, status, created_at DESC);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_tickets_channel ON tickets(guild_id, channel_id);`);

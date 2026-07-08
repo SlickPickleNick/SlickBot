@@ -10,6 +10,7 @@ const { PermissionService } = require('./modules/permissions/permissionService')
 const { LoggingService } = require('./modules/logging/loggingService');
 const { StatusService } = require('./modules/status/statusService');
 const { ModerationService } = require('./modules/moderation/moderationService');
+const { ApplicationService } = require('./modules/support/supportService');
 const { handleComponentInteraction } = require('./services/interactionRouter');
 
 const client = new Client({
@@ -21,6 +22,7 @@ const client = new Client({
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.GuildMessageReactions,
     GatewayIntentBits.GuildVoiceStates,
+    GatewayIntentBits.DirectMessages,
     GatewayIntentBits.MessageContent
   ],
   partials: [Partials.Channel, Partials.Message, Partials.Reaction, Partials.User, Partials.GuildMember]
@@ -30,6 +32,7 @@ const permissions = new PermissionService();
 const logger = new LoggingService(client);
 const status = new StatusService(client);
 const moderation = new ModerationService();
+const applications = new ApplicationService();
 const healthServer = startHealthServer(client);
 
 client.once(Events.ClientReady, async (readyClient) => {
@@ -191,6 +194,14 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
       newChannelId
     }
   }).catch((error) => console.error('Failed to log voice state:', error));
+});
+
+
+client.on(Events.MessageCreate, async (message) => {
+  if (message.author?.bot || message.guild) return;
+  await applications.handleDmResponse({ message, client, logger }).catch((error) => {
+    console.error('Failed to handle DM application response:', error);
+  });
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
