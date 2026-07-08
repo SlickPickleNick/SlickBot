@@ -9,6 +9,7 @@ const { replyPrivate } = require('./utils/reply');
 const { PermissionService } = require('./modules/permissions/permissionService');
 const { LoggingService } = require('./modules/logging/loggingService');
 const { StatusService } = require('./modules/status/statusService');
+const { ModerationService } = require('./modules/moderation/moderationService');
 const { handleComponentInteraction } = require('./services/interactionRouter');
 
 const client = new Client({
@@ -28,6 +29,7 @@ const client = new Client({
 const permissions = new PermissionService();
 const logger = new LoggingService(client);
 const status = new StatusService(client);
+const moderation = new ModerationService();
 const healthServer = startHealthServer(client);
 
 client.once(Events.ClientReady, async (readyClient) => {
@@ -156,7 +158,7 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
 
 client.on(Events.InteractionCreate, async (interaction) => {
   if (!interaction.isChatInputCommand()) {
-    await handleComponentInteraction(interaction, { client, permissions, logger, status }).catch((error) => {
+    await handleComponentInteraction(interaction, { client, permissions, logger, status, moderation }).catch((error) => {
       console.error('Component interaction failed:', error);
     });
     return;
@@ -168,7 +170,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
     return;
   }
 
-  const permissionResult = await permissions.checkInteraction(interaction, command.actionKey, command.moduleKey);
+  const actionKey = typeof command.getActionKey === 'function' ? command.getActionKey(interaction) : command.actionKey;
+  const moduleKey = typeof command.getModuleKey === 'function' ? command.getModuleKey(interaction) : command.moduleKey;
+  const permissionResult = await permissions.checkInteraction(interaction, actionKey, moduleKey);
   if (!permissionResult.allowed) {
     await replyPrivate(interaction, permissionResult.reason || 'You do not have permission to use this command.');
     return;
@@ -179,7 +183,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
       client,
       permissions,
       logger,
-      status
+      status,
+      moderation
     });
   } catch (error) {
     console.error(`Command failed: ${interaction.commandName}`, error);

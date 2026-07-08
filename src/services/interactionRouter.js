@@ -4,6 +4,7 @@ const { ModuleKeys, isCoreModule } = require('../modules/moduleRegistry');
 const { query } = require('./db');
 const { replyPrivate } = require('../utils/reply');
 const { buildSetupPanel, buildModulesPanel, buildLoggingPanel, buildTeamsPanel } = require('../modules/ui/panels');
+const { buildModerationPanel, buildRecentCasesPanel } = require('../modules/moderation/moderationUi');
 const { buildStatusPanel } = require('../commands/status');
 const { createBaseEmbed, SlickBotColors } = require('../modules/ui/uiService');
 const { ActivityTypeNames, PresenceStatus } = require('../modules/status/statusService');
@@ -49,6 +50,18 @@ async function handleButton(interaction, ctx) {
   if (id === CustomIds.SetupTeams) {
     if (!(await requireAction(interaction, ctx, ActionKeys.TeamsManage, ModuleKeys.PERMISSIONS))) return true;
     await updatePanel(interaction, await buildTeamsPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id === CustomIds.SetupModeration || id === CustomIds.ModerationRefresh) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.ModerationPanel, ModuleKeys.MODERATION))) return true;
+    await updatePanel(interaction, await buildModerationPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id === CustomIds.CasesRefresh) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.CasesView, ModuleKeys.MODERATION))) return true;
+    await updatePanel(interaction, await buildRecentCasesPanel(interaction.guildId));
     return true;
   }
 
@@ -149,6 +162,14 @@ async function handleSelect(interaction, ctx) {
       targetType: 'ModuleConfig',
       targetId: moduleKey,
       summary: `${moduleKey} module ${nextEnabled ? 'enabled' : 'disabled'} from interactive panel.`
+    });
+
+    await ctx.logger.log({
+      guildId: interaction.guildId,
+      eventKey: 'module-config',
+      title: `Module ${nextEnabled ? 'Enabled' : 'Disabled'}`,
+      body: [`Module: **${moduleKey}**`, `Updated By: <@${interaction.user.id}>`, 'Source: Interactive panel'].join('\n'),
+      metadata: { moduleKey, enabled: nextEnabled, actorUserId: interaction.user.id }
     });
 
     await updatePanel(interaction, await buildModulesPanel(interaction.guildId));

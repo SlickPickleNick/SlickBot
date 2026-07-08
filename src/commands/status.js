@@ -138,6 +138,14 @@ module.exports = {
         metadata: { status, activityType, activityText, activityUrl, save }
       });
 
+      await ctx.logger.log({
+        guildId: interaction.guildId,
+        eventKey: 'status',
+        title: 'Bot Status Updated',
+        body: [`Updated By: <@${interaction.user.id}>`, `Status: **${status}**`, `Activity: **${activityType}**`, activityText ? `Text: ${activityText}` : null].filter(Boolean).join('\n'),
+        metadata: { status, activityType, activityText, activityUrl, save, actorUserId: interaction.user.id }
+      });
+
       await replyPrivate(interaction, await buildStatusPanel(interaction.guildId, ctx, 'Status updated.'));
       return;
     }
@@ -154,6 +162,14 @@ module.exports = {
         targetId: interaction.client.user.id,
         summary: 'Bot presence cleared.',
         metadata: { save }
+      });
+
+      await ctx.logger.log({
+        guildId: interaction.guildId,
+        eventKey: 'status',
+        title: 'Bot Status Cleared',
+        body: `Cleared By: <@${interaction.user.id}>`,
+        metadata: { save, actorUserId: interaction.user.id }
       });
 
       await replyPrivate(interaction, await buildStatusPanel(interaction.guildId, ctx, 'Status cleared.'));

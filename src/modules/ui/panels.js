@@ -10,6 +10,7 @@ const {
   formatEnabled
 } = require('./uiService');
 const { CustomIds } = require('./customIds');
+const { LogEventCatalog } = require('../logging/logEventCatalog');
 
 async function ensureDefaultModules(guildId) {
   for (const moduleConfig of defaultModules) {
@@ -25,10 +26,6 @@ async function ensureDefaultModules(guildId) {
 async function buildSetupPanel(guildId, guildName = null) {
   await ensureDefaultModules(guildId);
 
-  const guildConfig = await query(
-    `SELECT * FROM guild_configs WHERE guild_id = $1 LIMIT 1`,
-    [guildId]
-  );
   const modules = await query(
     `SELECT module_key, enabled FROM module_configs WHERE guild_id = $1 ORDER BY module_key ASC`,
     [guildId]
@@ -37,9 +34,16 @@ async function buildSetupPanel(guildId, guildName = null) {
     `SELECT COUNT(*)::int AS count FROM permission_teams WHERE guild_id = $1`,
     [guildId]
   );
+  const configuredLogs = await query(
+    `SELECT COUNT(*)::int AS count FROM log_settings WHERE guild_id = $1 AND enabled = true AND channel_id IS NOT NULL`,
+    [guildId]
+  );
+  const cases = await query(
+    `SELECT COUNT(*)::int AS count FROM moderation_cases WHERE guild_id = $1`,
+    [guildId]
+  ).catch(() => ({ rows: [{ count: 0 }] }));
 
   const enabledCount = modules.rows.filter((row) => row.enabled).length;
-  const logChannelId = guildConfig.rows[0]?.default_log_channel_id || null;
 
   const embed = createBaseEmbed({
     title: 'SlickBot Setup Center',
@@ -47,24 +51,29 @@ async function buildSetupPanel(guildId, guildName = null) {
       `Server: **${guildName || 'Current Server'}**`,
       '',
       '**System Snapshot**',
-      `Log Channel: ${logChannelId ? `<#${logChannelId}>` : '**Not Set**'}`,
       `Modules Enabled: **${enabledCount}/${modules.rowCount}**`,
       `Permission Teams: **${teams.rows[0]?.count || 0}**`,
+      `Configured Log Events: **${configuredLogs.rows[0]?.count || 0}**`,
+      `Moderation Cases: **${cases.rows[0]?.count || 0}**`,
       '',
-      'Use the controls below to review setup areas. Detailed configuration still uses slash commands in this version.'
+      'Use the controls below to open setup panels. Event logs only post when that specific event has a channel configured.'
     ].join('\n'),
     color: SlickBotColors.PRIMARY
   });
 
-  const row = createButtonRow([
+  const rowOne = createButtonRow([
     createPanelButton(CustomIds.SetupModules, 'Modules', ButtonStyle.Primary, '🧩'),
     createPanelButton(CustomIds.SetupLogging, 'Logging', ButtonStyle.Secondary, '📋'),
+    createPanelButton(CustomIds.SetupModeration, 'Moderation', ButtonStyle.Secondary, '🛡️'),
     createPanelButton(CustomIds.SetupStatus, 'Status', ButtonStyle.Secondary, '🟣'),
-    createPanelButton(CustomIds.SetupTeams, 'Teams', ButtonStyle.Secondary, '🛡️'),
+    createPanelButton(CustomIds.SetupTeams, 'Teams', ButtonStyle.Secondary, '👥')
+  ]);
+
+  const rowTwo = createButtonRow([
     createPanelButton(CustomIds.SetupRefresh, 'Refresh', ButtonStyle.Secondary, '🔄')
   ]);
 
-  return { embeds: [embed], components: [row] };
+  return { embeds: [embed], components: [rowOne, rowTwo] };
 }
 
 async function buildModulesPanel(guildId) {
@@ -110,10 +119,6 @@ async function buildModulesPanel(guildId) {
 }
 
 async function buildLoggingPanel(guildId) {
-  const config = await query(
-    `SELECT default_log_channel_id FROM guild_configs WHERE guild_id = $1 LIMIT 1`,
-    [guildId]
-  );
   const settings = await query(
     `SELECT event_key, delivery_mode, channel_id, enabled, batch_interval_seconds
      FROM log_settings
@@ -126,21 +131,24 @@ async function buildLoggingPanel(guildId) {
     [guildId]
   );
 
-  const defaultChannelId = config.rows[0]?.default_log_channel_id || null;
-  const settingLines = settings.rowCount
-    ? settings.rows.map((row) => `• **${row.event_key}** — ${row.enabled ? row.delivery_mode : 'DISABLED'}${row.channel_id ? ` → <#${row.channel_id}>` : ''}`).join('\n')
-    : 'No event-specific log settings yet. Default behavior is batched.';
+  const settingsByKey = new Map(settings.rows.map((row) => [row.event_key, row]));
+  const catalogLines = LogEventCatalog.map((event) => {
+    const row = settingsByKey.get(event.key);
+    if (!row || !row.channel_id || row.enabled === false) {
+      return `• **${event.label}** \`${event.key}\` — Not configured`;
+    }
+    return `• **${event.label}** \`${event.key}\` — ${row.delivery_mode} → <#${row.channel_id}>`;
+  }).join('\n');
 
   const embed = createBaseEmbed({
     title: 'SlickBot Logging Center',
     description: [
-      `Default Log Channel: ${defaultChannelId ? `<#${defaultChannelId}>` : '**Not Set**'}`,
       `Queued Batched Logs: **${queued.rows[0]?.count || 0}**`,
       '',
-      '**Configured Log Events**',
-      settingLines,
+      '**Event Routing**',
+      catalogLines,
       '',
-      'Use `/logging set-channel`, `/logging mode`, and the controls below to manage logs.'
+      'Logs are only sent when an event-specific channel is configured. Use `/logging set-channel` and `/logging mode` to route logs.'
     ].join('\n'),
     color: SlickBotColors.INFO
   });

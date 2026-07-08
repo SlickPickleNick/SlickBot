@@ -4,6 +4,7 @@ const CustomIds = Object.freeze({
   SetupLogging: 'slickbot:setup:logging',
   SetupStatus: 'slickbot:setup:status',
   SetupTeams: 'slickbot:setup:teams',
+  SetupModeration: 'slickbot:setup:moderation',
 
   ModulesSelect: 'slickbot:modules:select',
   ModulesRefresh: 'slickbot:modules:refresh',
@@ -16,7 +17,10 @@ const CustomIds = Object.freeze({
   StatusQuickOnline: 'slickbot:status:quick-online',
   StatusQuickIdle: 'slickbot:status:quick-idle',
   StatusQuickDnd: 'slickbot:status:quick-dnd',
-  StatusClear: 'slickbot:status:clear'
+  StatusClear: 'slickbot:status:clear',
+
+  ModerationRefresh: 'slickbot:moderation:refresh',
+  CasesRefresh: 'slickbot:cases:refresh'
 });
 
 module.exports = { CustomIds };

@@ -118,6 +118,45 @@ async function initDatabase() {
     );
   `);
 
+
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS moderation_cases (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      case_number INTEGER NOT NULL,
+      target_user_id TEXT NOT NULL,
+      target_user_tag TEXT,
+      actor_user_id TEXT,
+      action_type TEXT NOT NULL,
+      reason TEXT,
+      status TEXT NOT NULL DEFAULT 'OPEN',
+      duration_seconds INTEGER,
+      expires_at TIMESTAMPTZ,
+      evidence TEXT,
+      metadata JSONB,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(guild_id, case_number)
+    );
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS user_notes (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      note_number INTEGER NOT NULL,
+      target_user_id TEXT NOT NULL,
+      target_user_tag TEXT,
+      actor_user_id TEXT,
+      note TEXT NOT NULL,
+      is_active BOOLEAN NOT NULL DEFAULT true,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(guild_id, note_number)
+    );
+  `);
+
   await query(`
     CREATE TABLE IF NOT EXISTS audit_logs (
       id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
@@ -138,6 +177,9 @@ async function initDatabase() {
   await query(`CREATE INDEX IF NOT EXISTS idx_log_queue_pending ON log_queue_items(guild_id, event_key, flushed_at);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_audit_logs_guild_created ON audit_logs(guild_id, created_at);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_bot_presence_guild ON bot_presence_settings(guild_id);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_moderation_cases_guild_target ON moderation_cases(guild_id, target_user_id, created_at DESC);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_moderation_cases_guild_number ON moderation_cases(guild_id, case_number);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_user_notes_guild_target ON user_notes(guild_id, target_user_id, created_at DESC);`);
 }
 
 if (require.main === module) {

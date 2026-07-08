@@ -67,6 +67,14 @@ module.exports = {
         );
       }
 
+      await ctx.logger.log({
+        guildId: interaction.guildId,
+        eventKey: 'permission-team',
+        title: 'Permission Team Saved',
+        body: [`Team: **${name}**`, `Updated By: <@${interaction.user.id}>`].join('\n'),
+        metadata: { teamName: name, actorUserId: interaction.user.id }
+      });
+
       await replyPrivate(interaction, { embeds: [createBaseEmbed({ title: 'Permission Team Saved', description: `Team **${name}** created/updated.`, color: SlickBotColors.SUCCESS })] });
       return;
     }
@@ -88,11 +96,27 @@ module.exports = {
            ON CONFLICT (team_id, role_id) DO NOTHING`,
           [team.id, role.id]
         );
+        await ctx.logger.log({
+          guildId: interaction.guildId,
+          eventKey: 'permission-team',
+          title: 'Role Added to Permission Team',
+          body: [`Team: **${teamName}**`, `Role: ${role}`, `Updated By: <@${interaction.user.id}>`].join('\n'),
+          metadata: { teamName, roleId: role.id, actorUserId: interaction.user.id }
+        });
+
         await replyPrivate(interaction, { embeds: [createBaseEmbed({ title: 'Role Added to Team', description: `Added ${role} to **${teamName}**.`, color: SlickBotColors.SUCCESS })] });
         return;
       }
 
       await query(`DELETE FROM permission_team_roles WHERE team_id = $1 AND role_id = $2`, [team.id, role.id]);
+      await ctx.logger.log({
+        guildId: interaction.guildId,
+        eventKey: 'permission-team',
+        title: 'Role Removed from Permission Team',
+        body: [`Team: **${teamName}**`, `Role: ${role}`, `Updated By: <@${interaction.user.id}>`].join('\n'),
+        metadata: { teamName, roleId: role.id, actorUserId: interaction.user.id }
+      });
+
       await replyPrivate(interaction, { embeds: [createBaseEmbed({ title: 'Role Removed from Team', description: `Removed ${role} from **${teamName}**.`, color: SlickBotColors.INFO })] });
       return;
     }
@@ -114,6 +138,14 @@ module.exports = {
          DO UPDATE SET allow = true, updated_at = NOW()`,
         [interaction.guildId, team.id, actionKey]
       );
+
+      await ctx.logger.log({
+        guildId: interaction.guildId,
+        eventKey: 'permission-team',
+        title: 'Team Permission Added',
+        body: [`Team: **${teamName}**`, `Action Key: \`${actionKey}\``, `Updated By: <@${interaction.user.id}>`].join('\n'),
+        metadata: { teamName, actionKey, actorUserId: interaction.user.id }
+      });
 
       await replyPrivate(interaction, { embeds: [createBaseEmbed({ title: 'Team Permission Added', description: `Allowed **${teamName}** to use \`${actionKey}\`.`, color: SlickBotColors.SUCCESS })] });
       return;

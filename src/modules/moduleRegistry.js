@@ -24,7 +24,7 @@ const defaultModules = [
   { key: ModuleKeys.PERMISSIONS, enabled: true },
   { key: ModuleKeys.LOGGING, enabled: true },
   { key: ModuleKeys.STATUS, enabled: true },
-  { key: ModuleKeys.MODERATION, enabled: false },
+  { key: ModuleKeys.MODERATION, enabled: true },
   { key: ModuleKeys.TICKETS, enabled: false },
   { key: ModuleKeys.APPLICATIONS, enabled: false },
   { key: ModuleKeys.APPEALS, enabled: false },

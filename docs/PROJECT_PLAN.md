@@ -1,6 +1,6 @@
 # SlickBot Project Plan
 
-## Current Version: v0.1.3
+## Current Version: v0.2.0
 
 SlickBot is a bot-only all-in-one Discord management system for the SlickPickleNick server. It is intentionally built for one server first, while preserving a database structure that can support selected external servers later.
 
@@ -15,58 +15,42 @@ SlickBot is a bot-only all-in-one Discord management system for the SlickPickleN
 - Module toggles
 - Ephemeral/private responses
 - Styled embeds/buttons/select menus
+- Event-specific log routing
 - Batched logging
 - Bot presence/status controls
+- Moderation cases
+- Private staff user notes
 
 ## Design Direction
 
 SlickBot responses should feel like a dark creator command center: polished embeds, compact metadata, clear hierarchy, interactive controls, and fewer plain text lists.
 
-## v0.1.3 Scope
+## v0.2.0 Scope
 
 ### Added
 
-- Privileged gateway intents:
-  - Presence
-  - Server Members
-  - Message Content
-- `STATUS` core module
-- `/status view`
-- `/status set`
-- `/status clear`
-- Saved status/activity settings
-- Presence restore on bot startup
-- Interactive setup panel
-- Interactive module manager
-- Interactive logging center
-- Interactive status buttons
-- Styled UI helper layer
-- Event listeners for batched logging:
-  - Member joins
-  - Member leaves
-  - Message deletes
-  - Message edits
-  - Voice state changes
-
-## v0.2.0 Recommended Scope
-
-### Moderation & Case Management
-
-- `/warn`
-- `/timeout`
-- `/untimeout`
-- `/kick`
-- `/ban`
-- `/unban`
+- Event-specific log channel routing
+- Silent behavior when no event-specific log channel is configured
+- Starter log routing through `/setup log_channel`
+- Moderation module enabled for new setups
+- `/mod panel`
+- `/mod warn`
+- `/mod timeout`
+- `/mod kick`
+- `/mod ban`
+- `/mod massban`
+- `/case panel`
 - `/case view`
-- `/case list`
+- `/case user`
+- `/case close`
+- `/case reopen`
 - `/note add`
-- `/note view`
-- `/note delete`
-- Confirmation buttons for dangerous actions
-- Case IDs
-- Moderator notes
-- Immediate moderation audit logs
+- `/note list`
+- `/note remove`
+- Moderation case database table
+- User note database table
+- Moderation center interactive panel
+- Recent cases interactive panel
 
 ## v0.3.0 Recommended Scope
 
@@ -100,4 +84,3 @@ SlickBot responses should feel like a dark creator command center: polished embe
 - Server stats
 - Join-to-create voice
 - Custom command creation
-

@@ -4,6 +4,9 @@ const teamCommand = require('./team');
 const modulesCommand = require('./modules');
 const loggingCommand = require('./logging');
 const statusCommand = require('./status');
+const modCommand = require('./mod');
+const caseCommand = require('./case');
+const noteCommand = require('./note');
 
 const commands = [
   pingCommand,
@@ -11,7 +14,10 @@ const commands = [
   teamCommand,
   modulesCommand,
   loggingCommand,
-  statusCommand
+  statusCommand,
+  modCommand,
+  caseCommand,
+  noteCommand
 ];
 
 const commandMap = new Map(commands.map((command) => [command.data.name, command]));

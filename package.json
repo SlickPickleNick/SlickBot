@@ -1,8 +1,8 @@
 {
   "name": "slickbot",
-  "version": "0.1.3",
+  "version": "0.2.0",
   "private": true,
-  "description": "SlickBot all-in-one Discord server management bot foundation with interactive setup and presence controls.",
+  "description": "SlickBot all-in-one Discord server management bot with interactive setup, event-routed logging, moderation cases, and user notes.",
   "main": "src/index.js",
   "engines": {
     "node": ">=22.12.0"

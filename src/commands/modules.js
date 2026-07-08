@@ -78,6 +78,14 @@ module.exports = {
       summary: `${moduleKey} module ${enabled ? 'enabled' : 'disabled'}.`
     });
 
+    await ctx.logger.log({
+      guildId: interaction.guildId,
+      eventKey: 'module-config',
+      title: `Module ${enabled ? 'Enabled' : 'Disabled'}`,
+      body: [`Module: **${moduleKey}**`, `Updated By: <@${interaction.user.id}>`].join('\n'),
+      metadata: { moduleKey, enabled, actorUserId: interaction.user.id }
+    });
+
     await replyPrivate(interaction, await buildModulesPanel(interaction.guildId));
   }
 };

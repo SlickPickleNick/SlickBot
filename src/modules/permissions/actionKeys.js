@@ -6,7 +6,17 @@ const ActionKeys = Object.freeze({
   LoggingConfigure: 'logging.configure',
   LoggingView: 'logging.view',
   StatusView: 'status.view',
-  StatusManage: 'status.manage'
+  StatusManage: 'status.manage',
+  ModerationPanel: 'moderation.panel',
+  ModerationWarn: 'moderation.warn',
+  ModerationTimeout: 'moderation.timeout',
+  ModerationKick: 'moderation.kick',
+  ModerationBan: 'moderation.ban',
+  ModerationMassBan: 'moderation.massban',
+  CasesView: 'cases.view',
+  CasesManage: 'cases.manage',
+  UserNotesView: 'user-notes.view',
+  UserNotesManage: 'user-notes.manage'
 });
 
 const defaultTeamPermissions = [
@@ -17,7 +27,17 @@ const defaultTeamPermissions = [
   ActionKeys.LoggingConfigure,
   ActionKeys.LoggingView,
   ActionKeys.StatusView,
-  ActionKeys.StatusManage
+  ActionKeys.StatusManage,
+  ActionKeys.ModerationPanel,
+  ActionKeys.ModerationWarn,
+  ActionKeys.ModerationTimeout,
+  ActionKeys.ModerationKick,
+  ActionKeys.ModerationBan,
+  ActionKeys.ModerationMassBan,
+  ActionKeys.CasesView,
+  ActionKeys.CasesManage,
+  ActionKeys.UserNotesView,
+  ActionKeys.UserNotesManage
 ];
 
 module.exports = {
