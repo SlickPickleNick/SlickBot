@@ -29,8 +29,8 @@ module.exports = {
       subcommand
         .setName('submit')
         .setDescription('Submit an appeal.')
-        .addIntegerOption((option) => option.setName('case_number').setDescription('Case number if known.').setRequired(false).setMinValue(1))
         .addStringOption((option) => option.setName('reason').setDescription('Why should staff review this?').setRequired(true).setMaxLength(1000))
+        .addIntegerOption((option) => option.setName('case_number').setDescription('Case number if known.').setRequired(false).setMinValue(1))
         .addStringOption((option) => option.setName('details').setDescription('Additional context.').setRequired(false).setMaxLength(1000))
     ),
   actionKey: ActionKeys.AppealsPanel,

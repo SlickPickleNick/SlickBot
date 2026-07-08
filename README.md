@@ -1,12 +1,19 @@
 # SlickBot
 
+## v0.3.1 Hotfix
+
+This version fixes the Discord command registration error from v0.3.0 where `/appeal submit` had an optional option before a required option. Discord requires required slash-command options to appear before optional options.
+
+This version also adds command payload validation before command deployment, so future option-order issues fail with a clear local validation message before Discord rejects the command list.
+
+
 SlickBot is a custom all-in-one Discord server management bot for the SlickPickleNick community.
 
 This version uses the working TitanBot-style JavaScript foundation: Discord.js, PostgreSQL, Railway Docker deployment, interactive embeds, buttons, select menus, and modals.
 
 ## Version
 
-`v0.3.0`
+`v0.3.1`
 
 ## Included Modules
 
@@ -172,7 +179,7 @@ No noisy member, message, or voice logs are routed by default. To enable those g
 /logging set-channel module:voice channel:#voice-logs
 ```
 
-To enable the v0.3.0 support workflow logs:
+To enable the v0.3.1 support workflow logs:
 
 ```text
 /logging set-channel module:tickets channel:#ticket-logs

@@ -1,10 +1,16 @@
 const { REST, Routes } = require('discord.js');
 const { env } = require('./config/env');
 const { commands } = require('./commands');
+const { validateCommandPayloads } = require('./utils/commandValidation');
 
 async function deployCommands() {
   const rest = new REST({ version: '10' }).setToken(env.DISCORD_TOKEN);
   const payload = commands.map((command) => command.data.toJSON());
+  const validationErrors = validateCommandPayloads(payload);
+
+  if (validationErrors.length > 0) {
+    throw new Error(`Invalid command payload:\n- ${validationErrors.join('\n- ')}`);
+  }
 
   if (env.DISCORD_GUILD_ID) {
     await rest.put(Routes.applicationGuildCommands(env.DISCORD_CLIENT_ID, env.DISCORD_GUILD_ID), {
