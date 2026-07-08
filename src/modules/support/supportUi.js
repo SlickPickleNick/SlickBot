@@ -14,6 +14,13 @@ function parseJson(value, fallback) {
   try { return JSON.parse(value); } catch { return fallback; }
 }
 
+function parseHexColor(value, fallback = SlickBotColors.PRIMARY) {
+  if (!value) return fallback;
+  const normalized = String(value).replace('#', '').trim();
+  if (!/^[0-9a-fA-F]{6}$/.test(normalized)) return fallback;
+  return Number.parseInt(normalized, 16);
+}
+
 async function buildSupportPanel(guildId) {
   const [tickets, reports, apps, appeals] = await Promise.all([
     query(`SELECT COUNT(*)::int AS count FROM tickets WHERE guild_id = $1 AND status = 'OPEN'`, [guildId]).catch(() => ({ rows: [{ count: 0 }] })),
@@ -182,14 +189,14 @@ async function buildAppealsPanel(guildId) {
   return { embeds: [embed], components: [row] };
 }
 
-async function buildPublicTicketPanel(types = []) {
+async function buildPublicTicketPanel(types = [], config = null) {
   const enabledTypes = types.filter((type) => type.enabled !== false).slice(0, 5);
   const embed = createBaseEmbed({
-    title: 'Open a Ticket',
-    description: enabledTypes.length
+    title: config?.panel_title || 'Open a Ticket',
+    description: config?.panel_description || (enabledTypes.length
       ? 'Select the ticket type that best matches what you need. SlickBot will ask the configured questions and create a private support channel.'
-      : 'Need help? Select **Open Ticket** below and SlickBot will create a private support channel for you.',
-    color: SlickBotColors.PRIMARY,
+      : 'Need help? Select **Open Ticket** below and SlickBot will create a private support channel for you.'),
+    color: parseHexColor(config?.panel_color, SlickBotColors.PRIMARY),
     footer: 'SlickBot Tickets'
   });
 
@@ -199,18 +206,18 @@ async function buildPublicTicketPanel(types = []) {
   return { embeds: [embed], components: [createButtonRow(buttons)] };
 }
 
-function buildPublicReportPanel() {
-  const embed = createBaseEmbed({ title: 'Submit a Report', description: 'Use this panel to privately report a concern to the staff team.', color: SlickBotColors.WARNING, footer: 'SlickBot Reports' });
+function buildPublicReportPanel(config = null) {
+  const embed = createBaseEmbed({ title: config?.panel_title || 'Submit a Report', description: config?.panel_description || 'Use this panel to privately report a concern to the staff team.', color: parseHexColor(config?.panel_color, SlickBotColors.WARNING), footer: 'SlickBot Reports' });
   return { embeds: [embed], components: [createButtonRow([createPanelButton(CustomIds.ReportOpen, 'Submit Report', ButtonStyle.Danger, '🚩')])] };
 }
 
 function buildPublicApplicationPanel(type) {
-  const embed = createBaseEmbed({ title: `${type.name} Application`, description: type.description || 'Use this panel to start a DM-based application.', color: SlickBotColors.PRIMARY, footer: 'SlickBot Applications' });
+  const embed = createBaseEmbed({ title: type.panel_title || `${type.name} Application`, description: type.panel_description || type.description || 'Use this panel to start a DM-based application.', color: parseHexColor(type.panel_color, SlickBotColors.PRIMARY), footer: 'SlickBot Applications' });
   return { embeds: [embed], components: [createButtonRow([createPanelButton(`${CustomIds.ApplicationApplyPrefix}${type.id}`, 'Start Application', ButtonStyle.Primary, '📝')])] };
 }
 
-function buildPublicAppealPanel() {
-  const embed = createBaseEmbed({ title: 'Submit an Appeal', description: 'Use this panel to submit an appeal for staff review.', color: SlickBotColors.INFO, footer: 'SlickBot Appeals' });
+function buildPublicAppealPanel(config = null) {
+  const embed = createBaseEmbed({ title: config?.panel_title || 'Submit an Appeal', description: config?.panel_description || 'Use this panel to submit an appeal for staff review.', color: parseHexColor(config?.panel_color, SlickBotColors.INFO), footer: 'SlickBot Appeals' });
   return { embeds: [embed], components: [createButtonRow([createPanelButton(CustomIds.AppealOpen, 'Submit Appeal', ButtonStyle.Primary, '⚖️')])] };
 }
 

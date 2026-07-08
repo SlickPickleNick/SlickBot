@@ -23,6 +23,10 @@ module.exports = {
         .addRoleOption((option) => option.setName('approved_role').setDescription('Role assigned when approved.').setRequired(false))
         .addBooleanOption((option) => option.setName('auto_assign').setDescription('Automatically assign approved role.').setRequired(false))
         .addStringOption((option) => option.setName('description').setDescription('Panel/application description.').setRequired(false).setMaxLength(500))
+        .addStringOption((option) => option.setName('confirmation_message').setDescription('DM message after user submits. Use {number} and {type}.').setRequired(false).setMaxLength(800))
+        .addStringOption((option) => option.setName('panel_title').setDescription('Public application panel title.').setRequired(false).setMaxLength(100))
+        .addStringOption((option) => option.setName('panel_description').setDescription('Public application panel description.').setRequired(false).setMaxLength(800))
+        .addStringOption((option) => option.setName('panel_color').setDescription('Panel accent color, example: #7869ff.').setRequired(false).setMaxLength(7))
     )
     .addSubcommand((subcommand) =>
       subcommand
@@ -83,7 +87,11 @@ module.exports = {
         pendingRoleId: interaction.options.getRole('pending_role')?.id || null,
         approvedRoleId: interaction.options.getRole('approved_role')?.id || null,
         autoAssignApprovedRole: interaction.options.getBoolean('auto_assign') || false,
-        description: interaction.options.getString('description') || null
+        description: interaction.options.getString('description') || null,
+        submissionConfirmationMessage: interaction.options.getString('confirmation_message') || null,
+        panelTitle: interaction.options.getString('panel_title') || null,
+        panelDescription: interaction.options.getString('panel_description') || null,
+        panelColor: interaction.options.getString('panel_color') || null
       });
       await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'setup', title: 'Application Settings Updated', body: `${type.name} application settings updated by ${interaction.user.tag}.`, actorUserId: interaction.user.id }).catch(() => {});
       return replyPrivate(interaction, { embeds: [createSuccessEmbed('Application Type Configured', `Application type **${type.name}** is ready. Use \`/application question-add\` to customize the DM questions.`)] });

@@ -190,6 +190,10 @@ async function initDatabase() {
       staff_role_id TEXT,
       ticket_limit INTEGER NOT NULL DEFAULT 1,
       transcript_enabled BOOLEAN NOT NULL DEFAULT true,
+      panel_title TEXT,
+      panel_description TEXT,
+      panel_color TEXT,
+      close_delete_seconds INTEGER NOT NULL DEFAULT 10,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
@@ -224,6 +228,9 @@ async function initDatabase() {
       id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
       guild_id TEXT UNIQUE NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
       review_channel_id TEXT,
+      panel_title TEXT,
+      panel_description TEXT,
+      panel_color TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
@@ -354,6 +361,8 @@ async function initDatabase() {
   await query(`ALTER TABLE reports ADD COLUMN IF NOT EXISTS claimed_by_user_id TEXT;`).catch(() => {});
   await query(`ALTER TABLE reports ADD COLUMN IF NOT EXISTS review_notes TEXT;`).catch(() => {});
   await query(`ALTER TABLE reports ADD COLUMN IF NOT EXISTS linked_ticket_id TEXT;`).catch(() => {});
+  await query(`ALTER TABLE reports ADD COLUMN IF NOT EXISTS review_channel_id TEXT;`).catch(() => {});
+  await query(`ALTER TABLE reports ADD COLUMN IF NOT EXISTS review_message_id TEXT;`).catch(() => {});
 
   await query(`
     CREATE TABLE IF NOT EXISTS application_questions (
@@ -385,6 +394,85 @@ async function initDatabase() {
 
   await query(`ALTER TABLE appeal_configs ADD COLUMN IF NOT EXISTS dm_decision_enabled BOOLEAN NOT NULL DEFAULT false;`).catch(() => {});
   await query(`ALTER TABLE appeals ADD COLUMN IF NOT EXISTS decision_reason TEXT;`).catch(() => {});
+
+
+  await query(`ALTER TABLE ticket_configs ADD COLUMN IF NOT EXISTS panel_title TEXT;`).catch(() => {});
+  await query(`ALTER TABLE ticket_configs ADD COLUMN IF NOT EXISTS panel_description TEXT;`).catch(() => {});
+  await query(`ALTER TABLE ticket_configs ADD COLUMN IF NOT EXISTS panel_color TEXT;`).catch(() => {});
+  await query(`ALTER TABLE ticket_configs ADD COLUMN IF NOT EXISTS close_delete_seconds INTEGER NOT NULL DEFAULT 10;`).catch(() => {});
+
+  await query(`ALTER TABLE report_configs ADD COLUMN IF NOT EXISTS panel_title TEXT;`).catch(() => {});
+  await query(`ALTER TABLE report_configs ADD COLUMN IF NOT EXISTS panel_description TEXT;`).catch(() => {});
+  await query(`ALTER TABLE report_configs ADD COLUMN IF NOT EXISTS panel_color TEXT;`).catch(() => {});
+
+  await query(`ALTER TABLE application_types ADD COLUMN IF NOT EXISTS submission_confirmation_message TEXT;`).catch(() => {});
+  await query(`ALTER TABLE application_types ADD COLUMN IF NOT EXISTS panel_title TEXT;`).catch(() => {});
+  await query(`ALTER TABLE application_types ADD COLUMN IF NOT EXISTS panel_description TEXT;`).catch(() => {});
+  await query(`ALTER TABLE application_types ADD COLUMN IF NOT EXISTS panel_color TEXT;`).catch(() => {});
+
+  await query(`ALTER TABLE appeal_configs ADD COLUMN IF NOT EXISTS panel_title TEXT;`).catch(() => {});
+  await query(`ALTER TABLE appeal_configs ADD COLUMN IF NOT EXISTS panel_description TEXT;`).catch(() => {});
+  await query(`ALTER TABLE appeal_configs ADD COLUMN IF NOT EXISTS panel_color TEXT;`).catch(() => {});
+  await query(`ALTER TABLE appeal_configs ADD COLUMN IF NOT EXISTS dm_include_submission BOOLEAN NOT NULL DEFAULT false;`).catch(() => {});
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS permission_ignored_users (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL,
+      reason TEXT,
+      added_by_user_id TEXT,
+      active BOOLEAN NOT NULL DEFAULT true,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(guild_id, user_id)
+    );
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS role_action_permissions (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      role_id TEXT NOT NULL,
+      action_key TEXT NOT NULL,
+      allow BOOLEAN NOT NULL DEFAULT true,
+      channel_scope TEXT NOT NULL DEFAULT '*',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(guild_id, role_id, action_key, channel_scope)
+    );
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS public_action_permissions (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      action_key TEXT NOT NULL,
+      enabled BOOLEAN NOT NULL DEFAULT true,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(guild_id, action_key)
+    );
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS module_permission_targets (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      module_key TEXT NOT NULL,
+      target_type TEXT NOT NULL,
+      target_id TEXT NOT NULL,
+      allow BOOLEAN NOT NULL DEFAULT true,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(guild_id, module_key, target_type, target_id)
+    );
+  `);
+
+  await query(`CREATE INDEX IF NOT EXISTS idx_ignored_users_guild_user ON permission_ignored_users(guild_id, user_id);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_role_action_permissions ON role_action_permissions(guild_id, action_key);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_public_action_permissions ON public_action_permissions(guild_id, action_key);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_module_permission_targets ON module_permission_targets(guild_id, module_key);`);
 
 
   await query(`

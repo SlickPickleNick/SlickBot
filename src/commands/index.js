@@ -11,6 +11,7 @@ const ticketCommand = require('./ticket');
 const reportCommand = require('./report');
 const applicationCommand = require('./application');
 const appealCommand = require('./appeal');
+const permissionsCommand = require('./permissions');
 
 const commands = [
   pingCommand,
@@ -25,7 +26,8 @@ const commands = [
   ticketCommand,
   reportCommand,
   applicationCommand,
-  appealCommand
+  appealCommand,
+  permissionsCommand
 ];
 
 const commandMap = new Map(commands.map((command) => [command.data.name, command]));

@@ -20,6 +20,9 @@ module.exports = {
         .addChannelOption((option) => option.setName('review_channel').setDescription('Private staff report review channel.').addChannelTypes(ChannelType.GuildText).setRequired(true))
         .addRoleOption((option) => option.setName('ping_role').setDescription('Role to ping when a report is submitted.').setRequired(false))
         .addStringOption((option) => option.setName('ping_team').setDescription('Permission Team to ping when a report is submitted.').setRequired(false).setMaxLength(80))
+        .addStringOption((option) => option.setName('panel_title').setDescription('Public report panel title.').setRequired(false).setMaxLength(100))
+        .addStringOption((option) => option.setName('panel_description').setDescription('Public report panel description.').setRequired(false).setMaxLength(800))
+        .addStringOption((option) => option.setName('panel_color').setDescription('Panel accent color, example: #f2b84b.').setRequired(false).setMaxLength(7))
     )
     .addSubcommand((subcommand) =>
       subcommand
@@ -58,14 +61,14 @@ module.exports = {
       const channel = interaction.options.getChannel('review_channel', true);
       const pingRole = interaction.options.getRole('ping_role');
       const pingTeam = interaction.options.getString('ping_team') || null;
-      const config = await reports.updateConfig(interaction.guildId, { reviewChannelId: channel.id, pingRoleId: pingRole?.id || null, pingTeamName: pingTeam });
+      const config = await reports.updateConfig(interaction.guildId, { reviewChannelId: channel.id, pingRoleId: pingRole?.id || null, pingTeamName: pingTeam, panelTitle: interaction.options.getString('panel_title') || null, panelDescription: interaction.options.getString('panel_description') || null, panelColor: interaction.options.getString('panel_color') || null });
       await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'setup', title: 'Report Settings Updated', body: `Report review channel set to <#${channel.id}> by ${interaction.user.tag}.`, actorUserId: interaction.user.id }).catch(() => {});
       return replyPrivate(interaction, { embeds: [createSuccessEmbed('Report System Configured', [`Review Channel: <#${channel.id}>`, `Ping Role: ${config.ping_role_id ? `<@&${config.ping_role_id}>` : 'Not set'}`, `Ping Team: ${config.ping_team_id ? 'Configured' : 'Not set'}`].join('\n'))] });
     }
 
     if (subcommand === 'panel') {
       const channel = interaction.options.getChannel('channel') || interaction.channel;
-      await channel.send(buildPublicReportPanel());
+      await channel.send(buildPublicReportPanel(await reports.getConfig(interaction.guildId))); 
       return replyPrivate(interaction, { embeds: [createSuccessEmbed('Report Panel Posted', `Panel posted in <#${channel.id}>.`)] });
     }
 

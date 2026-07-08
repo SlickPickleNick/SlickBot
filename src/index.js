@@ -206,6 +206,10 @@ client.on(Events.MessageCreate, async (message) => {
 
 client.on(Events.InteractionCreate, async (interaction) => {
   if (!interaction.isChatInputCommand()) {
+    if (interaction.guildId && await permissions.isIgnored(interaction.guildId, interaction.user.id)) {
+      await replyPrivate(interaction, 'You are currently blocked from interacting with SlickBot.');
+      return;
+    }
     await handleComponentInteraction(interaction, { client, permissions, logger, status, moderation }).catch((error) => {
       console.error('Component interaction failed:', error);
     });
@@ -222,10 +226,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
   const moduleKey = typeof command.getModuleKey === 'function' ? command.getModuleKey(interaction) : command.moduleKey;
 
   if (typeof command.isPublic === 'function' && command.isPublic(interaction)) {
-    await permissions.ensureGuildConfig(interaction.guildId, interaction.guild ? interaction.guild.name : null);
-    const moduleEnabled = await permissions.isModuleEnabled(interaction.guildId, moduleKey);
-    if (!moduleEnabled) {
-      await replyPrivate(interaction, `The ${moduleKey} module is disabled.`);
+    const publicResult = await permissions.checkPublicInteraction(interaction, actionKey, moduleKey);
+    if (!publicResult.allowed) {
+      await replyPrivate(interaction, publicResult.reason || 'You cannot use this command.');
       return;
     }
   } else {

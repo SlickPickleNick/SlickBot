@@ -6,28 +6,31 @@ This version keeps the working TitanBot-style JavaScript foundation: Discord.js,
 
 ## Version
 
-`v0.3.3`
+`v0.3.4`
 
-## v0.3.3 Support Workflow Expansion
+## v0.3.4 Support Workflow Polish + Permission Controls
 
-This update expands the support workflow modules without changing the working Railway deployment foundation from v0.3.2.
+This update keeps the stable v0.3.3 support workflow foundation and focuses on fixes, permissions, customization, and quality-of-life improvements.
 
 ### Added / Improved
 
-- DM-based applications with custom questions
-- Application questions are sent one at a time in DM
-- Application responses are recorded and submitted after the final answer
-- Ticket types with separate panel buttons
-- Custom ticket questions per ticket type
-- Ticket naming formats, such as `ticket-{username}-{number}` or `{type}-{username}-{number}`
-- Ticket escalation to a configured role or Permission Team
-- Ticket control embed now includes a Close With Reason button
-- Report claiming
-- Report Add Details button
-- Report Open Ticket button for staff follow-up
-- Report setup can ping a role and/or Permission Team when a report is submitted
-- Appeal setup can enable DM decision notices
-- Appeal decision buttons now support optional decision reasons
+- New `/permissions` command group.
+- Module-level command permission rules by Permission Team or Discord role.
+- Command/action-level permission rules by Permission Team or Discord role.
+- Public command/action toggles for commands that should be available to all non-ignored users.
+- Ignored users list. Ignored users cannot interact with SlickBot commands, buttons, selects, modals, or DM application controls.
+- Permission Center panel available from `/permissions panel` and the main setup panel.
+- Ticket close flow now sends a countdown and auto-deletes the ticket channel after transcript success.
+- Ticket close delete delay can be configured with `/ticket setup delete_seconds`.
+- Ticket escalation pings the escalated role/team in the ticket channel.
+- Report Add Details now updates the stored report and refreshes the staff review message when possible.
+- Report follow-up tickets now use the report review role/team instead of default ticket staff routing.
+- Application DM flow now includes a Cancel Application button on each question.
+- Applications now show a final Submit / Cancel confirmation panel before staff receive the submission.
+- Application submission confirmation DM message can be customized.
+- Appeal decision DMs can optionally include the original appeal submission.
+- Appeal review buttons are simplified to Approve and Deny. Both open a modal where decision details are optional.
+- Public panel title, description, and accent color can be configured for tickets, reports, applications, and appeals.
 
 ## Included Modules
 
@@ -48,6 +51,42 @@ This update expands the support workflow modules without changing the working Ra
 - Module manager
 - Bot status/activity controls
 
+### Permissions
+
+Main commands:
+
+```text
+/permissions panel
+/permissions module-allow-team
+/permissions module-allow-role
+/permissions command-allow-team
+/permissions command-allow-role
+/permissions command-public
+/permissions ignore-add
+/permissions ignore-remove
+/permissions ignore-list
+```
+
+Recommended examples:
+
+```text
+/permissions module-allow-team module:MODERATION team:Moderator Team
+/permissions module-allow-role module:TICKETS role:@Support Team
+/permissions command-allow-team action_key:tickets.close team:Senior Mods
+/permissions command-public action_key:bot.ping enabled:true
+/permissions ignore-add user:@ExampleUser reason:Abusing bot interactions
+```
+
+Permission order:
+
+1. Ignored users are blocked.
+2. Bot owners bypass permission checks.
+3. Disabled modules block access.
+4. Public command/action settings are allowed for all non-ignored users.
+5. Discord administrators are allowed.
+6. Module-level team/role rules are checked.
+7. Action-level team/role rules are checked.
+
 ### Logging
 
 - Module-based logging setup
@@ -60,27 +99,14 @@ This update expands the support workflow modules without changing the working Ra
 
 Discord log messages are only posted when the related log module or event override has a configured channel.
 
-### Log Modules
-
-- `core` — system, setup, module config, permission teams, bot status
-- `moderation` — moderation actions, cases, user notes
-- `member` — joins, leaves, nickname changes, role changes, member updates
-- `message` — message edits and deletions
-- `voice` — voice joins, leaves, and moves
-- `tickets` — ticket opens, claims, priority changes, escalations, closes, and transcripts
-- `reports` — report submissions, claims, notes, and decisions
-- `applications` — DM application starts, submissions, and review actions
-- `appeals` — appeal submissions and review actions
-- `scheduled-messages` — future scheduled message activity
-
 ## Support Workflow Setup
 
 ### Tickets
 
-Default settings:
+Default settings with customizable public panel:
 
 ```text
-/ticket setup category:#tickets log_channel:#ticket-logs staff_role:@Moderators ticket_limit:1 transcripts:true naming_format:ticket-{username}-{number}
+/ticket setup category:#tickets log_channel:#ticket-logs staff_role:@Moderators ticket_limit:1 transcripts:true naming_format:ticket-{username}-{number} delete_seconds:10 panel_title:Need Help? panel_description:Choose a ticket type below. panel_color:#7869ff
 ```
 
 Create ticket types:
@@ -111,19 +137,19 @@ Inside a ticket, staff can use:
 /ticket close reason:Issue resolved
 ```
 
-The ticket embed also includes interactive buttons for Claim, Escalate, and Close With Reason.
+The ticket embed also includes buttons for Claim, Escalate, and Close With Reason.
 
 ### Reports
 
-Setup:
+Setup with public panel customization:
 
 ```text
-/report setup review_channel:#staff-reports ping_role:@Moderators
+/report setup review_channel:#staff-reports ping_role:@Moderators panel_title:Submit a Report panel_description:Privately report a concern to staff. panel_color:#f2b84b
 /report setup review_channel:#staff-reports ping_team:Moderator Team
 /report panel channel:#support
 ```
 
-Reports now support:
+Reports support:
 
 - Claim
 - Resolve
@@ -135,10 +161,10 @@ Claiming changes the report status to `CLAIMED`, but the report remains open unt
 
 ### Applications
 
-Setup:
+Setup with custom DM confirmation and public panel customization:
 
 ```text
-/application setup type:Moderator review_channel:#mod-apps pending_role:@Applicant approved_role:@Trial-Mod auto_assign:true
+/application setup type:Moderator review_channel:#mod-apps pending_role:@Applicant approved_role:@Trial-Mod auto_assign:true confirmation_message:Your {type} application was submitted as #{number}. panel_title:Moderator Applications panel_description:Start your application through DM. panel_color:#7869ff
 ```
 
 Add custom DM questions:
@@ -156,24 +182,18 @@ Post the application panel:
 /application panel type:Moderator channel:#apply
 ```
 
-Users can also start from command:
-
-```text
-/application apply type:Moderator
-```
-
-SlickBot will DM the user each question one at a time, record each reply, and submit the completed application to the review channel.
+SlickBot DMs each question one at a time. Every question includes a Cancel Application button. After the final answer, SlickBot sends a Submit / Cancel confirmation panel before the application is sent to staff.
 
 ### Appeals
 
-Setup:
+Setup with optional decision DMs and public panel customization:
 
 ```text
-/appeal setup review_channel:#appeals dm_decision:true
+/appeal setup review_channel:#appeals dm_decision:true dm_include_submission:true panel_title:Submit an Appeal panel_description:Request staff review of a decision. panel_color:#5aa7ff
 /appeal panel channel:#support
 ```
 
-Appeal reviewers can approve or deny immediately, or use the `Approve + Reason` and `Deny + Reason` buttons to include an optional decision reason. If `dm_decision` is enabled, SlickBot DMs the user with the decision.
+Appeal reviewers see Approve and Deny buttons. Both open a modal where the reviewer can add optional decision details before submitting the decision.
 
 ## First Setup Commands
 
@@ -182,6 +202,7 @@ After deploying, run:
 ```text
 /setup log_channel:#staff-logs
 /modules panel
+/permissions panel
 /logging panel
 /mod panel
 /status view
@@ -194,12 +215,6 @@ To enable support workflow logs:
 /logging set-channel module:reports channel:#report-logs
 /logging set-channel module:applications channel:#application-logs
 /logging set-channel module:appeals channel:#appeal-logs
-```
-
-All configured log modules default to immediate delivery. To batch a module:
-
-```text
-/logging module-mode module:voice delivery:BATCHED interval_seconds:300
 ```
 
 ## Railway Variables
@@ -220,48 +235,16 @@ Optional:
 
 ```env
 DEFAULT_TIMEZONE=America/New_York
+LOG_BATCH_FLUSH_SECONDS=300
 DEFAULT_BOT_STATUS=online
 DEFAULT_BOT_ACTIVITY_TYPE=WATCHING
 DEFAULT_BOT_ACTIVITY_TEXT=the server
 DEFAULT_BOT_ACTIVITY_URL=
-LOG_BATCH_FLUSH_SECONDS=300
 ```
 
-TitanBot-style aliases are also supported:
+## Railway Notes
 
-```env
-CLIENT_ID=
-GUILD_ID=
-OWNER_IDS=
-POSTGRES_URL=
-```
-
-## Permission Teams
-
-The Bot Owners team gets all current action keys during setup. Other teams can be configured with:
-
-```text
-/team create
-/team add-role
-/team allow
-```
-
-Example:
-
-```text
-/team create name:Moderator Team description:MODS and SENIOR MODS
-/team add-role team:Moderator Team role:@MODS
-/team add-role team:Moderator Team role:@SENIOR MODS
-/team allow team:Moderator Team action_key:tickets.claim
-/team allow team:Moderator Team action_key:tickets.close
-/team allow team:Moderator Team action_key:reports.review
-/team allow team:Moderator Team action_key:applications.review
-/team allow team:Moderator Team action_key:appeals.review
-```
-
-## Deployment Notes
-
-The repo root should directly contain:
+The repository root should directly contain:
 
 ```text
 package.json
@@ -272,8 +255,4 @@ README.md
 .env.example
 ```
 
-It should not be nested inside another `slickbot/` folder.
-
-## Railway Install Path
-
-This package keeps the v0.3.2 Railway install fix: Docker uses `npm ci --omit=dev` with the committed lockfile and `.npmrc` forces the public npm registry.
+Do not upload the files inside an extra nested folder.

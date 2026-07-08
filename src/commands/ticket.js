@@ -23,6 +23,10 @@ module.exports = {
         .addIntegerOption((option) => option.setName('ticket_limit').setDescription('Default open ticket limit per user.').setMinValue(1).setMaxValue(10).setRequired(false))
         .addBooleanOption((option) => option.setName('transcripts').setDescription('Generate transcripts when tickets close.').setRequired(false))
         .addStringOption((option) => option.setName('naming_format').setDescription('Example: ticket-{username}-{number}').setRequired(false).setMaxLength(80))
+        .addIntegerOption((option) => option.setName('delete_seconds').setDescription('Seconds before deleting a closed ticket after transcript success.').setMinValue(3).setMaxValue(60).setRequired(false))
+        .addStringOption((option) => option.setName('panel_title').setDescription('Public ticket panel title.').setRequired(false).setMaxLength(100))
+        .addStringOption((option) => option.setName('panel_description').setDescription('Public ticket panel description.').setRequired(false).setMaxLength(800))
+        .addStringOption((option) => option.setName('panel_color').setDescription('Panel accent color, example: #7869ff.').setRequired(false).setMaxLength(7))
     )
     .addSubcommand((subcommand) =>
       subcommand
@@ -113,7 +117,11 @@ module.exports = {
         staffRoleId: interaction.options.getRole('staff_role')?.id || null,
         ticketLimit: interaction.options.getInteger('ticket_limit') || null,
         transcriptEnabled: interaction.options.getBoolean('transcripts'),
-        namingFormat: interaction.options.getString('naming_format') || null
+        namingFormat: interaction.options.getString('naming_format') || null,
+        closeDeleteSeconds: interaction.options.getInteger('delete_seconds') || null,
+        panelTitle: interaction.options.getString('panel_title') || null,
+        panelDescription: interaction.options.getString('panel_description') || null,
+        panelColor: interaction.options.getString('panel_color') || null
       });
       await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'setup', title: 'Ticket Settings Updated', body: `Ticket settings updated by ${interaction.user.tag}.`, actorUserId: interaction.user.id }).catch(() => {});
       return replyPrivate(interaction, { embeds: [createSuccessEmbed('Ticket Defaults Configured', [`Category: ${config.category_id ? `<#${config.category_id}>` : 'Not set'}`, `Log Channel: ${config.log_channel_id ? `<#${config.log_channel_id}>` : 'Not set'}`, `Staff Role: ${config.staff_role_id ? `<@&${config.staff_role_id}>` : 'Not set'}`, `Naming: \`${config.naming_format}\``].join('\n'))] });
@@ -132,6 +140,10 @@ module.exports = {
         ticketLimit: interaction.options.getInteger('ticket_limit') || null,
         transcriptEnabled: interaction.options.getBoolean('transcripts'),
         namingFormat: interaction.options.getString('naming_format') || null,
+        closeDeleteSeconds: interaction.options.getInteger('delete_seconds') || null,
+        panelTitle: interaction.options.getString('panel_title') || null,
+        panelDescription: interaction.options.getString('panel_description') || null,
+        panelColor: interaction.options.getString('panel_color') || null,
         description: interaction.options.getString('description') || null
       });
       return replyPrivate(interaction, { embeds: [createSuccessEmbed('Ticket Type Saved', `Saved ticket type **${type.name}**. Use \`/ticket question-add\` to customize intake questions.`)] });
@@ -152,7 +164,7 @@ module.exports = {
     if (subcommand === 'panel') {
       const channel = interaction.options.getChannel('channel') || interaction.channel;
       const types = await tickets.listTypes(interaction.guildId);
-      await channel.send(await buildPublicTicketPanel(types));
+      await channel.send(await buildPublicTicketPanel(types, await tickets.getConfig(interaction.guildId)));
       return replyPrivate(interaction, { embeds: [createSuccessEmbed('Ticket Panel Posted', `Panel posted in <#${channel.id}>.`)] });
     }
 
@@ -186,7 +198,23 @@ module.exports = {
     if (subcommand === 'close') {
       const result = await tickets.closeTicket({ interaction, client: ctx.client, logger: ctx.logger, reason: interaction.options.getString('reason') || 'No reason provided.' });
       if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Ticket Not Found', result.reason)] });
-      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Ticket Closed', `Ticket #${result.ticket.ticket_number} closed. Transcript sent: **${result.transcriptSent ? 'Yes' : 'No'}**.`)] });
+      await replyPrivate(interaction, { embeds: [createSuccessEmbed('Ticket Closed', `Ticket #${result.ticket.ticket_number} closed. Transcript sent: **${result.transcriptSent ? 'Yes' : 'No'}**.`)] });
+      if (result.shouldDelete) scheduleTicketDeletion(interaction.channel, result.deleteSeconds || 10).catch((error) => console.error('Failed to schedule ticket deletion:', error));
+      return;
     }
   }
 };
+
+
+async function scheduleTicketDeletion(channel, seconds = 10) {
+  const { createWarningEmbed } = require('../modules/ui/uiService');
+  if (!channel || typeof channel.send !== 'function') return;
+  const total = Math.max(3, Math.min(Number(seconds) || 10, 60));
+  const message = await channel.send({ embeds: [createWarningEmbed('Ticket Closing', `Ticket will close in **${total}** second(s).`)] }).catch(() => null);
+  if (!message) return;
+  for (let remaining = total - 1; remaining >= 1; remaining -= 1) {
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    await message.edit({ embeds: [createWarningEmbed('Ticket Closing', `Ticket will close in **${remaining}** second(s).`)] }).catch(() => {});
+  }
+  await channel.delete('SlickBot ticket closed and transcript completed.').catch(() => {});
+}

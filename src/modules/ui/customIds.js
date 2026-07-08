@@ -4,6 +4,14 @@ const CustomIds = Object.freeze({
   SetupLogging: 'slickbot:setup:logging',
   SetupStatus: 'slickbot:setup:status',
   SetupTeams: 'slickbot:setup:teams',
+
+  SetupPermissions: 'slickbot:setup:permissions',
+  PermissionsRefresh: 'slickbot:permissions:refresh',
+  PermissionsModuleSelect: 'slickbot:permissions:module-select',
+  PermissionsCommandSelect: 'slickbot:permissions:command-select',
+
+  ApplicationCancelPrefix: 'slickbot:application:cancel:',
+  ApplicationSubmitPrefix: 'slickbot:application:submit:',
   SetupModeration: 'slickbot:setup:moderation',
   SetupSupport: 'slickbot:setup:support',
 

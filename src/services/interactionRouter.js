@@ -3,7 +3,7 @@ const { ActionKeys } = require('../modules/permissions/actionKeys');
 const { ModuleKeys, isCoreModule } = require('../modules/moduleRegistry');
 const { query } = require('./db');
 const { replyPrivate } = require('../utils/reply');
-const { buildSetupPanel, buildModulesPanel, buildLoggingPanel, buildTeamsPanel } = require('../modules/ui/panels');
+const { buildSetupPanel, buildModulesPanel, buildLoggingPanel, buildTeamsPanel, buildPermissionsPanel } = require('../modules/ui/panels');
 const { buildModerationPanel, buildRecentCasesPanel } = require('../modules/moderation/moderationUi');
 const { buildStatusPanel } = require('../commands/status');
 const { createBaseEmbed, createSuccessEmbed, createWarningEmbed, SlickBotColors } = require('../modules/ui/uiService');
@@ -29,6 +29,21 @@ const appeals = new AppealService();
 
 async function handleComponentInteraction(interaction, ctx) {
   if (!interaction.guildId) {
+    if (interaction.isButton() && interaction.customId.startsWith(CustomIds.ApplicationCancelPrefix)) {
+      const sessionId = interaction.customId.slice(CustomIds.ApplicationCancelPrefix.length);
+      const session = await applications.cancelSession({ sessionId, user: interaction.user, logger: ctx.logger });
+      if (!session) return replyPrivate(interaction, { embeds: [createWarningEmbed('Application Not Cancelled', 'This application session was not found or is no longer active.')] });
+      await interaction.update({ embeds: [createSuccessEmbed('Application Cancelled', 'Your application was cancelled. Nothing was sent to the server.')], components: [] });
+      return true;
+    }
+    if (interaction.isButton() && interaction.customId.startsWith(CustomIds.ApplicationSubmitPrefix)) {
+      const sessionId = interaction.customId.slice(CustomIds.ApplicationSubmitPrefix.length);
+      const result = await applications.submitSession({ sessionId, user: interaction.user, client: ctx.client, logger: ctx.logger });
+      if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Application Not Submitted', result.reason)] });
+      const confirmation = result.applicationType?.submission_confirmation_message || `Your ${result.applicationType?.name || 'application'} application was submitted as #${result.submission.submission_number}.`;
+      await interaction.update({ embeds: [createSuccessEmbed('Application Submitted', confirmation.replaceAll('{number}', String(result.submission.submission_number)).replaceAll('{type}', result.applicationType?.name || 'application'))], components: [] });
+      return true;
+    }
     await replyPrivate(interaction, 'This control can only be used inside a server.');
     return true;
   }
@@ -63,6 +78,13 @@ async function handleButton(interaction, ctx) {
   if (id === CustomIds.SetupTeams) {
     if (!(await requireAction(interaction, ctx, ActionKeys.TeamsManage, ModuleKeys.PERMISSIONS))) return true;
     await updatePanel(interaction, await buildTeamsPanel(interaction.guildId));
+    return true;
+  }
+
+
+  if (id === CustomIds.SetupPermissions || id === CustomIds.PermissionsRefresh) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.PermissionsPanel, ModuleKeys.PERMISSIONS))) return true;
+    await updatePanel(interaction, await buildPermissionsPanel(interaction.guildId));
     return true;
   }
 
@@ -177,7 +199,8 @@ async function handleButton(interaction, ctx) {
     if (!report) return replyPrivate(interaction, { embeds: [createWarningEmbed('Report Not Found', 'The report could not be found.')] });
     const openerUser = await ctx.client.users.fetch(report.reporter_user_id).catch(() => null);
     if (!openerUser) return replyPrivate(interaction, { embeds: [createWarningEmbed('User Not Found', 'Could not fetch the report submitter.')] });
-    const result = await tickets.createTicket({ interaction, client: ctx.client, logger: ctx.logger, openerUser, actorUser: interaction.user, type: 'Report Follow-Up', subject: `Report #${report.report_number} Follow-Up`, details: report.details });
+    const reviewerRoleIds = await reports.getReviewerRoleIds(interaction.guildId);
+    const result = await tickets.createTicket({ interaction, client: ctx.client, logger: ctx.logger, openerUser, actorUser: interaction.user, type: 'Report Follow-Up', subject: `Report #${report.report_number} Follow-Up`, details: report.details, reviewerRoleIdsOverride: reviewerRoleIds, skipTicketLimit: true });
     if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Ticket Not Created', result.reason)] });
     await reports.linkTicket({ guildId: interaction.guildId, reportId, ticketId: result.ticket.id });
     await interaction.reply({ embeds: [createSuccessEmbed('Follow-Up Ticket Opened', `Created <#${result.channel.id}> for report #${report.report_number}.`)] });
@@ -316,6 +339,7 @@ async function handleModal(interaction, ctx) {
     const result = await tickets.closeTicket({ interaction, client: ctx.client, logger: ctx.logger, reason });
     if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Ticket Not Found', result.reason)] });
     await interaction.reply({ embeds: [createSuccessEmbed('Ticket Closed', `Ticket #${result.ticket.ticket_number} closed. Transcript sent: **${result.transcriptSent ? 'Yes' : 'No'}**.`)] });
+    if (result.shouldDelete) scheduleTicketDeletion(interaction.channel, result.deleteSeconds || 10).catch((error) => console.error('Failed to schedule ticket deletion:', error));
     return true;
   }
 
@@ -333,6 +357,7 @@ async function handleModal(interaction, ctx) {
     const reportId = id.slice(CustomIds.ReportDetailsModalPrefix.length);
     const report = await reports.addDetails({ guildId: interaction.guildId, reportId, reviewer: interaction.user, details: interaction.fields.getTextInputValue('details'), logger: ctx.logger });
     if (!report) return replyPrivate(interaction, { embeds: [createWarningEmbed('Report Not Found', 'The report could not be found.')] });
+    await reports.refreshReviewMessage({ client: ctx.client, report }).catch(() => {});
     await replyPrivate(interaction, { embeds: [createSuccessEmbed('Report Details Added', `Details were added to report #${report.report_number}.`)] });
     return true;
   }
@@ -387,6 +412,10 @@ async function requireAnySupportAction(interaction, ctx) {
 
 async function requireModuleOnly(interaction, ctx, moduleKey) {
   await ctx.permissions.ensureGuildConfig(interaction.guildId, interaction.guild ? interaction.guild.name : null);
+  if (await ctx.permissions.isIgnored(interaction.guildId, interaction.user.id)) {
+    await replyPrivate(interaction, { embeds: [createWarningEmbed('Access Blocked', 'You are currently blocked from interacting with SlickBot.')] });
+    return false;
+  }
   const enabled = await ctx.permissions.isModuleEnabled(interaction.guildId, moduleKey);
   if (enabled) return true;
   await replyPrivate(interaction, { embeds: [createWarningEmbed('Module Disabled', `The ${moduleKey} module is disabled.`)] });
@@ -410,6 +439,19 @@ async function updatePanel(interaction, payload) {
     return;
   }
   await replyPrivate(interaction, payload);
+}
+
+
+async function scheduleTicketDeletion(channel, seconds = 10) {
+  if (!channel || typeof channel.send !== 'function') return;
+  const total = Math.max(3, Math.min(Number(seconds) || 10, 60));
+  const message = await channel.send({ embeds: [createWarningEmbed('Ticket Closing', `Ticket will close in **${total}** second(s).`)] }).catch(() => null);
+  if (!message) return;
+  for (let remaining = total - 1; remaining >= 1; remaining -= 1) {
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    await message.edit({ embeds: [createWarningEmbed('Ticket Closing', `Ticket will close in **${remaining}** second(s).`)] }).catch(() => {});
+  }
+  await channel.delete('SlickBot ticket closed and transcript completed.').catch(() => {});
 }
 
 module.exports = { handleComponentInteraction };

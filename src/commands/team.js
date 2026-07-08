@@ -58,14 +58,6 @@ module.exports = {
       );
 
       const teamId = result.rows[0].id;
-      for (const actionKey of defaultTeamPermissions) {
-        await query(
-          `INSERT INTO command_permissions (guild_id, team_id, action_key, allow, channel_scope)
-           VALUES ($1, $2, $3, true, '*')
-           ON CONFLICT (team_id, action_key, channel_scope) DO NOTHING`,
-          [interaction.guildId, teamId, actionKey]
-        );
-      }
 
       await ctx.logger.log({
         guildId: interaction.guildId,
@@ -75,7 +67,7 @@ module.exports = {
         metadata: { teamName: name, actorUserId: interaction.user.id }
       });
 
-      await replyPrivate(interaction, { embeds: [createBaseEmbed({ title: 'Permission Team Saved', description: `Team **${name}** created/updated.`, color: SlickBotColors.SUCCESS })] });
+      await replyPrivate(interaction, { embeds: [createBaseEmbed({ title: 'Permission Team Saved', description: `Team **${name}** created/updated. Use \`/permissions command-allow-team\` or \`/permissions module-allow-team\` to grant access.`, color: SlickBotColors.SUCCESS })] });
       return;
     }
 

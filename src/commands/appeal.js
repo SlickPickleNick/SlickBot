@@ -19,6 +19,10 @@ module.exports = {
         .setDescription('Set appeal review settings.')
         .addChannelOption((option) => option.setName('review_channel').setDescription('Private staff appeal review channel.').addChannelTypes(ChannelType.GuildText).setRequired(true))
         .addBooleanOption((option) => option.setName('dm_decision').setDescription('DM users when their appeal is approved or denied.').setRequired(false))
+        .addBooleanOption((option) => option.setName('dm_include_submission').setDescription('Include original appeal submission in the decision DM.').setRequired(false))
+        .addStringOption((option) => option.setName('panel_title').setDescription('Public appeal panel title.').setRequired(false).setMaxLength(100))
+        .addStringOption((option) => option.setName('panel_description').setDescription('Public appeal panel description.').setRequired(false).setMaxLength(800))
+        .addStringOption((option) => option.setName('panel_color').setDescription('Panel accent color, example: #5aa7ff.').setRequired(false).setMaxLength(7))
     )
     .addSubcommand((subcommand) =>
       subcommand
@@ -53,14 +57,14 @@ module.exports = {
 
     if (subcommand === 'setup') {
       const channel = interaction.options.getChannel('review_channel', true);
-      const config = await appeals.updateConfig(interaction.guildId, { reviewChannelId: channel.id, dmDecisionEnabled: interaction.options.getBoolean('dm_decision') || false });
+      const config = await appeals.updateConfig(interaction.guildId, { reviewChannelId: channel.id, dmDecisionEnabled: interaction.options.getBoolean('dm_decision') || false, dmIncludeSubmission: interaction.options.getBoolean('dm_include_submission') || false, panelTitle: interaction.options.getString('panel_title') || null, panelDescription: interaction.options.getString('panel_description') || null, panelColor: interaction.options.getString('panel_color') || null });
       await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'setup', title: 'Appeal Settings Updated', body: `Appeal review channel set to <#${channel.id}> by ${interaction.user.tag}.`, actorUserId: interaction.user.id }).catch(() => {});
-      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Appeal System Configured', [`Review Channel: <#${channel.id}>`, `DM Decisions: **${config.dm_decision_enabled ? 'Enabled' : 'Disabled'}**`].join('\n'))] });
+      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Appeal System Configured', [`Review Channel: <#${channel.id}>`, `DM Decisions: **${config.dm_decision_enabled ? 'Enabled' : 'Disabled'}**`, `Include Submission in DM: **${config.dm_include_submission ? 'Enabled' : 'Disabled'}**`].join('\n'))] });
     }
 
     if (subcommand === 'panel') {
       const channel = interaction.options.getChannel('channel') || interaction.channel;
-      await channel.send(buildPublicAppealPanel());
+      await channel.send(buildPublicAppealPanel(await appeals.getConfig(interaction.guildId))); 
       return replyPrivate(interaction, { embeds: [createSuccessEmbed('Appeal Panel Posted', `Panel posted in <#${channel.id}>.`)] });
     }
 

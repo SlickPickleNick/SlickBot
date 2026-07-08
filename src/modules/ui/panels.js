@@ -12,6 +12,7 @@ const {
 const { CustomIds } = require('./customIds');
 const { buildSupportPanel } = require('../support/supportUi');
 const { LogModuleCatalog, LogEventCatalog, getEventsForModule } = require('../logging/logEventCatalog');
+const { defaultTeamPermissions } = require('../permissions/actionKeys');
 
 async function ensureDefaultModules(guildId) {
   for (const moduleConfig of defaultModules) {
@@ -72,6 +73,7 @@ async function buildSetupPanel(guildId, guildName = null) {
 
   const rowTwo = createButtonRow([
     createPanelButton(CustomIds.SetupTeams, 'Teams', ButtonStyle.Secondary, '👥'),
+    createPanelButton(CustomIds.SetupPermissions, 'Permissions', ButtonStyle.Secondary, '🔐'),
     createPanelButton(CustomIds.SetupRefresh, 'Refresh', ButtonStyle.Secondary, '🔄')
   ]);
 
@@ -225,10 +227,57 @@ async function buildTeamsPanel(guildId) {
   return { embeds: [embed], components: [row] };
 }
 
+
+async function buildPermissionsPanel(guildId) {
+  const [teams, moduleTargets, publicActions, roleActions, ignored] = await Promise.all([
+    query(`SELECT COUNT(*)::int AS count FROM permission_teams WHERE guild_id = $1`, [guildId]).catch(() => ({ rows: [{ count: 0 }] })),
+    query(`SELECT module_key, COUNT(*)::int AS count FROM module_permission_targets WHERE guild_id = $1 AND allow = true GROUP BY module_key ORDER BY module_key ASC`, [guildId]).catch(() => ({ rows: [] })),
+    query(`SELECT action_key FROM public_action_permissions WHERE guild_id = $1 AND enabled = true ORDER BY action_key ASC LIMIT 12`, [guildId]).catch(() => ({ rows: [] })),
+    query(`SELECT COUNT(*)::int AS count FROM role_action_permissions WHERE guild_id = $1 AND allow = true`, [guildId]).catch(() => ({ rows: [{ count: 0 }] })),
+    query(`SELECT COUNT(*)::int AS count FROM permission_ignored_users WHERE guild_id = $1 AND active = true`, [guildId]).catch(() => ({ rows: [{ count: 0 }] }))
+  ]);
+
+  const moduleLines = moduleTargets.rows.length
+    ? moduleTargets.rows.map((row) => `• **${row.module_key}** — ${row.count} target(s)`).join('\n')
+    : 'No module-level locks configured. Commands currently use action-level permissions and public command settings.';
+
+  const publicLines = publicActions.rows.length
+    ? publicActions.rows.map((row) => `• \`${row.action_key}\``).join('\n')
+    : 'No command/action keys are explicitly public.';
+
+  const embed = createBaseEmbed({
+    title: 'SlickBot Permission Center',
+    description: [
+      '**Permission Snapshot**',
+      `Teams: **${teams.rows[0]?.count || 0}**`,
+      `Role Command Grants: **${roleActions.rows[0]?.count || 0}**`,
+      `Ignored Users: **${ignored.rows[0]?.count || 0}**`,
+      '',
+      '**Module Access Rules**',
+      moduleLines,
+      '',
+      '**Public Commands**',
+      publicLines,
+      '',
+      'Use `/permissions module-allow-team`, `/permissions module-allow-role`, `/permissions command-allow-team`, `/permissions command-allow-role`, and `/permissions command-public` to configure access. Ignored users cannot interact with SlickBot.'
+    ].join('\n'),
+    color: SlickBotColors.INFO
+  });
+
+  const row = createButtonRow([
+    createPanelButton(CustomIds.PermissionsRefresh, 'Refresh', ButtonStyle.Secondary, '🔄'),
+    createPanelButton(CustomIds.SetupTeams, 'Teams', ButtonStyle.Secondary, '👥'),
+    createPanelButton(CustomIds.SetupRefresh, 'Back to Setup', ButtonStyle.Primary, '↩️')
+  ]);
+
+  return { embeds: [embed], components: [row] };
+}
+
 module.exports = {
   ensureDefaultModules,
   buildSetupPanel,
   buildModulesPanel,
   buildLoggingPanel,
-  buildTeamsPanel
+  buildTeamsPanel,
+  buildPermissionsPanel
 };

@@ -95,8 +95,8 @@ class TicketService {
 
   async updateConfig(guildId, input) {
     const result = await query(
-      `INSERT INTO ticket_configs (guild_id, category_id, log_channel_id, staff_role_id, ticket_limit, transcript_enabled, naming_format)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `INSERT INTO ticket_configs (guild_id, category_id, log_channel_id, staff_role_id, ticket_limit, transcript_enabled, naming_format, panel_title, panel_description, panel_color, close_delete_seconds)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        ON CONFLICT (guild_id)
        DO UPDATE SET
          category_id = COALESCE(EXCLUDED.category_id, ticket_configs.category_id),
@@ -105,6 +105,10 @@ class TicketService {
          ticket_limit = COALESCE(EXCLUDED.ticket_limit, ticket_configs.ticket_limit),
          transcript_enabled = COALESCE(EXCLUDED.transcript_enabled, ticket_configs.transcript_enabled),
          naming_format = COALESCE(EXCLUDED.naming_format, ticket_configs.naming_format),
+         panel_title = COALESCE(EXCLUDED.panel_title, ticket_configs.panel_title),
+         panel_description = COALESCE(EXCLUDED.panel_description, ticket_configs.panel_description),
+         panel_color = COALESCE(EXCLUDED.panel_color, ticket_configs.panel_color),
+         close_delete_seconds = COALESCE(EXCLUDED.close_delete_seconds, ticket_configs.close_delete_seconds),
          updated_at = NOW()
        RETURNING *`,
       [
@@ -114,7 +118,11 @@ class TicketService {
         input.staffRoleId || null,
         input.ticketLimit || null,
         typeof input.transcriptEnabled === 'boolean' ? input.transcriptEnabled : null,
-        input.namingFormat || null
+        input.namingFormat || null,
+        input.panelTitle || null,
+        input.panelDescription || null,
+        input.panelColor || null,
+        input.closeDeleteSeconds || null
       ]
     );
     await this.ensureDefaultType(guildId);
@@ -197,7 +205,7 @@ class TicketService {
     return result.rows[0];
   }
 
-  async createTicket({ interaction, client, logger, type = 'Admin Support', ticketType = null, openerUser = null, actorUser = null, subject, details, answers = null }) {
+  async createTicket({ interaction, client, logger, type = 'Admin Support', ticketType = null, openerUser = null, actorUser = null, subject, details, answers = null, reviewerRoleIdsOverride = null, skipTicketLimit = false }) {
     const guild = interaction.guild;
     const guildId = interaction.guildId;
     const config = await this.getConfig(guildId);
@@ -205,13 +213,13 @@ class TicketService {
     const actor = actorUser || interaction.user;
     const selectedType = ticketType || await this.getTypeByName(guildId, type) || await this.ensureDefaultType(guildId);
 
-    const openCount = await query(
+    const openCount = skipTicketLimit ? { rows: [{ count: 0 }] } : await query(
       `SELECT COUNT(*)::int AS count FROM tickets WHERE guild_id = $1 AND opener_user_id = $2 AND status = 'OPEN'`,
       [guildId, opener.id]
     );
 
     const limit = selectedType.ticket_limit || config.ticket_limit || 1;
-    if ((openCount.rows[0]?.count || 0) >= limit) {
+    if (!skipTicketLimit && (openCount.rows[0]?.count || 0) >= limit) {
       return { ok: false, reason: `This user already has the maximum number of open tickets allowed (**${limit}**).` };
     }
 
@@ -234,7 +242,7 @@ class TicketService {
     }
 
     const teamRoleIds = await getTeamRoleIds(selectedType.staff_team_id);
-    const reviewerRoleIds = [...new Set([selectedType.staff_role_id || config.staff_role_id, ...teamRoleIds].filter(Boolean))];
+    const reviewerRoleIds = Array.isArray(reviewerRoleIdsOverride) && reviewerRoleIdsOverride.length ? [...new Set(reviewerRoleIdsOverride)] : [...new Set([selectedType.staff_role_id || config.staff_role_id, ...teamRoleIds].filter(Boolean))];
     for (const roleId of reviewerRoleIds) {
       overwrites.push({ id: roleId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.ManageMessages] });
     }
@@ -404,16 +412,19 @@ class ReportService {
   async updateConfig(guildId, input) {
     const pingTeamId = input.pingTeamName ? await resolveTeamId(guildId, input.pingTeamName) : null;
     const result = await query(
-      `INSERT INTO report_configs (guild_id, review_channel_id, ping_role_id, ping_team_id)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO report_configs (guild_id, review_channel_id, ping_role_id, ping_team_id, panel_title, panel_description, panel_color)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        ON CONFLICT (guild_id)
        DO UPDATE SET
          review_channel_id = COALESCE(EXCLUDED.review_channel_id, report_configs.review_channel_id),
          ping_role_id = COALESCE(EXCLUDED.ping_role_id, report_configs.ping_role_id),
          ping_team_id = COALESCE(EXCLUDED.ping_team_id, report_configs.ping_team_id),
+         panel_title = COALESCE(EXCLUDED.panel_title, report_configs.panel_title),
+         panel_description = COALESCE(EXCLUDED.panel_description, report_configs.panel_description),
+         panel_color = COALESCE(EXCLUDED.panel_color, report_configs.panel_color),
          updated_at = NOW()
        RETURNING *`,
-      [guildId, input.reviewChannelId || null, input.pingRoleId || null, pingTeamId]
+      [guildId, input.reviewChannelId || null, input.pingRoleId || null, pingTeamId, input.panelTitle || null, input.panelDescription || null, input.panelColor || null]
     );
     return result.rows[0];
   }
@@ -421,6 +432,14 @@ class ReportService {
   async getConfig(guildId) {
     const result = await query(`SELECT * FROM report_configs WHERE guild_id = $1 LIMIT 1`, [guildId]);
     return result.rows[0] || null;
+  }
+
+
+  async getReviewerRoleIds(guildId) {
+    const config = await this.getConfig(guildId);
+    if (!config) return [];
+    const teamRoleIds = await getTeamRoleIds(config.ping_team_id);
+    return [...new Set([config.ping_role_id, ...teamRoleIds].filter(Boolean))];
   }
 
   async createReport({ interaction, client, logger, type = 'General Report', targetUser = null, details, messageLink = null }) {
@@ -437,7 +456,10 @@ class ReportService {
     if (reviewChannel) {
       const teamRoleIds = await getTeamRoleIds(config?.ping_team_id);
       const mentions = [...new Set([config?.ping_role_id, ...teamRoleIds].filter(Boolean))].map((roleId) => `<@&${roleId}>`).join(' ');
-      await reviewChannel.send({ content: mentions || undefined, ...buildReportReviewPayload(report) });
+      const sent = await reviewChannel.send({ content: mentions || undefined, ...buildReportReviewPayload(report) });
+      await query(`UPDATE reports SET review_channel_id = $1, review_message_id = $2 WHERE id = $3`, [reviewChannel.id, sent.id, report.id]).catch(() => {});
+      report.review_channel_id = reviewChannel.id;
+      report.review_message_id = sent.id;
     }
     await logger.log({ guildId: interaction.guildId, eventKey: 'report-submit', title: 'Report Submitted', body: `Report #${report.report_number} submitted by ${interaction.user.tag}.${targetUser ? ` Target: ${targetUser.tag}.` : ''}`, actorUserId: interaction.user.id, metadata: { reportId: report.id, targetUserId: targetUser?.id || null } }).catch(() => {});
     return report;
@@ -475,6 +497,16 @@ class ReportService {
     if (!report) return null;
     await logger.log({ guildId, eventKey: 'report-review', title: 'Report Reviewed', body: `Report #${report.report_number} marked **${report.status}** by ${reviewer.tag}.`, actorUserId: reviewer.id, metadata: { reportId: report.id, status: report.status } }).catch(() => {});
     return report;
+  }
+
+  async refreshReviewMessage({ client, report }) {
+    if (!report?.review_channel_id || !report?.review_message_id) return false;
+    const channel = await fetchSendableChannel(client, report.review_channel_id);
+    if (!channel || !channel.messages?.fetch) return false;
+    const message = await channel.messages.fetch(report.review_message_id).catch(() => null);
+    if (!message) return false;
+    await message.edit(buildReportReviewPayload(report)).catch(() => {});
+    return true;
   }
 
   async linkTicket({ guildId, reportId, ticketId }) {
@@ -533,17 +565,21 @@ class ApplicationService {
 
   async setupType(guildId, input) {
     const result = await query(
-      `INSERT INTO application_types (guild_id, name, description, review_channel_id, pending_role_id, approved_role_id, auto_assign_approved_role, enabled)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, true)
+      `INSERT INTO application_types (guild_id, name, description, review_channel_id, pending_role_id, approved_role_id, auto_assign_approved_role, submission_confirmation_message, panel_title, panel_description, panel_color, enabled)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, true)
        ON CONFLICT (guild_id, name) DO UPDATE SET
          description = COALESCE(EXCLUDED.description, application_types.description),
          review_channel_id = COALESCE(EXCLUDED.review_channel_id, application_types.review_channel_id),
          pending_role_id = COALESCE(EXCLUDED.pending_role_id, application_types.pending_role_id),
          approved_role_id = COALESCE(EXCLUDED.approved_role_id, application_types.approved_role_id),
          auto_assign_approved_role = EXCLUDED.auto_assign_approved_role,
+         submission_confirmation_message = COALESCE(EXCLUDED.submission_confirmation_message, application_types.submission_confirmation_message),
+         panel_title = COALESCE(EXCLUDED.panel_title, application_types.panel_title),
+         panel_description = COALESCE(EXCLUDED.panel_description, application_types.panel_description),
+         panel_color = COALESCE(EXCLUDED.panel_color, application_types.panel_color),
          enabled = true,
          updated_at = NOW() RETURNING *`,
-      [guildId, input.name, input.description || null, input.reviewChannelId || null, input.pendingRoleId || null, input.approvedRoleId || null, Boolean(input.autoAssignApprovedRole)]
+      [guildId, input.name, input.description || null, input.reviewChannelId || null, input.pendingRoleId || null, input.approvedRoleId || null, Boolean(input.autoAssignApprovedRole), input.submissionConfirmationMessage || null, input.panelTitle || null, input.panelDescription || null, input.panelColor || null]
     );
     await this.ensureDefaultQuestions(result.rows[0].id);
     return result.rows[0];
@@ -605,7 +641,7 @@ class ApplicationService {
 
   async handleDmResponse({ message, client, logger }) {
     if (message.author.bot || !message.channel || message.guild) return false;
-    const sessionResult = await query(`SELECT s.*, t.name AS application_name, t.review_channel_id, t.pending_role_id, t.approved_role_id, t.auto_assign_approved_role FROM application_sessions s INNER JOIN application_types t ON t.id = s.application_type_id WHERE s.applicant_user_id = $1 AND s.status = 'ACTIVE' ORDER BY s.updated_at DESC LIMIT 1`, [message.author.id]).catch(() => ({ rows: [] }));
+    const sessionResult = await query(`SELECT s.*, t.name AS application_name, t.review_channel_id, t.pending_role_id, t.approved_role_id, t.auto_assign_approved_role, t.submission_confirmation_message FROM application_sessions s INNER JOIN application_types t ON t.id = s.application_type_id WHERE s.applicant_user_id = $1 AND s.status = 'ACTIVE' ORDER BY s.updated_at DESC LIMIT 1`, [message.author.id]).catch(() => ({ rows: [] }));
     const session = sessionResult.rows[0];
     if (!session) return false;
 
@@ -618,21 +654,40 @@ class ApplicationService {
     const nextIndex = session.current_index + 1;
 
     if (nextIndex < questions.length) {
-      await query(`UPDATE application_sessions SET current_index = $1, answers = $2, updated_at = NOW() WHERE id = $3`, [nextIndex, safeJson(answers), session.id]);
-      await message.channel.send({ embeds: [createBaseEmbed({ title: `${session.application_name} Application`, description: `**Question ${nextIndex + 1} of ${questions.length}:** ${questions[nextIndex].question_text}`, color: SlickBotColors.PRIMARY, footer: 'SlickBot Applications' })] });
+      const updatedSession = await query(`UPDATE application_sessions SET current_index = $1, answers = $2, updated_at = NOW() WHERE id = $3 RETURNING *`, [nextIndex, safeJson(answers), session.id]);
+      await message.channel.send(buildApplicationQuestionPayload(updatedSession.rows[0], session.application_name, questions[nextIndex], nextIndex, questions.length));
       return true;
     }
 
-    await query(`UPDATE application_sessions SET current_index = $1, answers = $2, status = 'COMPLETED', completed_at = NOW(), updated_at = NOW() WHERE id = $3`, [nextIndex, safeJson(answers), session.id]);
+    const updatedSession = await query(`UPDATE application_sessions SET current_index = $1, answers = $2, status = 'AWAITING_CONFIRMATION', updated_at = NOW() WHERE id = $3 RETURNING *`, [nextIndex, safeJson(answers), session.id]);
+    await message.channel.send(buildApplicationConfirmPayload(updatedSession.rows[0], session.application_name, answers));
+    return true;
+  }
+
+
+  async cancelSession({ sessionId, user, logger = null }) {
+    const result = await query(`UPDATE application_sessions SET status = 'CANCELLED', updated_at = NOW() WHERE id = $1 AND applicant_user_id = $2 AND status IN ('ACTIVE','AWAITING_CONFIRMATION') RETURNING *`, [sessionId, user.id]);
+    const session = result.rows[0] || null;
+    if (session && logger) await logger.log({ guildId: session.guild_id, eventKey: 'application-cancel', title: 'Application Cancelled', body: `${user.tag} cancelled an application before submission.`, actorUserId: user.id, metadata: { sessionId } }).catch(() => {});
+    return session;
+  }
+
+  async submitSession({ sessionId, user, client, logger }) {
+    const result = await query(`SELECT s.*, t.*,
+      s.id AS session_id,
+      t.id AS app_type_id,
+      t.name AS application_name
+      FROM application_sessions s INNER JOIN application_types t ON t.id = s.application_type_id
+      WHERE s.id = $1 AND s.applicant_user_id = $2 AND s.status = 'AWAITING_CONFIRMATION' LIMIT 1`, [sessionId, user.id]);
+    const session = result.rows[0];
+    if (!session) return { ok: false, reason: 'This application session could not be found or is no longer waiting for confirmation.' };
     const guild = await client.guilds.fetch(session.guild_id).catch(() => null);
     const applicationType = await this.getTypeById(session.guild_id, session.application_type_id);
-    const submission = await this.submitApplicationDirect({ guildId: session.guild_id, guild, user: message.author, client, logger, applicationType, answers });
-    if (!submission.ok) {
-      await message.channel.send({ embeds: [createBaseEmbed({ title: 'Application Not Submitted', description: submission.reason || 'Your application could not be submitted.', color: SlickBotColors.WARNING, footer: 'SlickBot Applications' })] });
-      return true;
-    }
-    await message.channel.send({ embeds: [createSuccessEmbed('Application Submitted', `Your ${session.application_name} application was submitted as #${submission.submission.submission_number}.`)] });
-    return true;
+    const answers = parseJson(session.answers, {});
+    const submission = await this.submitApplicationDirect({ guildId: session.guild_id, guild, user, client, logger, applicationType, answers });
+    if (!submission.ok) return submission;
+    await query(`UPDATE application_sessions SET status = 'COMPLETED', completed_at = NOW(), updated_at = NOW() WHERE id = $1`, [sessionId]);
+    return { ...submission, applicationType };
   }
 
   async submitApplicationDirect({ guildId, guild, user, client, logger, applicationType, answers }) {
@@ -688,9 +743,17 @@ function buildApplicationReviewPayload(submission, applicationType) {
 class AppealService {
   async updateConfig(guildId, input) {
     const result = await query(
-      `INSERT INTO appeal_configs (guild_id, review_channel_id, dm_decision_enabled) VALUES ($1, $2, $3)
-       ON CONFLICT (guild_id) DO UPDATE SET review_channel_id = COALESCE(EXCLUDED.review_channel_id, appeal_configs.review_channel_id), dm_decision_enabled = EXCLUDED.dm_decision_enabled, updated_at = NOW() RETURNING *`,
-      [guildId, input.reviewChannelId || null, Boolean(input.dmDecisionEnabled)]
+      `INSERT INTO appeal_configs (guild_id, review_channel_id, dm_decision_enabled, dm_include_submission, panel_title, panel_description, panel_color)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       ON CONFLICT (guild_id) DO UPDATE SET
+         review_channel_id = COALESCE(EXCLUDED.review_channel_id, appeal_configs.review_channel_id),
+         dm_decision_enabled = EXCLUDED.dm_decision_enabled,
+         dm_include_submission = EXCLUDED.dm_include_submission,
+         panel_title = COALESCE(EXCLUDED.panel_title, appeal_configs.panel_title),
+         panel_description = COALESCE(EXCLUDED.panel_description, appeal_configs.panel_description),
+         panel_color = COALESCE(EXCLUDED.panel_color, appeal_configs.panel_color),
+         updated_at = NOW() RETURNING *`,
+      [guildId, input.reviewChannelId || null, Boolean(input.dmDecisionEnabled), Boolean(input.dmIncludeSubmission), input.panelTitle || null, input.panelDescription || null, input.panelColor || null]
     );
     return result.rows[0];
   }
@@ -735,10 +798,8 @@ function buildAppealReviewPayload(appeal) {
     footer: 'SlickBot Appeals'
   });
   const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId(`${CustomIds.AppealApprovePrefix}${appeal.id}`).setLabel('Approve').setStyle(ButtonStyle.Success),
-    new ButtonBuilder().setCustomId(`${CustomIds.AppealDenyPrefix}${appeal.id}`).setLabel('Deny').setStyle(ButtonStyle.Danger),
-    new ButtonBuilder().setCustomId(`${CustomIds.AppealApproveReasonPrefix}${appeal.id}`).setLabel('Approve + Reason').setStyle(ButtonStyle.Success),
-    new ButtonBuilder().setCustomId(`${CustomIds.AppealDenyReasonPrefix}${appeal.id}`).setLabel('Deny + Reason').setStyle(ButtonStyle.Danger)
+    new ButtonBuilder().setCustomId(`${CustomIds.AppealApproveReasonPrefix}${appeal.id}`).setLabel('Approve').setStyle(ButtonStyle.Success),
+    new ButtonBuilder().setCustomId(`${CustomIds.AppealDenyReasonPrefix}${appeal.id}`).setLabel('Deny').setStyle(ButtonStyle.Danger)
   );
   return { embeds: [embed], components: [row] };
 }
