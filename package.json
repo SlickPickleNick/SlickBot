@@ -1,6 +1,6 @@
 {
   "name": "slickbot",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "SlickBot all-in-one Discord server management bot foundation.",
   "type": "module",
@@ -10,29 +10,26 @@
   "scripts": {
     "dev": "tsx watch src/bot.ts",
     "build": "prisma generate && tsc",
-    "start": "prisma db push && node dist/bot.js",
+    "start": "npm run db:push && node dist/bot.js",
     "deploy:commands": "tsx src/deploy-commands.ts",
     "db:generate": "prisma generate",
-    "db:push": "prisma db push",
+    "db:push": "prisma db push --accept-data-loss",
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",
     "typecheck": "tsc --noEmit",
     "start:bot": "node dist/bot.js",
-    "railway:start": "prisma db push && node dist/bot.js"
+    "railway:start": "npm run db:push && node dist/bot.js"
   },
   "dependencies": {
-    "@discordjs/rest": "2.6.1",
-    "@prisma/client": "7.8.0",
-    "discord-api-types": "0.38.49",
-    "discord.js": "14.26.4",
-    "dotenv": "17.4.2",
-    "prisma": "7.8.0",
-    "zod": "4.4.3"
+    "@prisma/client": "^6.14.0",
+    "discord.js": "^14.22.1",
+    "dotenv": "^16.4.7"
   },
   "devDependencies": {
-    "@types/node": "26.1.0",
-    "tsx": "4.23.0",
-    "typescript": "6.0.3"
+    "@types/node": "^22.13.14",
+    "prisma": "^6.14.0",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2"
   },
   "packageManager": "npm@10.9.2"
 }

@@ -4,6 +4,7 @@ import { env, shouldAutoDeployCommands } from "./config/env.js";
 import { commandMap } from "./commands/index.js";
 import { deployCommands } from "./deploy-commands.js";
 import { prisma } from "./services/db.js";
+import { startHealthServer } from "./services/healthServer.js";
 import { replyPrivate } from "./utils/reply.js";
 import { PermissionService } from "./modules/permissions/permissionService.js";
 import { LoggingService } from "./modules/logging/loggingService.js";
@@ -11,7 +12,6 @@ import { LoggingService } from "./modules/logging/loggingService.js";
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.GuildVoiceStates
   ]
@@ -19,6 +19,7 @@ const client = new Client({
 
 const permissions = new PermissionService(prisma);
 const logger = new LoggingService(prisma, client);
+const healthServer = startHealthServer(client);
 
 client.once(Events.ClientReady, async (readyClient) => {
   console.log(`Logged in as ${readyClient.user.tag}.`);
@@ -96,12 +97,22 @@ main().catch(async (error) => {
   process.exit(1);
 });
 
-process.on("SIGINT", async () => {
+async function shutdown(): Promise<void> {
+  healthServer.close();
   await prisma.$disconnect();
   process.exit(0);
+}
+
+process.on("SIGINT", () => {
+  shutdown().catch((error) => {
+    console.error("Shutdown failed:", error);
+    process.exit(1);
+  });
 });
 
-process.on("SIGTERM", async () => {
-  await prisma.$disconnect();
-  process.exit(0);
+process.on("SIGTERM", () => {
+  shutdown().catch((error) => {
+    console.error("Shutdown failed:", error);
+    process.exit(1);
+  });
 });

@@ -1,86 +1,35 @@
 # SlickBot
 
-Bot-only foundation for an all-in-one Discord server management bot.
+SlickBot is a custom all-in-one Discord server management bot being built first for the SlickPickleNick Discord server.
 
-## Project identity
+Current scope: **bot-only foundation**. No web dashboard is included yet.
 
-- Project name: **SlickBot**
-- Recommended GitHub repo: `slickbot`
-- Recommended Railway service: `slickbot`
-- Current mode: bot-only, no dashboard
+## Current v0.1 foundation
 
-## Current scope
-
-This starter includes the v0.1 foundation:
+Included:
 
 - TypeScript + discord.js
 - Prisma + PostgreSQL
-- Railway-ready Docker deployment files
-- Slash command registration
+- Railway Docker deployment
+- Railway `/health` endpoint
+- Slash command auto-registration
 - Ephemeral/private command responses
 - Permission Teams
 - Module enable/disable system
-- Immediate and batched logging
-- Audit log table
+- Immediate logging
+- Batched logging queue
+- Audit log database table
+- `/setup`
+- `/team`
+- `/modules`
+- `/logging`
+- `/ping`
 
-This does **not** include the web dashboard yet.
+## Railway deployment
 
-## Commands included
+Railway should build this project using the root `Dockerfile`.
 
-### Core
-
-- `/ping` - Check whether the bot is online.
-- `/setup` - Initialize the bot for your server.
-
-### Permission Teams
-
-- `/team create`
-- `/team add-role`
-- `/team remove-role`
-- `/team add-user`
-- `/team remove-user`
-- `/team allow`
-- `/team revoke`
-- `/team list`
-
-### Modules
-
-- `/modules list`
-- `/modules enable`
-- `/modules disable`
-
-### Logging
-
-- `/logging set-channel`
-- `/logging mode`
-- `/logging test`
-- `/logging flush`
-
-## Railway setup
-
-### 1. Create the Discord application
-
-Create a Discord application and bot in the Discord Developer Portal.
-
-Needed values:
-
-```text
-DISCORD_TOKEN
-DISCORD_CLIENT_ID
-DISCORD_GUILD_ID
-```
-
-Use `DISCORD_GUILD_ID` while testing so command updates appear quickly in your server.
-
-### 2. Create a GitHub repo
-
-Recommended repo name:
-
-```text
-slickbot
-```
-
-Push the **contents of this project folder** to GitHub. Your GitHub repo root must directly contain:
+The GitHub repo root must directly contain:
 
 ```text
 package.json
@@ -88,23 +37,21 @@ Dockerfile
 railway.json
 prisma/
 src/
+README.md
 ```
 
-Do not upload this as `slickbot/slickbot/package.json` or Railway will not detect the Node/Docker project correctly.
+Do not upload the files inside an extra nested folder.
 
-### 3. Create a Railway project
+## Railway services
 
-In Railway:
+Create:
 
-1. Create a new project.
-2. Deploy from GitHub.
-3. Select the repo.
-4. Add a PostgreSQL service.
-5. Set the bot service environment variables.
+1. One Railway service for SlickBot from the GitHub repo.
+2. One Railway PostgreSQL database service.
 
-### 4. Environment variables
+Railway PostgreSQL exposes a `DATABASE_URL` variable. Add that value to the SlickBot service variables.
 
-Set these in Railway:
+## Required Railway variables
 
 ```text
 DISCORD_TOKEN=your_bot_token
@@ -116,64 +63,131 @@ BOT_OWNER_IDS=your_discord_user_id
 DEFAULT_TIMEZONE=America/New_York
 LOG_BATCH_FLUSH_SECONDS=300
 NODE_ENV=production
+WEB_HOST=0.0.0.0
 ```
 
-The exact Postgres service name in Railway may differ. If your database service is not named `Postgres`, use the matching Railway variable reference.
+Railway usually injects `PORT` automatically. You do not need to manually set it unless Railway asks for it.
 
-### 5. Database setup
+## Compatibility variable aliases
 
-The production start command runs:
+SlickBot also accepts some TitanBot-style variable names at runtime:
 
-```bash
-prisma db push && node dist/bot.js
-```
+| Preferred | Alias |
+|---|---|
+| `DISCORD_CLIENT_ID` | `CLIENT_ID` |
+| `DISCORD_GUILD_ID` | `GUILD_ID` |
+| `BOT_OWNER_IDS` | `OWNER_IDS` |
+| `DATABASE_URL` | `POSTGRES_URL` |
 
-That means Railway will apply the current Prisma schema to the connected PostgreSQL database before starting the bot. This is acceptable for the early v0.1 stage. Once the schema stabilizes, switch to Prisma migrations.
+For Railway + Prisma, still use `DATABASE_URL` when possible.
 
-### 6. Start command
+## Discord Developer Portal setup
 
-Railway should use:
+For v0.1, the bot only needs basic Gateway intents.
 
-```bash
-npm start
-```
+Required:
 
-The included `railway.json` forces Railway to use the included Dockerfile instead of relying on automatic Node detection:
+- Guilds
 
-```json
-{
-  "build": {
-    "builder": "DOCKERFILE",
-    "dockerfilePath": "Dockerfile"
-  },
-  "deploy": {
-    "startCommand": "npm start"
-  }
-}
-```
+Not required yet:
 
+- Server Members Intent
+- Message Content Intent
+- Presence Intent
 
-## Railway troubleshooting
+This is intentional. Requesting privileged intents before they are enabled can stop the bot from logging in. Future modules such as welcome, leveling, reaction roles, and full logging may require additional intents later.
 
-### `npm: command not found`
+## Invite URL scopes
 
-This usually means Railway did not detect the project root correctly, or it is not building from the folder that contains `package.json` and `Dockerfile`. The fixed version of this project includes a Dockerfile so Railway uses a known Node image with npm already installed.
-
-Confirm the GitHub repo root contains:
+When inviting the bot, use these scopes:
 
 ```text
-package.json
-Dockerfile
-railway.json
-prisma/
-src/
+bot
+applications.commands
 ```
 
-If your repo root only contains a folder named `slickbot`, move the files inside that folder up to the repository root.
+Recommended permissions for the early foundation:
 
-### Build fails before the bot starts
+```text
+View Channels
+Send Messages
+Embed Links
+Attach Files
+Read Message History
+Use Slash Commands
+```
 
-Check that these Railway variables are set on the bot service before deploy:
+Later modules will need additional permissions, such as Manage Roles, Manage Channels, Ban Members, Kick Members, and Moderate Members.
+
+## Railway health endpoint
+
+SlickBot includes a small HTTP server for Railway deployment health checks:
+
+```text
+/health
+```
+
+The endpoint returns HTTP 200 when the process is running.
+
+## Local development
+
+Requirements:
+
+- Node.js 22.12.0 or newer
+- PostgreSQL database
+
+Install:
+
+```bash
+npm install
+```
+
+Generate Prisma client:
+
+```bash
+npm run db:generate
+```
+
+Push database schema:
+
+```bash
+npm run db:push
+```
+
+Start development mode:
+
+```bash
+npm run dev
+```
+
+## First Discord setup commands
+
+After the bot is online in Discord, run:
+
+```text
+/setup log_channel:#your-log-channel
+/logging test
+/modules list
+/ping
+```
+
+## Common Railway issues
+
+### Build fails because `tsc` or `prisma` is missing
+
+This version uses `npm install --include=dev` in the Dockerfile so build tools are installed even when Railway builds with `NODE_ENV=production`.
+
+### Bot deploys but Railway health check fails
+
+Make sure the service is using this repo's `Dockerfile` and that the healthcheck path is:
+
+```text
+/health
+```
+
+### Bot crashes with missing environment variable
+
+Check that these are set on the SlickBot service, not only on the PostgreSQL service:
 
 ```text
 DISCORD_TOKEN
@@ -183,70 +197,17 @@ DATABASE_URL
 BOT_OWNER_IDS
 ```
 
-`DATABASE_URL` should point to the Railway PostgreSQL service.
+### Bot crashes with disallowed intents
 
-## First Discord setup
+For v0.1, do not add privileged intents in code unless they are enabled in the Discord Developer Portal. This starter intentionally avoids privileged intents.
 
-After the bot is online and slash commands are registered:
+## Next module target
 
-1. Run `/setup log_channel:#your-log-channel`.
-2. Run `/logging test`.
-3. Run `/modules list`.
-4. Create teams as needed:
+v0.2 should add:
 
-```text
-/team create name:Moderator Team description:Mods and Senior Mods
-/team add-role team:Moderator Team role:@MODS
-/team add-role team:Moderator Team role:@SENIOR MODS
-/team allow team:Moderator Team action_key:moderation.warn
-```
-
-## Permission model
-
-Every command has:
-
-```text
-moduleKey
-actionKey
-```
-
-Before the command runs, the bot checks:
-
-1. Is the command being used inside a server?
-2. Is the module enabled?
-3. Is the user a bot owner?
-4. Is the user a Discord Administrator?
-5. Is the user in a Permission Team with the required action key?
-
-Bot owners and Discord Administrators bypass team checks in this starter version.
-
-## Logging model
-
-Logs can be:
-
-- Immediate
-- Batched
-- Disabled
-
-Example:
-
-```text
-/logging mode event_key:voice delivery:BATCHED interval_seconds:300
-/logging mode event_key:moderation delivery:IMMEDIATE
-/logging mode event_key:message-delete delivery:BATCHED interval_seconds:900
-```
-
-Batched logs are queued in the database and flushed on a timer. If a batch is too large for an embed, the bot attaches a `.txt` file.
-
-## Next modules to build
-
-Recommended order:
-
-```text
-v0.2 - Moderation, cases, user notes
-v0.3 - Tickets, transcripts, reports
-v0.4 - Applications and appeals
-v0.5 - Welcome, auto roles, reaction/button roles
-v0.6 - Giveaways, birthdays, scheduled messages
-v0.7 - Leveling, server stats, join-to-create voice, custom commands
-```
+- Moderation cases
+- User notes
+- `/warn`
+- `/case view`
+- `/note add`
+- Better audit log viewing
