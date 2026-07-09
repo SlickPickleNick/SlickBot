@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`v0.3.6`
+`v0.4.0`
 
 ## Current Foundation
 
@@ -21,6 +21,9 @@
 - Tickets, reports, applications, and appeals
 - Seeded default permission levels for all current commands/modules
 - Public action defaults and ignored-user enforcement
+- Welcome messages and auto roles
+- Button role panels
+- Coming-soon module status indicators
 
 ## Version Roadmap
 
@@ -55,9 +58,10 @@
 
 ### v0.4.x — Community Basics
 
-- Welcome messages
-- Auto roles
-- Reaction/button roles
+- Welcome messages ✅
+- Auto roles ✅
+- Button role panels ✅
+- Reaction-based roles later if still needed
 
 ### v0.5.x — Engagement
 

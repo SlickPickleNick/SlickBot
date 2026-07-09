@@ -11,6 +11,7 @@ const { LoggingService } = require('./modules/logging/loggingService');
 const { StatusService } = require('./modules/status/statusService');
 const { ModerationService } = require('./modules/moderation/moderationService');
 const { ApplicationService } = require('./modules/support/supportService');
+const { handleMemberJoin: handleWelcomeMemberJoin } = require('./modules/community/welcomeService');
 const { handleComponentInteraction } = require('./services/interactionRouter');
 
 const client = new Client({
@@ -71,6 +72,11 @@ client.on(Events.GuildMemberAdd, async (member) => {
     body: `${member.user.tag} (${member.id}) joined the server.`,
     metadata: { userId: member.id, bot: member.user.bot }
   }).catch((error) => console.error('Failed to log member join:', error));
+
+  const welcomeEnabled = await permissions.isModuleEnabled(member.guild.id, 'WELCOME').catch(() => false);
+  if (welcomeEnabled) {
+    await handleWelcomeMemberJoin(member, logger).catch((error) => console.error('Failed to run welcome flow:', error));
+  }
 });
 
 client.on(Events.GuildMemberRemove, async (member) => {

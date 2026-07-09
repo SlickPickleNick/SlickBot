@@ -418,6 +418,69 @@ async function initDatabase() {
 
 
   await query(`
+    CREATE TABLE IF NOT EXISTS welcome_configs (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT UNIQUE NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      channel_id TEXT,
+      enabled BOOLEAN NOT NULL DEFAULT true,
+      message_template TEXT NOT NULL DEFAULT 'Welcome {user} to **{server}**.',
+      embed_title TEXT NOT NULL DEFAULT 'Welcome to {server}',
+      embed_description TEXT NOT NULL DEFAULT 'Glad to have you here, {user}. Grab your roles and check out the server information to get started.',
+      embed_color TEXT NOT NULL DEFAULT '#7869ff',
+      dm_enabled BOOLEAN NOT NULL DEFAULT false,
+      dm_message_template TEXT NOT NULL DEFAULT 'Welcome to {server}, {username}!',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS welcome_auto_roles (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      role_id TEXT NOT NULL,
+      active BOOLEAN NOT NULL DEFAULT true,
+      added_by_user_id TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(guild_id, role_id)
+    );
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS role_panels (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      title TEXT NOT NULL,
+      description TEXT,
+      accent_color TEXT NOT NULL DEFAULT '#7869ff',
+      mode TEXT NOT NULL DEFAULT 'MULTI',
+      active BOOLEAN NOT NULL DEFAULT true,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(guild_id, name)
+    );
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS role_panel_options (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      panel_id TEXT NOT NULL REFERENCES role_panels(id) ON DELETE CASCADE,
+      role_id TEXT NOT NULL,
+      label TEXT NOT NULL,
+      emoji TEXT,
+      description TEXT,
+      display_order INTEGER NOT NULL DEFAULT 1,
+      active BOOLEAN NOT NULL DEFAULT true,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(panel_id, role_id)
+    );
+  `);
+
+
+  await query(`
     CREATE TABLE IF NOT EXISTS role_permission_levels (
       id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
       guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
@@ -570,6 +633,11 @@ async function initDatabase() {
   await query(`CREATE INDEX IF NOT EXISTS idx_application_types_guild ON application_types(guild_id, name);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_application_submissions_guild_status ON application_submissions(guild_id, status, created_at DESC);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_appeals_guild_status ON appeals(guild_id, status, created_at DESC);`);
+
+  await query(`CREATE INDEX IF NOT EXISTS idx_welcome_auto_roles_guild ON welcome_auto_roles(guild_id, active);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_role_panels_guild ON role_panels(guild_id, name, active);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_role_panel_options_panel ON role_panel_options(panel_id, active);`);
+
 }
 
 if (require.main === module) {

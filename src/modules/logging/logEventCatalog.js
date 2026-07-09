@@ -58,6 +58,18 @@ const LogModuleCatalog = Object.freeze([
     label: 'Scheduled Messages',
     description: 'Scheduled announcement activity.',
     defaultDelivery: 'IMMEDIATE'
+  },
+  {
+    key: 'welcome',
+    label: 'Welcome / Auto Roles',
+    description: 'Welcome messages, DM welcomes, and auto role activity.',
+    defaultDelivery: 'IMMEDIATE'
+  },
+  {
+    key: 'reaction-roles',
+    label: 'Reaction / Button Roles',
+    description: 'Self-assignable role panel configuration and role toggles.',
+    defaultDelivery: 'IMMEDIATE'
   }
 ]);
 
@@ -104,7 +116,14 @@ const LogEventCatalog = Object.freeze([
   { key: 'appeal-submit', moduleKey: 'appeals', label: 'Appeal Submitted', description: 'A user submitted an appeal.', defaultDelivery: 'IMMEDIATE' },
   { key: 'appeal-review', moduleKey: 'appeals', label: 'Appeal Reviewed', description: 'Staff reviewed an appeal.', defaultDelivery: 'IMMEDIATE' },
 
-  { key: 'scheduled-messages', moduleKey: 'scheduled-messages', label: 'Scheduled Messages', description: 'Scheduled announcement activity.', defaultDelivery: 'IMMEDIATE' }
+  { key: 'scheduled-messages', moduleKey: 'scheduled-messages', label: 'Scheduled Messages', description: 'Scheduled announcement activity.', defaultDelivery: 'IMMEDIATE' },
+
+  { key: 'welcome-config', moduleKey: 'welcome', label: 'Welcome Config', description: 'Welcome message and DM configuration changes.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'welcome-member', moduleKey: 'welcome', label: 'Welcome Member', description: 'Welcome message and auto role actions on member join.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'auto-role-config', moduleKey: 'welcome', label: 'Auto Role Config', description: 'Auto role configuration changes.', defaultDelivery: 'IMMEDIATE' },
+
+  { key: 'reaction-role-config', moduleKey: 'reaction-roles', label: 'Role Panel Config', description: 'Self-assignable role panel setup changes.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'reaction-role-toggle', moduleKey: 'reaction-roles', label: 'Role Panel Used', description: 'User role self-assignment actions.', defaultDelivery: 'IMMEDIATE' }
 ]);
 
 const StarterLogModuleKeys = Object.freeze(['core', 'moderation']);

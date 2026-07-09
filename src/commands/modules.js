@@ -1,5 +1,5 @@
 const { SlashCommandBuilder } = require('discord.js');
-const { ModuleKeys, defaultModules, isCoreModule } = require('../modules/moduleRegistry');
+const { ModuleKeys, defaultModules, isCoreModule, isImplementedModule } = require('../modules/moduleRegistry');
 const { ActionKeys } = require('../modules/permissions/actionKeys');
 const { replyPrivate } = require('../utils/reply');
 const { query } = require('../services/db');
@@ -48,6 +48,17 @@ module.exports = {
     }
 
     const moduleKey = interaction.options.getString('module', true);
+
+    if (!isImplementedModule(moduleKey)) {
+      await replyPrivate(interaction, {
+        embeds: [createBaseEmbed({
+          title: 'Module Coming Soon',
+          description: `**${moduleKey}** has not been built yet. It will appear as 🕒 Coming Soon in the module panel until it is released.`,
+          color: SlickBotColors.WARNING
+        })]
+      });
+      return;
+    }
 
     if (isCoreModule(moduleKey) && subcommand === 'disable') {
       await replyPrivate(interaction, {

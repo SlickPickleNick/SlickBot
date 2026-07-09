@@ -13,6 +13,8 @@ const applicationCommand = require('./application');
 const appealCommand = require('./appeal');
 const permissionsCommand = require('./permissions');
 const resetCommand = require('./reset');
+const welcomeCommand = require('./welcome');
+const rolesCommand = require('./roles');
 
 const commands = [
   pingCommand,
@@ -29,7 +31,9 @@ const commands = [
   applicationCommand,
   appealCommand,
   permissionsCommand,
-  resetCommand
+  resetCommand,
+  welcomeCommand,
+  rolesCommand
 ];
 
 const commandMap = new Map(commands.map((command) => [command.data.name, command]));

@@ -16,6 +16,9 @@ const CustomIds = Object.freeze({
   ApplicationSubmitPrefix: 'slickbot:application:submit:',
   SetupModeration: 'slickbot:setup:moderation',
   SetupSupport: 'slickbot:setup:support',
+  SetupCommunity: 'slickbot:setup:community',
+  WelcomeRefresh: 'slickbot:welcome:refresh',
+  RolePanelsRefresh: 'slickbot:rolepanels:refresh',
 
   ModulesSelect: 'slickbot:modules:select',
   ModulesRefresh: 'slickbot:modules:refresh',

@@ -31,8 +31,8 @@ const defaultModules = [
   { key: ModuleKeys.APPLICATIONS, enabled: true },
   { key: ModuleKeys.APPEALS, enabled: true },
   { key: ModuleKeys.SCHEDULED_MESSAGES, enabled: false },
-  { key: ModuleKeys.WELCOME, enabled: false },
-  { key: ModuleKeys.REACTION_ROLES, enabled: false },
+  { key: ModuleKeys.WELCOME, enabled: true },
+  { key: ModuleKeys.REACTION_ROLES, enabled: true },
   { key: ModuleKeys.GIVEAWAYS, enabled: false },
   { key: ModuleKeys.BIRTHDAYS, enabled: false },
   { key: ModuleKeys.LEVELING, enabled: false },
@@ -46,9 +46,29 @@ function isCoreModule(moduleKey) {
   return coreModules.includes(moduleKey);
 }
 
+
+const implementedModules = Object.freeze([
+  ModuleKeys.PERMISSIONS,
+  ModuleKeys.LOGGING,
+  ModuleKeys.STATUS,
+  ModuleKeys.MODERATION,
+  ModuleKeys.TICKETS,
+  ModuleKeys.REPORTS,
+  ModuleKeys.APPLICATIONS,
+  ModuleKeys.APPEALS,
+  ModuleKeys.WELCOME,
+  ModuleKeys.REACTION_ROLES
+]);
+
+function isImplementedModule(moduleKey) {
+  return implementedModules.includes(moduleKey);
+}
+
 module.exports = {
   ModuleKeys,
   coreModules,
   defaultModules,
-  isCoreModule
+  implementedModules,
+  isCoreModule,
+  isImplementedModule
 };

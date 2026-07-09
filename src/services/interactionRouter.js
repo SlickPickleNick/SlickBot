@@ -3,12 +3,14 @@ const { ActionKeys } = require('../modules/permissions/actionKeys');
 const { ModuleKeys, isCoreModule } = require('../modules/moduleRegistry');
 const { query } = require('./db');
 const { replyPrivate } = require('../utils/reply');
-const { buildSetupPanel, buildModulesPanel, buildLoggingPanel, buildTeamsPanel, buildPermissionsPanel } = require('../modules/ui/panels');
+const { buildSetupPanel, buildModulesPanel, buildLoggingPanel, buildTeamsPanel, buildPermissionsPanel, buildCommunityPanel } = require('../modules/ui/panels');
 const { buildModerationPanel, buildRecentCasesPanel } = require('../modules/moderation/moderationUi');
 const { buildStatusPanel } = require('../commands/status');
 const { createBaseEmbed, createSuccessEmbed, createWarningEmbed, SlickBotColors } = require('../modules/ui/uiService');
 const { ActivityTypeNames, PresenceStatus } = require('../modules/status/statusService');
 const { buildSupportPanel, buildTicketsPanel, buildReportsPanel, buildApplicationsPanel, buildAppealsPanel } = require('../modules/support/supportUi');
+const { buildWelcomePanel } = require('../modules/community/welcomeService');
+const { buildRoleManagerPanel, toggleRole } = require('../modules/community/rolePanelService');
 const {
   TicketService,
   ReportService,
@@ -126,6 +128,24 @@ async function handleButton(interaction, ctx) {
     return true;
   }
 
+  if (id === CustomIds.SetupCommunity) {
+    if (!(await requireAnyCommunityAction(interaction, ctx))) return true;
+    await updatePanel(interaction, await buildCommunityPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id === CustomIds.WelcomeRefresh) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.WelcomeView, ModuleKeys.WELCOME))) return true;
+    await updatePanel(interaction, await buildWelcomePanel(interaction.guildId));
+    return true;
+  }
+
+  if (id === CustomIds.RolePanelsRefresh) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.RolePanelsView, ModuleKeys.REACTION_ROLES))) return true;
+    await updatePanel(interaction, await buildRoleManagerPanel(interaction.guildId));
+    return true;
+  }
+
   if (id === CustomIds.TicketsRefresh) {
     if (!(await requireAction(interaction, ctx, ActionKeys.TicketsManager, ModuleKeys.TICKETS))) return true;
     await updatePanel(interaction, await buildTicketsPanel(interaction.guildId));
@@ -148,6 +168,15 @@ async function handleButton(interaction, ctx) {
   if (id === CustomIds.AppealsRefresh) {
     if (!(await requireAction(interaction, ctx, ActionKeys.AppealsManager, ModuleKeys.APPEALS))) return true;
     await updatePanel(interaction, await buildAppealsPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id.startsWith('slickbot:rolepanel:')) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.RolePanelsUse, ModuleKeys.REACTION_ROLES))) return true;
+    const [, , panelId, optionId] = id.split(':');
+    const result = await toggleRole({ interaction, panelId, optionId, logger: ctx.logger });
+    if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Role Not Updated', result.reason)] });
+    await replyPrivate(interaction, { embeds: [createSuccessEmbed(result.added ? 'Role Added' : 'Role Removed', `${result.added ? 'Added' : 'Removed'} <@&${result.roleId}>.`)] });
     return true;
   }
 
@@ -320,6 +349,10 @@ async function handleSelect(interaction, ctx) {
   if (id === CustomIds.ModulesSelect) {
     if (!(await requireAction(interaction, ctx, ActionKeys.ModulesManage, ModuleKeys.PERMISSIONS))) return true;
     const moduleKey = interaction.values[0];
+    if (!isImplementedModuleSafe(moduleKey)) {
+      await updatePanel(interaction, { embeds: [createBaseEmbed({ title: 'Module Coming Soon', description: `**${moduleKey}** has not been built yet, so it cannot be enabled or disabled.`, color: SlickBotColors.WARNING })], components: (await buildModulesPanel(interaction.guildId)).components });
+      return true;
+    }
     if (isCoreModule(moduleKey)) {
       await updatePanel(interaction, { embeds: [createBaseEmbed({ title: 'Core Module Locked', description: `**${moduleKey}** is a core SlickBot module and cannot be disabled.`, color: SlickBotColors.WARNING })], components: (await buildModulesPanel(interaction.guildId)).components });
       return true;
@@ -431,6 +464,17 @@ async function requireAnySupportAction(interaction, ctx) {
   return false;
 }
 
+
+async function requireAnyCommunityAction(interaction, ctx) {
+  const checks = [[ActionKeys.WelcomeView, ModuleKeys.WELCOME], [ActionKeys.RolePanelsView, ModuleKeys.REACTION_ROLES]];
+  for (const [action, moduleKey] of checks) {
+    const result = await ctx.permissions.checkInteraction(interaction, action, moduleKey);
+    if (result.allowed) return true;
+  }
+  await replyPrivate(interaction, { embeds: [createBaseEmbed({ title: 'Permission Required', description: 'You need access to at least one community module.', color: SlickBotColors.ERROR })] });
+  return false;
+}
+
 async function requireModuleOnly(interaction, ctx, moduleKey) {
   await ctx.permissions.ensureGuildConfig(interaction.guildId, interaction.guild ? interaction.guild.name : null);
   if (await ctx.permissions.isIgnored(interaction.guildId, interaction.user.id)) {
@@ -473,6 +517,10 @@ async function scheduleTicketDeletion(channel, seconds = 10) {
     await message.edit({ embeds: [createWarningEmbed('Ticket Closing', `Ticket will close in **${remaining}** second(s).`)] }).catch(() => {});
   }
   await channel.delete('SlickBot ticket closed and transcript completed.').catch(() => {});
+}
+
+function isImplementedModuleSafe(moduleKey) {
+  return require('../modules/moduleRegistry').isImplementedModule(moduleKey);
 }
 
 module.exports = { handleComponentInteraction };

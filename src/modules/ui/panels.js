@@ -1,4 +1,4 @@
-const { defaultModules, isCoreModule } = require('../moduleRegistry');
+const { defaultModules, isCoreModule, isImplementedModule } = require('../moduleRegistry');
 const { query } = require('../../services/db');
 const {
   createBaseEmbed,
@@ -13,6 +13,8 @@ const { CustomIds } = require('./customIds');
 const { buildSupportPanel } = require('../support/supportUi');
 const { LogModuleCatalog, LogEventCatalog, getEventsForModule } = require('../logging/logEventCatalog');
 const { defaultTeamPermissions } = require('../permissions/actionKeys');
+const { buildWelcomePanel } = require('../community/welcomeService');
+const { buildRoleManagerPanel } = require('../community/rolePanelService');
 
 async function ensureDefaultModules(guildId) {
   for (const moduleConfig of defaultModules) {
@@ -72,6 +74,7 @@ async function buildSetupPanel(guildId, guildName = null) {
   ]);
 
   const rowTwo = createButtonRow([
+    createPanelButton(CustomIds.SetupCommunity, 'Community', ButtonStyle.Secondary, '✨'),
     createPanelButton(CustomIds.SetupTeams, 'Teams', ButtonStyle.Secondary, '👥'),
     createPanelButton(CustomIds.SetupPermissions, 'Permissions', ButtonStyle.Secondary, '🔐'),
     createPanelButton(CustomIds.SetupRefresh, 'Refresh', ButtonStyle.Secondary, '🔄')
@@ -99,9 +102,9 @@ async function buildModulesPanel(guildId) {
     title: 'SlickBot Module Manager',
     description: [
       '**Status Legend**',
-      '🟢 Fully enabled · 🟠 Partially enabled · 🟣 Needs configuration · 🔴 Disabled',
+      '🟢 Fully enabled · 🟠 Partially enabled · 🟣 Needs configuration · 🔴 Disabled · 🕒 Coming Soon',
       '',
-      `🟢 ${byStatus.READY || 0} · 🟠 ${byStatus.PARTIAL || 0} · 🟣 ${byStatus.NEEDS_CONFIG || 0} · 🔴 ${byStatus.DISABLED || 0}`,
+      `🟢 ${byStatus.READY || 0} · 🟠 ${byStatus.PARTIAL || 0} · 🟣 ${byStatus.NEEDS_CONFIG || 0} · 🔴 ${byStatus.DISABLED || 0} · 🕒 ${byStatus.COMING_SOON || 0}`,
       '',
       '**Modules**',
       lines || 'No modules found.',
@@ -130,15 +133,27 @@ async function buildModulesPanel(guildId) {
 }
 
 async function getModuleStatus(guildId, row) {
+  if (!isImplementedModule(row.module_key)) {
+    return { moduleKey: row.module_key, core: false, state: 'COMING_SOON', emoji: '🕒', label: 'Coming Soon', note: 'Not built yet' };
+  }
+
   if (!row.enabled) return { moduleKey: row.module_key, core: isCoreModule(row.module_key), state: 'DISABLED', emoji: '🔴', label: 'Disabled', note: 'Off' };
-  if (isCoreModule(row.module_key)) return { moduleKey: row.module_key, core: true, state: 'READY', emoji: '🟢', label: 'Fully enabled', note: 'Core' };
 
   if (row.module_key === 'LOGGING') {
-    const logs = await query(`SELECT COUNT(*)::int AS count FROM log_module_settings WHERE guild_id = $1 AND enabled = true AND channel_id IS NOT NULL`, [guildId]).catch(() => ({ rows: [{ count: 0 }] }));
-    return (logs.rows[0]?.count || 0) > 0
-      ? { moduleKey: row.module_key, core: false, state: 'READY', emoji: '🟢', label: 'Fully enabled', note: `${logs.rows[0].count} log group(s)` }
-      : { moduleKey: row.module_key, core: false, state: 'NEEDS_CONFIG', emoji: '🟣', label: 'Needs configuration', note: 'No log channels' };
+    const totalRequired = LogModuleCatalog.length;
+    const logs = await query(
+      `SELECT COUNT(*)::int AS count
+       FROM log_module_settings
+       WHERE guild_id = $1 AND enabled = true AND channel_id IS NOT NULL`,
+      [guildId]
+    ).catch(() => ({ rows: [{ count: 0 }] }));
+    const configured = logs.rows[0]?.count || 0;
+    if (configured <= 0) return { moduleKey: row.module_key, core: true, state: 'NEEDS_CONFIG', emoji: '🟣', label: 'Needs configuration', note: 'No log channels' };
+    if (configured < totalRequired) return { moduleKey: row.module_key, core: true, state: 'PARTIAL', emoji: '🟠', label: 'Partially enabled', note: `${configured}/${totalRequired} log groups` };
+    return { moduleKey: row.module_key, core: true, state: 'READY', emoji: '🟢', label: 'Fully enabled', note: `${configured}/${totalRequired} log groups` };
   }
+
+  if (isCoreModule(row.module_key)) return { moduleKey: row.module_key, core: true, state: 'READY', emoji: '🟢', label: 'Fully enabled', note: 'Core' };
 
   if (row.module_key === 'TICKETS') {
     const cfg = await query(`SELECT category_id, staff_role_id FROM ticket_configs WHERE guild_id = $1 LIMIT 1`, [guildId]).catch(() => ({ rows: [] }));
@@ -160,6 +175,25 @@ async function getModuleStatus(guildId, row) {
   if (row.module_key === 'APPEALS') {
     const cfg = await query(`SELECT review_channel_id FROM appeal_configs WHERE guild_id = $1 LIMIT 1`, [guildId]).catch(() => ({ rows: [] }));
     return cfg.rows[0]?.review_channel_id ? { moduleKey: row.module_key, core: false, state: 'READY', emoji: '🟢', label: 'Fully enabled', note: 'Review channel set' } : { moduleKey: row.module_key, core: false, state: 'NEEDS_CONFIG', emoji: '🟣', label: 'Needs configuration', note: 'Run /appeal setup' };
+  }
+
+  if (row.module_key === 'WELCOME') {
+    const [cfg, roles] = await Promise.all([
+      query(`SELECT channel_id, enabled FROM welcome_configs WHERE guild_id = $1 LIMIT 1`, [guildId]).catch(() => ({ rows: [] })),
+      query(`SELECT COUNT(*)::int AS count FROM welcome_auto_roles WHERE guild_id = $1 AND active = true`, [guildId]).catch(() => ({ rows: [{ count: 0 }] }))
+    ]);
+    const hasChannel = Boolean(cfg.rows[0]?.channel_id && cfg.rows[0]?.enabled !== false);
+    const autoRoles = roles.rows[0]?.count || 0;
+    if (hasChannel && autoRoles > 0) return { moduleKey: row.module_key, core: false, state: 'READY', emoji: '🟢', label: 'Fully enabled', note: 'Welcome + auto roles' };
+    if (hasChannel || autoRoles > 0) return { moduleKey: row.module_key, core: false, state: 'PARTIAL', emoji: '🟠', label: 'Partially enabled', note: hasChannel ? 'Welcome channel set' : `${autoRoles} auto role(s)` };
+    return { moduleKey: row.module_key, core: false, state: 'NEEDS_CONFIG', emoji: '🟣', label: 'Needs configuration', note: 'Run /welcome setup' };
+  }
+
+  if (row.module_key === 'REACTION_ROLES') {
+    const panels = await query(`SELECT COUNT(*)::int AS count FROM role_panels WHERE guild_id = $1 AND active = true`, [guildId]).catch(() => ({ rows: [{ count: 0 }] }));
+    return (panels.rows[0]?.count || 0) > 0
+      ? { moduleKey: row.module_key, core: false, state: 'READY', emoji: '🟢', label: 'Fully enabled', note: `${panels.rows[0].count} panel(s)` }
+      : { moduleKey: row.module_key, core: false, state: 'NEEDS_CONFIG', emoji: '🟣', label: 'Needs configuration', note: 'Run /roles create-panel' };
   }
 
   return { moduleKey: row.module_key, core: false, state: 'PARTIAL', emoji: '🟠', label: 'Partially enabled', note: 'Module shell only' };
@@ -316,11 +350,37 @@ async function buildPermissionsPanel(guildId) {
   return { embeds: [embed], components: [row] };
 }
 
+
+async function buildCommunityPanel(guildId) {
+  const welcomePayload = await buildWelcomePanel(guildId);
+  const rolePayload = await buildRoleManagerPanel(guildId);
+  const embed = createBaseEmbed({
+    title: 'SlickBot Community Center',
+    description: [
+      '**Welcome / Auto Roles**',
+      welcomePayload.embeds[0].data.description || 'No welcome status available.',
+      '',
+      '**Reaction / Button Roles**',
+      rolePayload.embeds[0].data.description || 'No role panel status available.',
+      '',
+      'Use `/welcome manager` or `/roles manager` for focused setup controls.'
+    ].join('\n'),
+    color: SlickBotColors.INFO
+  });
+  const row = createButtonRow([
+    createPanelButton(CustomIds.WelcomeRefresh, 'Welcome', ButtonStyle.Secondary, '👋'),
+    createPanelButton(CustomIds.RolePanelsRefresh, 'Role Panels', ButtonStyle.Secondary, '🎛️'),
+    createPanelButton(CustomIds.SetupRefresh, 'Back to Setup', ButtonStyle.Primary, '↩️')
+  ]);
+  return { embeds: [embed], components: [row] };
+}
+
 module.exports = {
   ensureDefaultModules,
   buildSetupPanel,
   buildModulesPanel,
   buildLoggingPanel,
   buildTeamsPanel,
-  buildPermissionsPanel
+  buildPermissionsPanel,
+  buildCommunityPanel
 };

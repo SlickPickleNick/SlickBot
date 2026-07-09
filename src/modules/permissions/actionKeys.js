@@ -62,6 +62,15 @@ const ActionKeys = Object.freeze({
   AppealsApprove: 'appeals.approve',
   AppealsDeny: 'appeals.deny',
 
+  WelcomeView: 'welcome.view',
+  WelcomeConfigure: 'welcome.configure',
+  WelcomeTest: 'welcome.test',
+
+  RolePanelsView: 'reaction-roles.view',
+  RolePanelsConfigure: 'reaction-roles.configure',
+  RolePanelsPost: 'reaction-roles.panel.post',
+  RolePanelsUse: 'reaction-roles.use',
+
   ServerReset: 'server.reset'
 });
 
@@ -143,6 +152,15 @@ const defaultActionLevels = Object.freeze({
   [ActionKeys.AppealsApprove]: PermissionLevels.SENIOR_MODERATOR,
   [ActionKeys.AppealsDeny]: PermissionLevels.SENIOR_MODERATOR,
 
+  [ActionKeys.WelcomeView]: PermissionLevels.MODERATOR,
+  [ActionKeys.WelcomeConfigure]: PermissionLevels.SENIOR_MODERATOR,
+  [ActionKeys.WelcomeTest]: PermissionLevels.SENIOR_MODERATOR,
+
+  [ActionKeys.RolePanelsView]: PermissionLevels.MODERATOR,
+  [ActionKeys.RolePanelsConfigure]: PermissionLevels.SENIOR_MODERATOR,
+  [ActionKeys.RolePanelsPost]: PermissionLevels.SENIOR_MODERATOR,
+  [ActionKeys.RolePanelsUse]: PermissionLevels.EVERYONE,
+
   [ActionKeys.ServerReset]: PermissionLevels.OWNER
 });
 
@@ -156,7 +174,7 @@ const defaultModuleLevels = Object.freeze({
   [ModuleKeys.APPLICATIONS]: PermissionLevels.EVERYONE,
   [ModuleKeys.APPEALS]: PermissionLevels.EVERYONE,
   [ModuleKeys.SCHEDULED_MESSAGES]: PermissionLevels.SENIOR_MODERATOR,
-  [ModuleKeys.WELCOME]: PermissionLevels.SENIOR_MODERATOR,
+  [ModuleKeys.WELCOME]: PermissionLevels.MODERATOR,
   [ModuleKeys.REACTION_ROLES]: PermissionLevels.EVERYONE,
   [ModuleKeys.GIVEAWAYS]: PermissionLevels.MODERATOR,
   [ModuleKeys.BIRTHDAYS]: PermissionLevels.EVERYONE,
@@ -172,12 +190,13 @@ const defaultPublicActions = Object.freeze([
   ActionKeys.TicketsOpen,
   ActionKeys.ReportsSubmit,
   ActionKeys.ApplicationsApply,
-  ActionKeys.AppealsSubmit
+  ActionKeys.AppealsSubmit,
+  ActionKeys.RolePanelsUse
 ]);
 
 const defaultTeamPermissions = Object.freeze(Object.values(ActionKeys));
 
-const PERMISSION_DEFAULTS_VERSION = '0.3.6';
+const PERMISSION_DEFAULTS_VERSION = '0.4.0';
 
 module.exports = {
   ActionKeys,
