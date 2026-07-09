@@ -1,8 +1,8 @@
 {
   "name": "slickbot",
-  "version": "0.5.3",
+  "version": "0.5.4",
   "private": true,
-  "description": "SlickBot all-in-one Discord server management bot with scheduled messages, birthday panel improvements, live panel edits, auto-dismiss fixes, and support/community modules.",
+  "description": "SlickBot all-in-one Discord server management bot with panel live-update fixes, panel deletion, birthday setup fixes, and server stats.",
   "main": "src/index.js",
   "engines": {
     "node": ">=22.12.0"

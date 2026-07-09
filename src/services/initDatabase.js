@@ -610,6 +610,35 @@ async function initDatabase() {
 
 
   await query(`
+    CREATE TABLE IF NOT EXISTS server_stats_configs (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT UNIQUE NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      enabled BOOLEAN NOT NULL DEFAULT true,
+      member_channel_id TEXT,
+      human_channel_id TEXT,
+      bot_channel_id TEXT,
+      voice_channel_id TEXT,
+      member_template TEXT NOT NULL DEFAULT 'Members: {members}',
+      human_template TEXT NOT NULL DEFAULT 'Humans: {humans}',
+      bot_template TEXT NOT NULL DEFAULT 'Bots: {bots}',
+      voice_template TEXT NOT NULL DEFAULT 'In Voice: {voice}',
+      last_updated_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await query(`ALTER TABLE server_stats_configs ADD COLUMN IF NOT EXISTS human_channel_id TEXT;`).catch(() => {});
+  await query(`ALTER TABLE server_stats_configs ADD COLUMN IF NOT EXISTS bot_channel_id TEXT;`).catch(() => {});
+  await query(`ALTER TABLE server_stats_configs ADD COLUMN IF NOT EXISTS voice_channel_id TEXT;`).catch(() => {});
+  await query(`ALTER TABLE server_stats_configs ADD COLUMN IF NOT EXISTS member_template TEXT NOT NULL DEFAULT 'Members: {members}';`).catch(() => {});
+  await query(`ALTER TABLE server_stats_configs ADD COLUMN IF NOT EXISTS human_template TEXT NOT NULL DEFAULT 'Humans: {humans}';`).catch(() => {});
+  await query(`ALTER TABLE server_stats_configs ADD COLUMN IF NOT EXISTS bot_template TEXT NOT NULL DEFAULT 'Bots: {bots}';`).catch(() => {});
+  await query(`ALTER TABLE server_stats_configs ADD COLUMN IF NOT EXISTS voice_template TEXT NOT NULL DEFAULT 'In Voice: {voice}';`).catch(() => {});
+  await query(`ALTER TABLE server_stats_configs ADD COLUMN IF NOT EXISTS last_updated_at TIMESTAMPTZ;`).catch(() => {});
+
+
+  await query(`
     CREATE TABLE IF NOT EXISTS scheduled_message_configs (
       id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
       guild_id TEXT UNIQUE NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,

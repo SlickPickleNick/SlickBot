@@ -94,7 +94,8 @@ async function startPanelMessageFlow(interaction, { target, name = null, logger 
     title: normalizeOptionalText(title.value),
     description: normalizeOptionalText(description.value),
     color: normalizeOptionalText(color.value),
-    displayMode: normalizeOptionalText(displayMode.value)
+    displayMode: normalizeOptionalText(displayMode.value),
+    createIfMissing: true
   });
 
   if (!result.ok) {

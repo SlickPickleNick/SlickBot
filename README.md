@@ -4,7 +4,66 @@ SlickBot is an all-in-one Discord server management bot built for the SlickPickl
 
 ## Version
 
-Current package: **v0.5.3**
+Current package: **v0.5.4**
+
+## v0.5.4 Updates
+
+### Panel Live-Update Fix
+
+- Fixed reaction-role panel live updates by exporting the role panel ID lookup used by the published-panel refresh service.
+- `/panel edit` now updates all tracked posts for the matching panel reference when possible.
+- Role panels are refreshed by both panel ID and panel name/legacy references.
+
+### Panel Deletion
+
+Added:
+
+```text
+/panel delete
+```
+
+This can delete/unpost tracked public panels. For named panel systems, use the `name` option.
+
+Examples:
+
+```text
+/panel delete target:role name:ColorRoles confirm:true delete_messages:true
+/panel delete target:application name:Moderator confirm:true delete_messages:true
+```
+
+### `/panel setup` Create-or-Update Behavior
+
+- `/panel setup` can now update existing panels or create missing named role/application panels.
+- This prevents setup from failing when a matching panel name does not already exist.
+- `/panel edit` remains edit-only and will not create missing panels.
+
+### Birthday Panel Fix
+
+- Fixed the **Enter Day** button interaction failure.
+- The birthday day modal no longer sends an empty default value to Discord when no day has been selected.
+
+### Server Stats Module
+
+Added the next module system: **Server Stats**.
+
+New commands:
+
+```text
+/stats manager
+/stats setup
+/stats refresh
+```
+
+Includes:
+
+- Member counter channel
+- Human counter channel
+- Bot counter channel
+- Voice counter channel
+- Custom channel name templates
+- Manual refresh command
+- Automatic refresh on member join/leave, voice changes, and periodic interval
+- Server stats logging through the `server-stats` log module
 
 ## v0.5.3 Updates
 

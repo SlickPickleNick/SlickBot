@@ -15,6 +15,7 @@ const { handleMemberJoin: handleWelcomeMemberJoin } = require('./modules/communi
 const { GiveawayService } = require('./modules/community/giveawayService');
 const { BirthdayService } = require('./modules/community/birthdayService');
 const { ScheduledMessageService } = require('./modules/automation/scheduledMessageService');
+const { ServerStatsService } = require('./modules/community/serverStatsService');
 const { handleComponentInteraction } = require('./services/interactionRouter');
 
 const client = new Client({
@@ -40,6 +41,7 @@ const applications = new ApplicationService();
 const giveaways = new GiveawayService();
 const birthdays = new BirthdayService();
 const scheduledMessages = new ScheduledMessageService();
+const serverStats = new ServerStatsService();
 const healthServer = startHealthServer(client);
 
 client.once(Events.ClientReady, async (readyClient) => {
@@ -71,6 +73,12 @@ client.once(Events.ClientReady, async (readyClient) => {
     scheduledMessages.processDue(readyClient, logger).catch((error) => console.error('Failed to process scheduled messages:', error));
   }, 60 * 1000);
   await scheduledMessages.processDue(readyClient, logger).catch((error) => console.error('Failed to process scheduled messages:', error));
+
+  setInterval(() => {
+    for (const guild of readyClient.guilds.cache.values()) {
+      serverStats.updateStats(guild, logger, 'interval').catch(() => {});
+    }
+  }, 15 * 60 * 1000);
 });
 
 client.on(Events.GuildCreate, async (guild) => {
@@ -98,9 +106,11 @@ client.on(Events.GuildMemberAdd, async (member) => {
   if (welcomeEnabled) {
     await handleWelcomeMemberJoin(member, logger).catch((error) => console.error('Failed to run welcome flow:', error));
   }
+  await serverStats.updateStats(member.guild, logger, 'member join').catch(() => {});
 });
 
 client.on(Events.GuildMemberRemove, async (member) => {
+  await serverStats.updateStats(member.guild, logger, 'member leave').catch(() => {});
   await logger.log({
     guildId: member.guild.id,
     eventKey: 'member-leave',
@@ -221,6 +231,8 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
       newChannelId
     }
   }).catch((error) => console.error('Failed to log voice state:', error));
+  const guild = newState.guild || oldState.guild;
+  await serverStats.updateStats(guild, logger, 'voice state').catch(() => {});
 });
 
 

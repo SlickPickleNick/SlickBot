@@ -76,6 +76,32 @@ async function updatePanelRows(client, panels, payload) {
   return { updated, removed, total: panels.length };
 }
 
+
+async function deletePublishedPanelsForRefs(client, { guildId, panelType, panelRefs = ['*'], deleteMessages = false }) {
+  const panels = await getPublishedPanelsForRefs(guildId, panelType, panelRefs);
+  let deleted = 0;
+  let deactivated = 0;
+
+  for (const panel of panels) {
+    if (deleteMessages && client) {
+      try {
+        const channel = await client.channels.fetch(panel.channel_id).catch(() => null);
+        const message = channel && typeof channel.messages?.fetch === 'function'
+          ? await channel.messages.fetch(panel.message_id).catch(() => null)
+          : null;
+        if (message && typeof message.delete === 'function') {
+          await message.delete().catch(() => {});
+          deleted += 1;
+        }
+      } catch (_error) {}
+    }
+    await markPanelInactive(panel.id).catch(() => {});
+    deactivated += 1;
+  }
+
+  return { deleted, deactivated, total: panels.length };
+}
+
 async function updatePublishedPanels(client, { guildId, panelType, panelRef = '*', payload }) {
   if (!client || !payload) return { updated: 0, removed: 0, total: 0 };
   const panels = await getPublishedPanels(guildId, panelType, panelRef);
@@ -93,5 +119,6 @@ module.exports = {
   getPublishedPanels,
   getPublishedPanelsForRefs,
   updatePublishedPanels,
-  updatePublishedPanelsForRefs
+  updatePublishedPanelsForRefs,
+  deletePublishedPanelsForRefs
 };

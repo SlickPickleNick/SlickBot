@@ -177,20 +177,21 @@ function getSession(sessionId, userId = null) {
 }
 
 function buildBirthdayDayModal(session) {
+  const input = new TextInputBuilder()
+    .setCustomId('day')
+    .setLabel('Birthday day')
+    .setPlaceholder('Enter a day from 1 to 31')
+    .setRequired(true)
+    .setMinLength(1)
+    .setMaxLength(2)
+    .setStyle(TextInputStyle.Short);
+
+  if (session.day) input.setValue(String(session.day));
+
   return new ModalBuilder()
     .setCustomId(`${CustomIds.BirthdayDayModalPrefix}${session.id}`)
     .setTitle('Set Birthday Day')
-    .addComponents(new ActionRowBuilder().addComponents(
-      new TextInputBuilder()
-        .setCustomId('day')
-        .setLabel('Birthday day')
-        .setPlaceholder('Enter a day from 1 to 31')
-        .setRequired(true)
-        .setMinLength(1)
-        .setMaxLength(2)
-        .setStyle(TextInputStyle.Short)
-        .setValue(session.day ? String(session.day) : '')
-    ));
+    .addComponents(new ActionRowBuilder().addComponents(input));
 }
 
 function buildBirthdayTimezoneModal(session) {

@@ -82,6 +82,12 @@ const LogModuleCatalog = Object.freeze([
     label: 'Birthdays',
     description: 'Birthday profile changes, birthday announcements, and birthday role activity.',
     defaultDelivery: 'IMMEDIATE'
+  },
+  {
+    key: 'server-stats',
+    label: 'Server Stats',
+    description: 'Member, human, bot, and voice counter channel updates.',
+    defaultDelivery: 'IMMEDIATE'
   }
 ]);
 
@@ -146,7 +152,10 @@ const LogEventCatalog = Object.freeze([
   { key: 'birthday-config', moduleKey: 'birthdays', label: 'Birthday Config', description: 'Birthday system settings changed.', defaultDelivery: 'IMMEDIATE' },
   { key: 'birthday-profile', moduleKey: 'birthdays', label: 'Birthday Profile', description: 'A user saved or removed their birthday.', defaultDelivery: 'IMMEDIATE' },
   { key: 'birthday-active', moduleKey: 'birthdays', label: 'Birthday Active', description: 'A birthday was announced or a birthday role was added.', defaultDelivery: 'IMMEDIATE' },
-  { key: 'birthday-ended', moduleKey: 'birthdays', label: 'Birthday Ended', description: 'A birthday role was removed after the birthday passed.', defaultDelivery: 'IMMEDIATE' }
+  { key: 'birthday-ended', moduleKey: 'birthdays', label: 'Birthday Ended', description: 'A birthday role was removed after the birthday passed.', defaultDelivery: 'IMMEDIATE' },
+
+  { key: 'server-stats-config', moduleKey: 'server-stats', label: 'Server Stats Config', description: 'Server stats configuration changed.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'server-stats-update', moduleKey: 'server-stats', label: 'Server Stats Updated', description: 'Server stat counter channels were refreshed.', defaultDelivery: 'IMMEDIATE' }
 ]);
 
 const StarterLogModuleKeys = Object.freeze(['core', 'moderation']);

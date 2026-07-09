@@ -88,6 +88,10 @@ const ActionKeys = Object.freeze({
   ScheduledMessagesCancel: 'scheduled-messages.cancel',
   ScheduledMessagesSendNow: 'scheduled-messages.send-now',
 
+  ServerStatsView: 'server-stats.view',
+  ServerStatsConfigure: 'server-stats.configure',
+  ServerStatsRefresh: 'server-stats.refresh',
+
   PanelsConfigure: 'panels.configure',
 
   ServerReset: 'server.reset'
@@ -198,6 +202,10 @@ const defaultActionLevels = Object.freeze({
   [ActionKeys.ScheduledMessagesCancel]: PermissionLevels.SENIOR_MODERATOR,
   [ActionKeys.ScheduledMessagesSendNow]: PermissionLevels.SENIOR_MODERATOR,
 
+  [ActionKeys.ServerStatsView]: PermissionLevels.MODERATOR,
+  [ActionKeys.ServerStatsConfigure]: PermissionLevels.SENIOR_MODERATOR,
+  [ActionKeys.ServerStatsRefresh]: PermissionLevels.MODERATOR,
+
   [ActionKeys.ServerReset]: PermissionLevels.OWNER
 });
 
@@ -216,7 +224,7 @@ const defaultModuleLevels = Object.freeze({
   [ModuleKeys.GIVEAWAYS]: PermissionLevels.MODERATOR,
   [ModuleKeys.BIRTHDAYS]: PermissionLevels.EVERYONE,
   [ModuleKeys.LEVELING]: PermissionLevels.EVERYONE,
-  [ModuleKeys.SERVER_STATS]: PermissionLevels.SENIOR_MODERATOR,
+  [ModuleKeys.SERVER_STATS]: PermissionLevels.MODERATOR,
   [ModuleKeys.JOIN_TO_CREATE]: PermissionLevels.EVERYONE,
   [ModuleKeys.CUSTOM_COMMANDS]: PermissionLevels.EVERYONE,
   [ModuleKeys.UTILITY]: PermissionLevels.EVERYONE

@@ -1,6 +1,6 @@
 # SlickBot Project Plan
 
-## Current Version: 0.5.1
+## Current Version: 0.5.4
 
 SlickBot is being built as a modular all-in-one Discord server management bot for the SlickPickleNick community.
 
@@ -24,21 +24,21 @@ SlickBot is being built as a modular all-in-one Discord server management bot fo
 - Guided panel builder
 - Live-updating posted panels
 - Giveaways
+- Birthdays
+- Scheduled messages
+- Server stats
 
-## v0.5.1 Scope
+## v0.5.4 Scope
 
-- Added live-updating posted panel support.
-- Added `/roles remove-all` for clearing all role options from a panel.
-- Added Giveaway module with start/end/reroll/list/setup/manager commands.
-- Added giveaway entry buttons and automatic due-giveaway processing.
-- Updated module status so Giveaways are implemented and unfinished future modules remain marked as Coming Soon.
+- Fixed reaction-role `/panel edit` live updates by exporting the role panel ID lookup used during refresh.
+- Added `/panel delete` for deleting/unposting tracked panel messages by target/name.
+- Updated `/panel setup` to create missing named role/application panels when needed.
+- Fixed the birthday **Enter Day** button/modal interaction failure.
+- Added Server Stats module with member, human, bot, and voice counter channel support.
 
 ## Future Modules
 
-- Leveling
 - Leveling / XP
-- Server stats
-- Scheduled messages
 - Join-to-create voice channels
 - Custom commands
 - Utility tools

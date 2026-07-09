@@ -5,6 +5,11 @@ const { replyPrivate } = require('../utils/reply');
 const { createBaseEmbed, createWarningEmbed, SlickBotColors } = require('../modules/ui/uiService');
 const { buildPanelDesignModal } = require('../modules/panels/panelModals');
 const { startPanelMessageFlow, startPanelFieldEditFlow } = require('../modules/panels/messagePanelFlow');
+const { deletePublishedPanelsForRefs } = require('../modules/panels/publishedPanelService');
+const rolePanels = require('../modules/community/rolePanelService');
+const { ApplicationService } = require('../modules/support/supportService');
+
+const applications = new ApplicationService();
 
 function addPanelTargetChoices(option) {
   return option.setName('target').setDescription('Panel system to edit.').setRequired(true).addChoices(
@@ -40,6 +45,15 @@ module.exports = {
           { name: 'Display Mode', value: 'display_mode' }
         ))
         .addStringOption((option) => option.setName('name').setDescription('Required for application types or reaction-role panels.').setRequired(false).setMaxLength(80))
+    )
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName('delete')
+        .setDescription('Delete or unpost a configured panel by name/reference.')
+        .addStringOption(addPanelTargetChoices)
+        .addBooleanOption((option) => option.setName('confirm').setDescription('Required. Set true to confirm deleting/unposting.').setRequired(true))
+        .addStringOption((option) => option.setName('name').setDescription('Panel name/reference. Required for application and reaction-role panels.').setRequired(false).setMaxLength(80))
+        .addBooleanOption((option) => option.setName('delete_messages').setDescription('Also delete tracked posted panel messages.').setRequired(false))
     )
     .addSubcommand((subcommand) =>
       subcommand
@@ -82,6 +96,54 @@ module.exports = {
     const name = interaction.options.getString('name') || '';
     if ((target === 'application' || target === 'role') && !name.trim()) {
       return replyPrivate(interaction, { embeds: [createWarningEmbed('Panel Name Required', 'Application and reaction-role panels require the `name` option so SlickBot knows which template to edit.')] });
+    }
+
+    if (subcommand === 'delete') {
+      const confirm = interaction.options.getBoolean('confirm', true);
+      const deleteMessages = interaction.options.getBoolean('delete_messages') ?? false;
+      if (!confirm) {
+        return replyPrivate(interaction, { embeds: [createWarningEmbed('Panel Delete Not Confirmed', 'Run the command again with `confirm:true` to delete/unpost this panel.')] });
+      }
+
+      let refs = ['*'];
+      let label = target;
+      if (target === 'role') {
+        if (!name.trim()) return replyPrivate(interaction, { embeds: [createWarningEmbed('Panel Name Required', 'Reaction-role panel deletion requires the `name` option.')] });
+        const panel = await rolePanels.getPanelByName(interaction.guildId, name);
+        if (!panel) return replyPrivate(interaction, { embeds: [createWarningEmbed('Panel Not Found', `No active reaction-role panel named **${name}** was found.`)] });
+        await rolePanels.deletePanel(interaction.guildId, panel.name);
+        refs = [panel.id, panel.name, name];
+        label = `Role Panel: ${panel.name}`;
+      } else if (target === 'application') {
+        if (!name.trim()) return replyPrivate(interaction, { embeds: [createWarningEmbed('Panel Name Required', 'Application panel deletion requires the `name` option.')] });
+        const type = await applications.getTypeByName(interaction.guildId, name);
+        if (!type) return replyPrivate(interaction, { embeds: [createWarningEmbed('Application Not Found', `No application type named **${name}** was found.`)] });
+        await applications.deleteType(interaction.guildId, name);
+        refs = [type.id, type.name, name];
+        label = `Application Panel: ${type.name}`;
+      } else {
+        refs = ['*'];
+        label = `${target.charAt(0).toUpperCase()}${target.slice(1)} Panel`;
+      }
+
+      const deleted = await deletePublishedPanelsForRefs(ctx.client || interaction.client, {
+        guildId: interaction.guildId,
+        panelType: target,
+        panelRefs: refs,
+        deleteMessages
+      }).catch(() => ({ total: 0, deleted: 0, deactivated: 0 }));
+
+      await ctx?.logger?.log({
+        guildId: interaction.guildId,
+        eventKey: 'panel-config',
+        title: 'Panel Deleted',
+        body: `Panel: **${label}**
+Delete Messages: **${deleteMessages ? 'Yes' : 'No'}**
+Tracked Posts: **${deleted.total || 0}**`,
+        actorUserId: interaction.user.id
+      }).catch(() => {});
+
+      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Panel Deleted', `Deleted/unposted **${label}**. Tracked posts affected: **${deleted.total || 0}**${deleteMessages ? `, messages deleted: **${deleted.deleted || 0}**` : ''}.`)] });
     }
 
     if (subcommand === 'setup') {

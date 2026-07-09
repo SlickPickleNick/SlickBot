@@ -1,7 +1,7 @@
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder } = require('discord.js');
 const { query } = require('../../services/db');
 const { createBaseEmbed, SlickBotColors } = require('../ui/uiService');
-const { updatePublishedPanels } = require('../panels/publishedPanelService');
+const { updatePublishedPanelsForRefs } = require('../panels/publishedPanelService');
 
 function normalizeHexColor(color, fallback = '#7869ff') {
   if (!color) return fallback;
@@ -281,11 +281,12 @@ async function toggleRole({ interaction, panelId, optionId, logger }) {
 }
 
 async function updatePublishedRolePanelMessages(client, guildId, panel) {
+  if (!panel) return { updated: 0, removed: 0, total: 0 };
   const payload = await buildRolePanelMessage(panel);
-  return updatePublishedPanels(client, {
+  return updatePublishedPanelsForRefs(client, {
     guildId,
     panelType: 'role',
-    panelRef: panel.id,
+    panelRefs: [panel.id, panel.name],
     payload
   });
 }
@@ -311,6 +312,7 @@ module.exports = {
   createPanel,
   deletePanel,
   getPanelByName,
+  getPanelById,
   listPanels,
   addOption,
   bulkAddOptions,
