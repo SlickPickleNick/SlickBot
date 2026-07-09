@@ -35,15 +35,15 @@ module.exports = {
         .addStringOption((option) => option.setName('description').setDescription('Panel description shown to users.').setRequired(false).setMaxLength(1500))
         .addStringOption((option) => option.setName('mode').setDescription('Allow one or multiple roles from this panel.').setRequired(false).addChoices({ name: 'Multiple roles', value: 'MULTI' }, { name: 'Single role', value: 'SINGLE' }))
         .addStringOption((option) => option.setName('color').setDescription('Panel accent color, such as #7869ff.').setRequired(false))
-        .addStringOption((option) => option.setName('display_mode').setDescription('Post this panel as buttons or a dropdown menu.').setRequired(false).addChoices({ name: 'Buttons', value: 'BUTTONS' }, { name: 'Dropdown menu', value: 'DROPDOWN' }))
+        .addStringOption((option) => option.setName('display_mode').setDescription('Post this panel as buttons, a dropdown menu, or native message reactions.').setRequired(false).addChoices({ name: 'Buttons', value: 'BUTTONS' }, { name: 'Dropdown menu', value: 'DROPDOWN' }, { name: 'Native message reactions', value: 'REACTIONS' }))
     )
 
     .addSubcommand((subcommand) =>
       subcommand
         .setName('display-mode')
-        .setDescription('Set whether a role panel posts as buttons or a dropdown menu.')
+        .setDescription('Set whether a role panel posts as buttons, a dropdown menu, or native message reactions.')
         .addStringOption((option) => option.setName('panel').setDescription('Panel name.').setRequired(true))
-        .addStringOption((option) => option.setName('display_mode').setDescription('Panel component style.').setRequired(true).addChoices({ name: 'Buttons', value: 'BUTTONS' }, { name: 'Dropdown menu', value: 'DROPDOWN' }))
+        .addStringOption((option) => option.setName('display_mode').setDescription('Panel display style.').setRequired(true).addChoices({ name: 'Buttons', value: 'BUTTONS' }, { name: 'Dropdown menu', value: 'DROPDOWN' }, { name: 'Native message reactions', value: 'REACTIONS' }))
     )
     .addSubcommand((subcommand) =>
       subcommand
@@ -64,10 +64,21 @@ module.exports = {
     )
     .addSubcommand((subcommand) =>
       subcommand
+        .setName('add-bundle')
+        .setDescription('Add one button/dropdown option that toggles multiple roles at once.')
+        .addStringOption((option) => option.setName('panel').setDescription('Panel name.').setRequired(true))
+        .addStringOption((option) => option.setName('roles').setDescription('Role mentions or IDs to toggle together, separated by spaces or commas.').setRequired(true).setMaxLength(1000))
+        .addStringOption((option) => option.setName('label').setDescription('Optional button/dropdown label.').setRequired(false).setMaxLength(80))
+        .addStringOption((option) => option.setName('emoji').setDescription('Optional button/dropdown emoji.').setRequired(false))
+        .addStringOption((option) => option.setName('description').setDescription('Optional dropdown description.').setRequired(false).setMaxLength(200))
+        .addStringOption((option) => option.setName('button_color').setDescription('Requested button color hex, mapped to nearest Discord style.').setRequired(false).setMaxLength(7))
+    )
+    .addSubcommand((subcommand) =>
+      subcommand
         .setName('bulk-add')
         .setDescription('Bulk add role options to a panel from line-based text.')
         .addStringOption((option) => option.setName('panel').setDescription('Panel name.').setRequired(true))
-        .addStringOption((option) => option.setName('entries').setDescription('Lines: @role|Label|emoji|#hex. Label and emoji can be blank.').setRequired(true).setMaxLength(4000))
+        .addStringOption((option) => option.setName('entries').setDescription('Lines: @role or @role,@role|Label|emoji|#hex. Label and emoji can be blank.').setRequired(true).setMaxLength(4000))
     )
     .addSubcommand((subcommand) =>
       subcommand
@@ -169,6 +180,28 @@ module.exports = {
       return;
     }
 
+    if (sub === 'add-bundle') {
+      const roleIds = (interaction.options.getString('roles', true).match(/\d{15,25}/g) || []);
+      const uniqueRoleIds = [...new Set(roleIds)];
+      if (!uniqueRoleIds.length) {
+        return replyPrivate(interaction, { embeds: [createWarningEmbed('No Valid Roles', 'Provide role mentions or role IDs in the `roles` field.')] });
+      }
+      const result = await rolePanels.addBundleOption({
+        guildId: interaction.guildId,
+        panelName: interaction.options.getString('panel', true),
+        roleIds: uniqueRoleIds,
+        label: interaction.options.getString('label') || '',
+        emoji: interaction.options.getString('emoji') || null,
+        description: interaction.options.getString('description') || null,
+        buttonColor: interaction.options.getString('button_color') || null
+      });
+      if (!result) return replyPrivate(interaction, { embeds: [createWarningEmbed('Panel Not Found', 'Create the panel first with `/roles create-panel`.')] });
+      await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'reaction-role-config', title: 'Role Bundle Added', body: `Panel: **${result.panel.name}**\nRoles: ${rolePanels.formatRoleMentions(uniqueRoleIds)}`, actorUserId: interaction.user.id });
+      const liveText = await updateLivePanelMessages(ctx, interaction.guildId, result.panel);
+      await replyPrivate(interaction, { embeds: [createSuccessEmbed('Role Bundle Added', `Added a bundle option with **${uniqueRoleIds.length}** role(s) to **${result.panel.name}**.${liveText}`)] });
+      return;
+    }
+
     if (sub === 'bulk-add') {
       const panelName = interaction.options.getString('panel', true);
       const entries = rolePanels.parseBulkEntries(interaction.options.getString('entries', true));
@@ -214,11 +247,17 @@ Removed: **${result.removed}** option(s)`, actorUserId: interaction.user.id }).c
     if (sub === 'post-panel') {
       const panel = await rolePanels.getPanelByName(interaction.guildId, interaction.options.getString('panel', true));
       if (!panel) return replyPrivate(interaction, { embeds: [createWarningEmbed('Panel Not Found', 'No active role panel was found with that name.')] });
+      const options = await rolePanels.getPanelOptions(panel.id);
+      const displayMode = rolePanels.normalizeDisplayMode(panel.panel_display_mode || 'BUTTONS');
+      if (!options.length) return replyPrivate(interaction, { embeds: [createWarningEmbed('No Role Options', 'Add at least one role option before posting this panel.')] });
+      if (displayMode === 'REACTIONS' && !options.some((option) => option.emoji)) {
+        return replyPrivate(interaction, { embeds: [createWarningEmbed('No Reaction Emojis', 'Native reaction panels require each usable option to have an emoji configured. Add emojis to this panel, then post it again.')] });
+      }
       const payload = await rolePanels.buildRolePanelMessage(panel);
-      if (!payload.components.length) return replyPrivate(interaction, { embeds: [createWarningEmbed('No Role Options', 'Add at least one role option before posting this panel.')] });
       const channel = interaction.options.getChannel('channel', true);
       const message = await channel.send(payload);
       await recordPublishedPanel({ guildId: interaction.guildId, panelType: 'role', panelRef: panel.id, channelId: channel.id, messageId: message.id });
+      if (displayMode === 'REACTIONS') await rolePanels.syncReactionPanelMessage(message, panel).catch(() => {});
       await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'reaction-role-config', title: 'Role Panel Posted', body: `Panel: **${panel.name}**\nChannel: <#${channel.id}>\nPosted By: <@${interaction.user.id}>`, actorUserId: interaction.user.id });
       await replyPrivate(interaction, { embeds: [createSuccessEmbed('Role Panel Posted', `Posted **${panel.name}** to <#${channel.id}>.`)] });
     }

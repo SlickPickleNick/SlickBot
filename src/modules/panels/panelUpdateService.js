@@ -33,6 +33,11 @@ function refsForPanel(panelRef = '*', extraRefs = []) {
 }
 
 async function refreshPublishedPanel(client, guildId, panelType, panelRef = '*', extraRefs = []) {
+  if (panelType === 'role') {
+    const panel = await rolePanels.getPanelById(guildId, panelRef) || await rolePanels.getPanelByName(guildId, panelRef);
+    if (!panel) return { updated: 0, removed: 0, total: 0 };
+    return rolePanels.updatePublishedRolePanelMessages(client, guildId, panel);
+  }
   const payload = await buildPayload(guildId, panelType, panelRef);
   if (!payload) return { updated: 0, removed: 0, total: 0 };
   return updatePublishedPanelsForRefs(client, { guildId, panelType, panelRefs: refsForPanel(panelRef, extraRefs), payload });

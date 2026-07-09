@@ -16,7 +16,12 @@ async function updatePanelDesign({ guildId, target, name = null, title = null, d
   const panelTitle = title && title.trim() ? title.trim() : null;
   const panelDescription = description && description.trim() ? description.trim() : null;
   const panelColor = color && color.trim() ? normalizeHexColor(color.trim()) : null;
-  const panelDisplayMode = displayMode && String(displayMode).trim() ? (String(displayMode).trim().toUpperCase().startsWith('DROP') || String(displayMode).trim().toUpperCase() === 'SELECT' ? 'DROPDOWN' : 'BUTTONS') : null;
+  const normalizedDisplayInput = displayMode && String(displayMode).trim() ? String(displayMode).trim().toUpperCase() : null;
+  const panelDisplayMode = normalizedDisplayInput
+    ? (normalizedDisplayInput.startsWith('REACT') || normalizedDisplayInput === 'EMOJI' || normalizedDisplayInput === 'EMOJIS'
+      ? 'REACTIONS'
+      : (normalizedDisplayInput.startsWith('DROP') || normalizedDisplayInput === 'SELECT' || normalizedDisplayInput === 'SELECT_MENU' ? 'DROPDOWN' : 'BUTTONS'))
+    : null;
   const key = normalizeTarget(target);
 
   if (key === 'ticket' || key === 'tickets') {

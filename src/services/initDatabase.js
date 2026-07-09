@@ -473,6 +473,7 @@ async function initDatabase() {
       id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
       panel_id TEXT NOT NULL REFERENCES role_panels(id) ON DELETE CASCADE,
       role_id TEXT NOT NULL,
+      role_ids JSONB,
       label TEXT NOT NULL,
       emoji TEXT,
       description TEXT,
@@ -488,6 +489,8 @@ async function initDatabase() {
 
   await query(`ALTER TABLE role_panels ADD COLUMN IF NOT EXISTS panel_display_mode TEXT NOT NULL DEFAULT 'BUTTONS';`).catch(() => {});
   await query(`ALTER TABLE role_panel_options ALTER COLUMN label DROP NOT NULL;`).catch(() => {});
+  await query(`ALTER TABLE role_panel_options ADD COLUMN IF NOT EXISTS role_ids JSONB;`).catch(() => {});
+  await query(`UPDATE role_panel_options SET role_ids = jsonb_build_array(role_id) WHERE role_ids IS NULL;`).catch(() => {});
 
   await query(`
     CREATE TABLE IF NOT EXISTS panel_messages (

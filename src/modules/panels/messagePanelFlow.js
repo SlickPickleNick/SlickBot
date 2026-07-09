@@ -83,7 +83,7 @@ async function startPanelMessageFlow(interaction, { target, name = null, logger 
 
   const displayMode = await waitForUserMessage(interaction, {
     title: 'Step 4 — Panel Display Mode',
-    description: 'Send `buttons` or `dropdown`. Type `skip` to keep the current/default mode. Buttons are the default.'
+    description: 'Send `buttons`, `dropdown`, or `reactions`. Type `skip` to keep the current/default mode. Buttons are the default.'
   });
   if (displayMode.cancelled) return interaction.channel.send({ embeds: [createWarningEmbed('Panel Builder Stopped', displayMode.reason)] });
 
@@ -231,14 +231,18 @@ async function startRolePanelCreationFlow(interaction, { logger = null, initialN
 
   const displayMode = await waitForUserMessage(interaction, {
     title: 'Step 6 — Panel Display Mode',
-    description: existingPanel ? `Send \`buttons\` or \`dropdown\`. Current: **${existingPanel.panel_display_mode || 'BUTTONS'}**. Type \`skip\` to keep it.` : 'Send `buttons` or `dropdown`. Type `skip` for buttons.'
+    description: existingPanel ? `Send \`buttons\`, \`dropdown\`, or \`reactions\`. Current: **${existingPanel.panel_display_mode || 'BUTTONS'}**. Type \`skip\` to keep it.` : 'Send `buttons`, `dropdown`, or `reactions`. Type `skip` for buttons.'
   });
   if (displayMode.cancelled) return interaction.channel.send({ embeds: [createWarningEmbed('Role Panel Builder Stopped', displayMode.reason)] });
 
   const normalizedMode = normalizeOptionalText(mode.value);
   const normalizedDisplayMode = normalizeOptionalText(displayMode.value);
   const modeValue = normalizedMode ? (String(normalizedMode).toLowerCase().startsWith('single') ? 'SINGLE' : 'MULTI') : (existingPanel?.mode || 'MULTI');
-  const displayModeValue = normalizedDisplayMode ? (String(normalizedDisplayMode).toLowerCase().startsWith('drop') ? 'DROPDOWN' : 'BUTTONS') : (existingPanel?.panel_display_mode || 'BUTTONS');
+  const displayModeValue = normalizedDisplayMode
+    ? (String(normalizedDisplayMode).toLowerCase().startsWith('react') || String(normalizedDisplayMode).toLowerCase().startsWith('emoji')
+      ? 'REACTIONS'
+      : (String(normalizedDisplayMode).toLowerCase().startsWith('drop') || String(normalizedDisplayMode).toLowerCase().startsWith('select') ? 'DROPDOWN' : 'BUTTONS'))
+    : (existingPanel?.panel_display_mode || 'BUTTONS');
   const panel = await rolePanels.createPanel({
     guildId: interaction.guildId,
     name,
@@ -276,10 +280,12 @@ async function startRoleBulkAddFlow(interaction, { panelName, logger = null }) {
       '',
       '**Format**',
       '`@Role | Button Label | Emoji | #hex`',
+      '`@Role, @Role | Bundle Label | Emoji | #hex`',
       '',
       '**Blank text buttons**',
       'Leave the label blank if you want an icon-only or blank-label button:',
       '`@Red || | #ff0000`',
+      '`@Red, @ColorPing | Red Bundle || #ff0000`',
       '',
       'SlickBot will not add an emoji unless you include one in the entry.',
       '',
@@ -291,7 +297,7 @@ async function startRoleBulkAddFlow(interaction, { panelName, logger = null }) {
 
   const response = await waitForUserMessage(interaction, {
     title: 'Paste Role Button Entries',
-    description: 'Paste the role button entries now. Line breaks will be preserved and parsed one line at a time.'
+    description: 'Paste the role button entries now. Line breaks will be preserved and parsed one line at a time. Put multiple role mentions/IDs in the first column to make one button assign a bundle of roles.'
   });
   if (response.cancelled) return interaction.channel.send({ embeds: [createWarningEmbed('Bulk Add Stopped', response.reason)] });
 

@@ -16,6 +16,7 @@ const { GiveawayService } = require('./modules/community/giveawayService');
 const { BirthdayService } = require('./modules/community/birthdayService');
 const { ScheduledMessageService } = require('./modules/automation/scheduledMessageService');
 const { ServerStatsService } = require('./modules/community/serverStatsService');
+const { handleReactionRole } = require('./modules/community/rolePanelService');
 const { handleComponentInteraction } = require('./services/interactionRouter');
 
 const client = new Client({
@@ -241,6 +242,30 @@ client.on(Events.MessageCreate, async (message) => {
   await applications.handleDmResponse({ message, client, logger }).catch((error) => {
     console.error('Failed to handle DM application response:', error);
   });
+});
+
+
+client.on(Events.MessageReactionAdd, async (reaction, user) => {
+  if (user?.bot) return;
+  const guildId = reaction.message?.guildId;
+  if (!guildId) return;
+  if (await permissions.isIgnored(guildId, user.id).catch(() => false)) {
+    await reaction.users.remove(user.id).catch(() => {});
+    return;
+  }
+  const enabled = await permissions.isModuleEnabled(guildId, 'REACTION_ROLES').catch(() => false);
+  if (!enabled) return;
+  await handleReactionRole({ reaction, user, action: 'add', logger }).catch((error) => console.error('Failed to handle reaction role add:', error));
+});
+
+client.on(Events.MessageReactionRemove, async (reaction, user) => {
+  if (user?.bot) return;
+  const guildId = reaction.message?.guildId;
+  if (!guildId) return;
+  if (await permissions.isIgnored(guildId, user.id).catch(() => false)) return;
+  const enabled = await permissions.isModuleEnabled(guildId, 'REACTION_ROLES').catch(() => false);
+  if (!enabled) return;
+  await handleReactionRole({ reaction, user, action: 'remove', logger }).catch((error) => console.error('Failed to handle reaction role remove:', error));
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {

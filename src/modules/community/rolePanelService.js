@@ -16,6 +16,37 @@ function parseColor(color) {
   return Number.parseInt(value.slice(1), 16);
 }
 
+function normalizeRoleIds(roleIds) {
+  const values = Array.isArray(roleIds) ? roleIds : [roleIds];
+  const seen = new Set();
+  return values
+    .flatMap((value) => String(value || '').match(/\d{15,25}/g) || [])
+    .filter((id) => {
+      if (seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
+}
+
+function optionRoleIds(option) {
+  if (!option) return [];
+  if (Array.isArray(option.role_ids)) return normalizeRoleIds(option.role_ids);
+  if (typeof option.role_ids === 'string') {
+    try {
+      const parsed = JSON.parse(option.role_ids);
+      return normalizeRoleIds(parsed);
+    } catch {
+      return normalizeRoleIds(option.role_ids);
+    }
+  }
+  return normalizeRoleIds(option.role_id);
+}
+
+function formatRoleMentions(roleIds) {
+  const ids = normalizeRoleIds(roleIds);
+  return ids.length ? ids.map((roleId) => `<@&${roleId}>`).join(', ') : 'No roles';
+}
+
 function buttonStyleFromHex(color) {
   // Discord buttons do not support arbitrary hex colors. SlickBot stores the
   // requested hex value, then maps it to the closest native Discord button style.
@@ -27,6 +58,13 @@ function buttonStyleFromHex(color) {
   if (red > 180 && green < 150 && blue < 150) return ButtonStyle.Danger;
   if (Math.max(red, green, blue) - Math.min(red, green, blue) < 30) return ButtonStyle.Secondary;
   return ButtonStyle.Primary;
+}
+
+function normalizeDisplayMode(displayMode) {
+  const value = String(displayMode || 'BUTTONS').trim().toUpperCase();
+  if (value === 'REACTIONS' || value === 'REACTION' || value === 'EMOJI' || value === 'EMOJIS') return 'REACTIONS';
+  if (value === 'DROPDOWN' || value === 'SELECT' || value === 'MENU' || value === 'SELECT_MENU') return 'DROPDOWN';
+  return 'BUTTONS';
 }
 
 function emojiFromHex(color) {
@@ -48,7 +86,7 @@ function emojiFromHex(color) {
 
 
 async function createPanel({ guildId, name, title, description, color, mode = 'MULTI', displayMode = 'BUTTONS' }) {
-  const normalizedDisplayMode = String(displayMode || 'BUTTONS').toUpperCase() === 'DROPDOWN' ? 'DROPDOWN' : 'BUTTONS';
+  const normalizedDisplayMode = normalizeDisplayMode(displayMode);
   const result = await query(
     `INSERT INTO role_panels (guild_id, name, title, description, accent_color, mode, panel_display_mode)
      VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -81,6 +119,23 @@ async function getPanelById(guildId, panelId) {
   return result.rows[0] || null;
 }
 
+async function getPanelByMessageId(guildId, messageId) {
+  const result = await query(
+    `SELECT rp.*
+     FROM panel_messages pm
+     JOIN role_panels rp ON rp.guild_id = pm.guild_id
+       AND rp.active = true
+       AND (pm.panel_ref = rp.id OR pm.panel_ref = rp.name)
+     WHERE pm.guild_id = $1
+       AND pm.panel_type = 'role'
+       AND pm.message_id = $2
+       AND pm.active = true
+     LIMIT 1`,
+    [guildId, messageId]
+  );
+  return result.rows[0] || null;
+}
+
 async function listPanels(guildId) {
   const result = await query(
     `SELECT rp.*, COUNT(rpo.id)::int AS option_count
@@ -94,7 +149,11 @@ async function listPanels(guildId) {
   return result.rows;
 }
 
-async function addOption({ guildId, panelName, roleId, label = '', emoji = null, description = null, buttonColor = null }) {
+async function addOption({ guildId, panelName, roleId = null, roleIds = null, label = '', emoji = null, description = null, buttonColor = null }) {
+  const normalizedRoleIds = normalizeRoleIds(roleIds && roleIds.length ? roleIds : roleId);
+  const primaryRoleId = normalizedRoleIds[0];
+  if (!primaryRoleId) return null;
+
   const normalizedButtonColor = normalizeHexColor(buttonColor, '#5865f2');
   const normalizedLabel = String(label || '').trim();
   const normalizedEmoji = emoji || null;
@@ -103,19 +162,24 @@ async function addOption({ guildId, panelName, roleId, label = '', emoji = null,
   const count = await query(`SELECT COUNT(*)::int AS count FROM role_panel_options WHERE panel_id = $1 AND active = true`, [panel.id]);
   const displayOrder = (count.rows[0]?.count || 0) + 1;
   const result = await query(
-    `INSERT INTO role_panel_options (panel_id, role_id, label, emoji, description, button_color, display_order)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
+    `INSERT INTO role_panel_options (panel_id, role_id, role_ids, label, emoji, description, button_color, display_order)
+     VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7, $8)
      ON CONFLICT (panel_id, role_id)
-     DO UPDATE SET label = EXCLUDED.label,
+     DO UPDATE SET role_ids = EXCLUDED.role_ids,
+                   label = EXCLUDED.label,
                    emoji = EXCLUDED.emoji,
                    description = EXCLUDED.description,
                    button_color = EXCLUDED.button_color,
                    active = true,
                    updated_at = NOW()
      RETURNING *`,
-    [panel.id, roleId, normalizedLabel, normalizedEmoji, description, normalizedButtonColor, displayOrder]
+    [panel.id, primaryRoleId, JSON.stringify(normalizedRoleIds), normalizedLabel, normalizedEmoji, description, normalizedButtonColor, displayOrder]
   );
   return { panel, option: result.rows[0] };
+}
+
+async function addBundleOption({ guildId, panelName, roleIds, label = '', emoji = null, description = null, buttonColor = null }) {
+  return addOption({ guildId, panelName, roleIds, label, emoji, description, buttonColor });
 }
 
 
@@ -125,7 +189,7 @@ async function bulkAddOptions({ guildId, panelName, entries }) {
     const result = await addOption({
       guildId,
       panelName,
-      roleId: entry.roleId,
+      roleIds: entry.roleIds || entry.roleId,
       label: entry.label,
       emoji: entry.emoji || null,
       description: entry.description || null,
@@ -141,17 +205,19 @@ function parseBulkEntries(raw) {
   return lines.slice(0, 25).map((line) => {
     const parts = line.split('|').map((part) => part.trim());
     const roleRaw = parts[0] || '';
-    const roleId = (roleRaw.match(/\d{15,25}/) || [])[0];
+    const roleIds = normalizeRoleIds(roleRaw);
     return {
-      roleId,
+      roleId: roleIds[0] || null,
+      roleIds,
       label: parts.length > 1 ? parts[1] : '',
       emoji: parts[2] || null,
       buttonColor: parts[3] || null,
       description: parts[4] || null,
-      valid: Boolean(roleId)
+      valid: roleIds.length > 0
     };
   });
 }
+
 
 async function removeOption({ guildId, panelName, roleId }) {
   const panel = await getPanelByName(guildId, panelName);
@@ -178,7 +244,7 @@ async function getPanelOptions(panelId) {
 
 
 async function setPanelDisplayMode({ guildId, panelName, displayMode }) {
-  const normalizedDisplayMode = String(displayMode || 'BUTTONS').toUpperCase() === 'DROPDOWN' ? 'DROPDOWN' : 'BUTTONS';
+  const normalizedDisplayMode = normalizeDisplayMode(displayMode);
   const result = await query(
     `UPDATE role_panels
      SET panel_display_mode = $3, updated_at = NOW()
@@ -190,13 +256,16 @@ async function setPanelDisplayMode({ guildId, panelName, displayMode }) {
 }
 
 async function buildRolePanelComponents(panel, options) {
-  const displayMode = String(panel.panel_display_mode || 'BUTTONS').toUpperCase();
+  const displayMode = normalizeDisplayMode(panel.panel_display_mode || 'BUTTONS');
+  if (displayMode === 'REACTIONS') return [];
+
   if (displayMode === 'DROPDOWN') {
     const selectOptions = options.slice(0, 25).map((option, index) => {
+      const roleCount = optionRoleIds(option).length;
       const item = {
         label: (option.label && option.label.trim()) || `Role ${index + 1}`,
         value: option.id,
-        description: option.description || `Toggle ${option.role_id}`
+        description: option.description || `Toggle ${roleCount} role${roleCount === 1 ? '' : 's'}`
       };
       if (option.emoji) item.emoji = option.emoji;
       return item;
@@ -231,11 +300,24 @@ async function buildRolePanelComponents(panel, options) {
 
 async function buildRolePanelMessage(panel) {
   const options = await getPanelOptions(panel.id);
+  const displayMode = normalizeDisplayMode(panel.panel_display_mode || 'BUTTONS');
+  const reactionLines = displayMode === 'REACTIONS'
+    ? options
+        .filter((option) => option.emoji)
+        .map((option, index) => `${option.emoji} ${option.label && option.label.trim() ? `**${option.label.trim()}**` : `Option ${index + 1}`} — ${formatRoleMentions(optionRoleIds(option))}`)
+        .join('\n')
+    : '';
+
+  const baseDescription = panel.description || (displayMode === 'REACTIONS' ? 'React below to toggle a role.' : 'Select an option below to toggle a role.');
+  const description = displayMode === 'REACTIONS' && reactionLines
+    ? `${baseDescription}\n\n${reactionLines}`
+    : baseDescription;
+
   const embed = createBaseEmbed({
     title: panel.title || panel.name,
-    description: panel.description || 'Select a button below to toggle a role.',
+    description,
     color: parseColor(panel.accent_color) || SlickBotColors.PRIMARY,
-    footer: `SlickBot Role Panel · ${panel.mode === 'SINGLE' ? 'Single role' : 'Multi role'}`
+    footer: `SlickBot Role Panel · ${panel.mode === 'SINGLE' ? 'Single role' : 'Multi role'} · ${displayMode}`
   });
 
   const rows = await buildRolePanelComponents(panel, options);
@@ -252,43 +334,183 @@ async function toggleRole({ interaction, panelId, optionId, logger }) {
 
   const member = interaction.member;
   if (!member || !member.roles) return { ok: false, reason: 'Could not resolve your server member profile.' };
-  const hasRole = member.roles.cache.has(option.role_id);
 
-  if (panel.mode === 'SINGLE' && !hasRole) {
+  const selectedRoleIds = optionRoleIds(option);
+  if (!selectedRoleIds.length) return { ok: false, reason: 'This role option has no roles configured.' };
+
+  const hasAllSelectedRoles = selectedRoleIds.every((roleId) => member.roles.cache.has(roleId));
+
+  if (panel.mode === 'SINGLE' && !hasAllSelectedRoles) {
+    const rolesToRemove = new Set();
     for (const other of options) {
-      if (other.role_id !== option.role_id && member.roles.cache.has(other.role_id)) {
-        await member.roles.remove(other.role_id, 'SlickBot single-select role panel').catch(() => {});
+      if (other.id === option.id) continue;
+      for (const roleId of optionRoleIds(other)) {
+        if (member.roles.cache.has(roleId)) rolesToRemove.add(roleId);
       }
+    }
+    if (rolesToRemove.size) {
+      await member.roles.remove([...rolesToRemove], 'SlickBot single-select role panel').catch(() => {});
     }
   }
 
-  if (hasRole) {
-    await member.roles.remove(option.role_id, 'SlickBot role panel toggle');
+  if (hasAllSelectedRoles) {
+    await member.roles.remove(selectedRoleIds, 'SlickBot role panel bundle toggle');
   } else {
-    await member.roles.add(option.role_id, 'SlickBot role panel toggle');
+    const missingRoleIds = selectedRoleIds.filter((roleId) => !member.roles.cache.has(roleId));
+    if (missingRoleIds.length) await member.roles.add(missingRoleIds, 'SlickBot role panel bundle toggle');
   }
 
   await logger?.log({
     guildId: interaction.guildId,
     eventKey: 'reaction-role-toggle',
     title: 'Role Panel Used',
-    body: [`User: <@${interaction.user.id}>`, `Panel: **${panel.name}**`, `Role: <@&${option.role_id}>`, `Action: **${hasRole ? 'Removed' : 'Added'}**`].join('\n'),
+    body: [`User: <@${interaction.user.id}>`, `Panel: **${panel.name}**`, `Roles: ${formatRoleMentions(selectedRoleIds)}`, `Action: **${hasAllSelectedRoles ? 'Removed' : 'Added'}**`].join('\n'),
     actorUserId: interaction.user.id,
-    metadata: { panelId, optionId, roleId: option.role_id, added: !hasRole }
+    metadata: { panelId, optionId, roleIds: selectedRoleIds, added: !hasAllSelectedRoles }
   }).catch(() => {});
 
-  return { ok: true, added: !hasRole, roleId: option.role_id, panel };
+  return { ok: true, added: !hasAllSelectedRoles, roleIds: selectedRoleIds, panel };
 }
+
+function cleanEmojiName(value) {
+  return String(value || '').trim();
+}
+
+function reactionEmojiKey(emoji) {
+  if (!emoji) return '';
+  if (emoji.id) return emoji.id;
+  return cleanEmojiName(emoji.name || emoji.toString?.() || '');
+}
+
+function configuredEmojiKeys(value) {
+  const raw = cleanEmojiName(value);
+  if (!raw) return [];
+  const customMatch = raw.match(/<?a?:?([A-Za-z0-9_~]+)?:?(\d{15,25})>?/);
+  const keys = new Set([raw]);
+  if (customMatch && customMatch[2]) keys.add(customMatch[2]);
+  return [...keys];
+}
+
+function optionMatchesReaction(option, reaction) {
+  const reactionKey = reactionEmojiKey(reaction.emoji);
+  if (!reactionKey || !option.emoji) return false;
+  return configuredEmojiKeys(option.emoji).includes(reactionKey);
+}
+
+async function syncReactionPanelMessage(message, panel) {
+  const displayMode = normalizeDisplayMode(panel?.panel_display_mode || 'BUTTONS');
+  if (displayMode !== 'REACTIONS') return { added: 0, skipped: 0 };
+
+  const options = await getPanelOptions(panel.id);
+  let added = 0;
+  let skipped = 0;
+  for (const option of options) {
+    if (!option.emoji) {
+      skipped += 1;
+      continue;
+    }
+    try {
+      await message.react(option.emoji);
+      added += 1;
+    } catch (_error) {
+      skipped += 1;
+    }
+  }
+  return { added, skipped };
+}
+
+async function removeOtherSingleModeReactions({ message, options, selectedOption, userId }) {
+  for (const other of options) {
+    if (other.id === selectedOption.id || !other.emoji) continue;
+    const reaction = message.reactions.cache.find((cachedReaction) => optionMatchesReaction(other, cachedReaction));
+    if (reaction) await reaction.users.remove(userId).catch(() => {});
+  }
+}
+
+async function handleReactionRole({ reaction, user, action, logger }) {
+  if (!reaction || !user || user.bot) return { ok: false, reason: 'Ignored bot or invalid reaction.' };
+  if (reaction.partial) await reaction.fetch().catch(() => null);
+  const message = reaction.message?.partial ? await reaction.message.fetch().catch(() => null) : reaction.message;
+  if (!message?.guildId) return { ok: false, reason: 'Reaction was not in a server.' };
+
+  const panel = await getPanelByMessageId(message.guildId, message.id);
+  if (!panel || normalizeDisplayMode(panel.panel_display_mode) !== 'REACTIONS') return { ok: false, reason: 'No active reaction-role panel found for this message.' };
+
+  const options = await getPanelOptions(panel.id);
+  const option = options.find((item) => optionMatchesReaction(item, reaction));
+  if (!option) return { ok: false, reason: 'Reaction is not configured on this panel.' };
+
+  const guild = message.guild || await message.client.guilds.fetch(message.guildId).catch(() => null);
+  const member = guild ? await guild.members.fetch(user.id).catch(() => null) : null;
+  if (!member) return { ok: false, reason: 'Could not resolve member.' };
+
+  const selectedRoleIds = optionRoleIds(option);
+  if (!selectedRoleIds.length) return { ok: false, reason: 'This role option has no roles configured.' };
+
+  if (action === 'remove') {
+    await member.roles.remove(selectedRoleIds, 'SlickBot native reaction role removed').catch(() => {});
+    await logger?.log({
+      guildId: message.guildId,
+      eventKey: 'reaction-role-toggle',
+      title: 'Reaction Role Removed',
+      body: [`User: <@${user.id}>`, `Panel: **${panel.name}**`, `Roles: ${formatRoleMentions(selectedRoleIds)}`].join('\n'),
+      actorUserId: user.id,
+      metadata: { panelId: panel.id, optionId: option.id, roleIds: selectedRoleIds, added: false, displayMode: 'REACTIONS' }
+    }).catch(() => {});
+    return { ok: true, added: false, panel, roleIds: selectedRoleIds };
+  }
+
+  if (panel.mode === 'SINGLE') {
+    const rolesToRemove = new Set();
+    for (const other of options) {
+      if (other.id === option.id) continue;
+      for (const roleId of optionRoleIds(other)) {
+        if (member.roles.cache.has(roleId)) rolesToRemove.add(roleId);
+      }
+    }
+    if (rolesToRemove.size) await member.roles.remove([...rolesToRemove], 'SlickBot single-select native reaction role panel').catch(() => {});
+    await removeOtherSingleModeReactions({ message, options, selectedOption: option, userId: user.id }).catch(() => {});
+  }
+
+  const missingRoleIds = selectedRoleIds.filter((roleId) => !member.roles.cache.has(roleId));
+  if (missingRoleIds.length) await member.roles.add(missingRoleIds, 'SlickBot native reaction role added').catch(() => {});
+
+  await logger?.log({
+    guildId: message.guildId,
+    eventKey: 'reaction-role-toggle',
+    title: 'Reaction Role Added',
+    body: [`User: <@${user.id}>`, `Panel: **${panel.name}**`, `Roles: ${formatRoleMentions(selectedRoleIds)}`].join('\n'),
+    actorUserId: user.id,
+    metadata: { panelId: panel.id, optionId: option.id, roleIds: selectedRoleIds, added: true, displayMode: 'REACTIONS' }
+  }).catch(() => {});
+
+  return { ok: true, added: true, panel, roleIds: selectedRoleIds };
+}
+
 
 async function updatePublishedRolePanelMessages(client, guildId, panel) {
   if (!panel) return { updated: 0, removed: 0, total: 0 };
   const payload = await buildRolePanelMessage(panel);
-  return updatePublishedPanelsForRefs(client, {
+  const result = await updatePublishedPanelsForRefs(client, {
     guildId,
     panelType: 'role',
     panelRefs: [panel.id, panel.name],
     payload
   });
+
+  if (normalizeDisplayMode(panel.panel_display_mode) === 'REACTIONS') {
+    const { getPublishedPanelsForRefs } = require('../panels/publishedPanelService');
+    const panels = await getPublishedPanelsForRefs(guildId, 'role', [panel.id, panel.name]).catch(() => []);
+    for (const published of panels) {
+      const channel = await client.channels.fetch(published.channel_id).catch(() => null);
+      const message = channel && typeof channel.messages?.fetch === 'function'
+        ? await channel.messages.fetch(published.message_id).catch(() => null)
+        : null;
+      if (message) await syncReactionPanelMessage(message, panel).catch(() => {});
+    }
+  }
+
+  return result;
 }
 
 async function buildRoleManagerPanel(guildId) {
@@ -315,13 +537,20 @@ module.exports = {
   getPanelById,
   listPanels,
   addOption,
+  addBundleOption,
   bulkAddOptions,
   parseBulkEntries,
   removeOption,
   removeAllOptions,
   setPanelDisplayMode,
   buildRolePanelMessage,
+  getPanelOptions,
+  syncReactionPanelMessage,
+  handleReactionRole,
   toggleRole,
   buildRoleManagerPanel,
-  updatePublishedRolePanelMessages
+  updatePublishedRolePanelMessages,
+  optionRoleIds,
+  formatRoleMentions,
+  normalizeDisplayMode
 };

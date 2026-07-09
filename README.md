@@ -4,7 +4,43 @@ SlickBot is an all-in-one Discord server management bot built for the SlickPickl
 
 ## Version
 
-Current package: **v0.5.4**
+Current package: **v0.5.6**
+
+## v0.5.6 Updates
+
+### Multi-Role Reaction Role Options
+
+- Role panel options can now assign/remove multiple roles at once.
+- Use `/roles add-bundle` to create one button/dropdown/reaction option that controls a bundle of roles.
+- Bulk add also supports multiple roles in the first column, such as `@RoleOne,@RoleTwo|Label|emoji|#5865f2`.
+
+### Native Reaction Role Display Mode
+
+Reaction role panels now support a third display mode:
+
+```text
+BUTTONS
+DROPDOWN
+REACTIONS
+```
+
+Buttons remain the default.
+
+Use:
+
+```text
+/roles display-mode panel:ColorRoles display_mode:REACTIONS
+```
+
+When posted in `REACTIONS` mode, SlickBot adds the configured emojis as native Discord reactions on the message.
+
+- Adding a reaction gives the linked role or role bundle.
+- Removing the reaction removes the linked role or role bundle.
+- Single-mode panels remove other roles/reactions from the same panel when a user selects a new reaction.
+- Multi-mode panels allow users to select multiple reactions.
+
+Native reaction mode requires configured emojis on the role options.
+
 
 ## v0.5.4 Updates
 
