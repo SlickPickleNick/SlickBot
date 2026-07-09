@@ -82,6 +82,12 @@ const ActionKeys = Object.freeze({
   BirthdaysView: 'birthdays.view',
   BirthdaysConfigure: 'birthdays.configure',
 
+  ScheduledMessagesView: 'scheduled-messages.view',
+  ScheduledMessagesConfigure: 'scheduled-messages.configure',
+  ScheduledMessagesCreate: 'scheduled-messages.create',
+  ScheduledMessagesCancel: 'scheduled-messages.cancel',
+  ScheduledMessagesSendNow: 'scheduled-messages.send-now',
+
   PanelsConfigure: 'panels.configure',
 
   ServerReset: 'server.reset'
@@ -186,6 +192,12 @@ const defaultActionLevels = Object.freeze({
   [ActionKeys.BirthdaysView]: PermissionLevels.MODERATOR,
   [ActionKeys.BirthdaysConfigure]: PermissionLevels.SENIOR_MODERATOR,
 
+  [ActionKeys.ScheduledMessagesView]: PermissionLevels.MODERATOR,
+  [ActionKeys.ScheduledMessagesConfigure]: PermissionLevels.SENIOR_MODERATOR,
+  [ActionKeys.ScheduledMessagesCreate]: PermissionLevels.SENIOR_MODERATOR,
+  [ActionKeys.ScheduledMessagesCancel]: PermissionLevels.SENIOR_MODERATOR,
+  [ActionKeys.ScheduledMessagesSendNow]: PermissionLevels.SENIOR_MODERATOR,
+
   [ActionKeys.ServerReset]: PermissionLevels.OWNER
 });
 
@@ -223,7 +235,7 @@ const defaultPublicActions = Object.freeze([
 
 const defaultTeamPermissions = Object.freeze(Object.values(ActionKeys));
 
-const PERMISSION_DEFAULTS_VERSION = '0.5.1';
+const PERMISSION_DEFAULTS_VERSION = '0.5.3';
 
 module.exports = {
   ActionKeys,

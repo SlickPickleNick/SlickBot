@@ -21,6 +21,7 @@ const CustomIds = Object.freeze({
   RolePanelsRefresh: 'slickbot:rolepanels:refresh',
   GiveawaysRefresh: 'slickbot:giveaways:refresh',
   BirthdaysRefresh: 'slickbot:birthdays:refresh',
+  ScheduledMessagesRefresh: 'slickbot:scheduled-messages:refresh',
 
   ModulesSelect: 'slickbot:modules:select',
   ModulesRefresh: 'slickbot:modules:refresh',
@@ -88,7 +89,10 @@ const CustomIds = Object.freeze({
   BirthdayCancelPrefix: 'slickbot:birthday:cancel:',
   BirthdayMonthPrefix: 'slickbot:birthday:month:',
   BirthdayDayPrefix: 'slickbot:birthday:day:',
+  BirthdayDayModalPrefix: 'slickbot:modal:birthday-day:',
   BirthdayTimezonePrefix: 'slickbot:birthday:timezone:',
+  BirthdayTimezoneCustomPrefix: 'slickbot:birthday:timezone-custom:',
+  BirthdayTimezoneModalPrefix: 'slickbot:modal:birthday-timezone:',
   BirthdayListSelect: 'slickbot:birthday:list-select'
 });
 

@@ -17,8 +17,10 @@ const { buildWelcomePanel } = require('../community/welcomeService');
 const { buildRoleManagerPanel } = require('../community/rolePanelService');
 const { GiveawayService } = require('../community/giveawayService');
 const { BirthdayService } = require('../community/birthdayService');
+const { ScheduledMessageService } = require('../automation/scheduledMessageService');
 const giveaways = new GiveawayService();
 const birthdays = new BirthdayService();
+const scheduledMessages = new ScheduledMessageService();
 
 async function ensureDefaultModules(guildId) {
   for (const moduleConfig of defaultModules) {
@@ -81,6 +83,7 @@ async function buildSetupPanel(guildId, guildName = null) {
     createPanelButton(CustomIds.SetupCommunity, 'Community', ButtonStyle.Secondary, '✨'),
     createPanelButton(CustomIds.SetupTeams, 'Teams', ButtonStyle.Secondary, '👥'),
     createPanelButton(CustomIds.SetupPermissions, 'Permissions', ButtonStyle.Secondary, '🔐'),
+    createPanelButton(CustomIds.ScheduledMessagesRefresh, 'Schedule', ButtonStyle.Secondary, '🗓️'),
     createPanelButton(CustomIds.SetupRefresh, 'Refresh', ButtonStyle.Secondary, '🔄')
   ]);
 
@@ -217,6 +220,17 @@ async function getModuleStatus(guildId, row) {
     if (configured && cfg.rows[0]?.enabled !== false) return { moduleKey: row.module_key, core: false, state: 'READY', emoji: '🟢', label: 'Fully enabled', note: `${profiles.rows[0]?.count || 0} birthday(s)` };
     if ((profiles.rows[0]?.count || 0) > 0) return { moduleKey: row.module_key, core: false, state: 'PARTIAL', emoji: '🟠', label: 'Partially enabled', note: `${profiles.rows[0]?.count || 0} birthday(s), setup needed` };
     return { moduleKey: row.module_key, core: false, state: 'NEEDS_CONFIG', emoji: '🟣', label: 'Needs configuration', note: 'Run /birthday setup' };
+  }
+
+
+  if (row.module_key === 'SCHEDULED_MESSAGES') {
+    const [cfg, active] = await Promise.all([
+      query(`SELECT default_channel_id, enabled FROM scheduled_message_configs WHERE guild_id = $1 LIMIT 1`, [guildId]).catch(() => ({ rows: [] })),
+      query(`SELECT COUNT(*)::int AS count FROM scheduled_messages WHERE guild_id = $1 AND status = 'SCHEDULED'`, [guildId]).catch(() => ({ rows: [{ count: 0 }] }))
+    ]);
+    if (cfg.rows[0]?.default_channel_id && cfg.rows[0]?.enabled !== false) return { moduleKey: row.module_key, core: false, state: 'READY', emoji: '🟢', label: 'Fully enabled', note: `${active.rows[0]?.count || 0} scheduled` };
+    if ((active.rows[0]?.count || 0) > 0) return { moduleKey: row.module_key, core: false, state: 'PARTIAL', emoji: '🟠', label: 'Partially enabled', note: `${active.rows[0]?.count || 0} scheduled, setup needed` };
+    return { moduleKey: row.module_key, core: false, state: 'NEEDS_CONFIG', emoji: '🟣', label: 'Needs configuration', note: 'Run /schedule setup' };
   }
 
   return { moduleKey: row.module_key, core: false, state: 'PARTIAL', emoji: '🟠', label: 'Partially enabled', note: 'Module shell only' };

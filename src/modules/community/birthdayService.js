@@ -2,7 +2,10 @@ const {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
-  StringSelectMenuBuilder
+  StringSelectMenuBuilder,
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle
 } = require('discord.js');
 const { query } = require('../../services/db');
 const { CustomIds } = require('../ui/customIds');
@@ -11,30 +14,86 @@ const { createBaseEmbed, createSuccessEmbed, createWarningEmbed, SlickBotColors 
 const MONTH_NAMES = [null, 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const BIRTHDAY_SESSIONS = new Map();
 
-const TIMEZONE_CHOICES = Object.freeze([
-  { name: 'Eastern Time (ET / EST / EDT) — America/New_York', value: 'America/New_York', aliases: ['est', 'edt', 'et', 'eastern'] },
-  { name: 'Central Time (CT / CST / CDT) — America/Chicago', value: 'America/Chicago', aliases: ['cst', 'cdt', 'ct', 'central'] },
-  { name: 'Mountain Time (MT / MST / MDT) — America/Denver', value: 'America/Denver', aliases: ['mst', 'mdt', 'mt', 'mountain'] },
-  { name: 'Pacific Time (PT / PST / PDT) — America/Los_Angeles', value: 'America/Los_Angeles', aliases: ['pst', 'pdt', 'pt', 'pacific'] },
-  { name: 'Arizona Time (MST) — America/Phoenix', value: 'America/Phoenix', aliases: ['arizona', 'phoenix'] },
-  { name: 'Alaska Time (AKT / AKST / AKDT) — America/Anchorage', value: 'America/Anchorage', aliases: ['alaska', 'akst', 'akdt'] },
-  { name: 'Hawaii Time (HST) — Pacific/Honolulu', value: 'Pacific/Honolulu', aliases: ['hawaii', 'hst'] },
-  { name: 'Atlantic Time (AT / AST / ADT) — America/Halifax', value: 'America/Halifax', aliases: ['atlantic', 'ast', 'adt'] },
-  { name: 'UTC — Etc/UTC', value: 'Etc/UTC', aliases: ['utc', 'gmt'] },
-  { name: 'United Kingdom (GMT / BST) — Europe/London', value: 'Europe/London', aliases: ['uk', 'london', 'bst', 'gmt'] },
-  { name: 'Central Europe (CET / CEST) — Europe/Berlin', value: 'Europe/Berlin', aliases: ['cet', 'cest', 'berlin', 'europe'] },
-  { name: 'India (IST) — Asia/Kolkata', value: 'Asia/Kolkata', aliases: ['india', 'ist', 'kolkata'] },
-  { name: 'Japan (JST) — Asia/Tokyo', value: 'Asia/Tokyo', aliases: ['japan', 'jst', 'tokyo'] },
-  { name: 'Australia Eastern — Australia/Sydney', value: 'Australia/Sydney', aliases: ['australia', 'aest', 'aedt', 'sydney'] }
+const COMMON_TIMEZONE_REFERENCES = Object.freeze([
+  { label: 'Eastern Time', value: 'America/New_York', refs: 'ET / EST / EDT', aliases: ['est', 'edt', 'et', 'eastern', 'new york'] },
+  { label: 'Central Time', value: 'America/Chicago', refs: 'CT / CST / CDT', aliases: ['cst', 'cdt', 'ct', 'central', 'chicago'] },
+  { label: 'Mountain Time', value: 'America/Denver', refs: 'MT / MST / MDT', aliases: ['mst', 'mdt', 'mt', 'mountain', 'denver'] },
+  { label: 'Pacific Time', value: 'America/Los_Angeles', refs: 'PT / PST / PDT', aliases: ['pst', 'pdt', 'pt', 'pacific', 'los angeles'] },
+  { label: 'Arizona Time', value: 'America/Phoenix', refs: 'MST', aliases: ['arizona', 'phoenix'] },
+  { label: 'Alaska Time', value: 'America/Anchorage', refs: 'AKT / AKST / AKDT', aliases: ['alaska', 'akst', 'akdt'] },
+  { label: 'Hawaii Time', value: 'Pacific/Honolulu', refs: 'HST', aliases: ['hawaii', 'hst', 'honolulu'] },
+  { label: 'Atlantic Time', value: 'America/Halifax', refs: 'AT / AST / ADT', aliases: ['atlantic', 'ast', 'adt', 'halifax'] },
+  { label: 'UTC', value: 'Etc/UTC', refs: 'UTC / GMT', aliases: ['utc', 'gmt', 'zulu'] },
+  { label: 'United Kingdom', value: 'Europe/London', refs: 'GMT / BST', aliases: ['uk', 'london', 'bst', 'gmt'] },
+  { label: 'Central Europe', value: 'Europe/Berlin', refs: 'CET / CEST', aliases: ['cet', 'cest', 'berlin', 'europe'] },
+  { label: 'India', value: 'Asia/Kolkata', refs: 'IST', aliases: ['india', 'ist', 'kolkata'] },
+  { label: 'Japan', value: 'Asia/Tokyo', refs: 'JST', aliases: ['japan', 'jst', 'tokyo'] },
+  { label: 'Australia Eastern', value: 'Australia/Sydney', refs: 'AEST / AEDT', aliases: ['australia', 'aest', 'aedt', 'sydney'] }
 ]);
+
+function getSupportedTimezones() {
+  try {
+    if (typeof Intl.supportedValuesOf === 'function') {
+      return Intl.supportedValuesOf('timeZone');
+    }
+  } catch (_error) {}
+  return COMMON_TIMEZONE_REFERENCES.map((item) => item.value);
+}
+
+function timezoneOffsetLabel(timezone, date = new Date()) {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone,
+      timeZoneName: 'shortOffset',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    }).formatToParts(date);
+    const offset = parts.find((part) => part.type === 'timeZoneName')?.value || '';
+    return offset.replace('GMT', 'UTC');
+  } catch (_error) {
+    return '';
+  }
+}
+
+function formatTimezoneChoice(item) {
+  const offset = timezoneOffsetLabel(item.value);
+  return [item.label, item.refs, item.value, offset].filter(Boolean).join(' · ');
+}
+
+const TIMEZONE_CHOICES = COMMON_TIMEZONE_REFERENCES.map((item) => ({
+  name: formatTimezoneChoice(item),
+  value: item.value,
+  aliases: item.aliases
+}));
 
 function timezoneChoicesForAutocomplete(queryText = '') {
   const q = String(queryText || '').trim().toLowerCase();
-  const matched = TIMEZONE_CHOICES.filter((item) => {
+  const commonMatches = TIMEZONE_CHOICES.filter((item) => {
     if (!q) return true;
     return item.name.toLowerCase().includes(q) || item.value.toLowerCase().includes(q) || item.aliases.some((alias) => alias.includes(q));
   });
-  return matched.slice(0, 25).map((item) => ({ name: item.name.slice(0, 100), value: item.value }));
+
+  const supportedMatches = getSupportedTimezones()
+    .filter((timezone) => {
+      if (!q) return false;
+      return timezone.toLowerCase().includes(q.replaceAll(' ', '_')) || timezone.toLowerCase().includes(q);
+    })
+    .map((timezone) => ({
+      name: `${timezone}${timezoneOffsetLabel(timezone) ? ` · ${timezoneOffsetLabel(timezone)}` : ''}`,
+      value: timezone,
+      aliases: []
+    }));
+
+  const seen = new Set();
+  return [...commonMatches, ...supportedMatches]
+    .filter((item) => {
+      if (seen.has(item.value)) return false;
+      seen.add(item.value);
+      return true;
+    })
+    .slice(0, 25)
+    .map((item) => ({ name: item.name.slice(0, 100), value: item.value }));
 }
 
 function isValidDate(month, day) {
@@ -117,28 +176,81 @@ function getSession(sessionId, userId = null) {
   return session;
 }
 
+function buildBirthdayDayModal(session) {
+  return new ModalBuilder()
+    .setCustomId(`${CustomIds.BirthdayDayModalPrefix}${session.id}`)
+    .setTitle('Set Birthday Day')
+    .addComponents(new ActionRowBuilder().addComponents(
+      new TextInputBuilder()
+        .setCustomId('day')
+        .setLabel('Birthday day')
+        .setPlaceholder('Enter a day from 1 to 31')
+        .setRequired(true)
+        .setMinLength(1)
+        .setMaxLength(2)
+        .setStyle(TextInputStyle.Short)
+        .setValue(session.day ? String(session.day) : '')
+    ));
+}
+
+function buildBirthdayTimezoneModal(session) {
+  return new ModalBuilder()
+    .setCustomId(`${CustomIds.BirthdayTimezoneModalPrefix}${session.id}`)
+    .setTitle('Set Custom Timezone')
+    .addComponents(new ActionRowBuilder().addComponents(
+      new TextInputBuilder()
+        .setCustomId('timezone')
+        .setLabel('IANA timezone')
+        .setPlaceholder('Example: America/New_York')
+        .setRequired(true)
+        .setMinLength(3)
+        .setMaxLength(64)
+        .setStyle(TextInputStyle.Short)
+        .setValue(session.timezone || 'America/New_York')
+    ));
+}
+
 function buildBirthdaySetupPayload(session) {
   const monthOptions = MONTH_NAMES.slice(1).map((name, index) => ({ label: name, value: String(index + 1) }));
-  const dayOptionsA = Array.from({ length: 25 }, (_, index) => ({ label: String(index + 1), value: String(index + 1) }));
-  const dayOptionsB = Array.from({ length: 6 }, (_, index) => ({ label: String(index + 26), value: String(index + 26) }));
-  const timezoneOptions = TIMEZONE_CHOICES.slice(0, 25).map((item) => ({ label: item.value, value: item.value, description: item.name.replace(` — ${item.value}`, '').slice(0, 100) }));
+  const timezoneOptions = TIMEZONE_CHOICES.slice(0, 25).map((item) => {
+    const common = COMMON_TIMEZONE_REFERENCES.find((ref) => ref.value === item.value);
+    return {
+      label: item.value.slice(0, 100),
+      value: item.value,
+      description: [common?.refs, timezoneOffsetLabel(item.value)].filter(Boolean).join(' · ').slice(0, 100)
+    };
+  });
+
+  const hasMonth = Boolean(session.month);
+  const hasDay = Boolean(session.day);
+  const hasTimezone = Boolean(session.timezone);
+  const dateInvalid = hasMonth && hasDay && !isValidDate(session.month, session.day);
+  const ready = hasMonth && hasDay && hasTimezone && !dateInvalid;
+
+  const commonRefs = [
+    'ET / EST / EDT → `America/New_York`',
+    'CT / CST / CDT → `America/Chicago`',
+    'MT / MST / MDT → `America/Denver`',
+    'PT / PST / PDT → `America/Los_Angeles`'
+  ];
 
   const embed = createBaseEmbed({
     title: 'Set Your Birthday',
     description: [
-      'Use the dropdowns below to save your birthday.',
+      'Use the controls below to save your birthday.',
       '',
       `Month: **${session.month ? MONTH_NAMES[session.month] : 'Not selected'}**`,
       `Day: **${session.day || 'Not selected'}**`,
-      `Timezone: **${session.timezone || 'Not selected'}**`,
+      `Timezone: **${session.timezone || 'Not selected'}**${session.timezone ? ` · ${timezoneOffsetLabel(session.timezone)}` : ''}`,
+      '',
+      dateInvalid ? '**Birthday Invalid**\nThe selected month/day combination is not valid. Update the day before saving.' : null,
       '',
       '**Common timezone references**',
-      'ET / EST / EDT → `America/New_York`',
-      'CT / CST / CDT → `America/Chicago`',
-      'MT / MST / MDT → `America/Denver`',
-      'PT / PST / PDT → `America/Los_Angeles`'
-    ].join('\n'),
-    color: session.month && session.day && session.timezone ? SlickBotColors.SUCCESS : SlickBotColors.PRIMARY,
+      ...commonRefs,
+      '',
+      'Use **Enter Custom Timezone** if your timezone is not listed in the dropdown.'
+    ].filter((line) => line !== null).join('\n'),
+    color: dateInvalid ? SlickBotColors.WARNING : ready ? SlickBotColors.SUCCESS : SlickBotColors.PRIMARY,
     footer: 'SlickBot Birthdays'
   });
 
@@ -146,11 +258,13 @@ function buildBirthdaySetupPayload(session) {
     embeds: [embed],
     components: [
       new ActionRowBuilder().addComponents(new StringSelectMenuBuilder().setCustomId(`${CustomIds.BirthdayMonthPrefix}${session.id}`).setPlaceholder('Select birthday month').setMinValues(1).setMaxValues(1).addOptions(monthOptions)),
-      new ActionRowBuilder().addComponents(new StringSelectMenuBuilder().setCustomId(`${CustomIds.BirthdayDayPrefix}${session.id}:a`).setPlaceholder('Select birthday day: 1–25').setMinValues(1).setMaxValues(1).addOptions(dayOptionsA)),
-      new ActionRowBuilder().addComponents(new StringSelectMenuBuilder().setCustomId(`${CustomIds.BirthdayDayPrefix}${session.id}:b`).setPlaceholder('Select birthday day: 26–31').setMinValues(1).setMaxValues(1).addOptions(dayOptionsB)),
-      new ActionRowBuilder().addComponents(new StringSelectMenuBuilder().setCustomId(`${CustomIds.BirthdayTimezonePrefix}${session.id}`).setPlaceholder('Select timezone').setMinValues(1).setMaxValues(1).addOptions(timezoneOptions)),
+      new ActionRowBuilder().addComponents(new StringSelectMenuBuilder().setCustomId(`${CustomIds.BirthdayTimezonePrefix}${session.id}`).setPlaceholder('Select common timezone').setMinValues(1).setMaxValues(1).addOptions(timezoneOptions)),
       new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`${CustomIds.BirthdaySavePrefix}${session.id}`).setLabel('Save Birthday').setStyle(ButtonStyle.Success).setDisabled(!(session.month && session.day && session.timezone)),
+        new ButtonBuilder().setCustomId(`${CustomIds.BirthdayDayPrefix}${session.id}`).setLabel(session.day ? `Day: ${session.day}` : 'Enter Day').setStyle(dateInvalid ? ButtonStyle.Danger : ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`${CustomIds.BirthdayTimezoneCustomPrefix}${session.id}`).setLabel('Enter Custom Timezone').setStyle(ButtonStyle.Secondary)
+      ),
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`${CustomIds.BirthdaySavePrefix}${session.id}`).setLabel('Save Birthday').setStyle(ButtonStyle.Success).setDisabled(!ready),
         new ButtonBuilder().setCustomId(`${CustomIds.BirthdayCancelPrefix}${session.id}`).setLabel('Cancel').setStyle(ButtonStyle.Secondary)
       )
     ]
@@ -452,5 +566,11 @@ module.exports = {
   safeTimezone,
   timezoneChoicesForAutocomplete,
   TIMEZONE_CHOICES,
+  COMMON_TIMEZONE_REFERENCES,
+  getSupportedTimezones,
+  timezoneOffsetLabel,
+  buildBirthdayDayModal,
+  buildBirthdayTimezoneModal,
+  isValidDate,
   MONTH_NAMES
 };

@@ -30,13 +30,22 @@ async function getPublishedPanels(guildId, panelType, panelRef = '*') {
   return result.rows;
 }
 
+async function getPublishedPanelsForRefs(guildId, panelType, panelRefs = ['*']) {
+  const refs = [...new Set(panelRefs.map(normalizePanelRef))];
+  const result = await query(
+    `SELECT * FROM panel_messages
+     WHERE guild_id = $1 AND panel_type = $2 AND panel_ref = ANY($3) AND active = true
+     ORDER BY created_at ASC`,
+    [guildId, panelType, refs]
+  );
+  return result.rows;
+}
+
 async function markPanelInactive(id) {
   await query(`UPDATE panel_messages SET active = false, updated_at = NOW() WHERE id = $1`, [id]);
 }
 
-async function updatePublishedPanels(client, { guildId, panelType, panelRef = '*', payload }) {
-  if (!client || !payload) return { updated: 0, removed: 0, total: 0 };
-  const panels = await getPublishedPanels(guildId, panelType, panelRef);
+async function updatePanelRows(client, panels, payload) {
   let updated = 0;
   let removed = 0;
 
@@ -67,8 +76,22 @@ async function updatePublishedPanels(client, { guildId, panelType, panelRef = '*
   return { updated, removed, total: panels.length };
 }
 
+async function updatePublishedPanels(client, { guildId, panelType, panelRef = '*', payload }) {
+  if (!client || !payload) return { updated: 0, removed: 0, total: 0 };
+  const panels = await getPublishedPanels(guildId, panelType, panelRef);
+  return updatePanelRows(client, panels, payload);
+}
+
+async function updatePublishedPanelsForRefs(client, { guildId, panelType, panelRefs = ['*'], payload }) {
+  if (!client || !payload) return { updated: 0, removed: 0, total: 0 };
+  const panels = await getPublishedPanelsForRefs(guildId, panelType, panelRefs);
+  return updatePanelRows(client, panels, payload);
+}
+
 module.exports = {
   recordPublishedPanel,
   getPublishedPanels,
-  updatePublishedPanels
+  getPublishedPanelsForRefs,
+  updatePublishedPanels,
+  updatePublishedPanelsForRefs
 };

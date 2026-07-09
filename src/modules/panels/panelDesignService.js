@@ -97,7 +97,7 @@ async function updatePanelDesign({ guildId, target, name = null, title = null, d
       [guildId, name, panelTitle, panelDescription, panelColor, panelDisplayMode]
     );
     if (!result.rows[0]) return { ok: false, reason: `Application type \`${name}\` was not found.` };
-    return { ok: true, target: `Application Panel: ${result.rows[0].name}`, panelType: 'application', panelRef: result.rows[0].id || name, row: result.rows[0] };
+    return { ok: true, target: `Application Panel: ${result.rows[0].name}`, panelType: 'application', panelRef: result.rows[0].id || name, altPanelRefs: [name, result.rows[0].name], row: result.rows[0] };
   }
 
   if (key === 'role' || key === 'roles' || key === 'reaction-role' || key === 'reaction-roles') {
@@ -114,7 +114,7 @@ async function updatePanelDesign({ guildId, target, name = null, title = null, d
       [guildId, name, panelTitle, panelDescription, panelColor, panelDisplayMode]
     );
     if (!result.rows[0]) return { ok: false, reason: `Role panel \`${name}\` was not found.` };
-    return { ok: true, target: `Role Panel: ${result.rows[0].name}`, panelType: 'role', panelRef: result.rows[0].id, row: result.rows[0] };
+    return { ok: true, target: `Role Panel: ${result.rows[0].name}`, panelType: 'role', panelRef: result.rows[0].id, altPanelRefs: [name, result.rows[0].name], row: result.rows[0] };
   }
 
   return { ok: false, reason: 'Unknown panel target. Use ticket, report, birthday, application, appeal, or role.' };

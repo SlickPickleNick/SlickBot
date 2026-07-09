@@ -610,6 +610,41 @@ async function initDatabase() {
 
 
   await query(`
+    CREATE TABLE IF NOT EXISTS scheduled_message_configs (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT UNIQUE NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      default_channel_id TEXT,
+      enabled BOOLEAN NOT NULL DEFAULT true,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS scheduled_messages (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      schedule_number INTEGER NOT NULL,
+      channel_id TEXT NOT NULL,
+      content TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'SCHEDULED',
+      send_at TIMESTAMPTZ NOT NULL,
+      repeat_mode TEXT NOT NULL DEFAULT 'NONE',
+      created_by_user_id TEXT,
+      cancelled_by_user_id TEXT,
+      last_sent_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(guild_id, schedule_number)
+    );
+  `);
+
+  await query(`CREATE INDEX IF NOT EXISTS idx_scheduled_messages_due ON scheduled_messages(status, send_at);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_scheduled_messages_guild ON scheduled_messages(guild_id, status, send_at);`);
+
+
+
+  await query(`
     CREATE TABLE IF NOT EXISTS role_permission_levels (
       id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
       guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,

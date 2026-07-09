@@ -2,19 +2,20 @@ const { CustomIds } = require('../modules/ui/customIds');
 const { ActionKeys } = require('../modules/permissions/actionKeys');
 const { ModuleKeys, isCoreModule } = require('../modules/moduleRegistry');
 const { query } = require('./db');
-const { replyPrivate } = require('../utils/reply');
+const { replyPrivate, acknowledgeQuietly } = require('../utils/reply');
 const { buildSetupPanel, buildModulesPanel, buildLoggingPanel, buildTeamsPanel, buildPermissionsPanel, buildCommunityPanel } = require('../modules/ui/panels');
 const { buildModerationPanel, buildRecentCasesPanel } = require('../modules/moderation/moderationUi');
 const { buildStatusPanel } = require('../commands/status');
 const { createBaseEmbed, createSuccessEmbed, createWarningEmbed, SlickBotColors } = require('../modules/ui/uiService');
 const { updatePanelDesign } = require('../modules/panels/panelDesignService');
-const { refreshPublishedPanel, formatRefreshSummary } = require('../modules/panels/panelUpdateService');
+const { refreshPublishedPanel, refreshPublishedPanelFromResult, formatRefreshSummary } = require('../modules/panels/panelUpdateService');
 const { parsePanelDesignModalId } = require('../modules/panels/panelModals');
 const { ActivityTypeNames, PresenceStatus } = require('../modules/status/statusService');
 const { buildSupportPanel, buildTicketsPanel, buildReportsPanel, buildApplicationsPanel, buildAppealsPanel } = require('../modules/support/supportUi');
 const { buildWelcomePanel } = require('../modules/community/welcomeService');
 const { GiveawayService } = require('../modules/community/giveawayService');
-const { BirthdayService } = require('../modules/community/birthdayService');
+const { BirthdayService, buildBirthdayDayModal, buildBirthdayTimezoneModal, isValidDate } = require('../modules/community/birthdayService');
+const { ScheduledMessageService } = require('../modules/automation/scheduledMessageService');
 const { buildRoleManagerPanel, toggleRole } = require('../modules/community/rolePanelService');
 const {
   TicketService,
@@ -35,6 +36,7 @@ const applications = new ApplicationService();
 const appeals = new AppealService();
 const giveaways = new GiveawayService();
 const birthdays = new BirthdayService();
+const scheduledMessages = new ScheduledMessageService();
 
 async function handleComponentInteraction(interaction, ctx) {
   if (!interaction.guildId) {
@@ -165,6 +167,12 @@ async function handleButton(interaction, ctx) {
     return true;
   }
 
+  if (id === CustomIds.ScheduledMessagesRefresh) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.ScheduledMessagesView, ModuleKeys.SCHEDULED_MESSAGES))) return true;
+    await updatePanel(interaction, await scheduledMessages.buildManagerPanel(interaction.guildId));
+    return true;
+  }
+
   if (id === CustomIds.TicketsRefresh) {
     if (!(await requireAction(interaction, ctx, ActionKeys.TicketsManager, ModuleKeys.TICKETS))) return true;
     await updatePanel(interaction, await buildTicketsPanel(interaction.guildId));
@@ -199,6 +207,23 @@ async function handleButton(interaction, ctx) {
     return true;
   }
 
+
+  if (id.startsWith(CustomIds.BirthdayDayPrefix)) {
+    const sessionId = id.slice(CustomIds.BirthdayDayPrefix.length).split(':')[0];
+    const session = birthdays.getSetupSession(sessionId, interaction.user.id);
+    if (!session) return replyPrivate(interaction, { embeds: [createWarningEmbed('Birthday Setup Not Found', 'This birthday setup session expired or belongs to another user.')], deleteAfterSeconds: 10 });
+    await interaction.showModal(buildBirthdayDayModal(session));
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.BirthdayTimezoneCustomPrefix)) {
+    const sessionId = id.slice(CustomIds.BirthdayTimezoneCustomPrefix.length);
+    const session = birthdays.getSetupSession(sessionId, interaction.user.id);
+    if (!session) return replyPrivate(interaction, { embeds: [createWarningEmbed('Birthday Setup Not Found', 'This birthday setup session expired or belongs to another user.')], deleteAfterSeconds: 10 });
+    await interaction.showModal(buildBirthdayTimezoneModal(session));
+    return true;
+  }
+
   if (id.startsWith(CustomIds.BirthdayCancelPrefix)) {
     const sessionId = id.slice(CustomIds.BirthdayCancelPrefix.length);
     const session = birthdays.getSetupSession(sessionId, interaction.user.id);
@@ -224,8 +249,8 @@ async function handleButton(interaction, ctx) {
     if (!(await requireAction(interaction, ctx, ActionKeys.RolePanelsUse, ModuleKeys.REACTION_ROLES))) return true;
     const [, , panelId, optionId] = id.split(':');
     const result = await toggleRole({ interaction, panelId, optionId, logger: ctx.logger });
-    if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Role Not Updated', result.reason)] });
-    await replyPrivate(interaction, { embeds: [createSuccessEmbed(result.added ? 'Role Added' : 'Role Removed', `${result.added ? 'Added' : 'Removed'} <@&${result.roleId}>.`)], deleteAfterSeconds: 8 });
+    if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Role Not Updated', result.reason)], deleteAfterSeconds: 10 });
+    await acknowledgeQuietly(interaction);
     return true;
   }
 
@@ -497,8 +522,8 @@ async function handleSelect(interaction, ctx) {
     const panelId = id.slice(CustomIds.RolePanelSelectPrefix.length);
     const optionId = interaction.values[0];
     const result = await toggleRole({ interaction, panelId, optionId, logger: ctx.logger });
-    if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Role Not Updated', result.reason)] });
-    await replyPrivate(interaction, { embeds: [createSuccessEmbed(result.added ? 'Role Added' : 'Role Removed', `${result.added ? 'Added' : 'Removed'} <@&${result.roleId}>.`)], deleteAfterSeconds: 8 });
+    if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Role Not Updated', result.reason)], deleteAfterSeconds: 10 });
+    await acknowledgeQuietly(interaction);
     return true;
   }
 
@@ -507,6 +532,26 @@ async function handleSelect(interaction, ctx) {
 
 async function handleModal(interaction, ctx) {
   const id = interaction.customId;
+
+  if (id.startsWith(CustomIds.BirthdayDayModalPrefix)) {
+    const sessionId = id.slice(CustomIds.BirthdayDayModalPrefix.length);
+    const session = birthdays.getSetupSession(sessionId, interaction.user.id);
+    if (!session) return replyPrivate(interaction, { embeds: [createWarningEmbed('Birthday Setup Not Found', 'This birthday setup session expired or belongs to another user.')], deleteAfterSeconds: 10 });
+    const day = Number(interaction.fields.getTextInputValue('day'));
+    birthdays.updateSetupSession(session, { day: Number.isInteger(day) ? day : null });
+    await updatePanel(interaction, birthdays.buildSetupSessionPayload(session));
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.BirthdayTimezoneModalPrefix)) {
+    const sessionId = id.slice(CustomIds.BirthdayTimezoneModalPrefix.length);
+    const session = birthdays.getSetupSession(sessionId, interaction.user.id);
+    if (!session) return replyPrivate(interaction, { embeds: [createWarningEmbed('Birthday Setup Not Found', 'This birthday setup session expired or belongs to another user.')], deleteAfterSeconds: 10 });
+    const timezone = interaction.fields.getTextInputValue('timezone');
+    birthdays.updateSetupSession(session, { timezone });
+    await updatePanel(interaction, birthdays.buildSetupSessionPayload(session));
+    return true;
+  }
 
   if (id.startsWith(CustomIds.TicketModalPrefix) || id === CustomIds.TicketModal) {
     if (!(await requireModuleOnly(interaction, ctx, ModuleKeys.TICKETS))) return true;
@@ -587,7 +632,7 @@ async function handleModal(interaction, ctx) {
     });
     if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Panel Not Updated', result.reason)] });
     await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'setup', title: 'Panel Design Updated', body: `${result.target} was updated by ${interaction.user.tag}.`, actorUserId: interaction.user.id }).catch(() => {});
-    const refresh = await refreshPublishedPanel(ctx.client, interaction.guildId, result.panelType, result.panelRef).catch(() => null);
+    const refresh = await refreshPublishedPanelFromResult(ctx.client, interaction.guildId, result).catch(() => null);
     await replyPrivate(interaction, { embeds: [createSuccessEmbed('Panel Design Updated', `${result.target} design settings were updated.${formatRefreshSummary(refresh) || '\nFuture posted panels will use the new design.'}`)] });
     return true;
   }
@@ -621,7 +666,7 @@ async function requireAnySupportAction(interaction, ctx) {
 
 
 async function requireAnyCommunityAction(interaction, ctx) {
-  const checks = [[ActionKeys.WelcomeView, ModuleKeys.WELCOME], [ActionKeys.RolePanelsView, ModuleKeys.REACTION_ROLES], [ActionKeys.GiveawaysView, ModuleKeys.GIVEAWAYS], [ActionKeys.BirthdaysView, ModuleKeys.BIRTHDAYS]];
+  const checks = [[ActionKeys.WelcomeView, ModuleKeys.WELCOME], [ActionKeys.RolePanelsView, ModuleKeys.REACTION_ROLES], [ActionKeys.GiveawaysView, ModuleKeys.GIVEAWAYS], [ActionKeys.BirthdaysView, ModuleKeys.BIRTHDAYS], [ActionKeys.ScheduledMessagesView, ModuleKeys.SCHEDULED_MESSAGES]];
   for (const [action, moduleKey] of checks) {
     const result = await ctx.permissions.checkInteraction(interaction, action, moduleKey);
     if (result.allowed) return true;

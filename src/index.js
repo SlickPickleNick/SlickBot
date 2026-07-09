@@ -14,6 +14,7 @@ const { ApplicationService } = require('./modules/support/supportService');
 const { handleMemberJoin: handleWelcomeMemberJoin } = require('./modules/community/welcomeService');
 const { GiveawayService } = require('./modules/community/giveawayService');
 const { BirthdayService } = require('./modules/community/birthdayService');
+const { ScheduledMessageService } = require('./modules/automation/scheduledMessageService');
 const { handleComponentInteraction } = require('./services/interactionRouter');
 
 const client = new Client({
@@ -38,6 +39,7 @@ const moderation = new ModerationService();
 const applications = new ApplicationService();
 const giveaways = new GiveawayService();
 const birthdays = new BirthdayService();
+const scheduledMessages = new ScheduledMessageService();
 const healthServer = startHealthServer(client);
 
 client.once(Events.ClientReady, async (readyClient) => {
@@ -64,6 +66,11 @@ client.once(Events.ClientReady, async (readyClient) => {
     birthdays.processBirthdays(readyClient, logger).catch((error) => console.error('Failed to process birthdays:', error));
   }, 60 * 60 * 1000);
   await birthdays.processBirthdays(readyClient, logger).catch((error) => console.error('Failed to process birthdays:', error));
+
+  setInterval(() => {
+    scheduledMessages.processDue(readyClient, logger).catch((error) => console.error('Failed to process scheduled messages:', error));
+  }, 60 * 1000);
+  await scheduledMessages.processDue(readyClient, logger).catch((error) => console.error('Failed to process scheduled messages:', error));
 });
 
 client.on(Events.GuildCreate, async (guild) => {

@@ -1,57 +1,71 @@
 # SlickBot
 
-SlickBot is an all-in-one Discord server management bot built for the SlickPickleNick server. It uses a TitanBot-style JavaScript foundation with Discord.js, PostgreSQL, Railway deployment support, modular command permissions, polished embeds, interactive setup panels, support workflows, community systems, giveaways, and birthdays.
+SlickBot is an all-in-one Discord server management bot built for the SlickPickleNick server. It uses a TitanBot-style JavaScript foundation with Discord.js, PostgreSQL, Railway deployment support, modular command permissions, polished embeds, interactive setup panels, support workflows, community systems, giveaways, birthdays, and scheduled messages.
 
 ## Version
 
-Current package: **v0.5.2**
+Current package: **v0.5.3**
 
-## v0.5.2 Updates
+## v0.5.3 Updates
 
-### Birthday UX Improvements
+### Auto-Dismiss Rework
 
-- Added timezone autocomplete/suggestions to birthday setup and user birthday commands.
-- Added common timezone labels such as:
-  - `America/New_York` — Eastern Time, ET / EST / EDT
-  - `America/Chicago` — Central Time, CT / CST / CDT
-  - `America/Denver` — Mountain Time, MT / MST / MDT
-  - `America/Los_Angeles` — Pacific Time, PT / PST / PDT
-- Added `/birthday panel` to post a public birthday setup panel.
-- Birthday panels open an interactive private setup flow with dropdowns for:
-  - Month
-  - Day 1–25
-  - Day 26–31
-  - Timezone
-- Added `/birthday test` to send a test birthday announcement without changing roles.
-- Updated `/birthday list` to use an interactive dropdown for:
-  - Full Year
-  - Individual months
+- Reworked private auto-dismiss behavior for basic user actions.
+- Reaction-role button/dropdown interactions now acknowledge quietly instead of creating persistent private confirmation popups.
+- Giveaway and birthday user confirmations still use short-lived private responses where a visible confirmation is helpful.
 
-### Panel Editing Improvements
+### Live Panel Edit Fix
 
-- Added `/panel edit` to edit one field at a time without wiping other panel content.
-- Supported fields:
-  - Title
-  - Description
-  - Accent Color
-  - Display Mode
-- `/roles panel-wizard` now preserves existing panel content when you type `skip`, instead of resetting existing title/description/mode values.
-- Birthday panels are now supported in the panel designer.
+- `/panel edit` now refreshes tracked live panel messages after edits.
+- SlickBot now updates all tracked posts for the same panel, including cases where a panel is posted in more than one channel.
+- Role and application panel edits now refresh tracked posts by both panel ID and legacy/name references when available.
 
-### Reaction Role Cleanup
+### Birthday Timezone Improvements
 
-- SlickBot no longer auto-adds emojis to role buttons/dropdowns unless they are explicitly configured.
-- Blank-label color-role buttons are supported using an invisible label fallback when no emoji is provided.
-- Dropdown role panels still require visible option labels due to Discord dropdown requirements, so blank labels are displayed as fallback role option labels.
+- Timezone autocomplete now searches all IANA timezones supported by the Node runtime.
+- Common timezone references are still prioritized, including:
+  - `America/New_York` — ET / EST / EDT
+  - `America/Chicago` — CT / CST / CDT
+  - `America/Denver` — MT / MST / MDT
+  - `America/Los_Angeles` — PT / PST / PDT
+- Timezone suggestions include UTC/GMT offset labels where available.
+- The birthday panel now uses a single **Enter Day** control instead of split day dropdowns.
+- Invalid dates, such as February 31, show the birthday setup panel in warning/yellow state and disable saving until corrected.
+- The birthday panel includes an **Enter Custom Timezone** option for timezones not shown in the common dropdown.
 
-### Giveaway Live Entry Counts
+### Scheduled Messages Module
 
-- Giveaway panels now live-update the entry count when a user enters the giveaway.
+Added the next module system: **Scheduled Messages**.
 
-### User Action Response Cleanup
+New commands:
 
-- Basic user interactions, such as reaction-role toggles, giveaway entries, and simple birthday actions, now attempt to auto-dismiss private confirmation messages after a short delay.
-- Configuration menus and setup flows remain persistent so admins can continue working through setup steps.
+```text
+/schedule manager
+/schedule setup
+/schedule create
+/schedule list
+/schedule cancel
+/schedule send-now
+```
+
+Includes:
+
+- One-time scheduled messages
+- Daily recurring messages
+- Weekly recurring messages
+- Default scheduled message channel
+- Manual send-now support
+- Cancellation support
+- Due-message processing every minute
+- Scheduled message logging through the `scheduled-messages` log module
+
+Example:
+
+```text
+/schedule setup default_channel:#announcements enabled:true
+/schedule create message:Stream starts soon! delay:2h repeat:NONE
+/schedule create message:Weekly community night reminder delay:1d repeat:WEEKLY
+```
 
 ## Required Railway Variables
 
@@ -75,6 +89,14 @@ NODE_ENV=production
 /birthday setup
 /birthday panel channel:#birthdays
 /birthday test
+/schedule setup default_channel:#announcements enabled:true
+/schedule manager
+```
+
+Optional log setup:
+
+```text
+/logging set-channel module:scheduled-messages channel:#scheduled-message-logs
 ```
 
 ## Notes
@@ -82,3 +104,4 @@ NODE_ENV=production
 - Discord buttons do not support arbitrary hex colors. SlickBot stores the requested hex value for reaction-role options and maps it to the closest native Discord button style.
 - Discord dropdown options require visible labels. For blank-label color roles, button mode is still the best display mode.
 - Posted panels are live-updated only after they have been posted or reposted with a SlickBot version that tracks panel messages.
+- Discord select menus can show up to 25 options, so the birthday panel uses common timezone choices plus a custom timezone entry flow for full timezone support.

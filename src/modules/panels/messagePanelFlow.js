@@ -2,7 +2,7 @@ const { ButtonStyle } = require('discord.js');
 const { createBaseEmbed, createSuccessEmbed, createWarningEmbed, SlickBotColors } = require('../ui/uiService');
 const { updatePanelDesign, normalizeHexColor } = require('./panelDesignService');
 const rolePanels = require('../community/rolePanelService');
-const { refreshPublishedPanel, formatRefreshSummary } = require('./panelUpdateService');
+const { refreshPublishedPanelFromResult, formatRefreshSummary } = require('./panelUpdateService');
 
 const FLOW_TIMEOUT_MS = 5 * 60 * 1000;
 
@@ -110,7 +110,7 @@ async function startPanelMessageFlow(interaction, { target, name = null, logger 
     metadata: { target, name }
   }).catch(() => {});
 
-  const refresh = await refreshPublishedPanel(interaction.client, interaction.guildId, result.panelType, result.panelRef).catch(() => null);
+  const refresh = await refreshPublishedPanelFromResult(interaction.client, interaction.guildId, result).catch(() => null);
   return interaction.channel.send({ embeds: [createSuccessEmbed('Panel Updated', `Updated **${result.target}**.${formatRefreshSummary(refresh) || '\nFuture posted panels will use the new design.'}`)] });
 }
 
@@ -167,7 +167,7 @@ async function startPanelFieldEditFlow(interaction, { target, name = null, field
     metadata: { target, name, field: fieldLabel }
   }).catch(() => {});
 
-  const refresh = await refreshPublishedPanel(interaction.client, interaction.guildId, result.panelType, result.panelRef).catch(() => null);
+  const refresh = await refreshPublishedPanelFromResult(interaction.client, interaction.guildId, result).catch(() => null);
   return interaction.channel.send({ embeds: [createSuccessEmbed('Panel Field Updated', `Updated **${fieldLabel.replace('_', ' ')}** for **${result.target}**.${formatRefreshSummary(refresh) || '\nFuture posted panels will use the new setting.'}`)] });
 }
 
