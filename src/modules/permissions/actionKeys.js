@@ -71,6 +71,8 @@ const ActionKeys = Object.freeze({
   RolePanelsPost: 'reaction-roles.panel.post',
   RolePanelsUse: 'reaction-roles.use',
 
+  PanelsConfigure: 'panels.configure',
+
   ServerReset: 'server.reset'
 });
 
@@ -160,6 +162,7 @@ const defaultActionLevels = Object.freeze({
   [ActionKeys.RolePanelsConfigure]: PermissionLevels.SENIOR_MODERATOR,
   [ActionKeys.RolePanelsPost]: PermissionLevels.SENIOR_MODERATOR,
   [ActionKeys.RolePanelsUse]: PermissionLevels.EVERYONE,
+  [ActionKeys.PanelsConfigure]: PermissionLevels.SENIOR_MODERATOR,
 
   [ActionKeys.ServerReset]: PermissionLevels.OWNER
 });
@@ -196,7 +199,7 @@ const defaultPublicActions = Object.freeze([
 
 const defaultTeamPermissions = Object.freeze(Object.values(ActionKeys));
 
-const PERMISSION_DEFAULTS_VERSION = '0.4.0';
+const PERMISSION_DEFAULTS_VERSION = '0.4.1';
 
 module.exports = {
   ActionKeys,

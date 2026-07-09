@@ -35,6 +35,14 @@ module.exports = {
         .addStringOption((option) => option.setName('label').setDescription('Button label.').setRequired(true).setMaxLength(80))
         .addStringOption((option) => option.setName('emoji').setDescription('Optional button emoji.').setRequired(false))
         .addStringOption((option) => option.setName('description').setDescription('Optional internal description.').setRequired(false).setMaxLength(200))
+        .addStringOption((option) => option.setName('button_color').setDescription('Requested button color hex, mapped to nearest Discord style.').setRequired(false).setMaxLength(7))
+    )
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName('bulk-add')
+        .setDescription('Bulk add role options to a panel from line-based text.')
+        .addStringOption((option) => option.setName('panel').setDescription('Panel name.').setRequired(true))
+        .addStringOption((option) => option.setName('entries').setDescription('Lines: @role|Label|emoji|#hex').setRequired(true).setMaxLength(4000))
     )
     .addSubcommand((subcommand) =>
       subcommand
@@ -95,11 +103,25 @@ module.exports = {
         roleId: interaction.options.getRole('role', true).id,
         label: interaction.options.getString('label', true),
         emoji: interaction.options.getString('emoji') || null,
-        description: interaction.options.getString('description') || null
+        description: interaction.options.getString('description') || null,
+        buttonColor: interaction.options.getString('button_color') || null
       });
       if (!result) return replyPrivate(interaction, { embeds: [createWarningEmbed('Panel Not Found', 'Create the panel first with `/roles create-panel`.')] });
       await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'reaction-role-config', title: 'Role Option Added', body: `Panel: **${result.panel.name}**\nRole: <@&${result.option.role_id}>`, actorUserId: interaction.user.id });
       await replyPrivate(interaction, { embeds: [createSuccessEmbed('Role Option Added', `<@&${result.option.role_id}> was added to **${result.panel.name}**.`)] });
+      return;
+    }
+
+    if (sub === 'bulk-add') {
+      const panelName = interaction.options.getString('panel', true);
+      const entries = rolePanels.parseBulkEntries(interaction.options.getString('entries', true));
+      const valid = entries.filter((entry) => entry.valid);
+      if (!valid.length) return replyPrivate(interaction, { embeds: [createWarningEmbed('No Valid Role Entries', 'Use one line per role in this format: `@role|Button Label|emoji|#5865f2`. Role mentions or role IDs are accepted.')] });
+      const added = await rolePanels.bulkAddOptions({ guildId: interaction.guildId, panelName, entries: valid });
+      if (!added.length) return replyPrivate(interaction, { embeds: [createWarningEmbed('Panel Not Found', 'Create the panel first with `/roles create-panel`.')] });
+      await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'reaction-role-config', title: 'Role Options Bulk Added', body: `Panel: **${panelName}**
+Options Added: **${added.length}**`, actorUserId: interaction.user.id });
+      await replyPrivate(interaction, { embeds: [createSuccessEmbed('Role Options Added', `Added **${added.length}** role option(s) to **${panelName}**. Invalid/skipped lines: **${entries.length - valid.length}**.`)] });
       return;
     }
 

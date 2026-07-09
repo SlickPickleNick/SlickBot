@@ -2,17 +2,30 @@ const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { query } = require('../../services/db');
 const { createBaseEmbed, SlickBotColors } = require('../ui/uiService');
 
-function normalizeHexColor(color) {
-  if (!color) return '#7869ff';
+function normalizeHexColor(color, fallback = '#7869ff') {
+  if (!color) return fallback;
   const value = String(color).trim();
   if (/^#[0-9a-fA-F]{6}$/.test(value)) return value;
   if (/^[0-9a-fA-F]{6}$/.test(value)) return `#${value}`;
-  return '#7869ff';
+  return fallback;
 }
 
 function parseColor(color) {
   const value = normalizeHexColor(color);
   return Number.parseInt(value.slice(1), 16);
+}
+
+function buttonStyleFromHex(color) {
+  // Discord buttons do not support arbitrary hex colors. SlickBot stores the
+  // requested hex value, then maps it to the closest native Discord button style.
+  const value = normalizeHexColor(color, '#5865f2').toLowerCase();
+  const red = Number.parseInt(value.slice(1, 3), 16);
+  const green = Number.parseInt(value.slice(3, 5), 16);
+  const blue = Number.parseInt(value.slice(5, 7), 16);
+  if (green > 150 && red < 150) return ButtonStyle.Success;
+  if (red > 180 && green < 150 && blue < 150) return ButtonStyle.Danger;
+  if (Math.max(red, green, blue) - Math.min(red, green, blue) < 30) return ButtonStyle.Secondary;
+  return ButtonStyle.Primary;
 }
 
 async function createPanel({ guildId, name, title, description, color, mode = 'MULTI' }) {
@@ -60,24 +73,60 @@ async function listPanels(guildId) {
   return result.rows;
 }
 
-async function addOption({ guildId, panelName, roleId, label, emoji = null, description = null }) {
+async function addOption({ guildId, panelName, roleId, label, emoji = null, description = null, buttonColor = null }) {
   const panel = await getPanelByName(guildId, panelName);
   if (!panel) return null;
   const count = await query(`SELECT COUNT(*)::int AS count FROM role_panel_options WHERE panel_id = $1 AND active = true`, [panel.id]);
   const displayOrder = (count.rows[0]?.count || 0) + 1;
   const result = await query(
-    `INSERT INTO role_panel_options (panel_id, role_id, label, emoji, description, display_order)
-     VALUES ($1, $2, $3, $4, $5, $6)
+    `INSERT INTO role_panel_options (panel_id, role_id, label, emoji, description, button_color, display_order)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
      ON CONFLICT (panel_id, role_id)
      DO UPDATE SET label = EXCLUDED.label,
                    emoji = EXCLUDED.emoji,
                    description = EXCLUDED.description,
+                   button_color = EXCLUDED.button_color,
                    active = true,
                    updated_at = NOW()
      RETURNING *`,
-    [panel.id, roleId, label, emoji, description, displayOrder]
+    [panel.id, roleId, label, emoji, description, normalizeHexColor(buttonColor, '#5865f2'), displayOrder]
   );
   return { panel, option: result.rows[0] };
+}
+
+
+async function bulkAddOptions({ guildId, panelName, entries }) {
+  const results = [];
+  for (const entry of entries) {
+    const result = await addOption({
+      guildId,
+      panelName,
+      roleId: entry.roleId,
+      label: entry.label,
+      emoji: entry.emoji || null,
+      description: entry.description || null,
+      buttonColor: entry.buttonColor || null
+    });
+    if (result) results.push(result.option);
+  }
+  return results;
+}
+
+function parseBulkEntries(raw) {
+  const lines = String(raw || '').split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  return lines.slice(0, 25).map((line) => {
+    const parts = line.split('|').map((part) => part.trim());
+    const roleRaw = parts[0] || '';
+    const roleId = (roleRaw.match(/\d{15,25}/) || [])[0];
+    return {
+      roleId,
+      label: parts[1] || 'Toggle Role',
+      emoji: parts[2] || null,
+      buttonColor: parts[3] || null,
+      description: parts[4] || null,
+      valid: Boolean(roleId)
+    };
+  });
 }
 
 async function removeOption({ guildId, panelName, roleId }) {
@@ -108,7 +157,7 @@ async function buildRolePanelMessage(panel) {
       const button = new ButtonBuilder()
         .setCustomId(`slickbot:rolepanel:${panel.id}:${option.id}`)
         .setLabel(option.label || 'Toggle Role')
-        .setStyle(ButtonStyle.Secondary);
+        .setStyle(buttonStyleFromHex(option.button_color || '#5865f2'));
       if (option.emoji) button.setEmoji(option.emoji);
       row.addComponents(button);
     });
@@ -178,6 +227,8 @@ module.exports = {
   getPanelByName,
   listPanels,
   addOption,
+  bulkAddOptions,
+  parseBulkEntries,
   removeOption,
   buildRolePanelMessage,
   toggleRole,

@@ -7,6 +7,8 @@ const { buildSetupPanel, buildModulesPanel, buildLoggingPanel, buildTeamsPanel, 
 const { buildModerationPanel, buildRecentCasesPanel } = require('../modules/moderation/moderationUi');
 const { buildStatusPanel } = require('../commands/status');
 const { createBaseEmbed, createSuccessEmbed, createWarningEmbed, SlickBotColors } = require('../modules/ui/uiService');
+const { updatePanelDesign } = require('../modules/panels/panelDesignService');
+const { parsePanelDesignModalId } = require('../modules/panels/panelModals');
 const { ActivityTypeNames, PresenceStatus } = require('../modules/status/statusService');
 const { buildSupportPanel, buildTicketsPanel, buildReportsPanel, buildApplicationsPanel, buildAppealsPanel } = require('../modules/support/supportUi');
 const { buildWelcomePanel } = require('../modules/community/welcomeService');
@@ -434,6 +436,23 @@ async function handleModal(interaction, ctx) {
     const appeal = await appeals.reviewAppeal({ interaction, client: ctx.client, logger: ctx.logger, appealId, status, reason });
     if (!appeal) return replyPrivate(interaction, { embeds: [createWarningEmbed('Appeal Not Found', 'The appeal could not be found.')] });
     await replyPrivate(interaction, { embeds: [createSuccessEmbed('Appeal Reviewed', `Appeal #${appeal.appeal_number} marked **${appeal.status}**.`)] });
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.PanelDesignModalPrefix)) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.PanelsConfigure, ModuleKeys.PERMISSIONS))) return true;
+    const { target, name } = parsePanelDesignModalId(id);
+    const result = await updatePanelDesign({
+      guildId: interaction.guildId,
+      target,
+      name,
+      title: interaction.fields.getTextInputValue('title') || null,
+      description: interaction.fields.getTextInputValue('description') || null,
+      color: interaction.fields.getTextInputValue('color') || null
+    });
+    if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Panel Not Updated', result.reason)] });
+    await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'setup', title: 'Panel Design Updated', body: `${result.target} was updated by ${interaction.user.tag}.`, actorUserId: interaction.user.id }).catch(() => {});
+    await replyPrivate(interaction, { embeds: [createSuccessEmbed('Panel Design Updated', `${result.target} design settings were updated. Repost the panel to publish the revised embed.`)] });
     return true;
   }
 

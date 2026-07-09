@@ -72,7 +72,8 @@ const CustomIds = Object.freeze({
   ReportDetailsModalPrefix: 'slickbot:modal:report-details:',
   AppealModal: 'slickbot:modal:appeal',
   AppealReasonModalPrefix: 'slickbot:modal:appeal-reason:',
-  ApplicationModalPrefix: 'slickbot:modal:application:'
+  ApplicationModalPrefix: 'slickbot:modal:application:',
+  PanelDesignModalPrefix: 'slickbot:modal:panel-design:'
 });
 
 module.exports = { CustomIds };

@@ -6,7 +6,60 @@ This version keeps the working TitanBot-style JavaScript foundation: Discord.js,
 
 ## Version
 
-`v0.4.0`
+`v0.4.1`
+
+
+## v0.4.1 Panel Builder Update
+
+This update improves public panel customization before moving to the next major module set.
+
+### Added
+
+- New `/panel design` modal editor for multiline public panel descriptions.
+- Reusable panel design support for:
+  - Ticket panels
+  - Report panels
+  - Application panels
+  - Appeal panels
+  - Reaction role panels
+- New `/panel help` command.
+- Reaction-role button color option using `button_color` hex values. Discord does not support arbitrary button hex colors, so SlickBot stores the requested hex and maps it to the closest native Discord button style.
+- New `/roles bulk-add` command for adding multiple reaction-role options at once.
+
+### Panel Designer
+
+```text
+/panel design target:ticket
+/panel design target:report
+/panel design target:appeal
+/panel design target:application name:Moderator
+/panel design target:role name:Game Roles
+```
+
+The modal supports:
+
+```text
+Title
+Multiline description
+Accent color, example: #7869ff
+```
+
+After editing a panel design, repost the panel with its normal post command so the public message uses the updated embed.
+
+### Bulk Reaction Role Format
+
+```text
+@Role|Button Label|emoji|#hex
+@Fortnite|Fortnite|🎮|#5865f2
+@Minecraft|Minecraft|⛏️|#57f287
+@GeoGuessr|GeoGuessr|🌎|#f2b84b
+```
+
+Command:
+
+```text
+/roles bulk-add panel:Game Roles entries:<lines above>
+```
 
 ## v0.4.0 Community Modules
 
@@ -67,6 +120,7 @@ Supported placeholders:
 /roles manager
 /roles create-panel
 /roles add-option
+/roles bulk-add
 /roles remove-option
 /roles delete-panel
 /roles post-panel
@@ -77,7 +131,8 @@ Example:
 
 ```text
 /roles create-panel name:Game Roles title:Choose Your Game Roles description:Use the buttons below to toggle roles. mode:MULTI color:#7869ff
-/roles add-option panel:Game Roles role:@Fortnite label:Fortnite emoji:🎮
+/roles add-option panel:Game Roles role:@Fortnite label:Fortnite emoji:🎮 button_color:#5865f2
+/roles bulk-add panel:Game Roles entries:@Minecraft|Minecraft|⛏️|#57f287
 /roles add-option panel:Game Roles role:@Minecraft label:Minecraft emoji:⛏️
 /roles post-panel panel:Game Roles channel:#roles
 ```

@@ -471,6 +471,7 @@ async function initDatabase() {
       label TEXT NOT NULL,
       emoji TEXT,
       description TEXT,
+      button_color TEXT NOT NULL DEFAULT '#5865f2',
       display_order INTEGER NOT NULL DEFAULT 1,
       active BOOLEAN NOT NULL DEFAULT true,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -636,6 +637,8 @@ async function initDatabase() {
 
   await query(`CREATE INDEX IF NOT EXISTS idx_welcome_auto_roles_guild ON welcome_auto_roles(guild_id, active);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_role_panels_guild ON role_panels(guild_id, name, active);`);
+  await query(`ALTER TABLE role_panel_options ADD COLUMN IF NOT EXISTS button_color TEXT NOT NULL DEFAULT '#5865f2';`).catch(() => {});
+
   await query(`CREATE INDEX IF NOT EXISTS idx_role_panel_options_panel ON role_panel_options(panel_id, active);`);
 
 }
