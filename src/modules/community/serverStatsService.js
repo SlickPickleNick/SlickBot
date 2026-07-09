@@ -48,10 +48,10 @@ class ServerStatsService {
         input.humanChannelId || null,
         input.botChannelId || null,
         input.voiceChannelId || null,
-        input.memberTemplate || null,
-        input.humanTemplate || null,
-        input.botTemplate || null,
-        input.voiceTemplate || null
+        input.memberTemplate || 'Members: {members}',
+        input.humanTemplate || 'Humans: {humans}',
+        input.botTemplate || 'Bots: {bots}',
+        input.voiceTemplate || 'In Voice: {voice}'
       ]
     );
     return result.rows[0];
@@ -79,13 +79,19 @@ class ServerStatsService {
       { id: config.voice_channel_id, name: renderTemplate(config.voice_template || 'In Voice: {voice}', counts), key: 'voice' }
     ].filter((item) => item.id);
 
+    if (!updates.length) {
+      return { ok: true, updated: 0, counts, config, reason: 'No server stat channels are configured yet.' };
+    }
+
     let updated = 0;
+    let attempted = 0;
     for (const item of updates) {
       const channel = await guild.channels.fetch(item.id).catch(() => null);
       if (!channel || typeof channel.setName !== 'function') continue;
       if (channel.name === item.name) continue;
-      await channel.setName(item.name, `SlickBot server stats update: ${reason}`).catch(() => null);
-      updated += 1;
+      attempted += 1;
+      const renamed = await channel.setName(item.name, `SlickBot server stats update: ${reason}`).then(() => true).catch(() => false);
+      if (renamed) updated += 1;
     }
 
     await query(`UPDATE server_stats_configs SET last_updated_at = NOW(), updated_at = NOW() WHERE guild_id = $1`, [guild.id]).catch(() => {});
@@ -93,8 +99,8 @@ class ServerStatsService {
       guildId: guild.id,
       eventKey: 'server-stats-update',
       title: 'Server Stats Updated',
-      body: `Updated Channels: **${updated}**\nMembers: **${counts.members}**\nHumans: **${counts.humans}**\nBots: **${counts.bots}**\nIn Voice: **${counts.voice}**`,
-      metadata: { counts, updated, reason }
+      body: `Updated Channels: **${updated}**\nAttempted Renames: **${attempted}**\nMembers: **${counts.members}**\nHumans: **${counts.humans}**\nBots: **${counts.bots}**\nIn Voice: **${counts.voice}**`,
+      metadata: { counts, updated, attempted, reason }
     }).catch(() => {});
 
     return { ok: true, updated, counts, config };

@@ -54,7 +54,7 @@ module.exports = {
       });
       await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'server-stats-config', title: 'Server Stats Configured', body: `Updated By: <@${interaction.user.id}>`, actorUserId: interaction.user.id }).catch(() => {});
       const result = await stats.updateStats(interaction.guild, ctx.logger, 'configuration').catch(() => null);
-      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Server Stats Configured', `Server stats are **${config.enabled ? 'enabled' : 'disabled'}**.${result?.ok ? ` Updated **${result.updated}** channel(s).` : ''}`)] });
+      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Server Stats Configured', `Server stats are **${config.enabled ? 'enabled' : 'disabled'}**.${result?.ok ? ` Updated **${result.updated}** channel(s).${result.reason ? ` ${result.reason}` : ''}` : ''}`)] });
     }
 
     if (sub === 'refresh') {

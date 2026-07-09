@@ -164,3 +164,11 @@ Optional log setup:
 - Discord dropdown options require visible labels. For blank-label color roles, button mode is still the best display mode.
 - Posted panels are live-updated only after they have been posted or reposted with a SlickBot version that tracks panel messages.
 - Discord select menus can show up to 25 options, so the birthday panel uses common timezone choices plus a custom timezone entry flow for full timezone support.
+
+
+## v0.5.5 Hotfix
+
+- Fixed `/panel delete` error caused by a missing `createSuccessEmbed` import.
+- Fixed `/stats setup` so you can configure only one or two stat channels without providing every available channel/template option.
+- Server stats now safely use default templates when templates are not provided.
+- Server stats refresh now handles no configured stat channels gracefully instead of throwing during setup.
