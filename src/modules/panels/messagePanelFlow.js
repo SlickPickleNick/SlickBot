@@ -79,13 +79,20 @@ async function startPanelMessageFlow(interaction, { target, name = null, logger 
   });
   if (color.cancelled) return interaction.channel.send({ embeds: [createWarningEmbed('Panel Builder Stopped', color.reason)] });
 
+  const displayMode = await waitForUserMessage(interaction, {
+    title: 'Step 4 — Panel Display Mode',
+    description: 'Send `buttons` or `dropdown`. Type `skip` to keep the current/default mode. Buttons are the default.'
+  });
+  if (displayMode.cancelled) return interaction.channel.send({ embeds: [createWarningEmbed('Panel Builder Stopped', displayMode.reason)] });
+
   const result = await updatePanelDesign({
     guildId: interaction.guildId,
     target,
     name,
     title: normalizeOptionalText(title.value),
     description: normalizeOptionalText(description.value),
-    color: normalizeOptionalText(color.value)
+    color: normalizeOptionalText(color.value),
+    displayMode: normalizeOptionalText(displayMode.value)
   });
 
   if (!result.ok) {
@@ -160,14 +167,22 @@ async function startRolePanelCreationFlow(interaction, { logger = null, initialN
   });
   if (color.cancelled) return interaction.channel.send({ embeds: [createWarningEmbed('Role Panel Builder Stopped', color.reason)] });
 
+  const displayMode = await waitForUserMessage(interaction, {
+    title: 'Step 6 — Panel Display Mode',
+    description: 'Send `buttons` or `dropdown`. Type `skip` for buttons.'
+  });
+  if (displayMode.cancelled) return interaction.channel.send({ embeds: [createWarningEmbed('Role Panel Builder Stopped', displayMode.reason)] });
+
   const modeValue = String(mode.value || '').trim().toLowerCase().startsWith('single') ? 'SINGLE' : 'MULTI';
+  const displayModeValue = String(displayMode.value || '').trim().toLowerCase().startsWith('drop') ? 'DROPDOWN' : 'BUTTONS';
   const panel = await rolePanels.createPanel({
     guildId: interaction.guildId,
     name,
     title: normalizeOptionalText(title.value) || name,
     description: normalizeOptionalText(description.value) || undefined,
     mode: modeValue,
-    color: normalizeOptionalText(color.value) || undefined
+    color: normalizeOptionalText(color.value) || undefined,
+    displayMode: displayModeValue
   });
 
   await logger?.log({

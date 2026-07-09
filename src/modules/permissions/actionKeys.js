@@ -78,6 +78,10 @@ const ActionKeys = Object.freeze({
   GiveawaysReroll: 'giveaways.reroll',
   GiveawaysEnter: 'giveaways.enter',
 
+  BirthdaysUse: 'birthdays.use',
+  BirthdaysView: 'birthdays.view',
+  BirthdaysConfigure: 'birthdays.configure',
+
   PanelsConfigure: 'panels.configure',
 
   ServerReset: 'server.reset'
@@ -178,6 +182,10 @@ const defaultActionLevels = Object.freeze({
   [ActionKeys.GiveawaysReroll]: PermissionLevels.MODERATOR,
   [ActionKeys.GiveawaysEnter]: PermissionLevels.EVERYONE,
 
+  [ActionKeys.BirthdaysUse]: PermissionLevels.EVERYONE,
+  [ActionKeys.BirthdaysView]: PermissionLevels.MODERATOR,
+  [ActionKeys.BirthdaysConfigure]: PermissionLevels.SENIOR_MODERATOR,
+
   [ActionKeys.ServerReset]: PermissionLevels.OWNER
 });
 
@@ -209,12 +217,13 @@ const defaultPublicActions = Object.freeze([
   ActionKeys.ApplicationsApply,
   ActionKeys.AppealsSubmit,
   ActionKeys.RolePanelsUse,
-  ActionKeys.GiveawaysEnter
+  ActionKeys.GiveawaysEnter,
+  ActionKeys.BirthdaysUse
 ]);
 
 const defaultTeamPermissions = Object.freeze(Object.values(ActionKeys));
 
-const PERMISSION_DEFAULTS_VERSION = '0.5.0';
+const PERMISSION_DEFAULTS_VERSION = '0.5.1';
 
 module.exports = {
   ActionKeys,

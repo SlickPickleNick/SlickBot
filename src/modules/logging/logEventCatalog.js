@@ -76,6 +76,12 @@ const LogModuleCatalog = Object.freeze([
     label: 'Giveaways',
     description: 'Giveaway creation, entries, endings, and rerolls.',
     defaultDelivery: 'IMMEDIATE'
+  },
+  {
+    key: 'birthdays',
+    label: 'Birthdays',
+    description: 'Birthday profile changes, birthday announcements, and birthday role activity.',
+    defaultDelivery: 'IMMEDIATE'
   }
 ]);
 
@@ -135,7 +141,12 @@ const LogEventCatalog = Object.freeze([
   { key: 'giveaway-created', moduleKey: 'giveaways', label: 'Giveaway Created', description: 'A giveaway was created.', defaultDelivery: 'IMMEDIATE' },
   { key: 'giveaway-entry', moduleKey: 'giveaways', label: 'Giveaway Entry', description: 'A user entered a giveaway.', defaultDelivery: 'IMMEDIATE' },
   { key: 'giveaway-ended', moduleKey: 'giveaways', label: 'Giveaway Ended', description: 'A giveaway ended and winners were selected.', defaultDelivery: 'IMMEDIATE' },
-  { key: 'giveaway-rerolled', moduleKey: 'giveaways', label: 'Giveaway Rerolled', description: 'Giveaway winners were rerolled.', defaultDelivery: 'IMMEDIATE' }
+  { key: 'giveaway-rerolled', moduleKey: 'giveaways', label: 'Giveaway Rerolled', description: 'Giveaway winners were rerolled.', defaultDelivery: 'IMMEDIATE' },
+
+  { key: 'birthday-config', moduleKey: 'birthdays', label: 'Birthday Config', description: 'Birthday system settings changed.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'birthday-profile', moduleKey: 'birthdays', label: 'Birthday Profile', description: 'A user saved or removed their birthday.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'birthday-active', moduleKey: 'birthdays', label: 'Birthday Active', description: 'A birthday was announced or a birthday role was added.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'birthday-ended', moduleKey: 'birthdays', label: 'Birthday Ended', description: 'A birthday role was removed after the birthday passed.', defaultDelivery: 'IMMEDIATE' }
 ]);
 
 const StarterLogModuleKeys = Object.freeze(['core', 'moderation']);

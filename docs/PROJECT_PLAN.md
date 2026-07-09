@@ -1,6 +1,6 @@
 # SlickBot Project Plan
 
-## Current Version: 0.5.0
+## Current Version: 0.5.1
 
 SlickBot is being built as a modular all-in-one Discord server management bot for the SlickPickleNick community.
 
@@ -25,7 +25,7 @@ SlickBot is being built as a modular all-in-one Discord server management bot fo
 - Live-updating posted panels
 - Giveaways
 
-## v0.5.0 Scope
+## v0.5.1 Scope
 
 - Added live-updating posted panel support.
 - Added `/roles remove-all` for clearing all role options from a panel.
@@ -35,7 +35,7 @@ SlickBot is being built as a modular all-in-one Discord server management bot fo
 
 ## Future Modules
 
-- Birthdays
+- Leveling
 - Leveling / XP
 - Server stats
 - Scheduled messages

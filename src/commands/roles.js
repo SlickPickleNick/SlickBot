@@ -35,6 +35,15 @@ module.exports = {
         .addStringOption((option) => option.setName('description').setDescription('Panel description shown to users.').setRequired(false).setMaxLength(1500))
         .addStringOption((option) => option.setName('mode').setDescription('Allow one or multiple roles from this panel.').setRequired(false).addChoices({ name: 'Multiple roles', value: 'MULTI' }, { name: 'Single role', value: 'SINGLE' }))
         .addStringOption((option) => option.setName('color').setDescription('Panel accent color, such as #7869ff.').setRequired(false))
+        .addStringOption((option) => option.setName('display_mode').setDescription('Post this panel as buttons or a dropdown menu.').setRequired(false).addChoices({ name: 'Buttons', value: 'BUTTONS' }, { name: 'Dropdown menu', value: 'DROPDOWN' }))
+    )
+
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName('display-mode')
+        .setDescription('Set whether a role panel posts as buttons or a dropdown menu.')
+        .addStringOption((option) => option.setName('panel').setDescription('Panel name.').setRequired(true))
+        .addStringOption((option) => option.setName('display_mode').setDescription('Panel component style.').setRequired(true).addChoices({ name: 'Buttons', value: 'BUTTONS' }, { name: 'Dropdown menu', value: 'DROPDOWN' }))
     )
     .addSubcommand((subcommand) =>
       subcommand
@@ -114,11 +123,24 @@ module.exports = {
         title: interaction.options.getString('title') || undefined,
         description: interaction.options.getString('description') || undefined,
         mode: interaction.options.getString('mode') || 'MULTI',
-        color: interaction.options.getString('color') || undefined
+        color: interaction.options.getString('color') || undefined,
+        displayMode: interaction.options.getString('display_mode') || 'BUTTONS'
       });
       await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'reaction-role-config', title: 'Role Panel Saved', body: `Panel: **${panel.name}**\nUpdated By: <@${interaction.user.id}>`, actorUserId: interaction.user.id });
       const liveText = await updateLivePanelMessages(ctx, interaction.guildId, panel);
       await replyPrivate(interaction, { embeds: [createSuccessEmbed('Role Panel Saved', `Panel **${panel.name}** is ready for role options.${liveText}`)] });
+      return;
+    }
+
+    if (sub === 'display-mode') {
+      const panel = await rolePanels.setPanelDisplayMode({
+        guildId: interaction.guildId,
+        panelName: interaction.options.getString('panel', true),
+        displayMode: interaction.options.getString('display_mode', true)
+      });
+      if (!panel) return replyPrivate(interaction, { embeds: [createWarningEmbed('Panel Not Found', 'No active role panel was found with that name.')] });
+      const liveText = await updateLivePanelMessages(ctx, interaction.guildId, panel);
+      await replyPrivate(interaction, { embeds: [createSuccessEmbed('Display Mode Updated', `Panel **${panel.name}** will now post as **${panel.panel_display_mode}**.${liveText}`)] });
       return;
     }
 

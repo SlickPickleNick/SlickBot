@@ -4,7 +4,7 @@ SlickBot is an all-in-one Discord server management bot for the SlickPickleNick 
 
 ## Version
 
-`0.5.0`
+`0.5.1`
 
 ## Included Systems
 
@@ -21,12 +21,94 @@ SlickBot is an all-in-one Discord server management bot for the SlickPickleNick 
 - Guided panel builders
 - Live-updating posted panels
 - Giveaways
+- Birthdays
 
-## New in v0.5.0
+## New in v0.5.1
+
+### Panel display modes
+
+Public panels can now be displayed as either:
+
+```text
+BUTTONS
+DROPDOWN
+```
+
+Buttons remain the default.
+
+Supported panels:
+
+- Ticket panels
+- Report panels
+- Application panels
+- Appeal panels
+- Reaction/button role panels
+
+Configuration examples:
+
+```text
+/ticket setup display_mode:DROPDOWN
+/report setup display_mode:DROPDOWN
+/application setup type:Moderator display_mode:DROPDOWN
+/appeal setup display_mode:DROPDOWN
+/roles display-mode panel:Color Roles display_mode:DROPDOWN
+```
+
+Guided setup through `/panel setup` and `/roles panel-wizard` now asks whether the panel should use buttons or a dropdown menu.
+
+### Reaction role dropdowns
+
+Reaction role panels can now be posted as dropdown/select menus instead of buttons.
+
+Notes:
+
+- Buttons are still the default.
+- Dropdown mode supports up to 25 role options on one panel.
+- Dropdown role selection toggles one selected role at a time.
+- Discord dropdown options require a text label, so emoji-only color role panels are best used in button mode.
+
+### Birthdays
+
+Added:
+
+```text
+/birthday manager
+/birthday setup
+/birthday set
+/birthday view
+/birthday remove
+/birthday list
+```
+
+Features:
+
+- User birthday tracking
+- Optional birthday announcement channel
+- Optional birthday role
+- Timezone support
+- Hourly birthday processing
+- Birthday role is removed after the birthday has passed
+- Announcement template placeholders:
+  - `{user}`
+  - `{username}`
+  - `{server}`
+  - `{date}`
+
+Example setup:
+
+```text
+/birthday setup channel:#birthdays birthday_role:@Birthday message:Happy birthday, {user}! 🎉 timezone:America/New_York enabled:true
+```
+
+User setup:
+
+```text
+/birthday set month:7 day:9 timezone:America/New_York
+```
 
 ### Live-updating panels
 
-SlickBot now tracks posted public panel messages and updates them automatically when their source configuration changes.
+Tracked panels still live-update after configuration changes.
 
 Tracked panel types:
 
@@ -36,58 +118,7 @@ Tracked panel types:
 - Appeal panels
 - Reaction/button role panels
 
-When a panel is reposted using commands such as `/ticket panel`, `/report panel`, `/application panel`, `/appeal panel`, or `/roles post-panel`, SlickBot stores the message ID. Future edits through `/panel setup`, `/panel design`, ticket type changes, application changes, or reaction-role changes will attempt to edit the already-posted panel message.
-
-### Reaction role panel cleanup
-
-Added:
-
-```text
-/roles remove-all
-```
-
-This removes all role options from a role panel. Posted role panels are live-updated after the options are cleared.
-
-### Giveaways
-
-Added:
-
-```text
-/giveaway manager
-/giveaway setup
-/giveaway start
-/giveaway end
-/giveaway reroll
-/giveaway list
-```
-
-Features:
-
-- Multiple winners
-- Automatic winner selection
-- Giveaway entry button
-- Manual early ending
-- Reroll support
-- Default giveaway channel
-- Optional giveaway ping role
-- Automatic due-giveaway processing every minute
-
-Example:
-
-```text
-/giveaway setup default_channel:#giveaways ping_role:@Giveaway Ping
-/giveaway start prize:Discord Nitro duration:1d winners:2 description:Thanks for being part of the community.
-```
-
-### Module status
-
-The module panel still shows unfinished systems as:
-
-```text
-🕒 Coming Soon
-```
-
-Giveaways are now implemented, so they will show as needs configuration or ready depending on setup.
+Panels posted before v0.5.0 were not tracked. Repost each panel once if needed, then future edits should update the existing posted panel.
 
 ## Railway Variables
 
@@ -136,20 +167,20 @@ README.md
 
 Do not upload the files inside an extra nested folder.
 
-## After deploying v0.5.0
+## After deploying v0.5.1
 
 Run:
 
 ```text
 /permissions apply-defaults
 /modules panel
-/giveaway setup default_channel:#giveaways
+/birthday setup channel:#birthdays birthday_role:@Birthday
 ```
 
 Optional log setup:
 
 ```text
-/logging set-channel module:giveaways channel:#giveaway-logs
+/logging set-channel module:birthdays channel:#birthday-logs
 ```
 
 ## Notes

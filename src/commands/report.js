@@ -25,6 +25,7 @@ module.exports = {
         .addStringOption((option) => option.setName('panel_title').setDescription('Public report panel title.').setRequired(false).setMaxLength(100))
         .addStringOption((option) => option.setName('panel_description').setDescription('Public report panel description.').setRequired(false).setMaxLength(800))
         .addStringOption((option) => option.setName('panel_color').setDescription('Panel accent color, example: #f2b84b.').setRequired(false).setMaxLength(7))
+        .addStringOption((option) => option.setName('display_mode').setDescription('Public panel component style.').setRequired(false).addChoices({ name: 'Buttons', value: 'BUTTONS' }, { name: 'Dropdown menu', value: 'DROPDOWN' }))
     )
     .addSubcommand((subcommand) =>
       subcommand
@@ -65,7 +66,7 @@ module.exports = {
       const channel = interaction.options.getChannel('review_channel', true);
       const pingRole = interaction.options.getRole('ping_role');
       const pingTeam = interaction.options.getString('ping_team') || null;
-      const config = await reports.updateConfig(interaction.guildId, { reviewChannelId: channel.id, pingRoleId: pingRole?.id || null, pingTeamName: pingTeam, panelTitle: interaction.options.getString('panel_title') || null, panelDescription: interaction.options.getString('panel_description') || null, panelColor: interaction.options.getString('panel_color') || null });
+      const config = await reports.updateConfig(interaction.guildId, { reviewChannelId: channel.id, pingRoleId: pingRole?.id || null, pingTeamName: pingTeam, panelTitle: interaction.options.getString('panel_title') || null, panelDescription: interaction.options.getString('panel_description') || null, panelColor: interaction.options.getString('panel_color') || null, panelDisplayMode: interaction.options.getString('display_mode') || null });
       await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'setup', title: 'Report Settings Updated', body: `Report review channel set to <#${channel.id}> by ${interaction.user.tag}.`, actorUserId: interaction.user.id }).catch(() => {});
       const refresh = await refreshPublishedPanel(ctx.client, interaction.guildId, 'report', '*').catch(() => null);
       return replyPrivate(interaction, { embeds: [createSuccessEmbed('Report System Configured', [`Review Channel: <#${channel.id}>`, `Ping Role: ${config.ping_role_id ? `<@&${config.ping_role_id}>` : 'Not set'}`, `Ping Team: ${config.ping_team_id ? 'Configured' : 'Not set'}`, formatRefreshSummary(refresh)].filter(Boolean).join('\n'))] });

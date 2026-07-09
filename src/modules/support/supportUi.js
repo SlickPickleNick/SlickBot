@@ -2,6 +2,7 @@ const {
   createBaseEmbed,
   createButtonRow,
   createPanelButton,
+  createSelectRow,
   ButtonStyle,
   SlickBotColors
 } = require('../ui/uiService');
@@ -19,6 +20,10 @@ function parseHexColor(value, fallback = SlickBotColors.PRIMARY) {
   const normalized = String(value).replace('#', '').trim();
   if (!/^[0-9a-fA-F]{6}$/.test(normalized)) return fallback;
   return Number.parseInt(normalized, 16);
+}
+
+function getPanelDisplayMode(value) {
+  return String(value || 'BUTTONS').toUpperCase() === 'DROPDOWN' ? 'DROPDOWN' : 'BUTTONS';
 }
 
 async function buildSupportPanel(guildId) {
@@ -190,34 +195,54 @@ async function buildAppealsPanel(guildId) {
 }
 
 async function buildPublicTicketPanel(types = [], config = null) {
-  const enabledTypes = types.filter((type) => type.enabled !== false).slice(0, 5);
+  const enabledTypes = types.filter((type) => type.enabled !== false).slice(0, 25);
   const embed = createBaseEmbed({
     title: config?.panel_title || 'Open a Ticket',
     description: config?.panel_description || (enabledTypes.length
       ? 'Select the ticket type that best matches what you need. SlickBot will ask the configured questions and create a private support channel.'
       : 'Need help? Select **Open Ticket** below and SlickBot will create a private support channel for you.'),
     color: parseHexColor(config?.panel_color, SlickBotColors.PRIMARY),
-    footer: 'SlickBot Tickets'
+    footer: `SlickBot Tickets · ${getPanelDisplayMode(config?.panel_display_mode)}`
   });
 
+  if (getPanelDisplayMode(config?.panel_display_mode) === 'DROPDOWN' && enabledTypes.length) {
+    const select = createSelectRow(CustomIds.TicketTypeSelect, 'Select a ticket type...', enabledTypes.map((type) => ({
+      label: String(type.label || type.name).slice(0, 100),
+      value: type.id,
+      description: String(type.description || 'Open this ticket type.').slice(0, 100),
+      emoji: '🎟️'
+    })));
+    return { embeds: [embed], components: [select] };
+  }
+
   const buttons = enabledTypes.length
-    ? enabledTypes.map((type) => createPanelButton(`${CustomIds.TicketOpenTypePrefix}${type.id}`, type.label || type.name, ButtonStyle.Primary, '🎟️'))
+    ? enabledTypes.slice(0, 5).map((type) => createPanelButton(`${CustomIds.TicketOpenTypePrefix}${type.id}`, type.label || type.name, ButtonStyle.Primary, '🎟️'))
     : [createPanelButton(CustomIds.TicketOpen, 'Open Ticket', ButtonStyle.Primary, '🎟️')];
   return { embeds: [embed], components: [createButtonRow(buttons)] };
 }
 
 function buildPublicReportPanel(config = null) {
-  const embed = createBaseEmbed({ title: config?.panel_title || 'Submit a Report', description: config?.panel_description || 'Use this panel to privately report a concern to the staff team.', color: parseHexColor(config?.panel_color, SlickBotColors.WARNING), footer: 'SlickBot Reports' });
+  const embed = createBaseEmbed({ title: config?.panel_title || 'Submit a Report', description: config?.panel_description || 'Use this panel to privately report a concern to the staff team.', color: parseHexColor(config?.panel_color, SlickBotColors.WARNING), footer: `SlickBot Reports · ${getPanelDisplayMode(config?.panel_display_mode)}` });
+  if (getPanelDisplayMode(config?.panel_display_mode) === 'DROPDOWN') {
+    return { embeds: [embed], components: [createSelectRow(CustomIds.ReportSelect, 'Choose an action...', [{ label: 'Submit Report', value: 'open', description: 'Privately report a concern to staff.', emoji: '🚩' }])] };
+  }
   return { embeds: [embed], components: [createButtonRow([createPanelButton(CustomIds.ReportOpen, 'Submit Report', ButtonStyle.Danger, '🚩')])] };
 }
 
 function buildPublicApplicationPanel(type) {
-  const embed = createBaseEmbed({ title: type.panel_title || `${type.name} Application`, description: type.panel_description || type.description || 'Use this panel to start a DM-based application.', color: parseHexColor(type.panel_color, SlickBotColors.PRIMARY), footer: 'SlickBot Applications' });
-  return { embeds: [embed], components: [createButtonRow([createPanelButton(`${CustomIds.ApplicationApplyPrefix}${type.id}`, 'Start Application', ButtonStyle.Primary, '📝')])] };
+  const embed = createBaseEmbed({ title: type.panel_title || `${type.name} Application`, description: type.panel_description || type.description || 'Use this panel to start a DM-based application.', color: parseHexColor(type.panel_color, SlickBotColors.PRIMARY), footer: `SlickBot Applications · ${getPanelDisplayMode(type.panel_display_mode)}` });
+  const customId = `${CustomIds.ApplicationApplyPrefix}${type.id}`;
+  if (getPanelDisplayMode(type.panel_display_mode) === 'DROPDOWN') {
+    return { embeds: [embed], components: [createSelectRow(`${CustomIds.ApplicationSelectPrefix}${type.id}`, 'Choose an action...', [{ label: `Start ${type.name}`.slice(0, 100), value: type.id, description: 'Start this DM-based application.', emoji: '📝' }])] };
+  }
+  return { embeds: [embed], components: [createButtonRow([createPanelButton(customId, 'Start Application', ButtonStyle.Primary, '📝')])] };
 }
 
 function buildPublicAppealPanel(config = null) {
-  const embed = createBaseEmbed({ title: config?.panel_title || 'Submit an Appeal', description: config?.panel_description || 'Use this panel to submit an appeal for staff review.', color: parseHexColor(config?.panel_color, SlickBotColors.INFO), footer: 'SlickBot Appeals' });
+  const embed = createBaseEmbed({ title: config?.panel_title || 'Submit an Appeal', description: config?.panel_description || 'Use this panel to submit an appeal for staff review.', color: parseHexColor(config?.panel_color, SlickBotColors.INFO), footer: `SlickBot Appeals · ${getPanelDisplayMode(config?.panel_display_mode)}` });
+  if (getPanelDisplayMode(config?.panel_display_mode) === 'DROPDOWN') {
+    return { embeds: [embed], components: [createSelectRow(CustomIds.AppealSelect, 'Choose an action...', [{ label: 'Submit Appeal', value: 'open', description: 'Submit an appeal for staff review.', emoji: '⚖️' }])] };
+  }
   return { embeds: [embed], components: [createButtonRow([createPanelButton(CustomIds.AppealOpen, 'Submit Appeal', ButtonStyle.Primary, '⚖️')])] };
 }
 

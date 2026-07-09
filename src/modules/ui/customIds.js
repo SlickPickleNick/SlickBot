@@ -20,6 +20,7 @@ const CustomIds = Object.freeze({
   WelcomeRefresh: 'slickbot:welcome:refresh',
   RolePanelsRefresh: 'slickbot:rolepanels:refresh',
   GiveawaysRefresh: 'slickbot:giveaways:refresh',
+  BirthdaysRefresh: 'slickbot:birthdays:refresh',
 
   ModulesSelect: 'slickbot:modules:select',
   ModulesRefresh: 'slickbot:modules:refresh',
@@ -41,6 +42,7 @@ const CustomIds = Object.freeze({
   TicketsRefresh: 'slickbot:tickets:refresh',
   TicketOpen: 'slickbot:ticket:open',
   TicketOpenTypePrefix: 'slickbot:ticket:open-type:',
+  TicketTypeSelect: 'slickbot:ticket:select-type',
   TicketClaim: 'slickbot:ticket:claim',
   TicketClose: 'slickbot:ticket:close',
   TicketCloseReason: 'slickbot:ticket:close-reason',
@@ -48,6 +50,7 @@ const CustomIds = Object.freeze({
 
   ReportsRefresh: 'slickbot:reports:refresh',
   ReportOpen: 'slickbot:report:open',
+  ReportSelect: 'slickbot:report:select',
   ReportClaimPrefix: 'slickbot:report:claim:',
   ReportResolvePrefix: 'slickbot:report:resolve:',
   ReportDismissPrefix: 'slickbot:report:dismiss:',
@@ -56,11 +59,13 @@ const CustomIds = Object.freeze({
 
   ApplicationsRefresh: 'slickbot:applications:refresh',
   ApplicationApplyPrefix: 'slickbot:application:apply:',
+  ApplicationSelectPrefix: 'slickbot:application:select:',
   ApplicationApprovePrefix: 'slickbot:application:approve:',
   ApplicationDenyPrefix: 'slickbot:application:deny:',
 
   AppealsRefresh: 'slickbot:appeals:refresh',
   AppealOpen: 'slickbot:appeal:open',
+  AppealSelect: 'slickbot:appeal:select',
   AppealApprovePrefix: 'slickbot:appeal:approve:',
   AppealDenyPrefix: 'slickbot:appeal:deny:',
   AppealApproveReasonPrefix: 'slickbot:appeal:approve-reason:',
@@ -74,7 +79,9 @@ const CustomIds = Object.freeze({
   AppealModal: 'slickbot:modal:appeal',
   AppealReasonModalPrefix: 'slickbot:modal:appeal-reason:',
   ApplicationModalPrefix: 'slickbot:modal:application:',
-  PanelDesignModalPrefix: 'slickbot:modal:panel-design:'
+  PanelDesignModalPrefix: 'slickbot:modal:panel-design:',
+
+  RolePanelSelectPrefix: 'slickbot:rolepanel-select:'
 });
 
 module.exports = { CustomIds };

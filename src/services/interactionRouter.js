@@ -14,6 +14,7 @@ const { ActivityTypeNames, PresenceStatus } = require('../modules/status/statusS
 const { buildSupportPanel, buildTicketsPanel, buildReportsPanel, buildApplicationsPanel, buildAppealsPanel } = require('../modules/support/supportUi');
 const { buildWelcomePanel } = require('../modules/community/welcomeService');
 const { GiveawayService } = require('../modules/community/giveawayService');
+const { BirthdayService } = require('../modules/community/birthdayService');
 const { buildRoleManagerPanel, toggleRole } = require('../modules/community/rolePanelService');
 const {
   TicketService,
@@ -33,6 +34,7 @@ const reports = new ReportService();
 const applications = new ApplicationService();
 const appeals = new AppealService();
 const giveaways = new GiveawayService();
+const birthdays = new BirthdayService();
 
 async function handleComponentInteraction(interaction, ctx) {
   if (!interaction.guildId) {
@@ -154,6 +156,12 @@ async function handleButton(interaction, ctx) {
   if (id === CustomIds.GiveawaysRefresh) {
     if (!(await requireAction(interaction, ctx, ActionKeys.GiveawaysView, ModuleKeys.GIVEAWAYS))) return true;
     await updatePanel(interaction, await giveaways.buildManagerPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id === CustomIds.BirthdaysRefresh) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.BirthdaysView, ModuleKeys.BIRTHDAYS))) return true;
+    await updatePanel(interaction, await birthdays.buildManagerPanel(interaction.guildId));
     return true;
   }
 
@@ -385,6 +393,49 @@ async function handleSelect(interaction, ctx) {
     await updatePanel(interaction, await buildModulesPanel(interaction.guildId));
     return true;
   }
+
+  if (id === CustomIds.TicketTypeSelect) {
+    if (!(await requireModuleOnly(interaction, ctx, ModuleKeys.TICKETS))) return true;
+    const typeId = interaction.values[0];
+    const type = await tickets.getTypeById(interaction.guildId, typeId);
+    if (!type || type.enabled === false) return replyPrivate(interaction, { embeds: [createWarningEmbed('Ticket Type Unavailable', 'This ticket type is not currently available.')] });
+    await interaction.showModal(buildTicketModal(type));
+    return true;
+  }
+
+  if (id === CustomIds.ReportSelect) {
+    if (!(await requireModuleOnly(interaction, ctx, ModuleKeys.REPORTS))) return true;
+    await interaction.showModal(buildReportModal());
+    return true;
+  }
+
+  if (id === CustomIds.AppealSelect) {
+    if (!(await requireModuleOnly(interaction, ctx, ModuleKeys.APPEALS))) return true;
+    await interaction.showModal(buildAppealModal());
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.ApplicationSelectPrefix)) {
+    if (!(await requireModuleOnly(interaction, ctx, ModuleKeys.APPLICATIONS))) return true;
+    const typeId = interaction.values[0] || id.slice(CustomIds.ApplicationSelectPrefix.length);
+    const type = await applications.getTypeById(interaction.guildId, typeId);
+    if (!type || !type.enabled) return replyPrivate(interaction, { embeds: [createWarningEmbed('Application Unavailable', 'This application type is not currently available.')] });
+    const result = await applications.startApplicationDm({ interaction, client: ctx.client, logger: ctx.logger, applicationType: type });
+    if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Application Not Started', result.reason)] });
+    await replyPrivate(interaction, { embeds: [createSuccessEmbed('Application Started', `I sent you a DM with the first question. Question count: **${result.questionCount}**.`)] });
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.RolePanelSelectPrefix)) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.RolePanelsUse, ModuleKeys.REACTION_ROLES))) return true;
+    const panelId = id.slice(CustomIds.RolePanelSelectPrefix.length);
+    const optionId = interaction.values[0];
+    const result = await toggleRole({ interaction, panelId, optionId, logger: ctx.logger });
+    if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Role Not Updated', result.reason)] });
+    await replyPrivate(interaction, { embeds: [createSuccessEmbed(result.added ? 'Role Added' : 'Role Removed', `${result.added ? 'Added' : 'Removed'} <@&${result.roleId}>.`)] });
+    return true;
+  }
+
   return false;
 }
 

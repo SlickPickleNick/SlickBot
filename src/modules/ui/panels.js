@@ -16,7 +16,9 @@ const { defaultTeamPermissions } = require('../permissions/actionKeys');
 const { buildWelcomePanel } = require('../community/welcomeService');
 const { buildRoleManagerPanel } = require('../community/rolePanelService');
 const { GiveawayService } = require('../community/giveawayService');
+const { BirthdayService } = require('../community/birthdayService');
 const giveaways = new GiveawayService();
+const birthdays = new BirthdayService();
 
 async function ensureDefaultModules(guildId) {
   for (const moduleConfig of defaultModules) {
@@ -206,6 +208,17 @@ async function getModuleStatus(guildId, row) {
     return { moduleKey: row.module_key, core: false, state: 'NEEDS_CONFIG', emoji: '🟣', label: 'Needs configuration', note: 'Run /giveaway setup' };
   }
 
+  if (row.module_key === 'BIRTHDAYS') {
+    const [cfg, profiles] = await Promise.all([
+      query(`SELECT channel_id, birthday_role_id, enabled FROM birthday_configs WHERE guild_id = $1 LIMIT 1`, [guildId]).catch(() => ({ rows: [] })),
+      query(`SELECT COUNT(*)::int AS count FROM birthday_profiles WHERE guild_id = $1 AND active = true`, [guildId]).catch(() => ({ rows: [{ count: 0 }] }))
+    ]);
+    const configured = Boolean(cfg.rows[0]?.channel_id || cfg.rows[0]?.birthday_role_id);
+    if (configured && cfg.rows[0]?.enabled !== false) return { moduleKey: row.module_key, core: false, state: 'READY', emoji: '🟢', label: 'Fully enabled', note: `${profiles.rows[0]?.count || 0} birthday(s)` };
+    if ((profiles.rows[0]?.count || 0) > 0) return { moduleKey: row.module_key, core: false, state: 'PARTIAL', emoji: '🟠', label: 'Partially enabled', note: `${profiles.rows[0]?.count || 0} birthday(s), setup needed` };
+    return { moduleKey: row.module_key, core: false, state: 'NEEDS_CONFIG', emoji: '🟣', label: 'Needs configuration', note: 'Run /birthday setup' };
+  }
+
   return { moduleKey: row.module_key, core: false, state: 'PARTIAL', emoji: '🟠', label: 'Partially enabled', note: 'Module shell only' };
 }
 
@@ -365,6 +378,7 @@ async function buildCommunityPanel(guildId) {
   const welcomePayload = await buildWelcomePanel(guildId);
   const rolePayload = await buildRoleManagerPanel(guildId);
   const giveawayPayload = await giveaways.buildManagerPanel(guildId);
+  const birthdayPayload = await birthdays.buildManagerPanel(guildId);
   const embed = createBaseEmbed({
     title: 'SlickBot Community Center',
     description: [
@@ -377,7 +391,10 @@ async function buildCommunityPanel(guildId) {
       '**Giveaways**',
       giveawayPayload.embeds[0].data.description || 'No giveaway status available.',
       '',
-      'Use `/welcome manager`, `/roles manager`, or `/giveaway manager` for focused setup controls.'
+      '**Birthdays**',
+      birthdayPayload.embeds[0].data.description || 'No birthday status available.',
+      '',
+      'Use `/welcome manager`, `/roles manager`, `/giveaway manager`, or `/birthday manager` for focused setup controls.'
     ].join('\n'),
     color: SlickBotColors.INFO
   });
@@ -385,6 +402,7 @@ async function buildCommunityPanel(guildId) {
     createPanelButton(CustomIds.WelcomeRefresh, 'Welcome', ButtonStyle.Secondary, '👋'),
     createPanelButton(CustomIds.RolePanelsRefresh, 'Role Panels', ButtonStyle.Secondary, '🎛️'),
     createPanelButton(CustomIds.GiveawaysRefresh, 'Giveaways', ButtonStyle.Secondary, '🎉'),
+    createPanelButton(CustomIds.BirthdaysRefresh, 'Birthdays', ButtonStyle.Secondary, '🎂'),
     createPanelButton(CustomIds.SetupRefresh, 'Back to Setup', ButtonStyle.Primary, '↩️')
   ]);
   return { embeds: [embed], components: [row] };

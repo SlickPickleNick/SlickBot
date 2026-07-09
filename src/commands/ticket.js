@@ -29,6 +29,7 @@ module.exports = {
         .addStringOption((option) => option.setName('panel_title').setDescription('Public ticket panel title.').setRequired(false).setMaxLength(100))
         .addStringOption((option) => option.setName('panel_description').setDescription('Public ticket panel description.').setRequired(false).setMaxLength(800))
         .addStringOption((option) => option.setName('panel_color').setDescription('Panel accent color, example: #7869ff.').setRequired(false).setMaxLength(7))
+        .addStringOption((option) => option.setName('display_mode').setDescription('Public panel component style.').setRequired(false).addChoices({ name: 'Buttons', value: 'BUTTONS' }, { name: 'Dropdown menu', value: 'DROPDOWN' }))
     )
     .addSubcommand((subcommand) =>
       subcommand
@@ -133,7 +134,8 @@ module.exports = {
         closeDeleteSeconds: interaction.options.getInteger('delete_seconds') || null,
         panelTitle: interaction.options.getString('panel_title') || null,
         panelDescription: interaction.options.getString('panel_description') || null,
-        panelColor: interaction.options.getString('panel_color') || null
+        panelColor: interaction.options.getString('panel_color') || null,
+        panelDisplayMode: interaction.options.getString('display_mode') || null
       });
       await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'setup', title: 'Ticket Settings Updated', body: `Ticket settings updated by ${interaction.user.tag}.`, actorUserId: interaction.user.id }).catch(() => {});
       const refresh = await refreshPublishedPanel(ctx.client, interaction.guildId, 'ticket', '*').catch(() => null);
@@ -153,10 +155,6 @@ module.exports = {
         ticketLimit: interaction.options.getInteger('ticket_limit') || null,
         transcriptEnabled: interaction.options.getBoolean('transcripts'),
         namingFormat: interaction.options.getString('naming_format') || null,
-        closeDeleteSeconds: interaction.options.getInteger('delete_seconds') || null,
-        panelTitle: interaction.options.getString('panel_title') || null,
-        panelDescription: interaction.options.getString('panel_description') || null,
-        panelColor: interaction.options.getString('panel_color') || null,
         description: interaction.options.getString('description') || null
       });
       const refresh = await refreshPublishedPanel(ctx.client, interaction.guildId, 'ticket', '*').catch(() => null);

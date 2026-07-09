@@ -1,4 +1,4 @@
-const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder } = require('discord.js');
 const { query } = require('../../services/db');
 const { createBaseEmbed, SlickBotColors } = require('../ui/uiService');
 const { updatePublishedPanels } = require('../panels/publishedPanelService');
@@ -47,19 +47,21 @@ function emojiFromHex(color) {
 }
 
 
-async function createPanel({ guildId, name, title, description, color, mode = 'MULTI' }) {
+async function createPanel({ guildId, name, title, description, color, mode = 'MULTI', displayMode = 'BUTTONS' }) {
+  const normalizedDisplayMode = String(displayMode || 'BUTTONS').toUpperCase() === 'DROPDOWN' ? 'DROPDOWN' : 'BUTTONS';
   const result = await query(
-    `INSERT INTO role_panels (guild_id, name, title, description, accent_color, mode)
-     VALUES ($1, $2, $3, $4, $5, $6)
+    `INSERT INTO role_panels (guild_id, name, title, description, accent_color, mode, panel_display_mode)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
      ON CONFLICT (guild_id, name)
      DO UPDATE SET title = EXCLUDED.title,
                    description = EXCLUDED.description,
                    accent_color = EXCLUDED.accent_color,
                    mode = EXCLUDED.mode,
+                   panel_display_mode = EXCLUDED.panel_display_mode,
                    active = true,
                    updated_at = NOW()
      RETURNING *`,
-    [guildId, name, title || name, description || 'Select a button below to toggle a role.', normalizeHexColor(color), mode]
+    [guildId, name, title || name, description || 'Select an option below to toggle a role.', normalizeHexColor(color), mode, normalizedDisplayMode]
   );
   return result.rows[0];
 }
@@ -174,14 +176,38 @@ async function getPanelOptions(panelId) {
   return result.rows;
 }
 
-async function buildRolePanelMessage(panel) {
-  const options = await getPanelOptions(panel.id);
-  const embed = createBaseEmbed({
-    title: panel.title || panel.name,
-    description: panel.description || 'Select a button below to toggle a role.',
-    color: parseColor(panel.accent_color) || SlickBotColors.PRIMARY,
-    footer: `SlickBot Role Panel · ${panel.mode === 'SINGLE' ? 'Single role' : 'Multi role'}`
-  });
+
+async function setPanelDisplayMode({ guildId, panelName, displayMode }) {
+  const normalizedDisplayMode = String(displayMode || 'BUTTONS').toUpperCase() === 'DROPDOWN' ? 'DROPDOWN' : 'BUTTONS';
+  const result = await query(
+    `UPDATE role_panels
+     SET panel_display_mode = $3, updated_at = NOW()
+     WHERE guild_id = $1 AND name = $2 AND active = true
+     RETURNING *`,
+    [guildId, panelName, normalizedDisplayMode]
+  );
+  return result.rows[0] || null;
+}
+
+async function buildRolePanelComponents(panel, options) {
+  const displayMode = String(panel.panel_display_mode || 'BUTTONS').toUpperCase();
+  if (displayMode === 'DROPDOWN') {
+    const selectOptions = options.slice(0, 25).map((option, index) => ({
+      label: (option.label && option.label.trim()) || `Role ${index + 1}`,
+      value: option.id,
+      description: option.description || `Toggle ${option.role_id}`,
+      emoji: option.emoji || emojiFromHex(option.button_color || '#5865f2')
+    }));
+    if (!selectOptions.length) return [];
+    return [new ActionRowBuilder().addComponents(
+      new StringSelectMenuBuilder()
+        .setCustomId(`slickbot:rolepanel-select:${panel.id}`)
+        .setPlaceholder(panel.mode === 'SINGLE' ? 'Choose one role...' : 'Choose a role to toggle...')
+        .setMinValues(1)
+        .setMaxValues(1)
+        .addOptions(selectOptions)
+    )];
+  }
 
   const rows = [];
   for (let i = 0; i < options.length; i += 5) {
@@ -197,6 +223,19 @@ async function buildRolePanelMessage(panel) {
     });
     rows.push(row);
   }
+  return rows;
+}
+
+async function buildRolePanelMessage(panel) {
+  const options = await getPanelOptions(panel.id);
+  const embed = createBaseEmbed({
+    title: panel.title || panel.name,
+    description: panel.description || 'Select a button below to toggle a role.',
+    color: parseColor(panel.accent_color) || SlickBotColors.PRIMARY,
+    footer: `SlickBot Role Panel · ${panel.mode === 'SINGLE' ? 'Single role' : 'Multi role'}`
+  });
+
+  const rows = await buildRolePanelComponents(panel, options);
 
   return { embeds: [embed], components: rows };
 }
@@ -251,7 +290,7 @@ async function updatePublishedRolePanelMessages(client, guildId, panel) {
 async function buildRoleManagerPanel(guildId) {
   const panels = await listPanels(guildId);
   const lines = panels.length
-    ? panels.map((panel) => `• **${panel.name}** — ${panel.option_count} option(s), ${panel.mode}`).join('\n')
+    ? panels.map((panel) => `• **${panel.name}** — ${panel.option_count} option(s), ${panel.mode}, ${panel.panel_display_mode || 'BUTTONS'}`).join('\n')
     : 'No role panels configured.';
   const embed = createBaseEmbed({
     title: 'SlickBot Role Panel Center',
@@ -275,6 +314,7 @@ module.exports = {
   parseBulkEntries,
   removeOption,
   removeAllOptions,
+  setPanelDisplayMode,
   buildRolePanelMessage,
   toggleRole,
   buildRoleManagerPanel,

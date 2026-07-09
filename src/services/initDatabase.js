@@ -400,19 +400,23 @@ async function initDatabase() {
   await query(`ALTER TABLE ticket_configs ADD COLUMN IF NOT EXISTS panel_description TEXT;`).catch(() => {});
   await query(`ALTER TABLE ticket_configs ADD COLUMN IF NOT EXISTS panel_color TEXT;`).catch(() => {});
   await query(`ALTER TABLE ticket_configs ADD COLUMN IF NOT EXISTS close_delete_seconds INTEGER NOT NULL DEFAULT 10;`).catch(() => {});
+  await query(`ALTER TABLE ticket_configs ADD COLUMN IF NOT EXISTS panel_display_mode TEXT NOT NULL DEFAULT 'BUTTONS';`).catch(() => {});
 
   await query(`ALTER TABLE report_configs ADD COLUMN IF NOT EXISTS panel_title TEXT;`).catch(() => {});
   await query(`ALTER TABLE report_configs ADD COLUMN IF NOT EXISTS panel_description TEXT;`).catch(() => {});
   await query(`ALTER TABLE report_configs ADD COLUMN IF NOT EXISTS panel_color TEXT;`).catch(() => {});
+  await query(`ALTER TABLE report_configs ADD COLUMN IF NOT EXISTS panel_display_mode TEXT NOT NULL DEFAULT 'BUTTONS';`).catch(() => {});
 
   await query(`ALTER TABLE application_types ADD COLUMN IF NOT EXISTS submission_confirmation_message TEXT;`).catch(() => {});
   await query(`ALTER TABLE application_types ADD COLUMN IF NOT EXISTS panel_title TEXT;`).catch(() => {});
   await query(`ALTER TABLE application_types ADD COLUMN IF NOT EXISTS panel_description TEXT;`).catch(() => {});
   await query(`ALTER TABLE application_types ADD COLUMN IF NOT EXISTS panel_color TEXT;`).catch(() => {});
+  await query(`ALTER TABLE application_types ADD COLUMN IF NOT EXISTS panel_display_mode TEXT NOT NULL DEFAULT 'BUTTONS';`).catch(() => {});
 
   await query(`ALTER TABLE appeal_configs ADD COLUMN IF NOT EXISTS panel_title TEXT;`).catch(() => {});
   await query(`ALTER TABLE appeal_configs ADD COLUMN IF NOT EXISTS panel_description TEXT;`).catch(() => {});
   await query(`ALTER TABLE appeal_configs ADD COLUMN IF NOT EXISTS panel_color TEXT;`).catch(() => {});
+  await query(`ALTER TABLE appeal_configs ADD COLUMN IF NOT EXISTS panel_display_mode TEXT NOT NULL DEFAULT 'BUTTONS';`).catch(() => {});
   await query(`ALTER TABLE appeal_configs ADD COLUMN IF NOT EXISTS dm_include_submission BOOLEAN NOT NULL DEFAULT false;`).catch(() => {});
 
 
@@ -456,6 +460,7 @@ async function initDatabase() {
       description TEXT,
       accent_color TEXT NOT NULL DEFAULT '#7869ff',
       mode TEXT NOT NULL DEFAULT 'MULTI',
+      panel_display_mode TEXT NOT NULL DEFAULT 'BUTTONS',
       active BOOLEAN NOT NULL DEFAULT true,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -481,6 +486,7 @@ async function initDatabase() {
   `);
 
 
+  await query(`ALTER TABLE role_panels ADD COLUMN IF NOT EXISTS panel_display_mode TEXT NOT NULL DEFAULT 'BUTTONS';`).catch(() => {});
   await query(`ALTER TABLE role_panel_options ALTER COLUMN label DROP NOT NULL;`).catch(() => {});
 
   await query(`
@@ -547,6 +553,52 @@ async function initDatabase() {
 
   await query(`CREATE INDEX IF NOT EXISTS idx_giveaways_due ON giveaways(status, ends_at);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_giveaway_entries_lookup ON giveaway_entries(giveaway_id);`);
+
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS birthday_configs (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT UNIQUE NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      channel_id TEXT,
+      birthday_role_id TEXT,
+      announcement_template TEXT NOT NULL DEFAULT 'Happy birthday, {user}! 🎉',
+      timezone TEXT NOT NULL DEFAULT 'America/New_York',
+      enabled BOOLEAN NOT NULL DEFAULT true,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS birthday_profiles (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL,
+      user_tag TEXT,
+      birth_month INTEGER NOT NULL,
+      birth_day INTEGER NOT NULL,
+      timezone TEXT,
+      active BOOLEAN NOT NULL DEFAULT true,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(guild_id, user_id)
+    );
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS birthday_active_grants (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL,
+      local_date TEXT NOT NULL,
+      role_id TEXT,
+      announced BOOLEAN NOT NULL DEFAULT false,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(guild_id, user_id, local_date)
+    );
+  `);
+
+  await query(`CREATE INDEX IF NOT EXISTS idx_birthday_profiles_lookup ON birthday_profiles(guild_id, active);`);
 
 
   await query(`

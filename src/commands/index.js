@@ -17,6 +17,7 @@ const welcomeCommand = require('./welcome');
 const rolesCommand = require('./roles');
 const panelCommand = require('./panel');
 const giveawayCommand = require('./giveaway');
+const birthdayCommand = require('./birthday');
 
 const commands = [
   pingCommand,
@@ -37,7 +38,8 @@ const commands = [
   welcomeCommand,
   rolesCommand,
   panelCommand,
-  giveawayCommand
+  giveawayCommand,
+  birthdayCommand
 ];
 
 const commandMap = new Map(commands.map((command) => [command.data.name, command]));

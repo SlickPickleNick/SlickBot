@@ -13,6 +13,7 @@ const { ModerationService } = require('./modules/moderation/moderationService');
 const { ApplicationService } = require('./modules/support/supportService');
 const { handleMemberJoin: handleWelcomeMemberJoin } = require('./modules/community/welcomeService');
 const { GiveawayService } = require('./modules/community/giveawayService');
+const { BirthdayService } = require('./modules/community/birthdayService');
 const { handleComponentInteraction } = require('./services/interactionRouter');
 
 const client = new Client({
@@ -36,6 +37,7 @@ const status = new StatusService(client);
 const moderation = new ModerationService();
 const applications = new ApplicationService();
 const giveaways = new GiveawayService();
+const birthdays = new BirthdayService();
 const healthServer = startHealthServer(client);
 
 client.once(Events.ClientReady, async (readyClient) => {
@@ -57,6 +59,11 @@ client.once(Events.ClientReady, async (readyClient) => {
     giveaways.processDueGiveaways(readyClient, logger).catch((error) => console.error('Failed to process due giveaways:', error));
   }, 60 * 1000);
   await giveaways.processDueGiveaways(readyClient, logger).catch((error) => console.error('Failed to process due giveaways:', error));
+
+  setInterval(() => {
+    birthdays.processBirthdays(readyClient, logger).catch((error) => console.error('Failed to process birthdays:', error));
+  }, 60 * 60 * 1000);
+  await birthdays.processBirthdays(readyClient, logger).catch((error) => console.error('Failed to process birthdays:', error));
 });
 
 client.on(Events.GuildCreate, async (guild) => {
