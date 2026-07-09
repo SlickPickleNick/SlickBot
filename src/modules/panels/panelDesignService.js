@@ -67,6 +67,22 @@ async function updatePanelDesign({ guildId, target, name = null, title = null, d
     return { ok: true, target: 'Appeal Panel', panelType: 'appeal', panelRef: '*', row: result.rows[0] };
   }
 
+
+  if (key === 'birthday' || key === 'birthdays') {
+    const result = await query(
+      `INSERT INTO birthday_configs (guild_id, panel_title, panel_description, panel_color)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (guild_id) DO UPDATE SET
+         panel_title = COALESCE(EXCLUDED.panel_title, birthday_configs.panel_title),
+         panel_description = COALESCE(EXCLUDED.panel_description, birthday_configs.panel_description),
+         panel_color = COALESCE(EXCLUDED.panel_color, birthday_configs.panel_color),
+         updated_at = NOW()
+       RETURNING panel_title, panel_description, panel_color`,
+      [guildId, panelTitle, panelDescription, panelColor]
+    );
+    return { ok: true, target: 'Birthday Panel', panelType: 'birthday', panelRef: '*', row: result.rows[0] };
+  }
+
   if (key === 'application' || key === 'applications') {
     if (!name) return { ok: false, reason: 'Application panel editing requires the application type name.' };
     const result = await query(
@@ -101,7 +117,7 @@ async function updatePanelDesign({ guildId, target, name = null, title = null, d
     return { ok: true, target: `Role Panel: ${result.rows[0].name}`, panelType: 'role', panelRef: result.rows[0].id, row: result.rows[0] };
   }
 
-  return { ok: false, reason: 'Unknown panel target. Use ticket, report, application, appeal, or role.' };
+  return { ok: false, reason: 'Unknown panel target. Use ticket, report, birthday, application, appeal, or role.' };
 }
 
 module.exports = { updatePanelDesign, normalizeHexColor };

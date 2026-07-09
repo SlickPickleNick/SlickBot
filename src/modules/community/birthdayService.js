@@ -1,7 +1,41 @@
+const {
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  StringSelectMenuBuilder
+} = require('discord.js');
 const { query } = require('../../services/db');
+const { CustomIds } = require('../ui/customIds');
 const { createBaseEmbed, createSuccessEmbed, createWarningEmbed, SlickBotColors } = require('../ui/uiService');
 
 const MONTH_NAMES = [null, 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const BIRTHDAY_SESSIONS = new Map();
+
+const TIMEZONE_CHOICES = Object.freeze([
+  { name: 'Eastern Time (ET / EST / EDT) — America/New_York', value: 'America/New_York', aliases: ['est', 'edt', 'et', 'eastern'] },
+  { name: 'Central Time (CT / CST / CDT) — America/Chicago', value: 'America/Chicago', aliases: ['cst', 'cdt', 'ct', 'central'] },
+  { name: 'Mountain Time (MT / MST / MDT) — America/Denver', value: 'America/Denver', aliases: ['mst', 'mdt', 'mt', 'mountain'] },
+  { name: 'Pacific Time (PT / PST / PDT) — America/Los_Angeles', value: 'America/Los_Angeles', aliases: ['pst', 'pdt', 'pt', 'pacific'] },
+  { name: 'Arizona Time (MST) — America/Phoenix', value: 'America/Phoenix', aliases: ['arizona', 'phoenix'] },
+  { name: 'Alaska Time (AKT / AKST / AKDT) — America/Anchorage', value: 'America/Anchorage', aliases: ['alaska', 'akst', 'akdt'] },
+  { name: 'Hawaii Time (HST) — Pacific/Honolulu', value: 'Pacific/Honolulu', aliases: ['hawaii', 'hst'] },
+  { name: 'Atlantic Time (AT / AST / ADT) — America/Halifax', value: 'America/Halifax', aliases: ['atlantic', 'ast', 'adt'] },
+  { name: 'UTC — Etc/UTC', value: 'Etc/UTC', aliases: ['utc', 'gmt'] },
+  { name: 'United Kingdom (GMT / BST) — Europe/London', value: 'Europe/London', aliases: ['uk', 'london', 'bst', 'gmt'] },
+  { name: 'Central Europe (CET / CEST) — Europe/Berlin', value: 'Europe/Berlin', aliases: ['cet', 'cest', 'berlin', 'europe'] },
+  { name: 'India (IST) — Asia/Kolkata', value: 'Asia/Kolkata', aliases: ['india', 'ist', 'kolkata'] },
+  { name: 'Japan (JST) — Asia/Tokyo', value: 'Asia/Tokyo', aliases: ['japan', 'jst', 'tokyo'] },
+  { name: 'Australia Eastern — Australia/Sydney', value: 'Australia/Sydney', aliases: ['australia', 'aest', 'aedt', 'sydney'] }
+]);
+
+function timezoneChoicesForAutocomplete(queryText = '') {
+  const q = String(queryText || '').trim().toLowerCase();
+  const matched = TIMEZONE_CHOICES.filter((item) => {
+    if (!q) return true;
+    return item.name.toLowerCase().includes(q) || item.value.toLowerCase().includes(q) || item.aliases.some((alias) => alias.includes(q));
+  });
+  return matched.slice(0, 25).map((item) => ({ name: item.name.slice(0, 100), value: item.value }));
+}
 
 function isValidDate(month, day) {
   const m = Number(month);
@@ -13,7 +47,7 @@ function isValidDate(month, day) {
 }
 
 function safeTimezone(timezone, fallback = 'America/New_York') {
-  const value = String(timezone || fallback).trim();
+  const value = String(timezone || fallback).trim().replace('America/NewYork', 'America/New_York');
   try {
     new Intl.DateTimeFormat('en-US', { timeZone: value }).format(new Date());
     return value;
@@ -48,6 +82,92 @@ function renderTemplate(template, { user, username, server, date }) {
     .replaceAll('{username}', username)
     .replaceAll('{server}', server)
     .replaceAll('{date}', date);
+}
+
+function parseHexColor(color, fallback = SlickBotColors.PRIMARY) {
+  const value = String(color || '').trim();
+  if (/^#[0-9a-fA-F]{6}$/.test(value)) return Number.parseInt(value.slice(1), 16);
+  return fallback;
+}
+
+function makeSessionId() {
+  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function cleanupSessions() {
+  const now = Date.now();
+  for (const [id, session] of BIRTHDAY_SESSIONS) {
+    if (now - session.createdAt > 15 * 60 * 1000) BIRTHDAY_SESSIONS.delete(id);
+  }
+}
+
+function createSession({ guildId, userId, defaultTimezone = 'America/New_York' }) {
+  cleanupSessions();
+  const id = makeSessionId();
+  const session = { id, guildId, userId, month: null, day: null, timezone: safeTimezone(defaultTimezone), createdAt: Date.now() };
+  BIRTHDAY_SESSIONS.set(id, session);
+  return session;
+}
+
+function getSession(sessionId, userId = null) {
+  cleanupSessions();
+  const session = BIRTHDAY_SESSIONS.get(sessionId);
+  if (!session) return null;
+  if (userId && session.userId !== userId) return null;
+  return session;
+}
+
+function buildBirthdaySetupPayload(session) {
+  const monthOptions = MONTH_NAMES.slice(1).map((name, index) => ({ label: name, value: String(index + 1) }));
+  const dayOptionsA = Array.from({ length: 25 }, (_, index) => ({ label: String(index + 1), value: String(index + 1) }));
+  const dayOptionsB = Array.from({ length: 6 }, (_, index) => ({ label: String(index + 26), value: String(index + 26) }));
+  const timezoneOptions = TIMEZONE_CHOICES.slice(0, 25).map((item) => ({ label: item.value, value: item.value, description: item.name.replace(` — ${item.value}`, '').slice(0, 100) }));
+
+  const embed = createBaseEmbed({
+    title: 'Set Your Birthday',
+    description: [
+      'Use the dropdowns below to save your birthday.',
+      '',
+      `Month: **${session.month ? MONTH_NAMES[session.month] : 'Not selected'}**`,
+      `Day: **${session.day || 'Not selected'}**`,
+      `Timezone: **${session.timezone || 'Not selected'}**`,
+      '',
+      '**Common timezone references**',
+      'ET / EST / EDT → `America/New_York`',
+      'CT / CST / CDT → `America/Chicago`',
+      'MT / MST / MDT → `America/Denver`',
+      'PT / PST / PDT → `America/Los_Angeles`'
+    ].join('\n'),
+    color: session.month && session.day && session.timezone ? SlickBotColors.SUCCESS : SlickBotColors.PRIMARY,
+    footer: 'SlickBot Birthdays'
+  });
+
+  return {
+    embeds: [embed],
+    components: [
+      new ActionRowBuilder().addComponents(new StringSelectMenuBuilder().setCustomId(`${CustomIds.BirthdayMonthPrefix}${session.id}`).setPlaceholder('Select birthday month').setMinValues(1).setMaxValues(1).addOptions(monthOptions)),
+      new ActionRowBuilder().addComponents(new StringSelectMenuBuilder().setCustomId(`${CustomIds.BirthdayDayPrefix}${session.id}:a`).setPlaceholder('Select birthday day: 1–25').setMinValues(1).setMaxValues(1).addOptions(dayOptionsA)),
+      new ActionRowBuilder().addComponents(new StringSelectMenuBuilder().setCustomId(`${CustomIds.BirthdayDayPrefix}${session.id}:b`).setPlaceholder('Select birthday day: 26–31').setMinValues(1).setMaxValues(1).addOptions(dayOptionsB)),
+      new ActionRowBuilder().addComponents(new StringSelectMenuBuilder().setCustomId(`${CustomIds.BirthdayTimezonePrefix}${session.id}`).setPlaceholder('Select timezone').setMinValues(1).setMaxValues(1).addOptions(timezoneOptions)),
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`${CustomIds.BirthdaySavePrefix}${session.id}`).setLabel('Save Birthday').setStyle(ButtonStyle.Success).setDisabled(!(session.month && session.day && session.timezone)),
+        new ButtonBuilder().setCustomId(`${CustomIds.BirthdayCancelPrefix}${session.id}`).setLabel('Cancel').setStyle(ButtonStyle.Secondary)
+      )
+    ]
+  };
+}
+
+function buildBirthdayPublicPanel(config) {
+  const embed = createBaseEmbed({
+    title: config?.panel_title || 'Set Your Birthday',
+    description: config?.panel_description || 'Save your birthday so the server can celebrate with you.',
+    color: parseHexColor(config?.panel_color, SlickBotColors.PRIMARY),
+    footer: 'SlickBot Birthdays'
+  });
+  return {
+    embeds: [embed],
+    components: [new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(CustomIds.BirthdaySetOpen).setLabel('Set Birthday').setStyle(ButtonStyle.Primary))]
+  };
 }
 
 class BirthdayService {
@@ -87,6 +207,29 @@ class BirthdayService {
     return result.rows[0];
   }
 
+  createSetupSession({ guildId, userId, defaultTimezone }) {
+    return createSession({ guildId, userId, defaultTimezone });
+  }
+
+  getSetupSession(sessionId, userId = null) {
+    return getSession(sessionId, userId);
+  }
+
+  buildSetupSessionPayload(session) {
+    return buildBirthdaySetupPayload(session);
+  }
+
+  updateSetupSession(session, patch) {
+    Object.assign(session, patch);
+    session.updatedAt = Date.now();
+    BIRTHDAY_SESSIONS.set(session.id, session);
+    return session;
+  }
+
+  cancelSetupSession(sessionId) {
+    return BIRTHDAY_SESSIONS.delete(sessionId);
+  }
+
   async setBirthday({ guildId, user, month, day, timezone }) {
     if (!isValidDate(month, day)) return { ok: false, reason: 'Enter a valid month and day.' };
     const tz = timezone ? safeTimezone(timezone) : null;
@@ -119,7 +262,14 @@ class BirthdayService {
     return result.rows[0] || null;
   }
 
-  async listBirthdays(guildId, limit = 20) {
+  async listBirthdays(guildId, limit = 100, month = null) {
+    if (month && month !== 'ALL') {
+      const result = await query(
+        `SELECT * FROM birthday_profiles WHERE guild_id = $1 AND active = true AND birth_month = $2 ORDER BY birth_day ASC, user_tag ASC LIMIT $3`,
+        [guildId, Number(month), limit]
+      );
+      return result.rows;
+    }
     const result = await query(
       `SELECT * FROM birthday_profiles WHERE guild_id = $1 AND active = true ORDER BY birth_month ASC, birth_day ASC, user_tag ASC LIMIT $2`,
       [guildId, limit]
@@ -148,12 +298,68 @@ class BirthdayService {
         '**Upcoming / Saved Birthdays**',
         lines,
         '',
-        'Users can run `/birthday set` to save their birthday. SlickBot checks birthdays hourly and removes birthday roles after the birthday has passed in the user/configured timezone.'
+        'Users can run `/birthday set` or use a birthday panel to save their birthday.'
       ].join('\n'),
       color: config.channel_id || config.birthday_role_id ? SlickBotColors.SUCCESS : SlickBotColors.WARNING
     });
 
     return { embeds: [embed] };
+  }
+
+  async buildListPanel(guildId, selected = 'ALL') {
+    const month = selected === 'ALL' ? null : Number(selected);
+    const profiles = await this.listBirthdays(guildId, 100, month);
+    const monthLabel = selected === 'ALL' ? 'Full Year' : MONTH_NAMES[Number(selected)];
+    const lines = profiles.length
+      ? profiles.map((profile) => `• <@${profile.user_id}> — **${formatBirthday(profile.birth_month, profile.birth_day)}**${profile.timezone ? ` · ${profile.timezone}` : ''}`).join('\n')
+      : `No birthdays saved for **${monthLabel}**.`;
+
+    const options = [
+      { label: 'Full Year', value: 'ALL', description: 'Show all saved birthdays' },
+      ...MONTH_NAMES.slice(1).map((name, index) => ({ label: name, value: String(index + 1), description: `Show ${name} birthdays` }))
+    ];
+
+    return {
+      embeds: [createBaseEmbed({
+        title: `Saved Birthdays — ${monthLabel}`,
+        description: [
+          lines,
+          profiles.length >= 100 ? '' : null,
+          profiles.length >= 100 ? 'Only the first 100 saved birthdays are shown.' : null
+        ].filter(Boolean).join('\n'),
+        color: profiles.length ? SlickBotColors.SUCCESS : SlickBotColors.INFO,
+        footer: 'Use the dropdown below to switch views.'
+      })],
+      components: [new ActionRowBuilder().addComponents(
+        new StringSelectMenuBuilder()
+          .setCustomId(CustomIds.BirthdayListSelect)
+          .setPlaceholder('Choose full year or a month')
+          .setMinValues(1)
+          .setMaxValues(1)
+          .addOptions(options)
+      )]
+    };
+  }
+
+  async buildPublicPanel(guildId) {
+    const config = await this.getConfig(guildId);
+    return buildBirthdayPublicPanel(config);
+  }
+
+  async sendTestBirthday({ guild, channel, user, logger, actorUserId }) {
+    const config = await this.getConfig(guild.id);
+    const targetChannel = channel || (config.channel_id ? await guild.channels.fetch(config.channel_id).catch(() => null) : null);
+    if (!targetChannel || typeof targetChannel.send !== 'function') return { ok: false, reason: 'No valid birthday announcement channel is configured or selected.' };
+    const profile = await this.getBirthday(guild.id, user.id);
+    const date = profile ? formatBirthday(profile.birth_month, profile.birth_day) : 'Test Birthday';
+    await targetChannel.send(renderTemplate(config.announcement_template, {
+      user: `<@${user.id}>`,
+      username: user.tag || user.username || user.id,
+      server: guild.name,
+      date
+    }));
+    await logger?.log({ guildId: guild.id, eventKey: 'birthday-config', title: 'Birthday Test Sent', body: `Test User: <@${user.id}>\nChannel: <#${targetChannel.id}>`, actorUserId }).catch(() => {});
+    return { ok: true, channel: targetChannel };
   }
 
   async processBirthdays(client, logger) {
@@ -243,5 +449,8 @@ module.exports = {
   birthdaySavedEmbed,
   birthdayNotFoundEmbed,
   formatBirthday,
-  safeTimezone
+  safeTimezone,
+  timezoneChoicesForAutocomplete,
+  TIMEZONE_CHOICES,
+  MONTH_NAMES
 };

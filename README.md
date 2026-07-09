@@ -1,188 +1,84 @@
 # SlickBot
 
-SlickBot is an all-in-one Discord server management bot for the SlickPickleNick community.
+SlickBot is an all-in-one Discord server management bot built for the SlickPickleNick server. It uses a TitanBot-style JavaScript foundation with Discord.js, PostgreSQL, Railway deployment support, modular command permissions, polished embeds, interactive setup panels, support workflows, community systems, giveaways, and birthdays.
 
 ## Version
 
-`0.5.1`
+Current package: **v0.5.2**
 
-## Included Systems
+## v0.5.2 Updates
 
-- Core setup panel
-- Permission Teams and permission levels
-- Ignored users
-- Module manager
-- Module-based logging
-- Bot status/activity controls
-- Moderation, cases, and user notes
-- Tickets, reports, applications, and appeals
-- Welcome messages and auto roles
-- Reaction/button role panels
-- Guided panel builders
-- Live-updating posted panels
-- Giveaways
-- Birthdays
+### Birthday UX Improvements
 
-## New in v0.5.1
+- Added timezone autocomplete/suggestions to birthday setup and user birthday commands.
+- Added common timezone labels such as:
+  - `America/New_York` — Eastern Time, ET / EST / EDT
+  - `America/Chicago` — Central Time, CT / CST / CDT
+  - `America/Denver` — Mountain Time, MT / MST / MDT
+  - `America/Los_Angeles` — Pacific Time, PT / PST / PDT
+- Added `/birthday panel` to post a public birthday setup panel.
+- Birthday panels open an interactive private setup flow with dropdowns for:
+  - Month
+  - Day 1–25
+  - Day 26–31
+  - Timezone
+- Added `/birthday test` to send a test birthday announcement without changing roles.
+- Updated `/birthday list` to use an interactive dropdown for:
+  - Full Year
+  - Individual months
 
-### Panel display modes
+### Panel Editing Improvements
 
-Public panels can now be displayed as either:
+- Added `/panel edit` to edit one field at a time without wiping other panel content.
+- Supported fields:
+  - Title
+  - Description
+  - Accent Color
+  - Display Mode
+- `/roles panel-wizard` now preserves existing panel content when you type `skip`, instead of resetting existing title/description/mode values.
+- Birthday panels are now supported in the panel designer.
 
-```text
-BUTTONS
-DROPDOWN
-```
+### Reaction Role Cleanup
 
-Buttons remain the default.
+- SlickBot no longer auto-adds emojis to role buttons/dropdowns unless they are explicitly configured.
+- Blank-label color-role buttons are supported using an invisible label fallback when no emoji is provided.
+- Dropdown role panels still require visible option labels due to Discord dropdown requirements, so blank labels are displayed as fallback role option labels.
 
-Supported panels:
+### Giveaway Live Entry Counts
 
-- Ticket panels
-- Report panels
-- Application panels
-- Appeal panels
-- Reaction/button role panels
+- Giveaway panels now live-update the entry count when a user enters the giveaway.
 
-Configuration examples:
+### User Action Response Cleanup
 
-```text
-/ticket setup display_mode:DROPDOWN
-/report setup display_mode:DROPDOWN
-/application setup type:Moderator display_mode:DROPDOWN
-/appeal setup display_mode:DROPDOWN
-/roles display-mode panel:Color Roles display_mode:DROPDOWN
-```
+- Basic user interactions, such as reaction-role toggles, giveaway entries, and simple birthday actions, now attempt to auto-dismiss private confirmation messages after a short delay.
+- Configuration menus and setup flows remain persistent so admins can continue working through setup steps.
 
-Guided setup through `/panel setup` and `/roles panel-wizard` now asks whether the panel should use buttons or a dropdown menu.
-
-### Reaction role dropdowns
-
-Reaction role panels can now be posted as dropdown/select menus instead of buttons.
-
-Notes:
-
-- Buttons are still the default.
-- Dropdown mode supports up to 25 role options on one panel.
-- Dropdown role selection toggles one selected role at a time.
-- Discord dropdown options require a text label, so emoji-only color role panels are best used in button mode.
-
-### Birthdays
-
-Added:
+## Required Railway Variables
 
 ```text
-/birthday manager
-/birthday setup
-/birthday set
-/birthday view
-/birthday remove
-/birthday list
-```
-
-Features:
-
-- User birthday tracking
-- Optional birthday announcement channel
-- Optional birthday role
-- Timezone support
-- Hourly birthday processing
-- Birthday role is removed after the birthday has passed
-- Announcement template placeholders:
-  - `{user}`
-  - `{username}`
-  - `{server}`
-  - `{date}`
-
-Example setup:
-
-```text
-/birthday setup channel:#birthdays birthday_role:@Birthday message:Happy birthday, {user}! 🎉 timezone:America/New_York enabled:true
-```
-
-User setup:
-
-```text
-/birthday set month:7 day:9 timezone:America/New_York
-```
-
-### Live-updating panels
-
-Tracked panels still live-update after configuration changes.
-
-Tracked panel types:
-
-- Ticket panels
-- Report panels
-- Application panels
-- Appeal panels
-- Reaction/button role panels
-
-Panels posted before v0.5.0 were not tracked. Repost each panel once if needed, then future edits should update the existing posted panel.
-
-## Railway Variables
-
-Required:
-
-```text
-DISCORD_TOKEN
-DISCORD_CLIENT_ID
-DISCORD_GUILD_ID
-DATABASE_URL
-```
-
-Recommended:
-
-```text
+DISCORD_TOKEN=
+DISCORD_CLIENT_ID=
+DISCORD_GUILD_ID=
+DATABASE_URL=
 AUTO_DEPLOY_COMMANDS=true
-BOT_OWNER_IDS=<your Discord user ID>
+BOT_OWNER_IDS=
 DEFAULT_TIMEZONE=America/New_York
 LOG_BATCH_FLUSH_SECONDS=300
 NODE_ENV=production
 ```
 
-Aliases also supported:
-
-```text
-CLIENT_ID
-GUILD_ID
-OWNER_IDS
-POSTGRES_URL
-```
-
-## Deployment
-
-This package is Railway/Docker ready.
-
-The repo root should directly contain:
-
-```text
-package.json
-Dockerfile
-railway.json
-src/
-README.md
-.env.example
-```
-
-Do not upload the files inside an extra nested folder.
-
-## After deploying v0.5.1
-
-Run:
+## Useful post-deploy commands
 
 ```text
 /permissions apply-defaults
 /modules panel
-/birthday setup channel:#birthdays birthday_role:@Birthday
-```
-
-Optional log setup:
-
-```text
-/logging set-channel module:birthdays channel:#birthday-logs
+/birthday setup
+/birthday panel channel:#birthdays
+/birthday test
 ```
 
 ## Notes
 
-Discord buttons do not support arbitrary hex colors. SlickBot stores requested hex colors for reaction-role buttons and maps them to the closest supported native Discord button style.
+- Discord buttons do not support arbitrary hex colors. SlickBot stores the requested hex value for reaction-role options and maps it to the closest native Discord button style.
+- Discord dropdown options require visible labels. For blank-label color roles, button mode is still the best display mode.
+- Posted panels are live-updated only after they have been posted or reposted with a SlickBot version that tracks panel messages.

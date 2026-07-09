@@ -57,8 +57,8 @@ module.exports = {
         .setDescription('Add a role option to a panel.')
         .addStringOption((option) => option.setName('panel').setDescription('Panel name.').setRequired(true))
         .addRoleOption((option) => option.setName('role').setDescription('Role to toggle.').setRequired(true))
-        .addStringOption((option) => option.setName('label').setDescription('Optional button label. Leave blank for emoji-only buttons.').setRequired(false).setMaxLength(80))
-        .addStringOption((option) => option.setName('emoji').setDescription('Optional button emoji. Required if you want no text and no auto color emoji.').setRequired(false))
+        .addStringOption((option) => option.setName('label').setDescription('Optional button label. Can be blank for color-role buttons.').setRequired(false).setMaxLength(80))
+        .addStringOption((option) => option.setName('emoji').setDescription('Optional button emoji. SlickBot will not add one unless specified.').setRequired(false))
         .addStringOption((option) => option.setName('description').setDescription('Optional internal description.').setRequired(false).setMaxLength(200))
         .addStringOption((option) => option.setName('button_color').setDescription('Requested button color hex, mapped to nearest Discord style.').setRequired(false).setMaxLength(7))
     )
@@ -67,7 +67,7 @@ module.exports = {
         .setName('bulk-add')
         .setDescription('Bulk add role options to a panel from line-based text.')
         .addStringOption((option) => option.setName('panel').setDescription('Panel name.').setRequired(true))
-        .addStringOption((option) => option.setName('entries').setDescription('Lines: @role|Label|emoji|#hex. Label can be blank.').setRequired(true).setMaxLength(4000))
+        .addStringOption((option) => option.setName('entries').setDescription('Lines: @role|Label|emoji|#hex. Label and emoji can be blank.').setRequired(true).setMaxLength(4000))
     )
     .addSubcommand((subcommand) =>
       subcommand
@@ -173,7 +173,7 @@ module.exports = {
       const panelName = interaction.options.getString('panel', true);
       const entries = rolePanels.parseBulkEntries(interaction.options.getString('entries', true));
       const valid = entries.filter((entry) => entry.valid);
-      if (!valid.length) return replyPrivate(interaction, { embeds: [createWarningEmbed('No Valid Role Entries', 'Use one line per role in this format: `@role|Button Label|emoji|#5865f2`. Label can be blank. Role mentions or role IDs are accepted.')] });
+      if (!valid.length) return replyPrivate(interaction, { embeds: [createWarningEmbed('No Valid Role Entries', 'Use one line per role in this format: `@role|Button Label|emoji|#5865f2`. Label and emoji can be blank. Role mentions or role IDs are accepted.')] });
       const added = await rolePanels.bulkAddOptions({ guildId: interaction.guildId, panelName, entries: valid });
       if (!added.length) return replyPrivate(interaction, { embeds: [createWarningEmbed('Panel Not Found', 'Create the panel first with `/roles create-panel`.')] });
       await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'reaction-role-config', title: 'Role Options Bulk Added', body: `Panel: **${panelName}**\nOptions Added: **${added.length}**`, actorUserId: interaction.user.id });

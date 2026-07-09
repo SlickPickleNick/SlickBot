@@ -190,12 +190,42 @@ async function handleButton(interaction, ctx) {
     return true;
   }
 
+
+  if (id === CustomIds.BirthdaySetOpen) {
+    if (!(await requireModuleOnly(interaction, ctx, ModuleKeys.BIRTHDAYS))) return true;
+    const config = await birthdays.getConfig(interaction.guildId).catch(() => ({ timezone: 'America/New_York' }));
+    const session = birthdays.createSetupSession({ guildId: interaction.guildId, userId: interaction.user.id, defaultTimezone: config?.timezone || 'America/New_York' });
+    await replyPrivate(interaction, birthdays.buildSetupSessionPayload(session));
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.BirthdayCancelPrefix)) {
+    const sessionId = id.slice(CustomIds.BirthdayCancelPrefix.length);
+    const session = birthdays.getSetupSession(sessionId, interaction.user.id);
+    if (!session) return replyPrivate(interaction, { embeds: [createWarningEmbed('Birthday Setup Not Found', 'This birthday setup session expired or belongs to another user.')], deleteAfterSeconds: 10 });
+    birthdays.cancelSetupSession(sessionId);
+    await updatePanel(interaction, { embeds: [createSuccessEmbed('Birthday Setup Cancelled', 'Your birthday was not changed.')], components: [] });
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.BirthdaySavePrefix)) {
+    const sessionId = id.slice(CustomIds.BirthdaySavePrefix.length);
+    const session = birthdays.getSetupSession(sessionId, interaction.user.id);
+    if (!session) return replyPrivate(interaction, { embeds: [createWarningEmbed('Birthday Setup Not Found', 'This birthday setup session expired or belongs to another user.')], deleteAfterSeconds: 10 });
+    const result = await birthdays.setBirthday({ guildId: interaction.guildId, user: interaction.user, month: session.month, day: session.day, timezone: session.timezone });
+    birthdays.cancelSetupSession(sessionId);
+    if (!result.ok) return updatePanel(interaction, { embeds: [createWarningEmbed('Birthday Not Saved', result.reason)], components: [] });
+    await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'birthday-profile', title: 'Birthday Saved', body: `User: <@${interaction.user.id}>\nBirthday: **${require('../modules/community/birthdayService').formatBirthday(result.profile.birth_month, result.profile.birth_day)}**`, actorUserId: interaction.user.id }).catch(() => {});
+    await updatePanel(interaction, { embeds: [createSuccessEmbed('Birthday Saved', `Your birthday was saved for **${require('../modules/community/birthdayService').formatBirthday(result.profile.birth_month, result.profile.birth_day)}** with timezone **${result.profile.timezone || 'server default'}**.`)], components: [] });
+    return true;
+  }
+
   if (id.startsWith('slickbot:rolepanel:')) {
     if (!(await requireAction(interaction, ctx, ActionKeys.RolePanelsUse, ModuleKeys.REACTION_ROLES))) return true;
     const [, , panelId, optionId] = id.split(':');
     const result = await toggleRole({ interaction, panelId, optionId, logger: ctx.logger });
     if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Role Not Updated', result.reason)] });
-    await replyPrivate(interaction, { embeds: [createSuccessEmbed(result.added ? 'Role Added' : 'Role Removed', `${result.added ? 'Added' : 'Removed'} <@&${result.roleId}>.`)] });
+    await replyPrivate(interaction, { embeds: [createSuccessEmbed(result.added ? 'Role Added' : 'Role Removed', `${result.added ? 'Added' : 'Removed'} <@&${result.roleId}>.`)], deleteAfterSeconds: 8 });
     return true;
   }
 
@@ -204,8 +234,9 @@ async function handleButton(interaction, ctx) {
     if (!(await requireAction(interaction, ctx, ActionKeys.GiveawaysEnter, ModuleKeys.GIVEAWAYS))) return true;
     const giveawayId = id.slice('slickbot:giveaway:enter:'.length);
     const result = await giveaways.enterGiveaway({ interaction, giveawayId, logger: ctx.logger });
-    if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Giveaway Entry Failed', result.reason)] });
-    return replyPrivate(interaction, { embeds: [createSuccessEmbed(result.alreadyEntered ? 'Already Entered' : 'Giveaway Entered', result.alreadyEntered ? 'You are already entered in this giveaway.' : 'You have been entered in the giveaway.')] });
+    if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Giveaway Entry Failed', result.reason)], deleteAfterSeconds: 10 });
+    if (!result.alreadyEntered) await giveaways.refreshGiveawayMessage(ctx.client, interaction.guildId, giveawayId).catch(() => {});
+    return replyPrivate(interaction, { embeds: [createSuccessEmbed(result.alreadyEntered ? 'Already Entered' : 'Giveaway Entered', result.alreadyEntered ? 'You are already entered in this giveaway.' : 'You have been entered in the giveaway.')], deleteAfterSeconds: 10 });
   }
 
   if (id === CustomIds.TicketOpen || id.startsWith(CustomIds.TicketOpenTypePrefix)) {
@@ -426,13 +457,48 @@ async function handleSelect(interaction, ctx) {
     return true;
   }
 
+
+  if (id.startsWith(CustomIds.BirthdayMonthPrefix)) {
+    const sessionId = id.slice(CustomIds.BirthdayMonthPrefix.length);
+    const session = birthdays.getSetupSession(sessionId, interaction.user.id);
+    if (!session) return replyPrivate(interaction, { embeds: [createWarningEmbed('Birthday Setup Not Found', 'This birthday setup session expired or belongs to another user.')], deleteAfterSeconds: 10 });
+    birthdays.updateSetupSession(session, { month: Number(interaction.values[0]) });
+    await updatePanel(interaction, birthdays.buildSetupSessionPayload(session));
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.BirthdayDayPrefix)) {
+    const rest = id.slice(CustomIds.BirthdayDayPrefix.length);
+    const sessionId = rest.split(':')[0];
+    const session = birthdays.getSetupSession(sessionId, interaction.user.id);
+    if (!session) return replyPrivate(interaction, { embeds: [createWarningEmbed('Birthday Setup Not Found', 'This birthday setup session expired or belongs to another user.')], deleteAfterSeconds: 10 });
+    birthdays.updateSetupSession(session, { day: Number(interaction.values[0]) });
+    await updatePanel(interaction, birthdays.buildSetupSessionPayload(session));
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.BirthdayTimezonePrefix)) {
+    const sessionId = id.slice(CustomIds.BirthdayTimezonePrefix.length);
+    const session = birthdays.getSetupSession(sessionId, interaction.user.id);
+    if (!session) return replyPrivate(interaction, { embeds: [createWarningEmbed('Birthday Setup Not Found', 'This birthday setup session expired or belongs to another user.')], deleteAfterSeconds: 10 });
+    birthdays.updateSetupSession(session, { timezone: interaction.values[0] });
+    await updatePanel(interaction, birthdays.buildSetupSessionPayload(session));
+    return true;
+  }
+
+  if (id === CustomIds.BirthdayListSelect) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.BirthdaysView, ModuleKeys.BIRTHDAYS))) return true;
+    await updatePanel(interaction, await birthdays.buildListPanel(interaction.guildId, interaction.values[0] || 'ALL'));
+    return true;
+  }
+
   if (id.startsWith(CustomIds.RolePanelSelectPrefix)) {
     if (!(await requireAction(interaction, ctx, ActionKeys.RolePanelsUse, ModuleKeys.REACTION_ROLES))) return true;
     const panelId = id.slice(CustomIds.RolePanelSelectPrefix.length);
     const optionId = interaction.values[0];
     const result = await toggleRole({ interaction, panelId, optionId, logger: ctx.logger });
     if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Role Not Updated', result.reason)] });
-    await replyPrivate(interaction, { embeds: [createSuccessEmbed(result.added ? 'Role Added' : 'Role Removed', `${result.added ? 'Added' : 'Removed'} <@&${result.roleId}>.`)] });
+    await replyPrivate(interaction, { embeds: [createSuccessEmbed(result.added ? 'Role Added' : 'Role Removed', `${result.added ? 'Added' : 'Removed'} <@&${result.roleId}>.`)], deleteAfterSeconds: 8 });
     return true;
   }
 
@@ -555,7 +621,7 @@ async function requireAnySupportAction(interaction, ctx) {
 
 
 async function requireAnyCommunityAction(interaction, ctx) {
-  const checks = [[ActionKeys.WelcomeView, ModuleKeys.WELCOME], [ActionKeys.RolePanelsView, ModuleKeys.REACTION_ROLES], [ActionKeys.GiveawaysView, ModuleKeys.GIVEAWAYS]];
+  const checks = [[ActionKeys.WelcomeView, ModuleKeys.WELCOME], [ActionKeys.RolePanelsView, ModuleKeys.REACTION_ROLES], [ActionKeys.GiveawaysView, ModuleKeys.GIVEAWAYS], [ActionKeys.BirthdaysView, ModuleKeys.BIRTHDAYS]];
   for (const [action, moduleKey] of checks) {
     const result = await ctx.permissions.checkInteraction(interaction, action, moduleKey);
     if (result.allowed) return true;

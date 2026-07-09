@@ -97,7 +97,7 @@ async function listPanels(guildId) {
 async function addOption({ guildId, panelName, roleId, label = '', emoji = null, description = null, buttonColor = null }) {
   const normalizedButtonColor = normalizeHexColor(buttonColor, '#5865f2');
   const normalizedLabel = String(label || '').trim();
-  const normalizedEmoji = emoji || (!normalizedLabel ? emojiFromHex(normalizedButtonColor) : null);
+  const normalizedEmoji = emoji || null;
   const panel = await getPanelByName(guildId, panelName);
   if (!panel) return null;
   const count = await query(`SELECT COUNT(*)::int AS count FROM role_panel_options WHERE panel_id = $1 AND active = true`, [panel.id]);
@@ -192,12 +192,15 @@ async function setPanelDisplayMode({ guildId, panelName, displayMode }) {
 async function buildRolePanelComponents(panel, options) {
   const displayMode = String(panel.panel_display_mode || 'BUTTONS').toUpperCase();
   if (displayMode === 'DROPDOWN') {
-    const selectOptions = options.slice(0, 25).map((option, index) => ({
-      label: (option.label && option.label.trim()) || `Role ${index + 1}`,
-      value: option.id,
-      description: option.description || `Toggle ${option.role_id}`,
-      emoji: option.emoji || emojiFromHex(option.button_color || '#5865f2')
-    }));
+    const selectOptions = options.slice(0, 25).map((option, index) => {
+      const item = {
+        label: (option.label && option.label.trim()) || `Role ${index + 1}`,
+        value: option.id,
+        description: option.description || `Toggle ${option.role_id}`
+      };
+      if (option.emoji) item.emoji = option.emoji;
+      return item;
+    });
     if (!selectOptions.length) return [];
     return [new ActionRowBuilder().addComponents(
       new StringSelectMenuBuilder()
@@ -218,7 +221,7 @@ async function buildRolePanelComponents(panel, options) {
         .setStyle(buttonStyleFromHex(option.button_color || '#5865f2'));
       if (option.label && option.label.trim()) button.setLabel(option.label.trim());
       if (option.emoji) button.setEmoji(option.emoji);
-      if (!option.label && !option.emoji) button.setEmoji(emojiFromHex(option.button_color || '#5865f2'));
+      if (!option.label && !option.emoji) button.setLabel('\u200B');
       row.addComponents(button);
     });
     rows.push(row);

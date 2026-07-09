@@ -4,7 +4,18 @@ const { ActionKeys } = require('../modules/permissions/actionKeys');
 const { replyPrivate } = require('../utils/reply');
 const { createBaseEmbed, createWarningEmbed, SlickBotColors } = require('../modules/ui/uiService');
 const { buildPanelDesignModal } = require('../modules/panels/panelModals');
-const { startPanelMessageFlow } = require('../modules/panels/messagePanelFlow');
+const { startPanelMessageFlow, startPanelFieldEditFlow } = require('../modules/panels/messagePanelFlow');
+
+function addPanelTargetChoices(option) {
+  return option.setName('target').setDescription('Panel system to edit.').setRequired(true).addChoices(
+    { name: 'Tickets', value: 'ticket' },
+    { name: 'Reports', value: 'report' },
+    { name: 'Applications', value: 'application' },
+    { name: 'Appeals', value: 'appeal' },
+    { name: 'Birthdays', value: 'birthday' },
+    { name: 'Reaction Roles', value: 'role' }
+  );
+}
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -14,12 +25,19 @@ module.exports = {
       subcommand
         .setName('setup')
         .setDescription('Start a guided message-based setup for a public panel embed.')
-        .addStringOption((option) => option.setName('target').setDescription('Panel system to edit.').setRequired(true).addChoices(
-          { name: 'Tickets', value: 'ticket' },
-          { name: 'Reports', value: 'report' },
-          { name: 'Applications', value: 'application' },
-          { name: 'Appeals', value: 'appeal' },
-          { name: 'Reaction Roles', value: 'role' }
+        .addStringOption(addPanelTargetChoices)
+        .addStringOption((option) => option.setName('name').setDescription('Required for application types or reaction-role panels.').setRequired(false).setMaxLength(80))
+    )
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName('edit')
+        .setDescription('Edit one specific live panel field without wiping the rest.')
+        .addStringOption(addPanelTargetChoices)
+        .addStringOption((option) => option.setName('field').setDescription('Specific panel field to edit.').setRequired(true).addChoices(
+          { name: 'Title', value: 'title' },
+          { name: 'Description', value: 'description' },
+          { name: 'Accent Color', value: 'color' },
+          { name: 'Display Mode', value: 'display_mode' }
         ))
         .addStringOption((option) => option.setName('name').setDescription('Required for application types or reaction-role panels.').setRequired(false).setMaxLength(80))
     )
@@ -27,13 +45,7 @@ module.exports = {
       subcommand
         .setName('design')
         .setDescription('Open a modal to customize a public panel embed.')
-        .addStringOption((option) => option.setName('target').setDescription('Panel system to edit.').setRequired(true).addChoices(
-          { name: 'Tickets', value: 'ticket' },
-          { name: 'Reports', value: 'report' },
-          { name: 'Applications', value: 'application' },
-          { name: 'Appeals', value: 'appeal' },
-          { name: 'Reaction Roles', value: 'role' }
-        ))
+        .addStringOption(addPanelTargetChoices)
         .addStringOption((option) => option.setName('name').setDescription('Required for application types or reaction-role panels.').setRequired(false).setMaxLength(80))
     )
     .addSubcommand((subcommand) => subcommand.setName('help').setDescription('Show panel design help.')),
@@ -47,17 +59,19 @@ module.exports = {
           title: 'SlickBot Panel Designer',
           description: [
             'Use `/panel setup` for guided message-based panel design in a setup channel.',
+            'Use `/panel edit` to change one specific field without touching the other fields.',
             '',
             '**Supported targets**',
             '• Tickets',
             '• Reports',
             '• Applications, requires the application type name',
             '• Appeals',
+            '• Birthdays',
             '• Reaction Roles, requires the role panel name',
             '',
             'Guided setup preserves multiline descriptions, spacing, and custom accent colors such as `#7869ff`.',
             '',
-            '`/panel design` still exists as a quick modal editor, but `/panel setup` is recommended for longer formatted panels.'
+            '`/panel design` still exists as a quick modal editor, but `/panel setup` and `/panel edit` are recommended for formatted panels.'
           ].join('\n'),
           color: SlickBotColors.PRIMARY
         })]
@@ -72,6 +86,10 @@ module.exports = {
 
     if (subcommand === 'setup') {
       return startPanelMessageFlow(interaction, { target, name, logger: ctx?.logger });
+    }
+
+    if (subcommand === 'edit') {
+      return startPanelFieldEditFlow(interaction, { target, name, field: interaction.options.getString('field', true), logger: ctx?.logger });
     }
 
     await interaction.showModal(buildPanelDesignModal(target, name));

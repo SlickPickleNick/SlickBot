@@ -81,7 +81,15 @@ const CustomIds = Object.freeze({
   ApplicationModalPrefix: 'slickbot:modal:application:',
   PanelDesignModalPrefix: 'slickbot:modal:panel-design:',
 
-  RolePanelSelectPrefix: 'slickbot:rolepanel-select:'
+  RolePanelSelectPrefix: 'slickbot:rolepanel-select:',
+
+  BirthdaySetOpen: 'slickbot:birthday:set-open',
+  BirthdaySavePrefix: 'slickbot:birthday:save:',
+  BirthdayCancelPrefix: 'slickbot:birthday:cancel:',
+  BirthdayMonthPrefix: 'slickbot:birthday:month:',
+  BirthdayDayPrefix: 'slickbot:birthday:day:',
+  BirthdayTimezonePrefix: 'slickbot:birthday:timezone:',
+  BirthdayListSelect: 'slickbot:birthday:list-select'
 });
 
 module.exports = { CustomIds };

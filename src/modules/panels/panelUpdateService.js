@@ -2,11 +2,13 @@ const { updatePublishedPanels } = require('./publishedPanelService');
 const { buildPublicTicketPanel, buildPublicReportPanel, buildPublicApplicationPanel, buildPublicAppealPanel } = require('../support/supportUi');
 const { TicketService, ReportService, ApplicationService, AppealService } = require('../support/supportService');
 const rolePanels = require('../community/rolePanelService');
+const { BirthdayService } = require('../community/birthdayService');
 
 const tickets = new TicketService();
 const reports = new ReportService();
 const applications = new ApplicationService();
 const appeals = new AppealService();
+const birthdays = new BirthdayService();
 
 async function buildPayload(guildId, panelType, panelRef = '*') {
   if (panelType === 'ticket') return buildPublicTicketPanel(await tickets.listTypes(guildId), await tickets.getConfig(guildId));
@@ -17,6 +19,7 @@ async function buildPayload(guildId, panelType, panelRef = '*') {
     if (!type) return null;
     return buildPublicApplicationPanel(type);
   }
+  if (panelType === 'birthday') return birthdays.buildPublicPanel(guildId);
   if (panelType === 'role') {
     const panel = await rolePanels.getPanelById(guildId, panelRef);
     if (!panel) return null;

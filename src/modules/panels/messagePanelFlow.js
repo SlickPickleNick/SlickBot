@@ -56,6 +56,8 @@ async function startPanelMessageFlow(interaction, { target, name = null, logger 
     footer: 'SlickBot Panel Builder'
   })] });
 
+  const existingPanel = await rolePanels.getPanelByName(interaction.guildId, name);
+
   const title = await waitForUserMessage(interaction, {
     title: 'Step 1 — Panel Title',
     description: 'Send the title for this panel. Type `skip` to keep the current/default title.'
@@ -112,6 +114,63 @@ async function startPanelMessageFlow(interaction, { target, name = null, logger 
   return interaction.channel.send({ embeds: [createSuccessEmbed('Panel Updated', `Updated **${result.target}**.${formatRefreshSummary(refresh) || '\nFuture posted panels will use the new design.'}`)] });
 }
 
+
+async function startPanelFieldEditFlow(interaction, { target, name = null, field, logger = null }) {
+  const fieldLabel = String(field || '').trim().toLowerCase();
+  const prompts = {
+    title: 'Send the new panel title. Type `skip` to leave it unchanged.',
+    description: 'Send the new panel description. Multiline spacing is supported. Type `skip` to leave it unchanged.',
+    color: 'Send a hex color such as `#7869ff`. Type `skip` to leave it unchanged.',
+    display_mode: 'Send `buttons` or `dropdown`. Type `skip` to leave it unchanged.'
+  };
+
+  if (!prompts[fieldLabel]) {
+    return interaction.reply({ embeds: [createWarningEmbed('Unknown Field', 'Choose title, description, color, or display_mode.')], ephemeral: true });
+  }
+
+  await interaction.reply({ embeds: [createBaseEmbed({
+    title: `Panel Field Editor — ${fieldLabel.replace('_', ' ')}`,
+    description: [
+      'Reply in this setup channel with only the field you want to change.',
+      'Other panel fields will be preserved.',
+      '',
+      prompts[fieldLabel],
+      '',
+      'Type `cancel` to stop.'
+    ].join('\n'),
+    color: SlickBotColors.PRIMARY,
+    footer: 'SlickBot Panel Editor'
+  })] });
+
+  const response = await waitForUserMessage(interaction, {
+    title: `Edit ${fieldLabel.replace('_', ' ')}`,
+    description: prompts[fieldLabel]
+  });
+  if (response.cancelled) return interaction.channel.send({ embeds: [createWarningEmbed('Panel Edit Stopped', response.reason)] });
+
+  const value = normalizeOptionalText(response.value);
+  const payload = { guildId: interaction.guildId, target, name };
+  if (fieldLabel === 'title') payload.title = value;
+  if (fieldLabel === 'description') payload.description = value;
+  if (fieldLabel === 'color') payload.color = value;
+  if (fieldLabel === 'display_mode') payload.displayMode = value;
+
+  const result = await updatePanelDesign(payload);
+  if (!result.ok) return interaction.channel.send({ embeds: [createWarningEmbed('Panel Not Updated', result.reason)] });
+
+  await logger?.log({
+    guildId: interaction.guildId,
+    eventKey: 'panel-config',
+    title: 'Panel Field Updated',
+    body: `Panel: **${result.target}**\nField: **${fieldLabel}**\nUpdated By: <@${interaction.user.id}>`,
+    actorUserId: interaction.user.id,
+    metadata: { target, name, field: fieldLabel }
+  }).catch(() => {});
+
+  const refresh = await refreshPublishedPanel(interaction.client, interaction.guildId, result.panelType, result.panelRef).catch(() => null);
+  return interaction.channel.send({ embeds: [createSuccessEmbed('Panel Field Updated', `Updated **${fieldLabel.replace('_', ' ')}** for **${result.target}**.${formatRefreshSummary(refresh) || '\nFuture posted panels will use the new setting.'}`)] });
+}
+
 async function startRolePanelCreationFlow(interaction, { logger = null, initialName = null }) {
   await interaction.reply({ embeds: [createBaseEmbed({
     title: 'Role Panel Builder Started',
@@ -138,9 +197,11 @@ async function startRolePanelCreationFlow(interaction, { logger = null, initialN
 
   if (!name) return interaction.channel.send({ embeds: [createWarningEmbed('Panel Name Required', 'A role panel needs an internal name.')] });
 
+  const existingPanel = await rolePanels.getPanelByName(interaction.guildId, name);
+
   const title = await waitForUserMessage(interaction, {
     title: 'Step 2 — Public Panel Title',
-    description: 'Send the public title for this panel. Type `skip` to use the internal panel name.'
+    description: existingPanel ? `Send the public title for this panel. Current: **${existingPanel.title || name}**. Type \`skip\` to keep it.` : 'Send the public title for this panel. Type `skip` to use the internal panel name.'
   });
   if (title.cancelled) return interaction.channel.send({ embeds: [createWarningEmbed('Role Panel Builder Stopped', title.reason)] });
 
@@ -150,38 +211,40 @@ async function startRolePanelCreationFlow(interaction, { logger = null, initialN
       'Send the full public description for this panel.',
       'Multiline spacing is supported.',
       '',
-      'Type `skip` to use the default description.'
+      existingPanel ? 'Type `skip` to keep the current description.' : 'Type `skip` to use the default description.'
     ].join('\n')
   });
   if (description.cancelled) return interaction.channel.send({ embeds: [createWarningEmbed('Role Panel Builder Stopped', description.reason)] });
 
   const mode = await waitForUserMessage(interaction, {
     title: 'Step 4 — Selection Mode',
-    description: 'Send `multi` for multiple roles or `single` for one role at a time. Type `skip` for multi.'
+    description: existingPanel ? `Send \`multi\` or \`single\`. Current: **${existingPanel.mode || 'MULTI'}**. Type \`skip\` to keep it.` : 'Send `multi` for multiple roles or `single` for one role at a time. Type `skip` for multi.'
   });
   if (mode.cancelled) return interaction.channel.send({ embeds: [createWarningEmbed('Role Panel Builder Stopped', mode.reason)] });
 
   const color = await waitForUserMessage(interaction, {
     title: 'Step 5 — Accent Color',
-    description: 'Send a hex color such as `#7869ff`. Type `skip` to use the default SlickBot accent.'
+    description: existingPanel ? `Send a hex color such as \`#7869ff\`. Current: **${existingPanel.accent_color || '#7869ff'}**. Type \`skip\` to keep it.` : 'Send a hex color such as `#7869ff`. Type `skip` to use the default SlickBot accent.'
   });
   if (color.cancelled) return interaction.channel.send({ embeds: [createWarningEmbed('Role Panel Builder Stopped', color.reason)] });
 
   const displayMode = await waitForUserMessage(interaction, {
     title: 'Step 6 — Panel Display Mode',
-    description: 'Send `buttons` or `dropdown`. Type `skip` for buttons.'
+    description: existingPanel ? `Send \`buttons\` or \`dropdown\`. Current: **${existingPanel.panel_display_mode || 'BUTTONS'}**. Type \`skip\` to keep it.` : 'Send `buttons` or `dropdown`. Type `skip` for buttons.'
   });
   if (displayMode.cancelled) return interaction.channel.send({ embeds: [createWarningEmbed('Role Panel Builder Stopped', displayMode.reason)] });
 
-  const modeValue = String(mode.value || '').trim().toLowerCase().startsWith('single') ? 'SINGLE' : 'MULTI';
-  const displayModeValue = String(displayMode.value || '').trim().toLowerCase().startsWith('drop') ? 'DROPDOWN' : 'BUTTONS';
+  const normalizedMode = normalizeOptionalText(mode.value);
+  const normalizedDisplayMode = normalizeOptionalText(displayMode.value);
+  const modeValue = normalizedMode ? (String(normalizedMode).toLowerCase().startsWith('single') ? 'SINGLE' : 'MULTI') : (existingPanel?.mode || 'MULTI');
+  const displayModeValue = normalizedDisplayMode ? (String(normalizedDisplayMode).toLowerCase().startsWith('drop') ? 'DROPDOWN' : 'BUTTONS') : (existingPanel?.panel_display_mode || 'BUTTONS');
   const panel = await rolePanels.createPanel({
     guildId: interaction.guildId,
     name,
-    title: normalizeOptionalText(title.value) || name,
-    description: normalizeOptionalText(description.value) || undefined,
+    title: normalizeOptionalText(title.value) || existingPanel?.title || name,
+    description: normalizeOptionalText(description.value) ?? existingPanel?.description ?? undefined,
     mode: modeValue,
-    color: normalizeOptionalText(color.value) || undefined,
+    color: normalizeOptionalText(color.value) || existingPanel?.accent_color || undefined,
     displayMode: displayModeValue
   });
 
@@ -214,10 +277,10 @@ async function startRoleBulkAddFlow(interaction, { panelName, logger = null }) {
       '`@Role | Button Label | Emoji | #hex`',
       '',
       '**Blank text buttons**',
-      'Leave the label blank and provide an emoji:',
-      '`@Red || 🟥 | #ff0000`',
+      'Leave the label blank if you want an icon-only or blank-label button:',
+      '`@Red || | #ff0000`',
       '',
-      'If both label and emoji are blank, SlickBot will use a colored square emoji based on the hex color.',
+      'SlickBot will not add an emoji unless you include one in the entry.',
       '',
       'Type `cancel` to stop.'
     ].join('\n'),
@@ -255,5 +318,6 @@ module.exports = {
   startPanelMessageFlow,
   startRolePanelCreationFlow,
   startRoleBulkAddFlow,
+  startPanelFieldEditFlow,
   normalizeHexColor
 };

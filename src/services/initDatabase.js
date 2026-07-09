@@ -563,6 +563,9 @@ async function initDatabase() {
       birthday_role_id TEXT,
       announcement_template TEXT NOT NULL DEFAULT 'Happy birthday, {user}! 🎉',
       timezone TEXT NOT NULL DEFAULT 'America/New_York',
+      panel_title TEXT,
+      panel_description TEXT,
+      panel_color TEXT,
       enabled BOOLEAN NOT NULL DEFAULT true,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -599,6 +602,11 @@ async function initDatabase() {
   `);
 
   await query(`CREATE INDEX IF NOT EXISTS idx_birthday_profiles_lookup ON birthday_profiles(guild_id, active);`);
+
+  await query(`ALTER TABLE birthday_configs ADD COLUMN IF NOT EXISTS panel_title TEXT;`).catch(() => {});
+  await query(`ALTER TABLE birthday_configs ADD COLUMN IF NOT EXISTS panel_description TEXT;`).catch(() => {});
+  await query(`ALTER TABLE birthday_configs ADD COLUMN IF NOT EXISTS panel_color TEXT;`).catch(() => {});
+
 
 
   await query(`

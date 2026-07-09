@@ -225,6 +225,14 @@ client.on(Events.MessageCreate, async (message) => {
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
+  if (interaction.isAutocomplete()) {
+    const command = commandMap.get(interaction.commandName);
+    if (command && typeof command.autocomplete === 'function') {
+      await command.autocomplete(interaction).catch((error) => console.error(`Autocomplete failed: ${interaction.commandName}`, error));
+    }
+    return;
+  }
+
   if (!interaction.isChatInputCommand()) {
     if (interaction.guildId && await permissions.isIgnored(interaction.guildId, interaction.user.id)) {
       await replyPrivate(interaction, 'You are currently blocked from interacting with SlickBot.');

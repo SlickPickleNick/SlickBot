@@ -132,6 +132,21 @@ class GiveawayService {
     return Number(result.rows[0]?.count || 0);
   }
 
+
+
+  async refreshGiveawayMessage(client, guildId, giveawayId) {
+    const result = await query(`SELECT * FROM giveaways WHERE guild_id = $1 AND id = $2 LIMIT 1`, [guildId, giveawayId]);
+    const giveaway = result.rows[0];
+    if (!giveaway || !giveaway.channel_id || !giveaway.message_id) return { ok: false, reason: 'Giveaway message not found.' };
+    const channel = await client.channels.fetch(giveaway.channel_id).catch(() => null);
+    if (!channel || typeof channel.messages?.fetch !== 'function') return { ok: false, reason: 'Giveaway channel not found.' };
+    const message = await channel.messages.fetch(giveaway.message_id).catch(() => null);
+    if (!message || typeof message.edit !== 'function') return { ok: false, reason: 'Giveaway message not found.' };
+    const entryCount = await this.getEntryCount(giveaway.id);
+    await message.edit(buildGiveawayPayload(giveaway, entryCount, await this.getConfig(guildId))).catch(() => {});
+    return { ok: true, entryCount };
+  }
+
   async listActive(guildId) {
     const result = await query(`SELECT g.*, COUNT(ge.id)::int AS entry_count FROM giveaways g LEFT JOIN giveaway_entries ge ON ge.giveaway_id = g.id WHERE g.guild_id = $1 AND g.status = 'OPEN' GROUP BY g.id ORDER BY g.ends_at ASC LIMIT 10`, [guildId]);
     return result.rows;
