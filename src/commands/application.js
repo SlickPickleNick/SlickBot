@@ -5,6 +5,8 @@ const { replyPrivate } = require('../utils/reply');
 const { ApplicationService } = require('../modules/support/supportService');
 const { buildApplicationsPanel, buildPublicApplicationPanel } = require('../modules/support/supportUi');
 const { createBaseEmbed, createSuccessEmbed, createWarningEmbed, SlickBotColors } = require('../modules/ui/uiService');
+const { recordPublishedPanel } = require('../modules/panels/publishedPanelService');
+const { refreshPublishedPanel, formatRefreshSummary } = require('../modules/panels/panelUpdateService');
 
 const applications = new ApplicationService();
 
@@ -104,7 +106,8 @@ module.exports = {
         panelColor: interaction.options.getString('panel_color') || null
       });
       await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'setup', title: 'Application Settings Updated', body: `${type.name} application settings updated by ${interaction.user.tag}.`, actorUserId: interaction.user.id }).catch(() => {});
-      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Application Type Configured', `Application type **${type.name}** is ready. Use \`/application question-add\` to customize the DM questions.`)] });
+      const refresh = await refreshPublishedPanel(ctx.client, interaction.guildId, 'application', type.id).catch(() => null);
+      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Application Type Configured', `Application type **${type.name}** is ready. Use \`/application question-add\` to customize the DM questions.${formatRefreshSummary(refresh)}`)] });
     }
 
 
@@ -115,13 +118,16 @@ module.exports = {
       const result = await applications.deleteType(interaction.guildId, typeName);
       if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Application Type Not Deleted', result.reason)] });
       await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'setup', title: 'Application Type Deleted', body: `Application type **${result.type.name}** was deleted by ${interaction.user.tag}.`, actorUserId: interaction.user.id }).catch(() => {});
-      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Application Type Deleted', `Deleted application type **${result.type.name}**.`)] });
+      const refresh = await refreshPublishedPanel(ctx.client, interaction.guildId, 'application', result.type.id).catch(() => null);
+      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Application Type Deleted', `Deleted application type **${result.type.name}**.${formatRefreshSummary(refresh)}`)] });
     }
 
     if (subcommand === 'question-add') {
       const question = await applications.addQuestion(interaction.guildId, interaction.options.getString('type', true), interaction.options.getString('question', true), interaction.options.getBoolean('required') ?? true, interaction.options.getInteger('order') || null);
       if (!question) return replyPrivate(interaction, { embeds: [createWarningEmbed('Application Type Not Found', 'Create the application type with `/application setup` first.')] });
-      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Application Question Added', `Question added at order **${question.display_order}**.`)] });
+      const type = await applications.getTypeByName(interaction.guildId, interaction.options.getString('type', true));
+      const refresh = type ? await refreshPublishedPanel(ctx.client, interaction.guildId, 'application', type.id).catch(() => null) : null;
+      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Application Question Added', `Question added at order **${question.display_order}**.${formatRefreshSummary(refresh)}`)] });
     }
 
     if (subcommand === 'question-list') {
@@ -135,15 +141,17 @@ module.exports = {
     if (subcommand === 'question-clear') {
       const type = await applications.clearQuestions(interaction.guildId, interaction.options.getString('type', true));
       if (!type) return replyPrivate(interaction, { embeds: [createWarningEmbed('Application Type Not Found', 'That application type could not be found.')] });
-      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Application Questions Cleared', `Questions cleared for **${type.name}**.`)] });
+      const refresh = await refreshPublishedPanel(ctx.client, interaction.guildId, 'application', type.id).catch(() => null);
+      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Application Questions Cleared', `Questions cleared for **${type.name}**.${formatRefreshSummary(refresh)}`)] });
     }
 
     if (subcommand === 'panel') {
       const type = await applications.getTypeByName(interaction.guildId, interaction.options.getString('type', true));
       if (!type) return replyPrivate(interaction, { embeds: [createWarningEmbed('Application Type Not Found', 'Create it with `/application setup` first.')] });
       const channel = interaction.options.getChannel('channel') || interaction.channel;
-      await channel.send(buildPublicApplicationPanel(type));
-      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Application Panel Posted', `Panel posted in <#${channel.id}>.`)] });
+      const message = await channel.send(buildPublicApplicationPanel(type));
+      await recordPublishedPanel({ guildId: interaction.guildId, panelType: 'application', panelRef: type.id, channelId: channel.id, messageId: message.id });
+      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Application Panel Posted', `Panel posted in <#${channel.id}>. Future edits for **${type.name}** will update this message automatically.`)] });
     }
 
     if (subcommand === 'apply') {

@@ -33,7 +33,7 @@ const defaultModules = [
   { key: ModuleKeys.SCHEDULED_MESSAGES, enabled: false },
   { key: ModuleKeys.WELCOME, enabled: true },
   { key: ModuleKeys.REACTION_ROLES, enabled: true },
-  { key: ModuleKeys.GIVEAWAYS, enabled: false },
+  { key: ModuleKeys.GIVEAWAYS, enabled: true },
   { key: ModuleKeys.BIRTHDAYS, enabled: false },
   { key: ModuleKeys.LEVELING, enabled: false },
   { key: ModuleKeys.SERVER_STATS, enabled: false },
@@ -57,7 +57,8 @@ const implementedModules = Object.freeze([
   ModuleKeys.APPLICATIONS,
   ModuleKeys.APPEALS,
   ModuleKeys.WELCOME,
-  ModuleKeys.REACTION_ROLES
+  ModuleKeys.REACTION_ROLES,
+  ModuleKeys.GIVEAWAYS
 ]);
 
 function isImplementedModule(moduleKey) {

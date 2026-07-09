@@ -4,7 +4,16 @@ const { ActionKeys } = require('../modules/permissions/actionKeys');
 const { replyPrivate } = require('../utils/reply');
 const { createSuccessEmbed, createWarningEmbed } = require('../modules/ui/uiService');
 const rolePanels = require('../modules/community/rolePanelService');
+const { recordPublishedPanel } = require('../modules/panels/publishedPanelService');
 const { startRolePanelCreationFlow, startRoleBulkAddFlow } = require('../modules/panels/messagePanelFlow');
+
+async function updateLivePanelMessages(ctx, guildId, panel) {
+  if (!panel) return '';
+  const result = await rolePanels.updatePublishedRolePanelMessages(ctx.client, guildId, panel).catch(() => null);
+  if (!result || !result.total) return '';
+  return `
+Live panels updated: **${result.updated}/${result.total}**.`;
+}
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -66,6 +75,13 @@ module.exports = {
     )
     .addSubcommand((subcommand) =>
       subcommand
+        .setName('remove-all')
+        .setDescription('Remove all role options from a panel.')
+        .addStringOption((option) => option.setName('panel').setDescription('Panel name.').setRequired(true))
+        .addBooleanOption((option) => option.setName('confirm').setDescription('Must be true to remove all role options.').setRequired(true))
+    )
+    .addSubcommand((subcommand) =>
+      subcommand
         .setName('post-panel')
         .setDescription('Post a role panel to a channel.')
         .addStringOption((option) => option.setName('panel').setDescription('Panel name.').setRequired(true))
@@ -101,7 +117,8 @@ module.exports = {
         color: interaction.options.getString('color') || undefined
       });
       await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'reaction-role-config', title: 'Role Panel Saved', body: `Panel: **${panel.name}**\nUpdated By: <@${interaction.user.id}>`, actorUserId: interaction.user.id });
-      await replyPrivate(interaction, { embeds: [createSuccessEmbed('Role Panel Saved', `Panel **${panel.name}** is ready for role options.`)] });
+      const liveText = await updateLivePanelMessages(ctx, interaction.guildId, panel);
+      await replyPrivate(interaction, { embeds: [createSuccessEmbed('Role Panel Saved', `Panel **${panel.name}** is ready for role options.${liveText}`)] });
       return;
     }
 
@@ -125,7 +142,8 @@ module.exports = {
       });
       if (!result) return replyPrivate(interaction, { embeds: [createWarningEmbed('Panel Not Found', 'Create the panel first with `/roles create-panel`.')] });
       await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'reaction-role-config', title: 'Role Option Added', body: `Panel: **${result.panel.name}**\nRole: <@&${result.option.role_id}>`, actorUserId: interaction.user.id });
-      await replyPrivate(interaction, { embeds: [createSuccessEmbed('Role Option Added', `<@&${result.option.role_id}> was added to **${result.panel.name}**.`)] });
+      const liveText = await updateLivePanelMessages(ctx, interaction.guildId, result.panel);
+      await replyPrivate(interaction, { embeds: [createSuccessEmbed('Role Option Added', `<@&${result.option.role_id}> was added to **${result.panel.name}**.${liveText}`)] });
       return;
     }
 
@@ -137,7 +155,9 @@ module.exports = {
       const added = await rolePanels.bulkAddOptions({ guildId: interaction.guildId, panelName, entries: valid });
       if (!added.length) return replyPrivate(interaction, { embeds: [createWarningEmbed('Panel Not Found', 'Create the panel first with `/roles create-panel`.')] });
       await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'reaction-role-config', title: 'Role Options Bulk Added', body: `Panel: **${panelName}**\nOptions Added: **${added.length}**`, actorUserId: interaction.user.id });
-      await replyPrivate(interaction, { embeds: [createSuccessEmbed('Role Options Added', `Added **${added.length}** role option(s) to **${panelName}**. Invalid/skipped lines: **${entries.length - valid.length}**.`)] });
+      const panel = await rolePanels.getPanelByName(interaction.guildId, panelName);
+      const liveText = await updateLivePanelMessages(ctx, interaction.guildId, panel);
+      await replyPrivate(interaction, { embeds: [createSuccessEmbed('Role Options Added', `Added **${added.length}** role option(s) to **${panelName}**. Invalid/skipped lines: **${entries.length - valid.length}**.${liveText}`)] });
       return;
     }
 
@@ -146,9 +166,26 @@ module.exports = {
     }
 
     if (sub === 'remove-option') {
-      const option = await rolePanels.removeOption({ guildId: interaction.guildId, panelName: interaction.options.getString('panel', true), roleId: interaction.options.getRole('role', true).id });
+      const panelName = interaction.options.getString('panel', true);
+      const option = await rolePanels.removeOption({ guildId: interaction.guildId, panelName, roleId: interaction.options.getRole('role', true).id });
       if (!option) return replyPrivate(interaction, { embeds: [createWarningEmbed('Option Not Found', 'No matching role option was found.')] });
-      await replyPrivate(interaction, { embeds: [createSuccessEmbed('Role Option Removed', 'The role option was removed from the panel.')] });
+      const panel = await rolePanels.getPanelByName(interaction.guildId, panelName);
+      const liveText = await updateLivePanelMessages(ctx, interaction.guildId, panel);
+      await replyPrivate(interaction, { embeds: [createSuccessEmbed('Role Option Removed', `The role option was removed from the panel.${liveText}`)] });
+      return;
+    }
+
+    if (sub === 'remove-all') {
+      const panelName = interaction.options.getString('panel', true);
+      if (!interaction.options.getBoolean('confirm', true)) {
+        return replyPrivate(interaction, { embeds: [createWarningEmbed('Remove All Not Confirmed', 'Run again with `confirm:true` to remove all role options from this panel.')] });
+      }
+      const result = await rolePanels.removeAllOptions({ guildId: interaction.guildId, panelName });
+      if (!result) return replyPrivate(interaction, { embeds: [createWarningEmbed('Panel Not Found', 'No active role panel was found with that name.')] });
+      const liveText = await updateLivePanelMessages(ctx, interaction.guildId, result.panel);
+      await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'reaction-role-config', title: 'Role Panel Options Cleared', body: `Panel: **${result.panel.name}**
+Removed: **${result.removed}** option(s)`, actorUserId: interaction.user.id }).catch(() => {});
+      await replyPrivate(interaction, { embeds: [createSuccessEmbed('Role Options Cleared', `Removed **${result.removed}** role option(s) from **${result.panel.name}**.${liveText}`)] });
       return;
     }
 
@@ -158,7 +195,8 @@ module.exports = {
       const payload = await rolePanels.buildRolePanelMessage(panel);
       if (!payload.components.length) return replyPrivate(interaction, { embeds: [createWarningEmbed('No Role Options', 'Add at least one role option before posting this panel.')] });
       const channel = interaction.options.getChannel('channel', true);
-      await channel.send(payload);
+      const message = await channel.send(payload);
+      await recordPublishedPanel({ guildId: interaction.guildId, panelType: 'role', panelRef: panel.id, channelId: channel.id, messageId: message.id });
       await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'reaction-role-config', title: 'Role Panel Posted', body: `Panel: **${panel.name}**\nChannel: <#${channel.id}>\nPosted By: <@${interaction.user.id}>`, actorUserId: interaction.user.id });
       await replyPrivate(interaction, { embeds: [createSuccessEmbed('Role Panel Posted', `Posted **${panel.name}** to <#${channel.id}>.`)] });
     }

@@ -30,7 +30,7 @@ async function updatePanelDesign({ guildId, target, name = null, title = null, d
        RETURNING panel_title, panel_description, panel_color`,
       [guildId, panelTitle, panelDescription, panelColor]
     );
-    return { ok: true, target: 'Ticket Panel', row: result.rows[0] };
+    return { ok: true, target: 'Ticket Panel', panelType: 'ticket', panelRef: '*', row: result.rows[0] };
   }
 
   if (key === 'report' || key === 'reports') {
@@ -45,7 +45,7 @@ async function updatePanelDesign({ guildId, target, name = null, title = null, d
        RETURNING panel_title, panel_description, panel_color`,
       [guildId, panelTitle, panelDescription, panelColor]
     );
-    return { ok: true, target: 'Report Panel', row: result.rows[0] };
+    return { ok: true, target: 'Report Panel', panelType: 'report', panelRef: '*', row: result.rows[0] };
   }
 
   if (key === 'appeal' || key === 'appeals') {
@@ -60,7 +60,7 @@ async function updatePanelDesign({ guildId, target, name = null, title = null, d
        RETURNING panel_title, panel_description, panel_color`,
       [guildId, panelTitle, panelDescription, panelColor]
     );
-    return { ok: true, target: 'Appeal Panel', row: result.rows[0] };
+    return { ok: true, target: 'Appeal Panel', panelType: 'appeal', panelRef: '*', row: result.rows[0] };
   }
 
   if (key === 'application' || key === 'applications') {
@@ -72,11 +72,11 @@ async function updatePanelDesign({ guildId, target, name = null, title = null, d
          panel_color = COALESCE($5, panel_color),
          updated_at = NOW()
        WHERE guild_id = $1 AND LOWER(name) = LOWER($2)
-       RETURNING panel_title, panel_description, panel_color, name`,
+       RETURNING id, panel_title, panel_description, panel_color, name`,
       [guildId, name, panelTitle, panelDescription, panelColor]
     );
     if (!result.rows[0]) return { ok: false, reason: `Application type \`${name}\` was not found.` };
-    return { ok: true, target: `Application Panel: ${result.rows[0].name}`, row: result.rows[0] };
+    return { ok: true, target: `Application Panel: ${result.rows[0].name}`, panelType: 'application', panelRef: result.rows[0].id || name, row: result.rows[0] };
   }
 
   if (key === 'role' || key === 'roles' || key === 'reaction-role' || key === 'reaction-roles') {
@@ -88,11 +88,11 @@ async function updatePanelDesign({ guildId, target, name = null, title = null, d
          accent_color = COALESCE($5, accent_color),
          updated_at = NOW()
        WHERE guild_id = $1 AND LOWER(name) = LOWER($2) AND active = true
-       RETURNING title, description, accent_color, name`,
+       RETURNING id, title, description, accent_color, name`,
       [guildId, name, panelTitle, panelDescription, panelColor]
     );
     if (!result.rows[0]) return { ok: false, reason: `Role panel \`${name}\` was not found.` };
-    return { ok: true, target: `Role Panel: ${result.rows[0].name}`, row: result.rows[0] };
+    return { ok: true, target: `Role Panel: ${result.rows[0].name}`, panelType: 'role', panelRef: result.rows[0].id, row: result.rows[0] };
   }
 
   return { ok: false, reason: 'Unknown panel target. Use ticket, report, application, appeal, or role.' };

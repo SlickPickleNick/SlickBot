@@ -5,6 +5,8 @@ const { replyPrivate } = require('../utils/reply');
 const { ReportService } = require('../modules/support/supportService');
 const { buildReportsPanel, buildPublicReportPanel } = require('../modules/support/supportUi');
 const { createSuccessEmbed } = require('../modules/ui/uiService');
+const { recordPublishedPanel } = require('../modules/panels/publishedPanelService');
+const { refreshPublishedPanel, formatRefreshSummary } = require('../modules/panels/panelUpdateService');
 
 const reports = new ReportService();
 
@@ -65,13 +67,15 @@ module.exports = {
       const pingTeam = interaction.options.getString('ping_team') || null;
       const config = await reports.updateConfig(interaction.guildId, { reviewChannelId: channel.id, pingRoleId: pingRole?.id || null, pingTeamName: pingTeam, panelTitle: interaction.options.getString('panel_title') || null, panelDescription: interaction.options.getString('panel_description') || null, panelColor: interaction.options.getString('panel_color') || null });
       await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'setup', title: 'Report Settings Updated', body: `Report review channel set to <#${channel.id}> by ${interaction.user.tag}.`, actorUserId: interaction.user.id }).catch(() => {});
-      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Report System Configured', [`Review Channel: <#${channel.id}>`, `Ping Role: ${config.ping_role_id ? `<@&${config.ping_role_id}>` : 'Not set'}`, `Ping Team: ${config.ping_team_id ? 'Configured' : 'Not set'}`].join('\n'))] });
+      const refresh = await refreshPublishedPanel(ctx.client, interaction.guildId, 'report', '*').catch(() => null);
+      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Report System Configured', [`Review Channel: <#${channel.id}>`, `Ping Role: ${config.ping_role_id ? `<@&${config.ping_role_id}>` : 'Not set'}`, `Ping Team: ${config.ping_team_id ? 'Configured' : 'Not set'}`, formatRefreshSummary(refresh)].filter(Boolean).join('\n'))] });
     }
 
     if (subcommand === 'panel') {
       const channel = interaction.options.getChannel('channel') || interaction.channel;
-      await channel.send(buildPublicReportPanel(await reports.getConfig(interaction.guildId))); 
-      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Report Panel Posted', `Panel posted in <#${channel.id}>.`)] });
+      const message = await channel.send(buildPublicReportPanel(await reports.getConfig(interaction.guildId)));
+      await recordPublishedPanel({ guildId: interaction.guildId, panelType: 'report', panelRef: '*', channelId: channel.id, messageId: message.id });
+      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Report Panel Posted', `Panel posted in <#${channel.id}>. Future report panel edits will update this message automatically.`)] });
     }
 
     if (subcommand === 'user') {

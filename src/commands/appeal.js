@@ -5,6 +5,8 @@ const { replyPrivate } = require('../utils/reply');
 const { AppealService } = require('../modules/support/supportService');
 const { buildAppealsPanel, buildPublicAppealPanel } = require('../modules/support/supportUi');
 const { createSuccessEmbed } = require('../modules/ui/uiService');
+const { recordPublishedPanel } = require('../modules/panels/publishedPanelService');
+const { refreshPublishedPanel, formatRefreshSummary } = require('../modules/panels/panelUpdateService');
 
 const appeals = new AppealService();
 
@@ -61,13 +63,15 @@ module.exports = {
       const channel = interaction.options.getChannel('review_channel', true);
       const config = await appeals.updateConfig(interaction.guildId, { reviewChannelId: channel.id, dmDecisionEnabled: interaction.options.getBoolean('dm_decision') || false, dmIncludeSubmission: interaction.options.getBoolean('dm_include_submission') || false, panelTitle: interaction.options.getString('panel_title') || null, panelDescription: interaction.options.getString('panel_description') || null, panelColor: interaction.options.getString('panel_color') || null });
       await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'setup', title: 'Appeal Settings Updated', body: `Appeal review channel set to <#${channel.id}> by ${interaction.user.tag}.`, actorUserId: interaction.user.id }).catch(() => {});
-      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Appeal System Configured', [`Review Channel: <#${channel.id}>`, `DM Decisions: **${config.dm_decision_enabled ? 'Enabled' : 'Disabled'}**`, `Include Submission in DM: **${config.dm_include_submission ? 'Enabled' : 'Disabled'}**`].join('\n'))] });
+      const refresh = await refreshPublishedPanel(ctx.client, interaction.guildId, 'appeal', '*').catch(() => null);
+      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Appeal System Configured', [`Review Channel: <#${channel.id}>`, `DM Decisions: **${config.dm_decision_enabled ? 'Enabled' : 'Disabled'}**`, `Include Submission in DM: **${config.dm_include_submission ? 'Enabled' : 'Disabled'}**`, formatRefreshSummary(refresh)].filter(Boolean).join('\n'))] });
     }
 
     if (subcommand === 'panel') {
       const channel = interaction.options.getChannel('channel') || interaction.channel;
-      await channel.send(buildPublicAppealPanel(await appeals.getConfig(interaction.guildId))); 
-      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Appeal Panel Posted', `Panel posted in <#${channel.id}>.`)] });
+      const message = await channel.send(buildPublicAppealPanel(await appeals.getConfig(interaction.guildId)));
+      await recordPublishedPanel({ guildId: interaction.guildId, panelType: 'appeal', panelRef: '*', channelId: channel.id, messageId: message.id });
+      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Appeal Panel Posted', `Panel posted in <#${channel.id}>. Future appeal panel edits will update this message automatically.`)] });
     }
 
     if (subcommand === 'submit') {

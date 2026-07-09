@@ -12,6 +12,7 @@ const { StatusService } = require('./modules/status/statusService');
 const { ModerationService } = require('./modules/moderation/moderationService');
 const { ApplicationService } = require('./modules/support/supportService');
 const { handleMemberJoin: handleWelcomeMemberJoin } = require('./modules/community/welcomeService');
+const { GiveawayService } = require('./modules/community/giveawayService');
 const { handleComponentInteraction } = require('./services/interactionRouter');
 
 const client = new Client({
@@ -34,6 +35,7 @@ const logger = new LoggingService(client);
 const status = new StatusService(client);
 const moderation = new ModerationService();
 const applications = new ApplicationService();
+const giveaways = new GiveawayService();
 const healthServer = startHealthServer(client);
 
 client.once(Events.ClientReady, async (readyClient) => {
@@ -50,6 +52,11 @@ client.once(Events.ClientReady, async (readyClient) => {
   setInterval(() => {
     logger.flushDueBatches().catch((error) => console.error('Failed to flush log batches:', error));
   }, flushMs);
+
+  setInterval(() => {
+    giveaways.processDueGiveaways(readyClient, logger).catch((error) => console.error('Failed to process due giveaways:', error));
+  }, 60 * 1000);
+  await giveaways.processDueGiveaways(readyClient, logger).catch((error) => console.error('Failed to process due giveaways:', error));
 });
 
 client.on(Events.GuildCreate, async (guild) => {

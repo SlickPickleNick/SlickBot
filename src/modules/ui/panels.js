@@ -15,6 +15,8 @@ const { LogModuleCatalog, LogEventCatalog, getEventsForModule } = require('../lo
 const { defaultTeamPermissions } = require('../permissions/actionKeys');
 const { buildWelcomePanel } = require('../community/welcomeService');
 const { buildRoleManagerPanel } = require('../community/rolePanelService');
+const { GiveawayService } = require('../community/giveawayService');
+const giveaways = new GiveawayService();
 
 async function ensureDefaultModules(guildId) {
   for (const moduleConfig of defaultModules) {
@@ -196,6 +198,14 @@ async function getModuleStatus(guildId, row) {
       : { moduleKey: row.module_key, core: false, state: 'NEEDS_CONFIG', emoji: '🟣', label: 'Needs configuration', note: 'Run /roles create-panel' };
   }
 
+
+  if (row.module_key === 'GIVEAWAYS') {
+    const cfg = await query(`SELECT default_channel_id, ping_role_id FROM giveaway_configs WHERE guild_id = $1 LIMIT 1`, [guildId]).catch(() => ({ rows: [] }));
+    const active = await query(`SELECT COUNT(*)::int AS count FROM giveaways WHERE guild_id = $1 AND status = 'OPEN'`, [guildId]).catch(() => ({ rows: [{ count: 0 }] }));
+    if (cfg.rows[0]?.default_channel_id) return { moduleKey: row.module_key, core: false, state: 'READY', emoji: '🟢', label: 'Fully enabled', note: `${active.rows[0]?.count || 0} active` };
+    return { moduleKey: row.module_key, core: false, state: 'NEEDS_CONFIG', emoji: '🟣', label: 'Needs configuration', note: 'Run /giveaway setup' };
+  }
+
   return { moduleKey: row.module_key, core: false, state: 'PARTIAL', emoji: '🟠', label: 'Partially enabled', note: 'Module shell only' };
 }
 
@@ -354,6 +364,7 @@ async function buildPermissionsPanel(guildId) {
 async function buildCommunityPanel(guildId) {
   const welcomePayload = await buildWelcomePanel(guildId);
   const rolePayload = await buildRoleManagerPanel(guildId);
+  const giveawayPayload = await giveaways.buildManagerPanel(guildId);
   const embed = createBaseEmbed({
     title: 'SlickBot Community Center',
     description: [
@@ -363,13 +374,17 @@ async function buildCommunityPanel(guildId) {
       '**Reaction / Button Roles**',
       rolePayload.embeds[0].data.description || 'No role panel status available.',
       '',
-      'Use `/welcome manager` or `/roles manager` for focused setup controls.'
+      '**Giveaways**',
+      giveawayPayload.embeds[0].data.description || 'No giveaway status available.',
+      '',
+      'Use `/welcome manager`, `/roles manager`, or `/giveaway manager` for focused setup controls.'
     ].join('\n'),
     color: SlickBotColors.INFO
   });
   const row = createButtonRow([
     createPanelButton(CustomIds.WelcomeRefresh, 'Welcome', ButtonStyle.Secondary, '👋'),
     createPanelButton(CustomIds.RolePanelsRefresh, 'Role Panels', ButtonStyle.Secondary, '🎛️'),
+    createPanelButton(CustomIds.GiveawaysRefresh, 'Giveaways', ButtonStyle.Secondary, '🎉'),
     createPanelButton(CustomIds.SetupRefresh, 'Back to Setup', ButtonStyle.Primary, '↩️')
   ]);
   return { embeds: [embed], components: [row] };

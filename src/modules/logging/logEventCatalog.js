@@ -70,6 +70,12 @@ const LogModuleCatalog = Object.freeze([
     label: 'Reaction / Button Roles',
     description: 'Self-assignable role panel configuration and role toggles.',
     defaultDelivery: 'IMMEDIATE'
+  },
+  {
+    key: 'giveaways',
+    label: 'Giveaways',
+    description: 'Giveaway creation, entries, endings, and rerolls.',
+    defaultDelivery: 'IMMEDIATE'
   }
 ]);
 
@@ -123,7 +129,13 @@ const LogEventCatalog = Object.freeze([
   { key: 'auto-role-config', moduleKey: 'welcome', label: 'Auto Role Config', description: 'Auto role configuration changes.', defaultDelivery: 'IMMEDIATE' },
 
   { key: 'reaction-role-config', moduleKey: 'reaction-roles', label: 'Role Panel Config', description: 'Self-assignable role panel setup changes.', defaultDelivery: 'IMMEDIATE' },
-  { key: 'reaction-role-toggle', moduleKey: 'reaction-roles', label: 'Role Panel Used', description: 'User role self-assignment actions.', defaultDelivery: 'IMMEDIATE' }
+  { key: 'reaction-role-toggle', moduleKey: 'reaction-roles', label: 'Role Panel Used', description: 'User role self-assignment actions.', defaultDelivery: 'IMMEDIATE' },
+
+  { key: 'giveaway-config', moduleKey: 'giveaways', label: 'Giveaway Config', description: 'Giveaway setup and default changes.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'giveaway-created', moduleKey: 'giveaways', label: 'Giveaway Created', description: 'A giveaway was created.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'giveaway-entry', moduleKey: 'giveaways', label: 'Giveaway Entry', description: 'A user entered a giveaway.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'giveaway-ended', moduleKey: 'giveaways', label: 'Giveaway Ended', description: 'A giveaway ended and winners were selected.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'giveaway-rerolled', moduleKey: 'giveaways', label: 'Giveaway Rerolled', description: 'Giveaway winners were rerolled.', defaultDelivery: 'IMMEDIATE' }
 ]);
 
 const StarterLogModuleKeys = Object.freeze(['core', 'moderation']);

@@ -1,6 +1,7 @@
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { query } = require('../../services/db');
 const { createBaseEmbed, SlickBotColors } = require('../ui/uiService');
+const { updatePublishedPanels } = require('../panels/publishedPanelService');
 
 function normalizeHexColor(color, fallback = '#7869ff') {
   if (!color) return fallback;
@@ -157,6 +158,17 @@ async function removeOption({ guildId, panelName, roleId }) {
   return result.rows[0] || null;
 }
 
+
+async function removeAllOptions({ guildId, panelName }) {
+  const panel = await getPanelByName(guildId, panelName);
+  if (!panel) return null;
+  const result = await query(
+    `UPDATE role_panel_options SET active = false, updated_at = NOW() WHERE panel_id = $1 AND active = true RETURNING *`,
+    [panel.id]
+  );
+  return { panel, removed: result.rowCount || 0 };
+}
+
 async function getPanelOptions(panelId) {
   const result = await query(`SELECT * FROM role_panel_options WHERE panel_id = $1 AND active = true ORDER BY display_order ASC, created_at ASC`, [panelId]);
   return result.rows;
@@ -226,6 +238,16 @@ async function toggleRole({ interaction, panelId, optionId, logger }) {
   return { ok: true, added: !hasRole, roleId: option.role_id, panel };
 }
 
+async function updatePublishedRolePanelMessages(client, guildId, panel) {
+  const payload = await buildRolePanelMessage(panel);
+  return updatePublishedPanels(client, {
+    guildId,
+    panelType: 'role',
+    panelRef: panel.id,
+    payload
+  });
+}
+
 async function buildRoleManagerPanel(guildId) {
   const panels = await listPanels(guildId);
   const lines = panels.length
@@ -252,7 +274,9 @@ module.exports = {
   bulkAddOptions,
   parseBulkEntries,
   removeOption,
+  removeAllOptions,
   buildRolePanelMessage,
   toggleRole,
-  buildRoleManagerPanel
+  buildRoleManagerPanel,
+  updatePublishedRolePanelMessages
 };

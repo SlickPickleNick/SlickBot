@@ -16,6 +16,7 @@ const resetCommand = require('./reset');
 const welcomeCommand = require('./welcome');
 const rolesCommand = require('./roles');
 const panelCommand = require('./panel');
+const giveawayCommand = require('./giveaway');
 
 const commands = [
   pingCommand,
@@ -35,7 +36,8 @@ const commands = [
   resetCommand,
   welcomeCommand,
   rolesCommand,
-  panelCommand
+  panelCommand,
+  giveawayCommand
 ];
 
 const commandMap = new Map(commands.map((command) => [command.data.name, command]));

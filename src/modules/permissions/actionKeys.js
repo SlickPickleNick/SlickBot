@@ -71,6 +71,13 @@ const ActionKeys = Object.freeze({
   RolePanelsPost: 'reaction-roles.panel.post',
   RolePanelsUse: 'reaction-roles.use',
 
+  GiveawaysView: 'giveaways.view',
+  GiveawaysConfigure: 'giveaways.configure',
+  GiveawaysCreate: 'giveaways.create',
+  GiveawaysEnd: 'giveaways.end',
+  GiveawaysReroll: 'giveaways.reroll',
+  GiveawaysEnter: 'giveaways.enter',
+
   PanelsConfigure: 'panels.configure',
 
   ServerReset: 'server.reset'
@@ -164,6 +171,13 @@ const defaultActionLevels = Object.freeze({
   [ActionKeys.RolePanelsUse]: PermissionLevels.EVERYONE,
   [ActionKeys.PanelsConfigure]: PermissionLevels.SENIOR_MODERATOR,
 
+  [ActionKeys.GiveawaysView]: PermissionLevels.MODERATOR,
+  [ActionKeys.GiveawaysConfigure]: PermissionLevels.SENIOR_MODERATOR,
+  [ActionKeys.GiveawaysCreate]: PermissionLevels.MODERATOR,
+  [ActionKeys.GiveawaysEnd]: PermissionLevels.MODERATOR,
+  [ActionKeys.GiveawaysReroll]: PermissionLevels.MODERATOR,
+  [ActionKeys.GiveawaysEnter]: PermissionLevels.EVERYONE,
+
   [ActionKeys.ServerReset]: PermissionLevels.OWNER
 });
 
@@ -194,12 +208,13 @@ const defaultPublicActions = Object.freeze([
   ActionKeys.ReportsSubmit,
   ActionKeys.ApplicationsApply,
   ActionKeys.AppealsSubmit,
-  ActionKeys.RolePanelsUse
+  ActionKeys.RolePanelsUse,
+  ActionKeys.GiveawaysEnter
 ]);
 
 const defaultTeamPermissions = Object.freeze(Object.values(ActionKeys));
 
-const PERMISSION_DEFAULTS_VERSION = '0.4.1';
+const PERMISSION_DEFAULTS_VERSION = '0.5.0';
 
 module.exports = {
   ActionKeys,

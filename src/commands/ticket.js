@@ -5,6 +5,8 @@ const { replyPrivate } = require('../utils/reply');
 const { TicketService, buildTicketModal } = require('../modules/support/supportService');
 const { buildTicketsPanel, buildPublicTicketPanel } = require('../modules/support/supportUi');
 const { createBaseEmbed, createSuccessEmbed, createWarningEmbed, SlickBotColors } = require('../modules/ui/uiService');
+const { recordPublishedPanel } = require('../modules/panels/publishedPanelService');
+const { refreshPublishedPanel, formatRefreshSummary } = require('../modules/panels/panelUpdateService');
 
 const tickets = new TicketService();
 
@@ -134,7 +136,8 @@ module.exports = {
         panelColor: interaction.options.getString('panel_color') || null
       });
       await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'setup', title: 'Ticket Settings Updated', body: `Ticket settings updated by ${interaction.user.tag}.`, actorUserId: interaction.user.id }).catch(() => {});
-      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Ticket Defaults Configured', [`Category: ${config.category_id ? `<#${config.category_id}>` : 'Not set'}`, `Log Channel: ${config.log_channel_id ? `<#${config.log_channel_id}>` : 'Not set'}`, `Staff Role: ${config.staff_role_id ? `<@&${config.staff_role_id}>` : 'Not set'}`, `Naming: \`${config.naming_format}\``].join('\n'))] });
+      const refresh = await refreshPublishedPanel(ctx.client, interaction.guildId, 'ticket', '*').catch(() => null);
+      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Ticket Defaults Configured', [`Category: ${config.category_id ? `<#${config.category_id}>` : 'Not set'}`, `Log Channel: ${config.log_channel_id ? `<#${config.log_channel_id}>` : 'Not set'}`, `Staff Role: ${config.staff_role_id ? `<@&${config.staff_role_id}>` : 'Not set'}`, `Naming: \`${config.naming_format}\``, formatRefreshSummary(refresh)].filter(Boolean).join('\n'))] });
     }
 
     if (subcommand === 'type-setup') {
@@ -156,7 +159,8 @@ module.exports = {
         panelColor: interaction.options.getString('panel_color') || null,
         description: interaction.options.getString('description') || null
       });
-      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Ticket Type Saved', `Saved ticket type **${type.name}**. Use \`/ticket question-add\` to customize intake questions.`)] });
+      const refresh = await refreshPublishedPanel(ctx.client, interaction.guildId, 'ticket', '*').catch(() => null);
+      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Ticket Type Saved', `Saved ticket type **${type.name}**. Use \`/ticket question-add\` to customize intake questions.${formatRefreshSummary(refresh)}`)] });
     }
 
 
@@ -167,26 +171,30 @@ module.exports = {
       const result = await tickets.deleteType(interaction.guildId, typeName);
       if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Ticket Type Not Deleted', result.reason)] });
       await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'setup', title: 'Ticket Type Deleted', body: `Ticket type **${result.type.name}** was deleted by ${interaction.user.tag}.`, actorUserId: interaction.user.id }).catch(() => {});
-      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Ticket Type Deleted', `Deleted ticket type **${result.type.name}**.`)] });
+      const refresh = await refreshPublishedPanel(ctx.client, interaction.guildId, 'ticket', '*').catch(() => null);
+      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Ticket Type Deleted', `Deleted ticket type **${result.type.name}**.${formatRefreshSummary(refresh)}`)] });
     }
 
     if (subcommand === 'question-add') {
       const type = await tickets.addQuestion(interaction.guildId, interaction.options.getString('type', true), interaction.options.getString('question', true), interaction.options.getBoolean('required') ?? true);
       if (!type) return replyPrivate(interaction, { embeds: [createWarningEmbed('Ticket Type Not Found', 'Create the ticket type with `/ticket type-setup` first.')] });
-      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Ticket Question Added', `Added a question to **${type.name}**. Ticket modals support up to 4 custom questions plus subject.`)] });
+      const refresh = await refreshPublishedPanel(ctx.client, interaction.guildId, 'ticket', '*').catch(() => null);
+      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Ticket Question Added', `Added a question to **${type.name}**. Ticket modals support up to 4 custom questions plus subject.${formatRefreshSummary(refresh)}`)] });
     }
 
     if (subcommand === 'question-clear') {
       const type = await tickets.clearQuestions(interaction.guildId, interaction.options.getString('type', true));
       if (!type) return replyPrivate(interaction, { embeds: [createWarningEmbed('Ticket Type Not Found', 'That ticket type could not be found.')] });
-      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Ticket Questions Cleared', `Custom questions cleared for **${type.name}**.`)] });
+      const refresh = await refreshPublishedPanel(ctx.client, interaction.guildId, 'ticket', '*').catch(() => null);
+      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Ticket Questions Cleared', `Custom questions cleared for **${type.name}**.${formatRefreshSummary(refresh)}`)] });
     }
 
     if (subcommand === 'panel') {
       const channel = interaction.options.getChannel('channel') || interaction.channel;
       const types = await tickets.listTypes(interaction.guildId);
-      await channel.send(await buildPublicTicketPanel(types, await tickets.getConfig(interaction.guildId)));
-      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Ticket Panel Posted', `Panel posted in <#${channel.id}>.`)] });
+      const message = await channel.send(await buildPublicTicketPanel(types, await tickets.getConfig(interaction.guildId)));
+      await recordPublishedPanel({ guildId: interaction.guildId, panelType: 'ticket', panelRef: '*', channelId: channel.id, messageId: message.id });
+      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Ticket Panel Posted', `Panel posted in <#${channel.id}>. Future ticket panel edits will update this message automatically.`)] });
     }
 
     if (subcommand === 'open') {

@@ -481,6 +481,74 @@ async function initDatabase() {
   `);
 
 
+  await query(`ALTER TABLE role_panel_options ALTER COLUMN label DROP NOT NULL;`).catch(() => {});
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS panel_messages (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      panel_type TEXT NOT NULL,
+      panel_ref TEXT NOT NULL DEFAULT '*',
+      channel_id TEXT NOT NULL,
+      message_id TEXT NOT NULL,
+      active BOOLEAN NOT NULL DEFAULT true,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(guild_id, message_id)
+    );
+  `);
+
+  await query(`CREATE INDEX IF NOT EXISTS idx_panel_messages_lookup ON panel_messages(guild_id, panel_type, panel_ref, active);`);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS giveaway_configs (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT UNIQUE NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      default_channel_id TEXT,
+      host_role_id TEXT,
+      ping_role_id TEXT,
+      panel_color TEXT NOT NULL DEFAULT '#7869ff',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS giveaways (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      giveaway_number INTEGER NOT NULL,
+      channel_id TEXT NOT NULL,
+      message_id TEXT,
+      prize TEXT NOT NULL,
+      description TEXT,
+      winner_count INTEGER NOT NULL DEFAULT 1,
+      host_user_id TEXT,
+      status TEXT NOT NULL DEFAULT 'OPEN',
+      ends_at TIMESTAMPTZ NOT NULL,
+      ended_at TIMESTAMPTZ,
+      winners JSONB,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(guild_id, giveaway_number)
+    );
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS giveaway_entries (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      giveaway_id TEXT NOT NULL REFERENCES giveaways(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL,
+      user_tag TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(giveaway_id, user_id)
+    );
+  `);
+
+  await query(`CREATE INDEX IF NOT EXISTS idx_giveaways_due ON giveaways(status, ends_at);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_giveaway_entries_lookup ON giveaway_entries(giveaway_id);`);
+
+
   await query(`
     CREATE TABLE IF NOT EXISTS role_permission_levels (
       id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,

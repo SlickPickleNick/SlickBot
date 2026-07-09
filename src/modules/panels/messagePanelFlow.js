@@ -2,6 +2,7 @@ const { ButtonStyle } = require('discord.js');
 const { createBaseEmbed, createSuccessEmbed, createWarningEmbed, SlickBotColors } = require('../ui/uiService');
 const { updatePanelDesign, normalizeHexColor } = require('./panelDesignService');
 const rolePanels = require('../community/rolePanelService');
+const { refreshPublishedPanel, formatRefreshSummary } = require('./panelUpdateService');
 
 const FLOW_TIMEOUT_MS = 5 * 60 * 1000;
 
@@ -100,7 +101,8 @@ async function startPanelMessageFlow(interaction, { target, name = null, logger 
     metadata: { target, name }
   }).catch(() => {});
 
-  return interaction.channel.send({ embeds: [createSuccessEmbed('Panel Updated', `Updated **${result.target}**. Future posted panels will use the new design.`)] });
+  const refresh = await refreshPublishedPanel(interaction.client, interaction.guildId, result.panelType, result.panelRef).catch(() => null);
+  return interaction.channel.send({ embeds: [createSuccessEmbed('Panel Updated', `Updated **${result.target}**.${formatRefreshSummary(refresh) || '\nFuture posted panels will use the new design.'}`)] });
 }
 
 async function startRolePanelCreationFlow(interaction, { logger = null, initialName = null }) {
@@ -176,7 +178,8 @@ async function startRolePanelCreationFlow(interaction, { logger = null, initialN
     actorUserId: interaction.user.id
   }).catch(() => {});
 
-  return interaction.channel.send({ embeds: [createSuccessEmbed('Role Panel Saved', `Panel **${panel.name}** is ready. Use \`/roles bulk-add-wizard panel:${panel.name}\` to add role buttons through guided setup.`)] });
+  const refresh = await rolePanels.updatePublishedRolePanelMessages(interaction.client, interaction.guildId, panel).catch(() => null);
+  return interaction.channel.send({ embeds: [createSuccessEmbed('Role Panel Saved', `Panel **${panel.name}** is ready. Use \`/roles bulk-add-wizard panel:${panel.name}\` to add role buttons through guided setup.${formatRefreshSummary(refresh)}`)] });
 }
 
 async function startRoleBulkAddFlow(interaction, { panelName, logger = null }) {
@@ -229,7 +232,8 @@ async function startRoleBulkAddFlow(interaction, { panelName, logger = null }) {
   }).catch(() => {});
 
   const invalidCount = entries.length - valid.length;
-  return interaction.channel.send({ embeds: [createSuccessEmbed('Role Options Added', `Added **${added.length}** role option(s) to **${panel.name}**. Invalid/skipped lines: **${invalidCount}**.`)] });
+  const refresh = await rolePanels.updatePublishedRolePanelMessages(interaction.client, interaction.guildId, panel).catch(() => null);
+  return interaction.channel.send({ embeds: [createSuccessEmbed('Role Options Added', `Added **${added.length}** role option(s) to **${panel.name}**. Invalid/skipped lines: **${invalidCount}**.${formatRefreshSummary(refresh)}`)] });
 }
 
 module.exports = {

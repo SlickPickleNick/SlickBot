@@ -8,10 +8,12 @@ const { buildModerationPanel, buildRecentCasesPanel } = require('../modules/mode
 const { buildStatusPanel } = require('../commands/status');
 const { createBaseEmbed, createSuccessEmbed, createWarningEmbed, SlickBotColors } = require('../modules/ui/uiService');
 const { updatePanelDesign } = require('../modules/panels/panelDesignService');
+const { refreshPublishedPanel, formatRefreshSummary } = require('../modules/panels/panelUpdateService');
 const { parsePanelDesignModalId } = require('../modules/panels/panelModals');
 const { ActivityTypeNames, PresenceStatus } = require('../modules/status/statusService');
 const { buildSupportPanel, buildTicketsPanel, buildReportsPanel, buildApplicationsPanel, buildAppealsPanel } = require('../modules/support/supportUi');
 const { buildWelcomePanel } = require('../modules/community/welcomeService');
+const { GiveawayService } = require('../modules/community/giveawayService');
 const { buildRoleManagerPanel, toggleRole } = require('../modules/community/rolePanelService');
 const {
   TicketService,
@@ -30,6 +32,7 @@ const tickets = new TicketService();
 const reports = new ReportService();
 const applications = new ApplicationService();
 const appeals = new AppealService();
+const giveaways = new GiveawayService();
 
 async function handleComponentInteraction(interaction, ctx) {
   if (!interaction.guildId) {
@@ -148,6 +151,12 @@ async function handleButton(interaction, ctx) {
     return true;
   }
 
+  if (id === CustomIds.GiveawaysRefresh) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.GiveawaysView, ModuleKeys.GIVEAWAYS))) return true;
+    await updatePanel(interaction, await giveaways.buildManagerPanel(interaction.guildId));
+    return true;
+  }
+
   if (id === CustomIds.TicketsRefresh) {
     if (!(await requireAction(interaction, ctx, ActionKeys.TicketsManager, ModuleKeys.TICKETS))) return true;
     await updatePanel(interaction, await buildTicketsPanel(interaction.guildId));
@@ -180,6 +189,15 @@ async function handleButton(interaction, ctx) {
     if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Role Not Updated', result.reason)] });
     await replyPrivate(interaction, { embeds: [createSuccessEmbed(result.added ? 'Role Added' : 'Role Removed', `${result.added ? 'Added' : 'Removed'} <@&${result.roleId}>.`)] });
     return true;
+  }
+
+
+  if (id.startsWith('slickbot:giveaway:enter:')) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.GiveawaysEnter, ModuleKeys.GIVEAWAYS))) return true;
+    const giveawayId = id.slice('slickbot:giveaway:enter:'.length);
+    const result = await giveaways.enterGiveaway({ interaction, giveawayId, logger: ctx.logger });
+    if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Giveaway Entry Failed', result.reason)] });
+    return replyPrivate(interaction, { embeds: [createSuccessEmbed(result.alreadyEntered ? 'Already Entered' : 'Giveaway Entered', result.alreadyEntered ? 'You are already entered in this giveaway.' : 'You have been entered in the giveaway.')] });
   }
 
   if (id === CustomIds.TicketOpen || id.startsWith(CustomIds.TicketOpenTypePrefix)) {
@@ -452,7 +470,8 @@ async function handleModal(interaction, ctx) {
     });
     if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Panel Not Updated', result.reason)] });
     await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'setup', title: 'Panel Design Updated', body: `${result.target} was updated by ${interaction.user.tag}.`, actorUserId: interaction.user.id }).catch(() => {});
-    await replyPrivate(interaction, { embeds: [createSuccessEmbed('Panel Design Updated', `${result.target} design settings were updated. Repost the panel to publish the revised embed.`)] });
+    const refresh = await refreshPublishedPanel(ctx.client, interaction.guildId, result.panelType, result.panelRef).catch(() => null);
+    await replyPrivate(interaction, { embeds: [createSuccessEmbed('Panel Design Updated', `${result.target} design settings were updated.${formatRefreshSummary(refresh) || '\nFuture posted panels will use the new design.'}`)] });
     return true;
   }
 
@@ -485,7 +504,7 @@ async function requireAnySupportAction(interaction, ctx) {
 
 
 async function requireAnyCommunityAction(interaction, ctx) {
-  const checks = [[ActionKeys.WelcomeView, ModuleKeys.WELCOME], [ActionKeys.RolePanelsView, ModuleKeys.REACTION_ROLES]];
+  const checks = [[ActionKeys.WelcomeView, ModuleKeys.WELCOME], [ActionKeys.RolePanelsView, ModuleKeys.REACTION_ROLES], [ActionKeys.GiveawaysView, ModuleKeys.GIVEAWAYS]];
   for (const [action, moduleKey] of checks) {
     const result = await ctx.permissions.checkInteraction(interaction, action, moduleKey);
     if (result.allowed) return true;

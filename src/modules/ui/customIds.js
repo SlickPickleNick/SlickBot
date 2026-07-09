@@ -19,6 +19,7 @@ const CustomIds = Object.freeze({
   SetupCommunity: 'slickbot:setup:community',
   WelcomeRefresh: 'slickbot:welcome:refresh',
   RolePanelsRefresh: 'slickbot:rolepanels:refresh',
+  GiveawaysRefresh: 'slickbot:giveaways:refresh',
 
   ModulesSelect: 'slickbot:modules:select',
   ModulesRefresh: 'slickbot:modules:refresh',
