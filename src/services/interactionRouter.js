@@ -57,6 +57,26 @@ async function handleComponentInteraction(interaction, ctx) {
 async function handleButton(interaction, ctx) {
   const id = interaction.customId;
 
+
+
+  if (id === CustomIds.ResetCancel) {
+    await updatePanel(interaction, { embeds: [createSuccessEmbed('Reset Cancelled', 'No SlickBot data was changed.')], components: [] });
+    return true;
+  }
+
+  if (id === CustomIds.ResetConfirm) {
+    if (!interaction.guild || interaction.guild.ownerId !== interaction.user.id) {
+      await replyPrivate(interaction, { embeds: [createWarningEmbed('Server Owner Required', 'Only the Discord server owner can confirm this reset.')] });
+      return true;
+    }
+    await query(`DELETE FROM guild_configs WHERE guild_id = $1`, [interaction.guildId]);
+    await ctx.permissions.ensureGuildConfig(interaction.guildId, interaction.guild.name);
+    await ctx.permissions.ensureOwnerTeam(interaction.guildId, interaction.user.id);
+    await ctx.logger.writeAudit({ guildId: interaction.guildId, actorUserId: interaction.user.id, actionKey: ActionKeys.ServerReset, targetType: 'GuildConfig', targetId: interaction.guildId, summary: 'SlickBot server data reset to fresh install.' }).catch(() => {});
+    await updatePanel(interaction, { embeds: [createSuccessEmbed('SlickBot Reset Complete', 'SlickBot data and configuration for this server has been reset. Run `/setup` to configure it again.')], components: [] });
+    return true;
+  }
+
   if (id === CustomIds.SetupRefresh) {
     if (!(await requireAction(interaction, ctx, ActionKeys.Setup, ModuleKeys.PERMISSIONS))) return true;
     await updatePanel(interaction, await buildSetupPanel(interaction.guildId, interaction.guild ? interaction.guild.name : null));
@@ -107,26 +127,26 @@ async function handleButton(interaction, ctx) {
   }
 
   if (id === CustomIds.TicketsRefresh) {
-    if (!(await requireAction(interaction, ctx, ActionKeys.TicketsPanel, ModuleKeys.TICKETS))) return true;
+    if (!(await requireAction(interaction, ctx, ActionKeys.TicketsManager, ModuleKeys.TICKETS))) return true;
     await updatePanel(interaction, await buildTicketsPanel(interaction.guildId));
     return true;
   }
 
   if (id === CustomIds.ReportsRefresh) {
-    if (!(await requireAction(interaction, ctx, ActionKeys.ReportsPanel, ModuleKeys.REPORTS))) return true;
+    if (!(await requireAction(interaction, ctx, ActionKeys.ReportsManager, ModuleKeys.REPORTS))) return true;
     await updatePanel(interaction, await buildReportsPanel(interaction.guildId));
     return true;
   }
 
   if (id === CustomIds.ApplicationsRefresh) {
-    if (!(await requireAction(interaction, ctx, ActionKeys.ApplicationsPanel, ModuleKeys.APPLICATIONS))) return true;
+    if (!(await requireAction(interaction, ctx, ActionKeys.ApplicationsManager, ModuleKeys.APPLICATIONS))) return true;
     await applications.ensureDefaultType(interaction.guildId);
     await updatePanel(interaction, await buildApplicationsPanel(interaction.guildId));
     return true;
   }
 
   if (id === CustomIds.AppealsRefresh) {
-    if (!(await requireAction(interaction, ctx, ActionKeys.AppealsPanel, ModuleKeys.APPEALS))) return true;
+    if (!(await requireAction(interaction, ctx, ActionKeys.AppealsManager, ModuleKeys.APPEALS))) return true;
     await updatePanel(interaction, await buildAppealsPanel(interaction.guildId));
     return true;
   }
@@ -168,7 +188,7 @@ async function handleButton(interaction, ctx) {
   }
 
   if (id.startsWith(CustomIds.ReportClaimPrefix)) {
-    if (!(await requireAction(interaction, ctx, ActionKeys.ReportsReview, ModuleKeys.REPORTS))) return true;
+    if (!(await requireAction(interaction, ctx, ActionKeys.ReportsClaim, ModuleKeys.REPORTS))) return true;
     const reportId = id.slice(CustomIds.ReportClaimPrefix.length);
     const report = await reports.claimReport({ guildId: interaction.guildId, reportId, reviewer: interaction.user, logger: ctx.logger });
     if (!report) return replyPrivate(interaction, { embeds: [createWarningEmbed('Report Not Found', 'The report could not be found or is already closed.')] });
@@ -177,9 +197,10 @@ async function handleButton(interaction, ctx) {
   }
 
   if (id.startsWith(CustomIds.ReportResolvePrefix) || id.startsWith(CustomIds.ReportDismissPrefix)) {
-    if (!(await requireAction(interaction, ctx, ActionKeys.ReportsReview, ModuleKeys.REPORTS))) return true;
-    const reportId = id.replace(CustomIds.ReportResolvePrefix, '').replace(CustomIds.ReportDismissPrefix, '');
     const status = id.startsWith(CustomIds.ReportResolvePrefix) ? 'RESOLVED' : 'DISMISSED';
+    const action = status === 'RESOLVED' ? ActionKeys.ReportsResolve : ActionKeys.ReportsDismiss;
+    if (!(await requireAction(interaction, ctx, action, ModuleKeys.REPORTS))) return true;
+    const reportId = id.replace(CustomIds.ReportResolvePrefix, '').replace(CustomIds.ReportDismissPrefix, '');
     const report = await reports.reviewReport({ guildId: interaction.guildId, reportId, reviewer: interaction.user, status, logger: ctx.logger });
     if (!report) return replyPrivate(interaction, { embeds: [createWarningEmbed('Report Not Found', 'The report could not be found.')] });
     await updatePanel(interaction, { embeds: [createSuccessEmbed('Report Updated', `Report #${report.report_number} marked **${report.status}**.`)], components: [] });
@@ -193,7 +214,7 @@ async function handleButton(interaction, ctx) {
   }
 
   if (id.startsWith(CustomIds.ReportOpenTicketPrefix)) {
-    if (!(await requireAction(interaction, ctx, ActionKeys.ReportsReview, ModuleKeys.REPORTS))) return true;
+    if (!(await requireAction(interaction, ctx, ActionKeys.ReportsOpenTicket, ModuleKeys.REPORTS))) return true;
     const reportId = id.slice(CustomIds.ReportOpenTicketPrefix.length);
     const report = await reports.getReport(interaction.guildId, reportId);
     if (!report) return replyPrivate(interaction, { embeds: [createWarningEmbed('Report Not Found', 'The report could not be found.')] });
@@ -401,7 +422,7 @@ function buildTicketCloseReasonModal() {
 }
 
 async function requireAnySupportAction(interaction, ctx) {
-  const checks = [[ActionKeys.TicketsPanel, ModuleKeys.TICKETS], [ActionKeys.ReportsPanel, ModuleKeys.REPORTS], [ActionKeys.ApplicationsPanel, ModuleKeys.APPLICATIONS], [ActionKeys.AppealsPanel, ModuleKeys.APPEALS]];
+  const checks = [[ActionKeys.TicketsManager, ModuleKeys.TICKETS], [ActionKeys.ReportsManager, ModuleKeys.REPORTS], [ActionKeys.ApplicationsManager, ModuleKeys.APPLICATIONS], [ActionKeys.AppealsManager, ModuleKeys.APPEALS]];
   for (const [action, moduleKey] of checks) {
     const result = await ctx.permissions.checkInteraction(interaction, action, moduleKey);
     if (result.allowed) return true;

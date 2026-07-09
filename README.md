@@ -6,31 +6,216 @@ This version keeps the working TitanBot-style JavaScript foundation: Discord.js,
 
 ## Version
 
-`v0.3.4`
+`v0.3.6`
 
-## v0.3.4 Support Workflow Polish + Permission Controls
+## v0.3.6 Default Permission Seeding
 
-This update keeps the stable v0.3.3 support workflow foundation and focuses on fixes, permissions, customization, and quality-of-life improvements.
+This update keeps the stable v0.3.5 support workflow foundation and adds a complete default permission seed system for all current commands, modules, and public actions.
 
 ### Added / Improved
 
-- New `/permissions` command group.
-- Module-level command permission rules by Permission Team or Discord role.
-- Command/action-level permission rules by Permission Team or Discord role.
-- Public command/action toggles for commands that should be available to all non-ignored users.
-- Ignored users list. Ignored users cannot interact with SlickBot commands, buttons, selects, modals, or DM application controls.
-- Permission Center panel available from `/permissions panel` and the main setup panel.
-- Ticket close flow now sends a countdown and auto-deletes the ticket channel after transcript success.
-- Ticket close delete delay can be configured with `/ticket setup delete_seconds`.
-- Ticket escalation pings the escalated role/team in the ticket channel.
-- Report Add Details now updates the stored report and refreshes the staff review message when possible.
-- Report follow-up tickets now use the report review role/team instead of default ticket staff routing.
-- Application DM flow now includes a Cancel Application button on each question.
-- Applications now show a final Submit / Cancel confirmation panel before staff receive the submission.
-- Application submission confirmation DM message can be customized.
-- Appeal decision DMs can optionally include the original appeal submission.
-- Appeal review buttons are simplified to Approve and Deny. Both open a modal where decision details are optional.
-- Public panel title, description, and accent color can be configured for tickets, reports, applications, and appeals.
+- Added built-in default permission levels for every current command/action key.
+- Added built-in default permission levels for every current module.
+- Added default public action seeding for basic user-facing actions.
+- Added one-time automatic permission default migration for existing servers.
+- Added `/permissions apply-defaults` to intentionally reapply SlickBot's built-in permission map.
+- Updated support workflow commands so manager panels, public panels, public submissions, and staff actions use distinct permission keys.
+- Updated module lock behavior so module-level team/role locks are checked before command-level permission access.
+- Kept all v0.3.5 additions: reset, template deletion, colored module statuses, support workflows, and owner-only high-risk controls.
+
+## Default Permission Levels
+
+SlickBot now seeds the following access model automatically.
+
+| Level | Intended Use |
+|---|---|
+| `EVERYONE` | Basic public commands, such as opening tickets, submitting reports, applying, submitting appeals, and `/ping`. |
+| `MODERATOR` | Active staff tools, such as viewing panels, claiming/closing tickets, reviewing reports, viewing cases, adding notes, and basic moderation. |
+| `SENIOR_MODERATOR` | Bot configuration tools, such as setup, module configuration, logging configuration, support-system setup, application/appeal approvals, and posting public panels. |
+| `OWNER` | Highest-risk controls, such as permission management, permission team management, mass bans, and server reset. |
+
+The Discord server owner always has owner-level access. Discord administrators are treated as owner-level for normal permission checks, but `/reset` still requires the actual Discord server owner.
+
+### Public actions seeded by default
+
+```text
+bot.ping
+tickets.open
+reports.submit
+applications.apply
+appeals.submit
+```
+
+### Permission defaults command
+
+Use this after upgrading if you want to force the built-in defaults back into the database:
+
+```text
+/permissions apply-defaults
+```
+
+This reapplies:
+
+```text
+Command/action default levels
+Module default levels
+Public action defaults
+```
+
+## Permission Configuration
+
+Role/team level mapping:
+
+```text
+/permissions role-level role:@Mods level:MODERATOR
+/permissions role-level role:@Senior-Mods level:SENIOR_MODERATOR
+/permissions team-level team:Moderator Team level:MODERATOR
+```
+
+Command/module level overrides:
+
+```text
+/permissions command-level action_key:tickets.close level:MODERATOR
+/permissions module-level module:APPLICATIONS level:EVERYONE
+```
+
+Direct team/role allow controls:
+
+```text
+/permissions module-allow-team module:MODERATION team:Moderator Team
+/permissions module-allow-role module:TICKETS role:@Support Team
+/permissions command-allow-team action_key:tickets.close team:Senior Mods
+/permissions command-allow-role action_key:reports.resolve role:@Moderators
+```
+
+Public command toggle:
+
+```text
+/permissions command-public action_key:reports.submit enabled:true
+/permissions command-public action_key:reports.submit enabled:false
+```
+
+Ignored users:
+
+```text
+/permissions ignore-add user:@ExampleUser reason:Abusing bot interactions
+/permissions ignore-remove user:@ExampleUser
+/permissions ignore-list
+```
+
+Ignored users cannot use commands, buttons, select menus, modals, or DM application controls.
+
+## Current Command Permission Highlights
+
+### Everyone
+
+```text
+/ping
+/ticket open
+/report user
+/report issue
+/application apply
+/appeal submit
+```
+
+### Moderator
+
+```text
+/mod panel
+/mod warn
+/mod timeout
+/case view
+/case user
+/note add
+/note list
+/ticket manager
+/ticket claim
+/ticket close
+/ticket priority
+/ticket escalate
+/report manager
+/report claim/resolve/dismiss controls
+/application manager
+/application review controls
+/appeal manager
+/appeal review controls
+/logging panel
+/status view
+```
+
+### Senior Moderator
+
+```text
+/setup
+/modules enable/disable
+/logging configuration
+/status set/clear
+/ticket setup/type/question/panel commands
+/report setup/panel commands
+/application setup/question/panel/delete commands
+/appeal setup/panel commands
+/application approve/deny controls
+/appeal approve/deny controls
+/permissions ignore-add/remove/list
+```
+
+### Owner
+
+```text
+/team create/add-role/remove-role/delete/allow/list
+/permissions manage commands
+/mod massban
+/reset
+```
+
+## Template Deletion
+
+Delete ticket types:
+
+```text
+/ticket type-delete type:Admin Support confirm:true
+```
+
+Ticket types with open tickets cannot be deleted until those tickets are closed.
+
+Delete application types:
+
+```text
+/application delete type:Moderator confirm:true
+```
+
+This deletes the application type and related application questions/submissions.
+
+Delete non-system permission teams:
+
+```text
+/team delete name:Event Team confirm:true
+```
+
+System teams, such as Bot Owners, cannot be deleted.
+
+## Fresh Install Reset
+
+Server owner only:
+
+```text
+/reset
+```
+
+SlickBot will show a confirmation panel before deleting data. Confirming the reset deletes SlickBot data/configuration for the server and recreates fresh default setup records, including the built-in permission defaults.
+
+## Module Status Indicators
+
+`/modules panel` uses:
+
+```text
+🟢 Fully enabled
+🟠 Partially enabled
+🟣 Needs configuration
+🔴 Disabled
+```
+
+Support modules show 🟣 when enabled but missing required setup, such as review channels, ticket category, or application review configuration.
 
 ## Included Modules
 
@@ -48,44 +233,10 @@ This update keeps the stable v0.3.3 support workflow foundation and focuses on f
 - Ephemeral/private command responses
 - Interactive setup panels
 - Permission Teams
+- Permission levels
+- Default permission seeding
 - Module manager
 - Bot status/activity controls
-
-### Permissions
-
-Main commands:
-
-```text
-/permissions panel
-/permissions module-allow-team
-/permissions module-allow-role
-/permissions command-allow-team
-/permissions command-allow-role
-/permissions command-public
-/permissions ignore-add
-/permissions ignore-remove
-/permissions ignore-list
-```
-
-Recommended examples:
-
-```text
-/permissions module-allow-team module:MODERATION team:Moderator Team
-/permissions module-allow-role module:TICKETS role:@Support Team
-/permissions command-allow-team action_key:tickets.close team:Senior Mods
-/permissions command-public action_key:bot.ping enabled:true
-/permissions ignore-add user:@ExampleUser reason:Abusing bot interactions
-```
-
-Permission order:
-
-1. Ignored users are blocked.
-2. Bot owners bypass permission checks.
-3. Disabled modules block access.
-4. Public command/action settings are allowed for all non-ignored users.
-5. Discord administrators are allowed.
-6. Module-level team/role rules are checked.
-7. Action-level team/role rules are checked.
 
 ### Logging
 
@@ -154,7 +305,6 @@ Reports support:
 - Claim
 - Resolve
 - Dismiss
-- Add Details
 - Open Ticket
 
 Claiming changes the report status to `CLAIMED`, but the report remains open until resolved or dismissed.
@@ -201,6 +351,7 @@ After deploying, run:
 
 ```text
 /setup log_channel:#staff-logs
+/permissions apply-defaults
 /modules panel
 /permissions panel
 /logging panel

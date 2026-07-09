@@ -205,6 +205,16 @@ class TicketService {
     return result.rows[0];
   }
 
+
+  async deleteType(guildId, typeName) {
+    const type = await this.getTypeByName(guildId, typeName);
+    if (!type) return { ok: false, reason: 'Ticket type not found.' };
+    const openTickets = await query(`SELECT COUNT(*)::int AS count FROM tickets WHERE guild_id = $1 AND ticket_type_id = $2 AND status = 'OPEN'`, [guildId, type.id]).catch(() => ({ rows: [{ count: 0 }] }));
+    if ((openTickets.rows[0]?.count || 0) > 0) return { ok: false, reason: 'This ticket type still has open tickets. Close them before deleting the type.' };
+    await query(`DELETE FROM ticket_types WHERE guild_id = $1 AND id = $2`, [guildId, type.id]);
+    return { ok: true, type };
+  }
+
   async createTicket({ interaction, client, logger, type = 'Admin Support', ticketType = null, openerUser = null, actorUser = null, subject, details, answers = null, reviewerRoleIdsOverride = null, skipTicketLimit = false }) {
     const guild = interaction.guild;
     const guildId = interaction.guildId;
@@ -242,7 +252,7 @@ class TicketService {
     }
 
     const teamRoleIds = await getTeamRoleIds(selectedType.staff_team_id);
-    const reviewerRoleIds = Array.isArray(reviewerRoleIdsOverride) && reviewerRoleIdsOverride.length ? [...new Set(reviewerRoleIdsOverride)] : [...new Set([selectedType.staff_role_id || config.staff_role_id, ...teamRoleIds].filter(Boolean))];
+    const reviewerRoleIds = Array.isArray(reviewerRoleIdsOverride) ? [...new Set(reviewerRoleIdsOverride)] : [...new Set([selectedType.staff_role_id || config.staff_role_id, ...teamRoleIds].filter(Boolean))];
     for (const roleId of reviewerRoleIds) {
       overwrites.push({ id: roleId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.ManageMessages] });
     }
@@ -362,7 +372,7 @@ class TicketService {
     await interaction.channel.permissionOverwrites.edit(ticket.opener_user_id, { SendMessages: false }).catch(() => {});
     await interaction.channel.setName(`closed-${interaction.channel.name}`.slice(0, 95)).catch(() => {});
     await logger.log({ guildId: interaction.guildId, eventKey: 'ticket-close', title: 'Ticket Closed', body: `Ticket #${ticket.ticket_number} closed by ${interaction.user.tag}. Transcript sent: **${transcriptSent ? 'Yes' : 'No'}**.\nReason: ${reason}`, actorUserId: interaction.user.id, metadata: { ticketId: ticket.id, transcriptSent } }).catch(() => {});
-    return { ok: true, ticket: result.rows[0], transcriptSent };
+    return { ok: true, ticket: result.rows[0], transcriptSent, shouldDelete: transcriptSent === true, deleteSeconds: Number(type?.close_delete_seconds || config.close_delete_seconds || 10) };
   }
 
   async buildTranscript(channel, ticket, reason, closedBy) {
@@ -536,7 +546,6 @@ function buildReportReviewPayload(report) {
     new ButtonBuilder().setCustomId(`${CustomIds.ReportClaimPrefix}${report.id}`).setLabel('Claim').setStyle(ButtonStyle.Primary),
     new ButtonBuilder().setCustomId(`${CustomIds.ReportResolvePrefix}${report.id}`).setLabel('Resolve').setStyle(ButtonStyle.Success),
     new ButtonBuilder().setCustomId(`${CustomIds.ReportDismissPrefix}${report.id}`).setLabel('Dismiss').setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId(`${CustomIds.ReportDetailsPrefix}${report.id}`).setLabel('Add Details').setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId(`${CustomIds.ReportOpenTicketPrefix}${report.id}`).setLabel('Open Ticket').setStyle(ButtonStyle.Danger)
   );
   return { embeds: [embed], components: [row] };
@@ -613,6 +622,14 @@ class ApplicationService {
     if (!type) return null;
     await query(`DELETE FROM application_questions WHERE application_type_id = $1`, [type.id]);
     return type;
+  }
+
+
+  async deleteType(guildId, typeName) {
+    const type = await this.getTypeByName(guildId, typeName);
+    if (!type) return { ok: false, reason: 'Application type not found.' };
+    await query(`DELETE FROM application_types WHERE guild_id = $1 AND id = $2`, [guildId, type.id]);
+    return { ok: true, type };
   }
 
   async startApplicationDm({ interaction, client, logger, applicationType }) {

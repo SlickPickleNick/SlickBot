@@ -37,6 +37,14 @@ module.exports = {
         .addStringOption((option) => option.setName('team').setDescription('Team name.').setRequired(true))
         .addStringOption((option) => option.setName('action_key').setDescription('Example: moderation.warn').setRequired(true))
     )
+
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName('delete')
+        .setDescription('Delete a non-system permission team.')
+        .addStringOption((option) => option.setName('name').setDescription('Team name.').setRequired(true))
+        .addBooleanOption((option) => option.setName('confirm').setDescription('Must be true to delete the team.').setRequired(true))
+    )
     .addSubcommand((subcommand) => subcommand.setName('list').setDescription('List permission teams.')),
   actionKey: ActionKeys.TeamsManage,
   moduleKey: ModuleKeys.PERMISSIONS,
@@ -141,6 +149,19 @@ module.exports = {
 
       await replyPrivate(interaction, { embeds: [createBaseEmbed({ title: 'Team Permission Added', description: `Allowed **${teamName}** to use \`${actionKey}\`.`, color: SlickBotColors.SUCCESS })] });
       return;
+    }
+
+
+    if (subcommand === 'delete') {
+      const teamName = interaction.options.getString('name', true).trim();
+      const confirmed = interaction.options.getBoolean('confirm', true);
+      if (!confirmed) return replyPrivate(interaction, { embeds: [createBaseEmbed({ title: 'Delete Not Confirmed', description: 'Run the command again with `confirm:true` to delete this team.', color: SlickBotColors.WARNING })] });
+      const team = await getTeam(interaction.guildId, teamName);
+      if (!team) return replyPrivate(interaction, { embeds: [createBaseEmbed({ title: 'Team Not Found', description: `Team **${teamName}** was not found.`, color: SlickBotColors.WARNING })] });
+      if (team.is_system_team) return replyPrivate(interaction, { embeds: [createBaseEmbed({ title: 'System Team Locked', description: 'System teams cannot be deleted.', color: SlickBotColors.ERROR })] });
+      await query(`DELETE FROM permission_teams WHERE guild_id = $1 AND id = $2`, [interaction.guildId, team.id]);
+      await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'permission-team', title: 'Permission Team Deleted', body: `Team **${team.name}** was deleted by <@${interaction.user.id}>.`, actorUserId: interaction.user.id }).catch(() => {});
+      return replyPrivate(interaction, { embeds: [createBaseEmbed({ title: 'Team Deleted', description: `Deleted team **${team.name}**.`, color: SlickBotColors.SUCCESS })] });
     }
 
     if (subcommand === 'list') {

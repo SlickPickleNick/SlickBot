@@ -49,6 +49,14 @@ module.exports = {
         .setDescription('Clear all custom questions for an application type.')
         .addStringOption((option) => option.setName('type').setDescription('Application type name.').setRequired(true).setMaxLength(80))
     )
+
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName('delete')
+        .setDescription('Delete an application type template and its related questions/submissions.')
+        .addStringOption((option) => option.setName('type').setDescription('Application type name.').setRequired(true).setMaxLength(80))
+        .addBooleanOption((option) => option.setName('confirm').setDescription('Must be true to delete the application type.').setRequired(true))
+    )
     .addSubcommand((subcommand) =>
       subcommand
         .setName('panel')
@@ -66,8 +74,10 @@ module.exports = {
   moduleKey: ModuleKeys.APPLICATIONS,
   getActionKey(interaction) {
     const subcommand = interaction.options.getSubcommand();
-    if (['setup', 'question-add', 'question-clear'].includes(subcommand)) return ActionKeys.ApplicationsConfigure;
-    if (subcommand === 'panel' || subcommand === 'manager' || subcommand === 'question-list') return ActionKeys.ApplicationsPanel;
+    if (['setup', 'delete', 'question-add', 'question-clear'].includes(subcommand)) return ActionKeys.ApplicationsConfigure;
+    if (subcommand === 'manager' || subcommand === 'question-list') return ActionKeys.ApplicationsManager;
+    if (subcommand === 'panel') return ActionKeys.ApplicationsPostPanel;
+    if (subcommand === 'apply') return ActionKeys.ApplicationsApply;
     return ActionKeys.ApplicationsReview;
   },
   isPublic(interaction) {
@@ -95,6 +105,17 @@ module.exports = {
       });
       await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'setup', title: 'Application Settings Updated', body: `${type.name} application settings updated by ${interaction.user.tag}.`, actorUserId: interaction.user.id }).catch(() => {});
       return replyPrivate(interaction, { embeds: [createSuccessEmbed('Application Type Configured', `Application type **${type.name}** is ready. Use \`/application question-add\` to customize the DM questions.`)] });
+    }
+
+
+    if (subcommand === 'delete') {
+      const typeName = interaction.options.getString('type', true);
+      const confirmed = interaction.options.getBoolean('confirm', true);
+      if (!confirmed) return replyPrivate(interaction, { embeds: [createWarningEmbed('Delete Not Confirmed', 'Run the command again with `confirm:true` to delete this application type.')] });
+      const result = await applications.deleteType(interaction.guildId, typeName);
+      if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Application Type Not Deleted', result.reason)] });
+      await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'setup', title: 'Application Type Deleted', body: `Application type **${result.type.name}** was deleted by ${interaction.user.tag}.`, actorUserId: interaction.user.id }).catch(() => {});
+      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Application Type Deleted', `Deleted application type **${result.type.name}**.`)] });
     }
 
     if (subcommand === 'question-add') {

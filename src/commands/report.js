@@ -44,7 +44,9 @@ module.exports = {
   getActionKey(interaction) {
     const subcommand = interaction.options.getSubcommand();
     if (subcommand === 'setup') return ActionKeys.ReportsConfigure;
-    if (subcommand === 'panel' || subcommand === 'manager') return ActionKeys.ReportsPanel;
+    if (subcommand === 'manager') return ActionKeys.ReportsManager;
+    if (subcommand === 'panel') return ActionKeys.ReportsPostPanel;
+    if (subcommand === 'user' || subcommand === 'issue') return ActionKeys.ReportsSubmit;
     return ActionKeys.ReportsReview;
   },
   isPublic(interaction) {

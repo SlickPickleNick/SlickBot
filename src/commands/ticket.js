@@ -59,6 +59,14 @@ module.exports = {
         .setDescription('Clear all custom questions for a ticket type.')
         .addStringOption((option) => option.setName('type').setDescription('Ticket type name.').setRequired(true).setMaxLength(80))
     )
+
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName('type-delete')
+        .setDescription('Delete a ticket type template. Open tickets must be closed first.')
+        .addStringOption((option) => option.setName('type').setDescription('Ticket type name.').setRequired(true).setMaxLength(80))
+        .addBooleanOption((option) => option.setName('confirm').setDescription('Must be true to delete the ticket type.').setRequired(true))
+    )
     .addSubcommand((subcommand) =>
       subcommand
         .setName('panel')
@@ -94,12 +102,14 @@ module.exports = {
   moduleKey: ModuleKeys.TICKETS,
   getActionKey(interaction) {
     const subcommand = interaction.options.getSubcommand();
-    if (['setup', 'type-setup', 'question-add', 'question-clear'].includes(subcommand)) return ActionKeys.TicketsConfigure;
-    if (subcommand === 'panel' || subcommand === 'manager') return ActionKeys.TicketsPanel;
+    if (['setup', 'type-setup', 'type-delete', 'question-add', 'question-clear'].includes(subcommand)) return ActionKeys.TicketsConfigure;
+    if (subcommand === 'manager') return ActionKeys.TicketsManager;
+    if (subcommand === 'panel') return ActionKeys.TicketsPostPanel;
+    if (subcommand === 'open') return ActionKeys.TicketsOpen;
     if (subcommand === 'claim') return ActionKeys.TicketsClaim;
     if (subcommand === 'close') return ActionKeys.TicketsClose;
     if (['priority', 'escalate'].includes(subcommand)) return ActionKeys.TicketsManage;
-    return ActionKeys.TicketsPanel;
+    return ActionKeys.TicketsManager;
   },
   isPublic(interaction) {
     return interaction.options.getSubcommand() === 'open';
@@ -147,6 +157,17 @@ module.exports = {
         description: interaction.options.getString('description') || null
       });
       return replyPrivate(interaction, { embeds: [createSuccessEmbed('Ticket Type Saved', `Saved ticket type **${type.name}**. Use \`/ticket question-add\` to customize intake questions.`)] });
+    }
+
+
+    if (subcommand === 'type-delete') {
+      const typeName = interaction.options.getString('type', true);
+      const confirmed = interaction.options.getBoolean('confirm', true);
+      if (!confirmed) return replyPrivate(interaction, { embeds: [createWarningEmbed('Delete Not Confirmed', 'Run the command again with `confirm:true` to delete this ticket type.')] });
+      const result = await tickets.deleteType(interaction.guildId, typeName);
+      if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Ticket Type Not Deleted', result.reason)] });
+      await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'setup', title: 'Ticket Type Deleted', body: `Ticket type **${result.type.name}** was deleted by ${interaction.user.tag}.`, actorUserId: interaction.user.id }).catch(() => {});
+      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Ticket Type Deleted', `Deleted ticket type **${result.type.name}**.`)] });
     }
 
     if (subcommand === 'question-add') {

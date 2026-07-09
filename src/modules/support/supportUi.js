@@ -115,7 +115,7 @@ async function buildReportsPanel(guildId) {
       `Ping Role: ${cfg?.ping_role_id ? `<@&${cfg.ping_role_id}>` : 'Not set'}`,
       `Ping Team: ${cfg?.ping_team_id ? 'Configured' : 'Not set'}`,
       '',
-      'Reports can be claimed, resolved, dismissed, updated with details, or converted into a follow-up ticket.'
+      'Reports can be claimed, resolved, dismissed, or converted into a follow-up ticket.'
     ].join('\n'),
     color: SlickBotColors.INFO
   });

@@ -1,18 +1,20 @@
 const { SlashCommandBuilder } = require('discord.js');
 const { ModuleKeys, defaultModules } = require('../modules/moduleRegistry');
-const { ActionKeys } = require('../modules/permissions/actionKeys');
+const { ActionKeys, PermissionLevels } = require('../modules/permissions/actionKeys');
 const { replyPrivate } = require('../utils/reply');
 const { query } = require('../services/db');
 const { createBaseEmbed, createSuccessEmbed, createWarningEmbed, SlickBotColors } = require('../modules/ui/uiService');
 const { buildPermissionsPanel } = require('../modules/ui/panels');
 
 const moduleChoices = defaultModules.map((module) => ({ name: module.key, value: module.key })).slice(0, 25);
+const levelChoices = Object.values(PermissionLevels).map((level) => ({ name: level.replace('_', ' '), value: level }));
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('permissions')
     .setDescription('Manage SlickBot command permissions and ignored users.')
     .addSubcommand((subcommand) => subcommand.setName('panel').setDescription('Open the permission control panel.'))
+    .addSubcommand((subcommand) => subcommand.setName('apply-defaults').setDescription('Reapply SlickBot default command/module permission levels.'))
     .addSubcommand((subcommand) =>
       subcommand
         .setName('module-allow-team')
@@ -48,6 +50,35 @@ module.exports = {
         .addStringOption((option) => option.setName('action_key').setDescription('Command/action key, example: tickets.close.').setRequired(true).setMaxLength(100))
         .addBooleanOption((option) => option.setName('enabled').setDescription('Whether all users can use this command/action.').setRequired(true))
     )
+
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName('role-level')
+        .setDescription('Set a Discord role permission level.')
+        .addRoleOption((option) => option.setName('role').setDescription('Discord role.').setRequired(true))
+        .addStringOption((option) => option.setName('level').setDescription('Permission level.').setRequired(true).addChoices(...levelChoices))
+    )
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName('team-level')
+        .setDescription('Set a Permission Team permission level.')
+        .addStringOption((option) => option.setName('team').setDescription('Permission Team name.').setRequired(true).setMaxLength(80))
+        .addStringOption((option) => option.setName('level').setDescription('Permission level.').setRequired(true).addChoices(...levelChoices))
+    )
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName('command-level')
+        .setDescription('Set the default permission level required for an action key.')
+        .addStringOption((option) => option.setName('action_key').setDescription('Command/action key, example: tickets.close.').setRequired(true).setMaxLength(100))
+        .addStringOption((option) => option.setName('level').setDescription('Required permission level.').setRequired(true).addChoices(...levelChoices))
+    )
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName('module-level')
+        .setDescription('Set the default permission level required for an entire module.')
+        .addStringOption((option) => option.setName('module').setDescription('Module key.').setRequired(true).addChoices(...moduleChoices))
+        .addStringOption((option) => option.setName('level').setDescription('Required permission level.').setRequired(true).addChoices(...levelChoices))
+    )
     .addSubcommand((subcommand) =>
       subcommand
         .setName('ignore-add')
@@ -75,6 +106,12 @@ module.exports = {
     await ctx.permissions.ensureGuildConfig(interaction.guildId, interaction.guild ? interaction.guild.name : null);
 
     if (subcommand === 'panel') return replyPrivate(interaction, await buildPermissionsPanel(interaction.guildId));
+
+    if (subcommand === 'apply-defaults') {
+      await ctx.permissions.reapplyDefaultPermissionLevels(interaction.guildId);
+      await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'permission-team', title: 'Default Permissions Applied', body: `Built-in SlickBot permission levels were reapplied by ${interaction.user.tag}.`, actorUserId: interaction.user.id }).catch(() => {});
+      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Default Permissions Applied', 'SlickBot command levels, module levels, and public command defaults were reapplied. Use `/permissions panel` to review current access settings.')] });
+    }
 
     if (subcommand === 'module-allow-team') {
       const moduleKey = interaction.options.getString('module', true);
@@ -115,6 +152,37 @@ module.exports = {
       const enabled = interaction.options.getBoolean('enabled', true);
       await query(`INSERT INTO public_action_permissions (guild_id, action_key, enabled) VALUES ($1, $2, $3) ON CONFLICT (guild_id, action_key) DO UPDATE SET enabled = EXCLUDED.enabled, updated_at = NOW()`, [interaction.guildId, actionKey, enabled]);
       return replyPrivate(interaction, { embeds: [createSuccessEmbed('Public Command Updated', `${actionKey} is now **${enabled ? 'available to all non-ignored users' : 'restricted'}**.`)] });
+    }
+
+
+    if (subcommand === 'role-level') {
+      const role = interaction.options.getRole('role', true);
+      const level = interaction.options.getString('level', true);
+      await query(`INSERT INTO role_permission_levels (guild_id, role_id, permission_level) VALUES ($1, $2, $3) ON CONFLICT (guild_id, role_id) DO UPDATE SET permission_level = EXCLUDED.permission_level, updated_at = NOW()`, [interaction.guildId, role.id, level]);
+      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Role Level Saved', `${role} is now mapped to **${level}**.`)] });
+    }
+
+    if (subcommand === 'team-level') {
+      const teamName = interaction.options.getString('team', true);
+      const level = interaction.options.getString('level', true);
+      const team = await getTeam(interaction.guildId, teamName);
+      if (!team) return replyPrivate(interaction, { embeds: [createWarningEmbed('Team Not Found', `Team **${teamName}** was not found.`)] });
+      await query(`INSERT INTO team_permission_levels (guild_id, team_id, permission_level) VALUES ($1, $2, $3) ON CONFLICT (guild_id, team_id) DO UPDATE SET permission_level = EXCLUDED.permission_level, updated_at = NOW()`, [interaction.guildId, team.id, level]);
+      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Team Level Saved', `Team **${team.name}** is now mapped to **${level}**.`)] });
+    }
+
+    if (subcommand === 'command-level') {
+      const actionKey = interaction.options.getString('action_key', true);
+      const level = interaction.options.getString('level', true);
+      await query(`INSERT INTO command_permission_levels (guild_id, action_key, required_level) VALUES ($1, $2, $3) ON CONFLICT (guild_id, action_key) DO UPDATE SET required_level = EXCLUDED.required_level, updated_at = NOW()`, [interaction.guildId, actionKey, level]);
+      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Command Level Saved', `Action key \`${actionKey}\` now requires **${level}**.`)] });
+    }
+
+    if (subcommand === 'module-level') {
+      const moduleKey = interaction.options.getString('module', true);
+      const level = interaction.options.getString('level', true);
+      await query(`INSERT INTO module_permission_levels (guild_id, module_key, required_level) VALUES ($1, $2, $3) ON CONFLICT (guild_id, module_key) DO UPDATE SET required_level = EXCLUDED.required_level, updated_at = NOW()`, [interaction.guildId, moduleKey, level]);
+      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Module Level Saved', `Module **${moduleKey}** now requires **${level}** unless a command has a higher requirement.`)] });
     }
 
     if (subcommand === 'ignore-add') {

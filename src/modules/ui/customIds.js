@@ -6,6 +6,8 @@ const CustomIds = Object.freeze({
   SetupTeams: 'slickbot:setup:teams',
 
   SetupPermissions: 'slickbot:setup:permissions',
+  ResetConfirm: 'slickbot:reset:confirm',
+  ResetCancel: 'slickbot:reset:cancel',
   PermissionsRefresh: 'slickbot:permissions:refresh',
   PermissionsModuleSelect: 'slickbot:permissions:module-select',
   PermissionsCommandSelect: 'slickbot:permissions:command-select',

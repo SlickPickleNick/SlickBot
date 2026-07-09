@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`v0.3.0`
+`v0.3.6`
 
 ## Current Foundation
 
@@ -19,6 +19,8 @@
 - Module-based logging
 - Moderation, case management, and user notes
 - Tickets, reports, applications, and appeals
+- Seeded default permission levels for all current commands/modules
+- Public action defaults and ignored-user enforcement
 
 ## Version Roadmap
 
@@ -49,6 +51,7 @@
 - Appeals system
 - Public launcher panels
 - Staff review buttons
+- Default permission seeding and `/permissions apply-defaults`
 
 ### v0.4.x — Community Basics
 

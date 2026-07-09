@@ -415,6 +415,65 @@ async function initDatabase() {
   await query(`ALTER TABLE appeal_configs ADD COLUMN IF NOT EXISTS panel_color TEXT;`).catch(() => {});
   await query(`ALTER TABLE appeal_configs ADD COLUMN IF NOT EXISTS dm_include_submission BOOLEAN NOT NULL DEFAULT false;`).catch(() => {});
 
+
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS role_permission_levels (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      role_id TEXT NOT NULL,
+      permission_level TEXT NOT NULL DEFAULT 'MODERATOR',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(guild_id, role_id)
+    );
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS team_permission_levels (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      team_id TEXT NOT NULL REFERENCES permission_teams(id) ON DELETE CASCADE,
+      permission_level TEXT NOT NULL DEFAULT 'MODERATOR',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(guild_id, team_id)
+    );
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS command_permission_levels (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      action_key TEXT NOT NULL,
+      required_level TEXT NOT NULL DEFAULT 'SENIOR_MODERATOR',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(guild_id, action_key)
+    );
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS module_permission_levels (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      module_key TEXT NOT NULL,
+      required_level TEXT NOT NULL DEFAULT 'SENIOR_MODERATOR',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(guild_id, module_key)
+    );
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS permission_default_versions (
+      guild_id TEXT PRIMARY KEY REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      seeded_version TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
   await query(`
     CREATE TABLE IF NOT EXISTS permission_ignored_users (
       id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,

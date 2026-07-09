@@ -1,8 +1,8 @@
 {
   "name": "slickbot",
-  "version": "0.3.4",
+  "version": "0.3.6",
   "private": true,
-  "description": "SlickBot all-in-one Discord server management bot with permission controls, support workflow polish, customizable panels, DM application confirmation, ticket auto-delete, and optimized Railway deployment.",
+  "description": "SlickBot all-in-one Discord server management bot with seeded default permission levels for commands/modules, public actions, and support workflow permissions.",
   "main": "src/index.js",
   "engines": {
     "node": ">=22.12.0"

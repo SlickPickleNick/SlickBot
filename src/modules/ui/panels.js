@@ -87,30 +87,37 @@ async function buildModulesPanel(guildId) {
     [guildId]
   );
 
-  const enabled = modules.rows.filter((row) => row.enabled);
-  const disabled = modules.rows.filter((row) => !row.enabled);
+  const statuses = await Promise.all(modules.rows.map((row) => getModuleStatus(guildId, row)));
+  const byStatus = statuses.reduce((acc, item) => {
+    acc[item.state] = (acc[item.state] || 0) + 1;
+    return acc;
+  }, {});
+
+  const lines = statuses.map((item) => `${item.emoji} **${item.moduleKey}**${item.core ? ' — Core' : ''} · ${item.label}${item.note ? ` · ${item.note}` : ''}`).join('\n');
 
   const embed = createBaseEmbed({
     title: 'SlickBot Module Manager',
     description: [
-      '**Enabled Modules**',
-      enabled.length ? enabled.map((row) => `• **${row.module_key}**${isCoreModule(row.module_key) ? ' — Core' : ''}`).join('\n') : 'None',
+      '**Status Legend**',
+      '🟢 Fully enabled · 🟠 Partially enabled · 🟣 Needs configuration · 🔴 Disabled',
       '',
-      '**Disabled Modules**',
-      disabled.length ? disabled.map((row) => `• ${row.module_key}`).join('\n') : 'None',
+      `🟢 ${byStatus.READY || 0} · 🟠 ${byStatus.PARTIAL || 0} · 🟣 ${byStatus.NEEDS_CONFIG || 0} · 🔴 ${byStatus.DISABLED || 0}`,
       '',
-      'Use the menu below to toggle non-core modules.'
+      '**Modules**',
+      lines || 'No modules found.',
+      '',
+      'Use the menu below to toggle non-core modules. Configure module settings from the related manager panel.'
     ].join('\n'),
     color: SlickBotColors.INFO
   });
 
-  const options = modules.rows.map((row) => ({
-    label: row.module_key,
-    value: row.module_key,
-    description: isCoreModule(row.module_key)
+  const options = statuses.map((item) => ({
+    label: item.moduleKey,
+    value: item.moduleKey,
+    description: isCoreModule(item.moduleKey)
       ? 'Core module; cannot be disabled.'
-      : `${formatEnabled(row.enabled)}. Select to toggle.`,
-    emoji: row.enabled ? '✅' : '⬜'
+      : `${item.label}. Select to toggle.`,
+    emoji: item.emoji
   }));
 
   const select = createSelectRow(CustomIds.ModulesSelect, 'Toggle a module...', options.slice(0, 25));
@@ -120,6 +127,42 @@ async function buildModulesPanel(guildId) {
   ]);
 
   return { embeds: [embed], components: [select, buttons] };
+}
+
+async function getModuleStatus(guildId, row) {
+  if (!row.enabled) return { moduleKey: row.module_key, core: isCoreModule(row.module_key), state: 'DISABLED', emoji: '🔴', label: 'Disabled', note: 'Off' };
+  if (isCoreModule(row.module_key)) return { moduleKey: row.module_key, core: true, state: 'READY', emoji: '🟢', label: 'Fully enabled', note: 'Core' };
+
+  if (row.module_key === 'LOGGING') {
+    const logs = await query(`SELECT COUNT(*)::int AS count FROM log_module_settings WHERE guild_id = $1 AND enabled = true AND channel_id IS NOT NULL`, [guildId]).catch(() => ({ rows: [{ count: 0 }] }));
+    return (logs.rows[0]?.count || 0) > 0
+      ? { moduleKey: row.module_key, core: false, state: 'READY', emoji: '🟢', label: 'Fully enabled', note: `${logs.rows[0].count} log group(s)` }
+      : { moduleKey: row.module_key, core: false, state: 'NEEDS_CONFIG', emoji: '🟣', label: 'Needs configuration', note: 'No log channels' };
+  }
+
+  if (row.module_key === 'TICKETS') {
+    const cfg = await query(`SELECT category_id, staff_role_id FROM ticket_configs WHERE guild_id = $1 LIMIT 1`, [guildId]).catch(() => ({ rows: [] }));
+    const types = await query(`SELECT COUNT(*)::int AS count FROM ticket_types WHERE guild_id = $1 AND enabled = true`, [guildId]).catch(() => ({ rows: [{ count: 0 }] }));
+    const ready = Boolean(cfg.rows[0]?.category_id) && (Boolean(cfg.rows[0]?.staff_role_id) || (types.rows[0]?.count || 0) > 0);
+    return ready ? { moduleKey: row.module_key, core: false, state: 'READY', emoji: '🟢', label: 'Fully enabled', note: `${types.rows[0]?.count || 0} type(s)` } : { moduleKey: row.module_key, core: false, state: 'NEEDS_CONFIG', emoji: '🟣', label: 'Needs configuration', note: 'Run /ticket setup' };
+  }
+
+  if (row.module_key === 'REPORTS') {
+    const cfg = await query(`SELECT review_channel_id FROM report_configs WHERE guild_id = $1 LIMIT 1`, [guildId]).catch(() => ({ rows: [] }));
+    return cfg.rows[0]?.review_channel_id ? { moduleKey: row.module_key, core: false, state: 'READY', emoji: '🟢', label: 'Fully enabled', note: 'Review channel set' } : { moduleKey: row.module_key, core: false, state: 'NEEDS_CONFIG', emoji: '🟣', label: 'Needs configuration', note: 'Run /report setup' };
+  }
+
+  if (row.module_key === 'APPLICATIONS') {
+    const types = await query(`SELECT COUNT(*)::int AS count FROM application_types WHERE guild_id = $1 AND enabled = true AND review_channel_id IS NOT NULL`, [guildId]).catch(() => ({ rows: [{ count: 0 }] }));
+    return (types.rows[0]?.count || 0) > 0 ? { moduleKey: row.module_key, core: false, state: 'READY', emoji: '🟢', label: 'Fully enabled', note: `${types.rows[0].count} type(s)` } : { moduleKey: row.module_key, core: false, state: 'NEEDS_CONFIG', emoji: '🟣', label: 'Needs configuration', note: 'Run /application setup' };
+  }
+
+  if (row.module_key === 'APPEALS') {
+    const cfg = await query(`SELECT review_channel_id FROM appeal_configs WHERE guild_id = $1 LIMIT 1`, [guildId]).catch(() => ({ rows: [] }));
+    return cfg.rows[0]?.review_channel_id ? { moduleKey: row.module_key, core: false, state: 'READY', emoji: '🟢', label: 'Fully enabled', note: 'Review channel set' } : { moduleKey: row.module_key, core: false, state: 'NEEDS_CONFIG', emoji: '🟣', label: 'Needs configuration', note: 'Run /appeal setup' };
+  }
+
+  return { moduleKey: row.module_key, core: false, state: 'PARTIAL', emoji: '🟠', label: 'Partially enabled', note: 'Module shell only' };
 }
 
 async function buildLoggingPanel(guildId) {
