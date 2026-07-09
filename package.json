@@ -1,8 +1,8 @@
 {
   "name": "slickbot",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "private": true,
-  "description": "SlickBot all-in-one Discord server management bot with improved custom panel design, bulk reaction-role creation, and role button color mapping.",
+  "description": "SlickBot all-in-one Discord server management bot with guided message-based panel builders and improved reaction-role bulk setup.",
   "main": "src/index.js",
   "engines": {
     "node": ">=22.12.0"

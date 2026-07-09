@@ -28,6 +28,24 @@ function buttonStyleFromHex(color) {
   return ButtonStyle.Primary;
 }
 
+function emojiFromHex(color) {
+  const value = normalizeHexColor(color, '#5865f2').toLowerCase();
+  const red = Number.parseInt(value.slice(1, 3), 16);
+  const green = Number.parseInt(value.slice(3, 5), 16);
+  const blue = Number.parseInt(value.slice(5, 7), 16);
+
+  if (red > 210 && green > 210 && blue > 210) return '⬜';
+  if (red < 70 && green < 70 && blue < 70) return '⬛';
+  if (red > 190 && green < 120 && blue < 120) return '🟥';
+  if (red > 200 && green > 120 && green < 200 && blue < 100) return '🟧';
+  if (red > 190 && green > 170 && blue < 110) return '🟨';
+  if (green > 150 && red < 160 && blue < 160) return '🟩';
+  if (blue > 150 && red < 160) return '🟦';
+  if (red > 120 && blue > 120) return '🟪';
+  return '⬛';
+}
+
+
 async function createPanel({ guildId, name, title, description, color, mode = 'MULTI' }) {
   const result = await query(
     `INSERT INTO role_panels (guild_id, name, title, description, accent_color, mode)
@@ -73,7 +91,10 @@ async function listPanels(guildId) {
   return result.rows;
 }
 
-async function addOption({ guildId, panelName, roleId, label, emoji = null, description = null, buttonColor = null }) {
+async function addOption({ guildId, panelName, roleId, label = '', emoji = null, description = null, buttonColor = null }) {
+  const normalizedButtonColor = normalizeHexColor(buttonColor, '#5865f2');
+  const normalizedLabel = String(label || '').trim();
+  const normalizedEmoji = emoji || (!normalizedLabel ? emojiFromHex(normalizedButtonColor) : null);
   const panel = await getPanelByName(guildId, panelName);
   if (!panel) return null;
   const count = await query(`SELECT COUNT(*)::int AS count FROM role_panel_options WHERE panel_id = $1 AND active = true`, [panel.id]);
@@ -89,7 +110,7 @@ async function addOption({ guildId, panelName, roleId, label, emoji = null, desc
                    active = true,
                    updated_at = NOW()
      RETURNING *`,
-    [panel.id, roleId, label, emoji, description, normalizeHexColor(buttonColor, '#5865f2'), displayOrder]
+    [panel.id, roleId, normalizedLabel, normalizedEmoji, description, normalizedButtonColor, displayOrder]
   );
   return { panel, option: result.rows[0] };
 }
@@ -120,7 +141,7 @@ function parseBulkEntries(raw) {
     const roleId = (roleRaw.match(/\d{15,25}/) || [])[0];
     return {
       roleId,
-      label: parts[1] || 'Toggle Role',
+      label: parts.length > 1 ? parts[1] : '',
       emoji: parts[2] || null,
       buttonColor: parts[3] || null,
       description: parts[4] || null,
@@ -156,9 +177,10 @@ async function buildRolePanelMessage(panel) {
     options.slice(i, i + 5).forEach((option) => {
       const button = new ButtonBuilder()
         .setCustomId(`slickbot:rolepanel:${panel.id}:${option.id}`)
-        .setLabel(option.label || 'Toggle Role')
         .setStyle(buttonStyleFromHex(option.button_color || '#5865f2'));
+      if (option.label && option.label.trim()) button.setLabel(option.label.trim());
       if (option.emoji) button.setEmoji(option.emoji);
+      if (!option.label && !option.emoji) button.setEmoji(emojiFromHex(option.button_color || '#5865f2'));
       row.addComponents(button);
     });
     rows.push(row);
@@ -214,7 +236,7 @@ async function buildRoleManagerPanel(guildId) {
     description: [
       lines,
       '',
-      'Use `/roles create-panel`, `/roles add-option`, and `/roles post-panel` to create self-assignable button role panels.'
+      'Use `/roles panel-wizard`, `/roles bulk-add-wizard`, and `/roles post-panel` for guided setup-channel creation.'
     ].join('\n'),
     color: panels.length ? SlickBotColors.SUCCESS : SlickBotColors.WARNING
   });

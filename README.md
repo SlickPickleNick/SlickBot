@@ -6,7 +6,75 @@ This version keeps the working TitanBot-style JavaScript foundation: Discord.js,
 
 ## Version
 
-`v0.4.1`
+`v0.4.2`
+
+## v0.4.2 Guided Panel Builder Update
+
+This update replaces the modal-first panel design workflow with guided setup-channel message flows. This is better for longer panel text because Discord message replies preserve line breaks and spacing.
+
+### Added
+
+- New `/panel setup` guided message-based designer for public panels.
+- New `/roles panel-wizard` guided message-based role panel creator.
+- New `/roles bulk-add-wizard` guided bulk role button setup.
+- Reaction-role button labels are now optional.
+- Emoji-only role buttons are supported.
+- If a reaction-role option has no label and no emoji, SlickBot auto-selects a colored square emoji from the provided hex color.
+- Existing `/panel design` modal editor remains available for quick edits.
+
+### Guided Panel Setup
+
+```text
+/panel setup target:ticket
+/panel setup target:report
+/panel setup target:appeal
+/panel setup target:application name:Moderator
+/panel setup target:role name:Game Roles
+```
+
+SlickBot will ask for:
+
+```text
+Panel title
+Panel description
+Accent color
+```
+
+For descriptions, paste formatted multiline text directly into the setup channel. SlickBot preserves the line breaks.
+
+### Guided Role Panel Creation
+
+```text
+/roles panel-wizard
+/roles panel-wizard name:Color Roles
+```
+
+SlickBot will ask for:
+
+```text
+Internal panel name
+Public panel title
+Public panel description
+Selection mode: single or multi
+Accent color
+```
+
+### Guided Bulk Role Button Setup
+
+```text
+/roles bulk-add-wizard panel:Color Roles
+```
+
+Paste one role option per line:
+
+```text
+@Role | Button Label | Emoji | #hex
+@Red || 🟥 | #ff0000
+@Blue || 🟦 | #5865f2
+@Green || 🟩 | #57f287
+```
+
+Button text can be left blank. Discord requires a button to have either text or an emoji, so if both label and emoji are blank, SlickBot uses a colored square emoji based on the hex color. Discord does not support fully custom button hex colors, so SlickBot stores the hex and maps it to the closest native Discord button style.
 
 
 ## v0.4.1 Panel Builder Update
@@ -29,11 +97,11 @@ This update improves public panel customization before moving to the next major 
 ### Panel Designer
 
 ```text
-/panel design target:ticket
-/panel design target:report
-/panel design target:appeal
-/panel design target:application name:Moderator
-/panel design target:role name:Game Roles
+/panel setup target:ticket
+/panel setup target:report
+/panel setup target:appeal
+/panel setup target:application name:Moderator
+/panel setup target:role name:Game Roles
 ```
 
 The modal supports:
@@ -118,9 +186,11 @@ Supported placeholders:
 
 ```text
 /roles manager
+/roles panel-wizard
 /roles create-panel
 /roles add-option
 /roles bulk-add
+/roles bulk-add-wizard
 /roles remove-option
 /roles delete-panel
 /roles post-panel
@@ -130,9 +200,9 @@ Supported placeholders:
 Example:
 
 ```text
-/roles create-panel name:Game Roles title:Choose Your Game Roles description:Use the buttons below to toggle roles. mode:MULTI color:#7869ff
-/roles add-option panel:Game Roles role:@Fortnite label:Fortnite emoji:🎮 button_color:#5865f2
-/roles bulk-add panel:Game Roles entries:@Minecraft|Minecraft|⛏️|#57f287
+/roles panel-wizard name:Game Roles
+/roles bulk-add-wizard panel:Game Roles
+/roles add-option panel:Game Roles role:@Fortnite emoji:🎮 button_color:#5865f2
 /roles add-option panel:Game Roles role:@Minecraft label:Minecraft emoji:⛏️
 /roles post-panel panel:Game Roles channel:#roles
 ```
@@ -205,4 +275,5 @@ Recommended post-deploy checks:
 /modules panel
 /welcome manager
 /roles manager
+/panel help
 ```

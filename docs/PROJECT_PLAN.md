@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`v0.4.0`
+`v0.4.2`
 
 ## Current Foundation
 
@@ -23,6 +23,8 @@
 - Public action defaults and ignored-user enforcement
 - Welcome messages and auto roles
 - Button role panels
+- Guided message-based panel builders
+- Guided bulk reaction-role option setup
 - Coming-soon module status indicators
 
 ## Version Roadmap
@@ -61,6 +63,8 @@
 - Welcome messages ✅
 - Auto roles ✅
 - Button role panels ✅
+- Guided panel setup flows ✅
+- Guided bulk role option setup ✅
 - Reaction-based roles later if still needed
 
 ### v0.5.x — Engagement

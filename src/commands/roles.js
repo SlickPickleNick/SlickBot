@@ -4,12 +4,19 @@ const { ActionKeys } = require('../modules/permissions/actionKeys');
 const { replyPrivate } = require('../utils/reply');
 const { createSuccessEmbed, createWarningEmbed } = require('../modules/ui/uiService');
 const rolePanels = require('../modules/community/rolePanelService');
+const { startRolePanelCreationFlow, startRoleBulkAddFlow } = require('../modules/panels/messagePanelFlow');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('roles')
     .setDescription('Create and manage self-assignable role panels.')
     .addSubcommand((subcommand) => subcommand.setName('manager').setDescription('Open the role panel manager.'))
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName('panel-wizard')
+        .setDescription('Create or update a role panel through guided setup-channel messages.')
+        .addStringOption((option) => option.setName('name').setDescription('Optional internal panel name. If blank, SlickBot will ask for it.').setRequired(false).setMaxLength(50))
+    )
     .addSubcommand((subcommand) =>
       subcommand
         .setName('create-panel')
@@ -32,8 +39,8 @@ module.exports = {
         .setDescription('Add a role option to a panel.')
         .addStringOption((option) => option.setName('panel').setDescription('Panel name.').setRequired(true))
         .addRoleOption((option) => option.setName('role').setDescription('Role to toggle.').setRequired(true))
-        .addStringOption((option) => option.setName('label').setDescription('Button label.').setRequired(true).setMaxLength(80))
-        .addStringOption((option) => option.setName('emoji').setDescription('Optional button emoji.').setRequired(false))
+        .addStringOption((option) => option.setName('label').setDescription('Optional button label. Leave blank for emoji-only buttons.').setRequired(false).setMaxLength(80))
+        .addStringOption((option) => option.setName('emoji').setDescription('Optional button emoji. Required if you want no text and no auto color emoji.').setRequired(false))
         .addStringOption((option) => option.setName('description').setDescription('Optional internal description.').setRequired(false).setMaxLength(200))
         .addStringOption((option) => option.setName('button_color').setDescription('Requested button color hex, mapped to nearest Discord style.').setRequired(false).setMaxLength(7))
     )
@@ -42,7 +49,13 @@ module.exports = {
         .setName('bulk-add')
         .setDescription('Bulk add role options to a panel from line-based text.')
         .addStringOption((option) => option.setName('panel').setDescription('Panel name.').setRequired(true))
-        .addStringOption((option) => option.setName('entries').setDescription('Lines: @role|Label|emoji|#hex').setRequired(true).setMaxLength(4000))
+        .addStringOption((option) => option.setName('entries').setDescription('Lines: @role|Label|emoji|#hex. Label can be blank.').setRequired(true).setMaxLength(4000))
+    )
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName('bulk-add-wizard')
+        .setDescription('Bulk add role options through guided setup-channel messages.')
+        .addStringOption((option) => option.setName('panel').setDescription('Panel name.').setRequired(true))
     )
     .addSubcommand((subcommand) =>
       subcommand
@@ -74,6 +87,10 @@ module.exports = {
       return;
     }
 
+    if (sub === 'panel-wizard') {
+      return startRolePanelCreationFlow(interaction, { logger: ctx.logger, initialName: interaction.options.getString('name') || null });
+    }
+
     if (sub === 'create-panel') {
       const panel = await rolePanels.createPanel({
         guildId: interaction.guildId,
@@ -101,7 +118,7 @@ module.exports = {
         guildId: interaction.guildId,
         panelName: interaction.options.getString('panel', true),
         roleId: interaction.options.getRole('role', true).id,
-        label: interaction.options.getString('label', true),
+        label: interaction.options.getString('label') || '',
         emoji: interaction.options.getString('emoji') || null,
         description: interaction.options.getString('description') || null,
         buttonColor: interaction.options.getString('button_color') || null
@@ -116,13 +133,16 @@ module.exports = {
       const panelName = interaction.options.getString('panel', true);
       const entries = rolePanels.parseBulkEntries(interaction.options.getString('entries', true));
       const valid = entries.filter((entry) => entry.valid);
-      if (!valid.length) return replyPrivate(interaction, { embeds: [createWarningEmbed('No Valid Role Entries', 'Use one line per role in this format: `@role|Button Label|emoji|#5865f2`. Role mentions or role IDs are accepted.')] });
+      if (!valid.length) return replyPrivate(interaction, { embeds: [createWarningEmbed('No Valid Role Entries', 'Use one line per role in this format: `@role|Button Label|emoji|#5865f2`. Label can be blank. Role mentions or role IDs are accepted.')] });
       const added = await rolePanels.bulkAddOptions({ guildId: interaction.guildId, panelName, entries: valid });
       if (!added.length) return replyPrivate(interaction, { embeds: [createWarningEmbed('Panel Not Found', 'Create the panel first with `/roles create-panel`.')] });
-      await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'reaction-role-config', title: 'Role Options Bulk Added', body: `Panel: **${panelName}**
-Options Added: **${added.length}**`, actorUserId: interaction.user.id });
+      await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'reaction-role-config', title: 'Role Options Bulk Added', body: `Panel: **${panelName}**\nOptions Added: **${added.length}**`, actorUserId: interaction.user.id });
       await replyPrivate(interaction, { embeds: [createSuccessEmbed('Role Options Added', `Added **${added.length}** role option(s) to **${panelName}**. Invalid/skipped lines: **${entries.length - valid.length}**.`)] });
       return;
+    }
+
+    if (sub === 'bulk-add-wizard') {
+      return startRoleBulkAddFlow(interaction, { panelName: interaction.options.getString('panel', true), logger: ctx.logger });
     }
 
     if (sub === 'remove-option') {
