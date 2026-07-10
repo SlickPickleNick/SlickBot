@@ -3,6 +3,7 @@ const { createBaseEmbed, createSuccessEmbed, createWarningEmbed, SlickBotColors 
 const { updatePanelDesign, normalizeHexColor } = require('./panelDesignService');
 const rolePanels = require('../community/rolePanelService');
 const { refreshPublishedPanelFromResult, formatRefreshSummary } = require('./panelUpdateService');
+const { resolveHeaderImageUrl } = require('./panelImageService');
 
 const FLOW_TIMEOUT_MS = 5 * 60 * 1000;
 
@@ -87,6 +88,22 @@ async function startPanelMessageFlow(interaction, { target, name = null, logger 
   });
   if (displayMode.cancelled) return interaction.channel.send({ embeds: [createWarningEmbed('Panel Builder Stopped', displayMode.reason)] });
 
+  const headerImage = await waitForUserMessage(interaction, {
+    title: 'Step 5 — Header Image',
+    description: [
+      'Send a direct image URL or a Discord message link containing an image attachment.',
+      'The image will appear above the panel embed.',
+      '',
+      'Type `skip` to keep the current setting, or `remove` to clear the image.'
+    ].join('\n')
+  });
+  if (headerImage.cancelled) return interaction.channel.send({ embeds: [createWarningEmbed('Panel Builder Stopped', headerImage.reason)] });
+
+  const resolvedHeaderImage = await resolveHeaderImageUrl(interaction.client, headerImage.value);
+  if (normalizeOptionalText(headerImage.value) && resolvedHeaderImage === null) {
+    return interaction.channel.send({ embeds: [createWarningEmbed('Invalid Header Image', 'Provide a direct image URL or a Discord message link containing an attachment.')] });
+  }
+
   const result = await updatePanelDesign({
     guildId: interaction.guildId,
     target,
@@ -95,6 +112,7 @@ async function startPanelMessageFlow(interaction, { target, name = null, logger 
     description: normalizeOptionalText(description.value),
     color: normalizeOptionalText(color.value),
     displayMode: normalizeOptionalText(displayMode.value),
+    headerImageUrl: resolvedHeaderImage,
     createIfMissing: true
   });
 
@@ -122,11 +140,12 @@ async function startPanelFieldEditFlow(interaction, { target, name = null, field
     title: 'Send the new panel title. Type `skip` to leave it unchanged.',
     description: 'Send the new panel description. Multiline spacing is supported. Type `skip` to leave it unchanged.',
     color: 'Send a hex color such as `#7869ff`. Type `skip` to leave it unchanged.',
-    display_mode: 'Send `buttons` or `dropdown`. Type `skip` to leave it unchanged.'
+    display_mode: 'Send `buttons`, `dropdown`, or `reactions`. Type `skip` to leave it unchanged.',
+    header_image: 'Send a direct image URL or Discord message link containing an image. Type `remove` to clear it or `skip` to leave it unchanged.'
   };
 
   if (!prompts[fieldLabel]) {
-    return interaction.reply({ embeds: [createWarningEmbed('Unknown Field', 'Choose title, description, color, or display_mode.')], ephemeral: true });
+    return interaction.reply({ embeds: [createWarningEmbed('Unknown Field', 'Choose title, description, color, display_mode, or header_image.')], ephemeral: true });
   }
 
   await interaction.reply({ embeds: [createBaseEmbed({
@@ -155,6 +174,11 @@ async function startPanelFieldEditFlow(interaction, { target, name = null, field
   if (fieldLabel === 'description') payload.description = value;
   if (fieldLabel === 'color') payload.color = value;
   if (fieldLabel === 'display_mode') payload.displayMode = value;
+  if (fieldLabel === 'header_image') {
+    const resolved = await resolveHeaderImageUrl(interaction.client, response.value);
+    if (value && resolved === null) return interaction.channel.send({ embeds: [createWarningEmbed('Invalid Header Image', 'Provide a direct image URL or a Discord message link containing an attachment.')] });
+    payload.headerImageUrl = resolved;
+  }
 
   const result = await updatePanelDesign(payload);
   if (!result.ok) return interaction.channel.send({ embeds: [createWarningEmbed('Panel Not Updated', result.reason)] });

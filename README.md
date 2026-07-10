@@ -265,3 +265,14 @@ Optional log setup:
 - Fixed `/stats setup` so you can configure only one or two stat channels without providing every available channel/template option.
 - Server stats now safely use default templates when templates are not provided.
 - Server stats refresh now handles no configured stat channels gracefully instead of throwing during setup.
+
+
+## v0.6.2 Ticket Modes and Panel Media
+
+- Ticket types can use private channel mode or private thread mode.
+- Thread mode creates private threads under a configured host text channel.
+- Default ticket settings now support assignment and escalation teams/roles.
+- Ticket escalation removes previous reviewer access before granting the escalation team access.
+- `/ticket add-user` adds a member to the current ticket.
+- `/levels info` is streamlined for members and sorts multiplier roles from lowest to highest.
+- All configurable public panels support an optional header image through `/panel setup` or `/panel edit field:Header Image`.

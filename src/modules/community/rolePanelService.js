@@ -2,6 +2,7 @@ const { ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder } 
 const { query } = require('../../services/db');
 const { createBaseEmbed, SlickBotColors } = require('../ui/uiService');
 const { updatePublishedPanelsForRefs } = require('../panels/publishedPanelService');
+const { embedsWithHeader } = require('../panels/panelImageService');
 
 const MAX_NATIVE_REACTION_OPTIONS = 20;
 
@@ -346,7 +347,7 @@ async function buildRolePanelMessage(panel) {
 
   const rows = await buildRolePanelComponents(panel, options);
 
-  return { embeds: [embed], components: rows };
+  return { embeds: embedsWithHeader(panel.panel_header_image_url, embed), components: rows };
 }
 
 async function toggleRole({ interaction, panelId, optionId, logger }) {

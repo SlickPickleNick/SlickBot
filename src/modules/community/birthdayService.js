@@ -8,6 +8,7 @@ const {
   TextInputStyle
 } = require('discord.js');
 const { query } = require('../../services/db');
+const { embedsWithHeader } = require('../panels/panelImageService');
 const { CustomIds } = require('../ui/customIds');
 const { createBaseEmbed, createSuccessEmbed, createWarningEmbed, SlickBotColors } = require('../ui/uiService');
 
@@ -280,7 +281,7 @@ function buildBirthdayPublicPanel(config) {
     footer: 'SlickBot Birthdays'
   });
   return {
-    embeds: [embed],
+    embeds: embedsWithHeader(config?.panel_header_image_url, embed),
     components: [new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(CustomIds.BirthdaySetOpen).setLabel('Set Birthday').setStyle(ButtonStyle.Primary))]
   };
 }

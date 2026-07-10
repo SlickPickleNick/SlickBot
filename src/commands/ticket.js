@@ -21,7 +21,12 @@ module.exports = {
         .setDescription('Configure default ticket settings.')
         .addChannelOption((option) => option.setName('category').setDescription('Default category where ticket channels should be created.').addChannelTypes(ChannelType.GuildCategory).setRequired(false))
         .addChannelOption((option) => option.setName('log_channel').setDescription('Default channel where ticket transcripts should be sent.').addChannelTypes(ChannelType.GuildText).setRequired(false))
-        .addRoleOption((option) => option.setName('staff_role').setDescription('Default staff role that can view ticket channels.').setRequired(false))
+        .addRoleOption((option) => option.setName('staff_role').setDescription('Default staff role that can review tickets.').setRequired(false))
+        .addStringOption((option) => option.setName('staff_team').setDescription('Default Permission Team assigned to tickets.').setRequired(false).setMaxLength(80))
+        .addRoleOption((option) => option.setName('escalated_role').setDescription('Default escalation role.').setRequired(false))
+        .addStringOption((option) => option.setName('escalated_team').setDescription('Default escalation Permission Team.').setRequired(false).setMaxLength(80))
+        .addStringOption((option) => option.setName('ticket_mode').setDescription('Create private channels or private threads.').setRequired(false).addChoices({ name: 'Channels', value: 'CHANNEL' }, { name: 'Threads', value: 'THREAD' }))
+        .addChannelOption((option) => option.setName('thread_host').setDescription('Host text channel for thread-mode tickets.').addChannelTypes(ChannelType.GuildText).setRequired(false))
         .addIntegerOption((option) => option.setName('ticket_limit').setDescription('Default open ticket limit per user.').setMinValue(1).setMaxValue(10).setRequired(false))
         .addBooleanOption((option) => option.setName('transcripts').setDescription('Generate transcripts when tickets close.').setRequired(false))
         .addStringOption((option) => option.setName('naming_format').setDescription('Example: ticket-{username}-{number}').setRequired(false).setMaxLength(80))
@@ -37,7 +42,9 @@ module.exports = {
         .setDescription('Create or update a ticket type.')
         .addStringOption((option) => option.setName('name').setDescription('Ticket type name.').setRequired(true).setMaxLength(80))
         .addStringOption((option) => option.setName('label').setDescription('Button label shown on the public panel.').setRequired(false).setMaxLength(80))
-        .addChannelOption((option) => option.setName('category').setDescription('Category for this ticket type.').addChannelTypes(ChannelType.GuildCategory).setRequired(false))
+        .addChannelOption((option) => option.setName('category').setDescription('Category for channel-mode tickets.').addChannelTypes(ChannelType.GuildCategory).setRequired(false))
+        .addStringOption((option) => option.setName('ticket_mode').setDescription('Create private channels or private threads.').setRequired(false).addChoices({ name: 'Channels', value: 'CHANNEL' }, { name: 'Threads', value: 'THREAD' }))
+        .addChannelOption((option) => option.setName('thread_host').setDescription('Host text channel for thread-mode tickets.').addChannelTypes(ChannelType.GuildText).setRequired(false))
         .addChannelOption((option) => option.setName('log_channel').setDescription('Transcript channel for this ticket type.').addChannelTypes(ChannelType.GuildText).setRequired(false))
         .addRoleOption((option) => option.setName('staff_role').setDescription('Role assigned to review this ticket type.').setRequired(false))
         .addStringOption((option) => option.setName('staff_team').setDescription('Permission Team assigned to review this ticket type.').setRequired(false).setMaxLength(80))
@@ -97,6 +104,12 @@ module.exports = {
     )
     .addSubcommand((subcommand) =>
       subcommand
+        .setName('add-user')
+        .setDescription('Add a user to the current ticket.')
+        .addUserOption((option) => option.setName('user').setDescription('User to add to the ticket.').setRequired(true))
+    )
+    .addSubcommand((subcommand) =>
+      subcommand
         .setName('close')
         .setDescription('Close the current ticket.')
         .addStringOption((option) => option.setName('reason').setDescription('Close reason.').setRequired(false).setMaxLength(1000))
@@ -111,7 +124,7 @@ module.exports = {
     if (subcommand === 'open') return ActionKeys.TicketsOpen;
     if (subcommand === 'claim') return ActionKeys.TicketsClaim;
     if (subcommand === 'close') return ActionKeys.TicketsClose;
-    if (['priority', 'escalate'].includes(subcommand)) return ActionKeys.TicketsManage;
+    if (['priority', 'escalate', 'add-user'].includes(subcommand)) return ActionKeys.TicketsManage;
     return ActionKeys.TicketsManager;
   },
   isPublic(interaction) {
@@ -128,6 +141,11 @@ module.exports = {
         categoryId: interaction.options.getChannel('category')?.id || null,
         logChannelId: interaction.options.getChannel('log_channel')?.id || null,
         staffRoleId: interaction.options.getRole('staff_role')?.id || null,
+        staffTeamName: interaction.options.getString('staff_team') || null,
+        escalatedRoleId: interaction.options.getRole('escalated_role')?.id || null,
+        escalatedTeamName: interaction.options.getString('escalated_team') || null,
+        ticketMode: interaction.options.getString('ticket_mode') || null,
+        threadHostChannelId: interaction.options.getChannel('thread_host')?.id || null,
         ticketLimit: interaction.options.getInteger('ticket_limit') || null,
         transcriptEnabled: interaction.options.getBoolean('transcripts'),
         namingFormat: interaction.options.getString('naming_format') || null,
@@ -139,7 +157,13 @@ module.exports = {
       });
       await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'setup', title: 'Ticket Settings Updated', body: `Ticket settings updated by ${interaction.user.tag}.`, actorUserId: interaction.user.id }).catch(() => {});
       const refresh = await refreshPublishedPanel(ctx.client, interaction.guildId, 'ticket', '*').catch(() => null);
-      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Ticket Defaults Configured', [`Category: ${config.category_id ? `<#${config.category_id}>` : 'Not set'}`, `Log Channel: ${config.log_channel_id ? `<#${config.log_channel_id}>` : 'Not set'}`, `Staff Role: ${config.staff_role_id ? `<@&${config.staff_role_id}>` : 'Not set'}`, `Naming: \`${config.naming_format}\``, formatRefreshSummary(refresh)].filter(Boolean).join('\n'))] });
+      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Ticket Defaults Configured', [`Mode: **${config.ticket_mode || 'CHANNEL'}**`,
+        `Category: ${config.category_id ? `<#${config.category_id}>` : 'Not set'}`,
+        `Thread Host: ${config.thread_host_channel_id ? `<#${config.thread_host_channel_id}>` : 'Not set'}`,
+        `Staff Role: ${config.staff_role_id ? `<@&${config.staff_role_id}>` : 'Not set'}`,
+        `Staff Team: ${config.staff_team_id ? 'Configured' : 'Not set'}`,
+        `Escalation Role: ${config.escalated_role_id ? `<@&${config.escalated_role_id}>` : 'Not set'}`,
+        `Escalation Team: ${config.escalated_team_id ? 'Configured' : 'Not set'}`, `Log Channel: ${config.log_channel_id ? `<#${config.log_channel_id}>` : 'Not set'}`, `Naming: \`${config.naming_format}\``, formatRefreshSummary(refresh)].filter(Boolean).join('\n'))] });
     }
 
     if (subcommand === 'type-setup') {
@@ -147,6 +171,8 @@ module.exports = {
         name: interaction.options.getString('name', true),
         label: interaction.options.getString('label') || null,
         categoryId: interaction.options.getChannel('category')?.id || null,
+        ticketMode: interaction.options.getString('ticket_mode') || null,
+        threadHostChannelId: interaction.options.getChannel('thread_host')?.id || null,
         logChannelId: interaction.options.getChannel('log_channel')?.id || null,
         staffRoleId: interaction.options.getRole('staff_role')?.id || null,
         staffTeamName: interaction.options.getString('staff_team') || null,
@@ -220,6 +246,14 @@ module.exports = {
       if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Ticket Not Escalated', result.reason)] });
       await interaction.channel.send({ content: result.roleIds.map((roleId) => `<@&${roleId}>`).join(' '), embeds: [createBaseEmbed({ title: 'Ticket Escalated', description: `This ticket has been escalated by <@${interaction.user.id}>.`, color: SlickBotColors.WARNING })] }).catch(() => {});
       return replyPrivate(interaction, { embeds: [createSuccessEmbed('Ticket Escalated', `Ticket #${result.ticket.ticket_number} was escalated.`)] });
+    }
+
+    if (subcommand === 'add-user') {
+      const user = interaction.options.getUser('user', true);
+      const result = await tickets.addUserToTicket({ interaction, user, logger: ctx.logger });
+      if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('User Not Added', result.reason)] });
+      await interaction.channel.send({ embeds: [createBaseEmbed({ title: 'User Added', description: `<@${user.id}> was added to this ticket by <@${interaction.user.id}>.`, color: SlickBotColors.INFO })] }).catch(() => {});
+      return replyPrivate(interaction, { embeds: [createSuccessEmbed('User Added', `<@${user.id}> can now access ticket #${result.ticket.ticket_number}.`)] });
     }
 
     if (subcommand === 'close') {

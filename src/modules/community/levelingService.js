@@ -186,7 +186,7 @@ class LevelingService {
     const result = await query(
       `SELECT * FROM leveling_multiplier_roles
        WHERE guild_id = $1 AND active = true
-       ORDER BY multiplier DESC, created_at ASC`,
+       ORDER BY multiplier ASC, created_at ASC`,
       [guildId]
     );
     return result.rows;
@@ -361,51 +361,28 @@ class LevelingService {
 
   async buildInfoEmbed(guild) {
     const config = await this.getConfig(guild.id);
-    const [rewards, multipliers] = await Promise.all([
-      this.listRoleRewards(guild.id),
-      this.listMultiplierRoles(guild.id)
-    ]);
-    if (!config) {
-      return createBaseEmbed({
-        title: 'How SlickBot Levels Work',
-        description: 'The Leveling module has not been configured yet.',
-        color: SlickBotColors.WARNING
-      });
-    }
+    const [rewards, multipliers] = await Promise.all([this.listRoleRewards(guild.id), this.listMultiplierRoles(guild.id)]);
+    if (!config) return createBaseEmbed({ title: 'Server Levels', description: 'Leveling has not been configured yet.', color: SlickBotColors.WARNING });
 
     const multiplierLines = multipliers.length
-      ? multipliers.map((item) => `<@&${item.role_id}> — **${formatMultiplier(item.multiplier)} XP**`).join('\n')
-      : 'No multiplier roles are configured.';
+      ? [...multipliers].sort((a, b) => Number(a.multiplier) - Number(b.multiplier)).map((item) => `• <@&${item.role_id}> — **${formatMultiplier(item.multiplier)}**`).join('\n')
+      : null;
     const rewardLines = rewards.length
-      ? rewards.slice(0, 15).map((item) => `Level **${item.level}** — <@&${item.role_id}>`).join('\n')
-      : 'No level-role rewards are configured.';
+      ? rewards.slice(0, 20).map((item) => `• **Level ${item.level}** → <@&${item.role_id}>`).join('\n')
+      : null;
 
-    return createBaseEmbed({
-      title: 'How SlickBot Levels Work',
-      description: [
-        '**Earning XP**',
-        `Send eligible messages to earn a random **${config.xp_min}–${config.xp_max} XP**.`,
-        `XP can be earned once every **${config.cooldown_seconds} seconds** per user.`,
-        `Messages must contain at least **${config.minimum_message_length} characters**. Bot messages, ignored channels, and ignored roles do not earn XP.`,
-        '',
-        '**Multiplier Roles**',
-        multiplierLines,
-        multipliers.length > 1 ? '\nIf you have multiple multiplier roles, SlickBot uses the **highest multiplier** rather than stacking them.' : '',
-        '',
-        '**Level Rewards**',
-        rewardLines,
-        '',
-        `Level-up announcements: **${normalizeAnnouncementMode(config.level_up_announce_mode) === 'ROLE_REWARDS_ONLY' ? 'Only levels with role rewards' : 'Every level'}**`,
-        config.level_up_channel_id ? `Announcement channel: <#${config.level_up_channel_id}>` : 'Announcement channel: Not configured',
-        '',
-        '**Commands**',
-        '`/level rank` — View your XP and level progress',
-        '`/level leaderboard` — View the top XP users',
-        '`/levels info` — Show this information panel'
-      ].filter(Boolean).join('\n'),
-      color: SlickBotColors.PRIMARY,
-      footer: `SlickBot Leveling · ${guild.name}`
-    });
+    const sections = [
+      '## Earn XP',
+      `Chat normally in eligible channels to earn **${config.xp_min}–${config.xp_max} XP** per eligible message.`,
+      `You can earn XP once every **${config.cooldown_seconds} seconds**. Messages must contain at least **${config.minimum_message_length} characters**.`,
+      '',
+      'Use `/level rank` to see your progress and `/level leaderboard` to view the server leaderboard.'
+    ];
+    if (multiplierLines) sections.push('', '## XP Multipliers', multiplierLines, multipliers.length > 1 ? '_Only your highest multiplier applies; multipliers do not stack._' : '');
+    if (rewardLines) sections.push('', '## Level Rewards', rewardLines);
+    if (config.level_up_channel_id) sections.push('', '## Level-Ups', normalizeAnnouncementMode(config.level_up_announce_mode) === 'ROLE_REWARDS_ONLY' ? 'Announcements are posted when you reach a level with a role reward.' : 'Level-up announcements are posted for every level.');
+
+    return createBaseEmbed({ title: 'Server Levels', description: sections.filter((line, index, arr) => line !== '' || arr[index - 1] !== '').join('\n'), color: SlickBotColors.PRIMARY, footer: `${guild.name} · SlickBot Leveling` });
   }
 
   async buildManagerPanel(guildId) {

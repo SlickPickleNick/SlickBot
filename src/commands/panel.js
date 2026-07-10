@@ -42,7 +42,8 @@ module.exports = {
           { name: 'Title', value: 'title' },
           { name: 'Description', value: 'description' },
           { name: 'Accent Color', value: 'color' },
-          { name: 'Display Mode', value: 'display_mode' }
+          { name: 'Display Mode', value: 'display_mode' },
+          { name: 'Header Image', value: 'header_image' }
         ))
         .addStringOption((option) => option.setName('name').setDescription('Required for application types or reaction-role panels.').setRequired(false).setMaxLength(80))
     )

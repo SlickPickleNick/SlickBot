@@ -79,6 +79,39 @@ function buildQuestionLines(answers) {
   return entries.map(([question, answer]) => `**${question}**\n${truncate(String(answer || 'No answer provided.'), 700)}`).join('\n\n');
 }
 
+
+function parseRoleIds(value) {
+  const parsed = parseJson(value, []);
+  return [...new Set((Array.isArray(parsed) ? parsed : []).map(String).filter(Boolean))];
+}
+
+async function getRoleMemberIds(guild, roleIds) {
+  const ids = new Set();
+  if (!guild || !roleIds?.length) return [];
+  await guild.members.fetch().catch(() => null);
+  for (const roleId of roleIds) {
+    const role = guild.roles.cache.get(roleId) || await guild.roles.fetch(roleId).catch(() => null);
+    for (const member of role?.members?.values?.() || []) {
+      if (!member.user.bot) ids.add(member.id);
+    }
+  }
+  return [...ids];
+}
+
+async function addMembersToPrivateThread(thread, userIds) {
+  for (const userId of [...new Set(userIds.filter(Boolean))]) {
+    await thread.members.add(userId).catch(() => {});
+  }
+}
+
+async function removeMembersFromPrivateThread(thread, userIds, preserveIds = []) {
+  const preserve = new Set(preserveIds.filter(Boolean));
+  for (const userId of [...new Set(userIds.filter(Boolean))]) {
+    if (preserve.has(userId)) continue;
+    await thread.members.remove(userId).catch(() => {});
+  }
+}
+
 class TicketService {
   async getConfig(guildId) {
     const result = await query(`SELECT * FROM ticket_configs WHERE guild_id = $1 LIMIT 1`, [guildId]);
@@ -94,14 +127,20 @@ class TicketService {
   }
 
   async updateConfig(guildId, input) {
+    const staffTeamId = input.staffTeamName ? await resolveTeamId(guildId, input.staffTeamName) : null;
+    const escalatedTeamId = input.escalatedTeamName ? await resolveTeamId(guildId, input.escalatedTeamName) : null;
     const result = await query(
-      `INSERT INTO ticket_configs (guild_id, category_id, log_channel_id, staff_role_id, ticket_limit, transcript_enabled, naming_format, panel_title, panel_description, panel_color, close_delete_seconds, panel_display_mode)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-       ON CONFLICT (guild_id)
-       DO UPDATE SET
+      `INSERT INTO ticket_configs (guild_id, category_id, log_channel_id, staff_role_id, staff_team_id, escalated_role_id, escalated_team_id, ticket_mode, thread_host_channel_id, ticket_limit, transcript_enabled, naming_format, panel_title, panel_description, panel_color, close_delete_seconds, panel_display_mode)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+       ON CONFLICT (guild_id) DO UPDATE SET
          category_id = COALESCE(EXCLUDED.category_id, ticket_configs.category_id),
          log_channel_id = COALESCE(EXCLUDED.log_channel_id, ticket_configs.log_channel_id),
          staff_role_id = COALESCE(EXCLUDED.staff_role_id, ticket_configs.staff_role_id),
+         staff_team_id = COALESCE(EXCLUDED.staff_team_id, ticket_configs.staff_team_id),
+         escalated_role_id = COALESCE(EXCLUDED.escalated_role_id, ticket_configs.escalated_role_id),
+         escalated_team_id = COALESCE(EXCLUDED.escalated_team_id, ticket_configs.escalated_team_id),
+         ticket_mode = COALESCE(EXCLUDED.ticket_mode, ticket_configs.ticket_mode),
+         thread_host_channel_id = COALESCE(EXCLUDED.thread_host_channel_id, ticket_configs.thread_host_channel_id),
          ticket_limit = COALESCE(EXCLUDED.ticket_limit, ticket_configs.ticket_limit),
          transcript_enabled = COALESCE(EXCLUDED.transcript_enabled, ticket_configs.transcript_enabled),
          naming_format = COALESCE(EXCLUDED.naming_format, ticket_configs.naming_format),
@@ -112,20 +151,7 @@ class TicketService {
          panel_display_mode = COALESCE(EXCLUDED.panel_display_mode, ticket_configs.panel_display_mode),
          updated_at = NOW()
        RETURNING *`,
-      [
-        guildId,
-        input.categoryId || null,
-        input.logChannelId || null,
-        input.staffRoleId || null,
-        input.ticketLimit || null,
-        typeof input.transcriptEnabled === 'boolean' ? input.transcriptEnabled : null,
-        input.namingFormat || null,
-        input.panelTitle || null,
-        input.panelDescription || null,
-        input.panelColor || null,
-        input.closeDeleteSeconds || null,
-        input.panelDisplayMode || null
-      ]
+      [guildId, input.categoryId || null, input.logChannelId || null, input.staffRoleId || null, staffTeamId, input.escalatedRoleId || null, escalatedTeamId, input.ticketMode || null, input.threadHostChannelId || null, input.ticketLimit || null, typeof input.transcriptEnabled === 'boolean' ? input.transcriptEnabled : null, input.namingFormat || null, input.panelTitle || null, input.panelDescription || null, input.panelColor || null, input.closeDeleteSeconds || null, input.panelDisplayMode || null]
     );
     await this.ensureDefaultType(guildId);
     return result.rows[0];
@@ -134,16 +160,20 @@ class TicketService {
   async ensureDefaultType(guildId) {
     const cfg = await this.getConfig(guildId);
     const result = await query(
-      `INSERT INTO ticket_types (guild_id, name, label, description, category_id, log_channel_id, staff_role_id, ticket_limit, transcript_enabled, naming_format, questions, enabled)
-       VALUES ($1, 'Admin Support', 'Admin Support', 'General server support and administrative help.', $2, $3, $4, $5, $6, $7, $8, true)
-       ON CONFLICT (guild_id, name)
-       DO UPDATE SET
+      `INSERT INTO ticket_types (guild_id, name, label, description, category_id, thread_host_channel_id, ticket_mode, log_channel_id, staff_role_id, staff_team_id, escalated_role_id, escalated_team_id, ticket_limit, transcript_enabled, naming_format, questions, enabled)
+       VALUES ($1, 'Admin Support', 'Admin Support', 'General server support and administrative help.', $2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,true)
+       ON CONFLICT (guild_id, name) DO UPDATE SET
          category_id = COALESCE(ticket_types.category_id, EXCLUDED.category_id),
+         thread_host_channel_id = COALESCE(ticket_types.thread_host_channel_id, EXCLUDED.thread_host_channel_id),
+         ticket_mode = COALESCE(ticket_types.ticket_mode, EXCLUDED.ticket_mode),
          log_channel_id = COALESCE(ticket_types.log_channel_id, EXCLUDED.log_channel_id),
          staff_role_id = COALESCE(ticket_types.staff_role_id, EXCLUDED.staff_role_id),
+         staff_team_id = COALESCE(ticket_types.staff_team_id, EXCLUDED.staff_team_id),
+         escalated_role_id = COALESCE(ticket_types.escalated_role_id, EXCLUDED.escalated_role_id),
+         escalated_team_id = COALESCE(ticket_types.escalated_team_id, EXCLUDED.escalated_team_id),
          updated_at = NOW()
        RETURNING *`,
-      [guildId, cfg.category_id || null, cfg.log_channel_id || null, cfg.staff_role_id || null, cfg.ticket_limit || 1, cfg.transcript_enabled !== false, cfg.naming_format || 'ticket-{username}-{number}', JSON.stringify([{ label: 'How can staff help?', required: true }])]
+      [guildId, cfg.category_id || null, cfg.thread_host_channel_id || null, cfg.ticket_mode || 'CHANNEL', cfg.log_channel_id || null, cfg.staff_role_id || null, cfg.staff_team_id || null, cfg.escalated_role_id || null, cfg.escalated_team_id || null, cfg.ticket_limit || 1, cfg.transcript_enabled !== false, cfg.naming_format || 'ticket-{username}-{number}', JSON.stringify([{ label: 'How can staff help?', required: true }])]
     );
     return result.rows[0];
   }
@@ -152,13 +182,14 @@ class TicketService {
     const staffTeamId = input.staffTeamName ? await resolveTeamId(guildId, input.staffTeamName) : null;
     const escalatedTeamId = input.escalatedTeamName ? await resolveTeamId(guildId, input.escalatedTeamName) : null;
     const result = await query(
-      `INSERT INTO ticket_types (guild_id, name, label, description, category_id, log_channel_id, staff_role_id, staff_team_id, escalated_role_id, escalated_team_id, ticket_limit, transcript_enabled, naming_format, enabled)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, true)
-       ON CONFLICT (guild_id, name)
-       DO UPDATE SET
+      `INSERT INTO ticket_types (guild_id, name, label, description, category_id, thread_host_channel_id, ticket_mode, log_channel_id, staff_role_id, staff_team_id, escalated_role_id, escalated_team_id, ticket_limit, transcript_enabled, naming_format, enabled)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,true)
+       ON CONFLICT (guild_id, name) DO UPDATE SET
          label = COALESCE(EXCLUDED.label, ticket_types.label),
          description = COALESCE(EXCLUDED.description, ticket_types.description),
          category_id = COALESCE(EXCLUDED.category_id, ticket_types.category_id),
+         thread_host_channel_id = COALESCE(EXCLUDED.thread_host_channel_id, ticket_types.thread_host_channel_id),
+         ticket_mode = COALESCE(EXCLUDED.ticket_mode, ticket_types.ticket_mode),
          log_channel_id = COALESCE(EXCLUDED.log_channel_id, ticket_types.log_channel_id),
          staff_role_id = COALESCE(EXCLUDED.staff_role_id, ticket_types.staff_role_id),
          staff_team_id = COALESCE(EXCLUDED.staff_team_id, ticket_types.staff_team_id),
@@ -170,7 +201,7 @@ class TicketService {
          enabled = true,
          updated_at = NOW()
        RETURNING *`,
-      [guildId, input.name, input.label || input.name, input.description || null, input.categoryId || null, input.logChannelId || null, input.staffRoleId || null, staffTeamId, input.escalatedRoleId || null, escalatedTeamId, input.ticketLimit || null, typeof input.transcriptEnabled === 'boolean' ? input.transcriptEnabled : null, input.namingFormat || null]
+      [guildId, input.name, input.label || input.name, input.description || null, input.categoryId || null, input.threadHostChannelId || null, input.ticketMode || null, input.logChannelId || null, input.staffRoleId || null, staffTeamId, input.escalatedRoleId || null, escalatedTeamId, input.ticketLimit || null, typeof input.transcriptEnabled === 'boolean' ? input.transcriptEnabled : null, input.namingFormat || null]
     );
     return result.rows[0];
   }
@@ -224,78 +255,60 @@ class TicketService {
     const opener = openerUser || interaction.user;
     const actor = actorUser || interaction.user;
     const selectedType = ticketType || await this.getTypeByName(guildId, type) || await this.ensureDefaultType(guildId);
+    const mode = String(selectedType.ticket_mode || config.ticket_mode || 'CHANNEL').toUpperCase() === 'THREAD' ? 'THREAD' : 'CHANNEL';
 
-    const openCount = skipTicketLimit ? { rows: [{ count: 0 }] } : await query(
-      `SELECT COUNT(*)::int AS count FROM tickets WHERE guild_id = $1 AND opener_user_id = $2 AND status = 'OPEN'`,
-      [guildId, opener.id]
-    );
-
+    const openCount = skipTicketLimit ? { rows: [{ count: 0 }] } : await query(`SELECT COUNT(*)::int AS count FROM tickets WHERE guild_id = $1 AND opener_user_id = $2 AND status = 'OPEN'`, [guildId, opener.id]);
     const limit = selectedType.ticket_limit || config.ticket_limit || 1;
-    if (!skipTicketLimit && (openCount.rows[0]?.count || 0) >= limit) {
-      return { ok: false, reason: `This user already has the maximum number of open tickets allowed (**${limit}**).` };
-    }
+    if (!skipTicketLimit && (openCount.rows[0]?.count || 0) >= limit) return { ok: false, reason: `This user already has the maximum number of open tickets allowed (**${limit}**).` };
 
     const next = await query(nextNumberQuery('tickets', 'ticket_number'), [guildId]);
     const ticketNumber = Number(next.rows[0].next_number);
-    const channelName = formatTicketChannelName(selectedType.naming_format || config.naming_format, {
-      username: opener.username,
-      number: ticketNumber,
-      type: selectedType.name
-    });
+    const channelName = formatTicketChannelName(selectedType.naming_format || config.naming_format, { username: opener.username, number: ticketNumber, type: selectedType.name });
+    const teamRoleIds = await getTeamRoleIds(selectedType.staff_team_id || config.staff_team_id);
+    const reviewerRoleIds = Array.isArray(reviewerRoleIdsOverride)
+      ? [...new Set(reviewerRoleIdsOverride)]
+      : [...new Set([selectedType.staff_role_id || config.staff_role_id, ...teamRoleIds].filter(Boolean))];
 
-    const botMember = guild.members.me || await guild.members.fetchMe().catch(() => null);
-    const overwrites = [
-      { id: guild.roles.everyone.id, deny: [PermissionFlagsBits.ViewChannel] },
-      { id: opener.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.AttachFiles] }
-    ];
-
-    if (botMember) {
-      overwrites.push({ id: botMember.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ManageChannels, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.AttachFiles] });
+    let channel;
+    let parentChannelId = null;
+    if (mode === 'THREAD') {
+      const hostId = selectedType.thread_host_channel_id || config.thread_host_channel_id;
+      if (!hostId) return { ok: false, reason: 'This ticket type uses thread mode, but no thread host channel is configured.' };
+      const host = await guild.channels.fetch(hostId).catch(() => null);
+      if (!host || !host.threads || typeof host.threads.create !== 'function') return { ok: false, reason: 'The configured thread host channel is unavailable or does not support threads.' };
+      if (!host.permissionsFor(opener.id)?.has(PermissionFlagsBits.ViewChannel)) return { ok: false, reason: 'The ticket opener cannot view the configured thread host channel. Grant members View Channel access to the host channel, while keeping Send Messages disabled if desired.' };
+      channel = await host.threads.create({ name: channelName, type: ChannelType.PrivateThread, invitable: false, reason: `SlickBot ticket #${ticketNumber}` });
+      parentChannelId = host.id;
+      const reviewerMemberIds = await getRoleMemberIds(guild, reviewerRoleIds);
+      await addMembersToPrivateThread(channel, [opener.id, ...reviewerMemberIds]);
+    } else {
+      const botMember = guild.members.me || await guild.members.fetchMe().catch(() => null);
+      const overwrites = [
+        { id: guild.roles.everyone.id, deny: [PermissionFlagsBits.ViewChannel] },
+        { id: opener.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.AttachFiles] }
+      ];
+      if (botMember) overwrites.push({ id: botMember.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ManageChannels, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.AttachFiles] });
+      for (const roleId of reviewerRoleIds) overwrites.push({ id: roleId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.ManageMessages] });
+      channel = await guild.channels.create({ name: channelName, type: ChannelType.GuildText, parent: selectedType.category_id || config.category_id || null, topic: `SlickBot ticket #${ticketNumber} opened by ${opener.tag} (${opener.id})`, permissionOverwrites: overwrites, reason: `SlickBot ticket #${ticketNumber}` });
+      parentChannelId = channel.parentId || null;
     }
-
-    const teamRoleIds = await getTeamRoleIds(selectedType.staff_team_id);
-    const reviewerRoleIds = Array.isArray(reviewerRoleIdsOverride) ? [...new Set(reviewerRoleIdsOverride)] : [...new Set([selectedType.staff_role_id || config.staff_role_id, ...teamRoleIds].filter(Boolean))];
-    for (const roleId of reviewerRoleIds) {
-      overwrites.push({ id: roleId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.ManageMessages] });
-    }
-
-    const channel = await guild.channels.create({
-      name: channelName,
-      type: ChannelType.GuildText,
-      parent: selectedType.category_id || config.category_id || null,
-      topic: `SlickBot ticket #${ticketNumber} opened by ${opener.tag} (${opener.id})`,
-      permissionOverwrites: overwrites,
-      reason: `SlickBot ticket #${ticketNumber}`
-    });
 
     const readableDetails = answers ? buildQuestionLines(answers) : (details || null);
     const insert = await query(
-      `INSERT INTO tickets (guild_id, ticket_number, channel_id, opener_user_id, opener_user_tag, type, subject, details, status, priority, ticket_type_id, reviewer_role_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'OPEN', 'NORMAL', $9, $10)
-       RETURNING *`,
-      [guildId, ticketNumber, channel.id, opener.id, opener.tag, selectedType.name, subject || 'Support Request', readableDetails, selectedType.id, reviewerRoleIds[0] || null]
+      `INSERT INTO tickets (guild_id, ticket_number, channel_id, parent_channel_id, ticket_mode, opener_user_id, opener_user_tag, type, subject, details, status, priority, ticket_type_id, reviewer_role_id, reviewer_role_ids)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'OPEN','NORMAL',$11,$12,$13::jsonb) RETURNING *`,
+      [guildId, ticketNumber, channel.id, parentChannelId, mode, opener.id, opener.tag, selectedType.name, subject || 'Support Request', readableDetails, selectedType.id, reviewerRoleIds[0] || null, JSON.stringify(reviewerRoleIds)]
     );
     const ticket = insert.rows[0];
-
     const embed = buildTicketControlEmbed(ticket, selectedType);
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId(CustomIds.TicketClaim).setLabel('Claim').setStyle(ButtonStyle.Primary).setEmoji('🙋'),
       new ButtonBuilder().setCustomId(CustomIds.TicketEscalate).setLabel('Escalate').setStyle(ButtonStyle.Secondary).setEmoji('⬆️'),
       new ButtonBuilder().setCustomId(CustomIds.TicketCloseReason).setLabel('Close With Reason').setStyle(ButtonStyle.Danger).setEmoji('🔒')
     );
-
     const reviewerMentions = reviewerRoleIds.map((roleId) => `<@&${roleId}>`).join(' ');
     await channel.send({ content: `<@${opener.id}>${reviewerMentions ? ` ${reviewerMentions}` : ''}`, embeds: [embed], components: [row] });
-
-    await logger.log({
-      guildId,
-      eventKey: 'ticket-open',
-      title: 'Ticket Opened',
-      body: `Ticket #${ticket.ticket_number} opened by ${opener.tag} in <#${channel.id}>.${actor.id !== opener.id ? ` Created by ${actor.tag}.` : ''}`,
-      actorUserId: actor.id,
-      metadata: { ticketId: ticket.id, channelId: channel.id, openerUserId: opener.id }
-    }).catch(() => {});
-
+    await logger.log({ guildId, eventKey: 'ticket-open', title: 'Ticket Opened', body: `Ticket #${ticket.ticket_number} opened by ${opener.tag} in <#${channel.id}> using **${mode.toLowerCase()} mode**.${actor.id !== opener.id ? ` Created by ${actor.tag}.` : ''}`, actorUserId: actor.id, metadata: { ticketId: ticket.id, channelId: channel.id, openerUserId: opener.id, mode } }).catch(() => {});
     return { ok: true, ticket, channel };
   }
 
@@ -324,23 +337,42 @@ class TicketService {
   async escalateTicket({ interaction, logger, reason = 'No escalation reason provided.' }) {
     const ticket = await this.findOpenTicketByChannel(interaction.guildId, interaction.channelId);
     if (!ticket) return { ok: false, reason: 'This channel is not an open SlickBot ticket.' };
-
+    const config = await this.getConfig(interaction.guildId);
     const type = ticket.ticket_type_id ? await this.getTypeById(interaction.guildId, ticket.ticket_type_id) : null;
-    const escalatedRoles = [...new Set([type?.escalated_role_id, ...(await getTeamRoleIds(type?.escalated_team_id))].filter(Boolean))];
-    if (!escalatedRoles.length) return { ok: false, reason: 'This ticket type does not have an escalation role or team configured.' };
+    const escalatedRoles = [...new Set([type?.escalated_role_id || config.escalated_role_id, ...(await getTeamRoleIds(type?.escalated_team_id || config.escalated_team_id))].filter(Boolean))];
+    if (!escalatedRoles.length) return { ok: false, reason: 'This ticket does not have an escalation role or team configured.' };
 
-    if (ticket.reviewer_role_id) await interaction.channel.permissionOverwrites.delete(ticket.reviewer_role_id).catch(() => {});
-    for (const roleId of escalatedRoles) {
-      await interaction.channel.permissionOverwrites.edit(roleId, { ViewChannel: true, SendMessages: true, ReadMessageHistory: true, ManageMessages: true }).catch(() => {});
+    const currentReviewerRoles = parseRoleIds(ticket.reviewer_role_ids);
+    if (!currentReviewerRoles.length && ticket.reviewer_role_id) currentReviewerRoles.push(ticket.reviewer_role_id);
+    const isThread = String(ticket.ticket_mode || '').toUpperCase() === 'THREAD' || interaction.channel.isThread?.();
+    if (isThread) {
+      const oldMemberIds = await getRoleMemberIds(interaction.guild, currentReviewerRoles);
+      const newMemberIds = await getRoleMemberIds(interaction.guild, escalatedRoles);
+      await removeMembersFromPrivateThread(interaction.channel, oldMemberIds, [ticket.opener_user_id, interaction.client.user.id]);
+      await addMembersToPrivateThread(interaction.channel, newMemberIds);
+    } else {
+      for (const roleId of currentReviewerRoles) await interaction.channel.permissionOverwrites.delete(roleId).catch(() => {});
+      for (const roleId of escalatedRoles) await interaction.channel.permissionOverwrites.edit(roleId, { ViewChannel: true, SendMessages: true, ReadMessageHistory: true, ManageMessages: true }).catch(() => {});
     }
 
     const result = await query(
-      `UPDATE tickets SET priority = 'ESCALATED', escalated_to_role_id = $1, escalated_by_user_id = $2, escalated_at = NOW(), updated_at = NOW() WHERE id = $3 RETURNING *`,
-      [escalatedRoles[0], interaction.user.id, ticket.id]
+      `UPDATE tickets SET priority = 'ESCALATED', reviewer_role_id = $1, reviewer_role_ids = $2::jsonb, escalated_to_role_id = $1, escalated_by_user_id = $3, escalated_at = NOW(), updated_at = NOW() WHERE id = $4 RETURNING *`,
+      [escalatedRoles[0], JSON.stringify(escalatedRoles), interaction.user.id, ticket.id]
     );
+    await logger.log({ guildId: interaction.guildId, eventKey: 'ticket-escalate', title: 'Ticket Escalated', body: `Ticket #${ticket.ticket_number} escalated by ${interaction.user.tag}.\nPrevious Review Roles: ${currentReviewerRoles.map((id) => `<@&${id}>`).join(', ') || 'None'}\nNew Review Roles: ${escalatedRoles.map((id) => `<@&${id}>`).join(', ')}\nReason: ${reason}`, actorUserId: interaction.user.id, metadata: { ticketId: ticket.id, previousRoles: currentReviewerRoles, escalatedRoles } }).catch(() => {});
+    return { ok: true, ticket: result.rows[0], roleIds: escalatedRoles, removedRoleIds: currentReviewerRoles };
+  }
 
-    await logger.log({ guildId: interaction.guildId, eventKey: 'ticket-escalate', title: 'Ticket Escalated', body: `Ticket #${ticket.ticket_number} escalated by ${interaction.user.tag}.\nReason: ${reason}`, actorUserId: interaction.user.id, metadata: { ticketId: ticket.id, escalatedRoles } }).catch(() => {});
-    return { ok: true, ticket: result.rows[0], roleIds: escalatedRoles };
+  async addUserToTicket({ interaction, user, logger }) {
+    const ticket = await this.findOpenTicketByChannel(interaction.guildId, interaction.channelId);
+    if (!ticket) return { ok: false, reason: 'This channel is not an open SlickBot ticket.' };
+    if (interaction.channel.isThread?.()) {
+      await interaction.channel.members.add(user.id).catch(() => null);
+    } else {
+      await interaction.channel.permissionOverwrites.edit(user.id, { ViewChannel: true, SendMessages: true, ReadMessageHistory: true, AttachFiles: true }).catch(() => null);
+    }
+    await logger.log({ guildId: interaction.guildId, eventKey: 'ticket-user-add', title: 'User Added to Ticket', body: `User <@${user.id}> was added to ticket #${ticket.ticket_number} by ${interaction.user.tag}.`, actorUserId: interaction.user.id, metadata: { ticketId: ticket.id, userId: user.id } }).catch(() => {});
+    return { ok: true, ticket };
   }
 
   async closeTicket({ interaction, client, logger, reason = 'No reason provided.' }) {

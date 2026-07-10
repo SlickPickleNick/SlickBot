@@ -8,6 +8,7 @@ const {
 } = require('../ui/uiService');
 const { CustomIds } = require('../ui/customIds');
 const { query } = require('../../services/db');
+const { embedsWithHeader } = require('../panels/panelImageService');
 
 function parseJson(value, fallback) {
   if (!value) return fallback;
@@ -80,7 +81,9 @@ async function buildTicketsPanel(guildId) {
       `Closed Tickets: **${byStatus.CLOSED || 0}**`,
       '',
       '**Default Configuration**',
+      `Mode: **${cfg?.ticket_mode || 'CHANNEL'}**`,
       `Category: ${cfg?.category_id ? `<#${cfg.category_id}>` : 'Not set'}`,
+      `Thread Host: ${cfg?.thread_host_channel_id ? `<#${cfg.thread_host_channel_id}>` : 'Not set'}`,
       `Staff Role: ${cfg?.staff_role_id ? `<@&${cfg.staff_role_id}>` : 'Not set'}`,
       `Ticket Log: ${cfg?.log_channel_id ? `<#${cfg.log_channel_id}>` : 'Not set'}`,
       `Naming: \`${cfg?.naming_format || 'ticket-{username}-{number}'}\``,
@@ -212,38 +215,38 @@ async function buildPublicTicketPanel(types = [], config = null) {
       description: String(type.description || 'Open this ticket type.').slice(0, 100),
       emoji: '🎟️'
     })));
-    return { embeds: [embed], components: [select] };
+    return { embeds: embedsWithHeader(config?.panel_header_image_url, embed), components: [select] };
   }
 
   const buttons = enabledTypes.length
     ? enabledTypes.slice(0, 5).map((type) => createPanelButton(`${CustomIds.TicketOpenTypePrefix}${type.id}`, type.label || type.name, ButtonStyle.Primary, '🎟️'))
     : [createPanelButton(CustomIds.TicketOpen, 'Open Ticket', ButtonStyle.Primary, '🎟️')];
-  return { embeds: [embed], components: [createButtonRow(buttons)] };
+  return { embeds: embedsWithHeader(config?.panel_header_image_url, embed), components: [createButtonRow(buttons)] };
 }
 
 function buildPublicReportPanel(config = null) {
   const embed = createBaseEmbed({ title: config?.panel_title || 'Submit a Report', description: config?.panel_description || 'Use this panel to privately report a concern to the staff team.', color: parseHexColor(config?.panel_color, SlickBotColors.WARNING), footer: `SlickBot Reports · ${getPanelDisplayMode(config?.panel_display_mode)}` });
   if (getPanelDisplayMode(config?.panel_display_mode) === 'DROPDOWN') {
-    return { embeds: [embed], components: [createSelectRow(CustomIds.ReportSelect, 'Choose an action...', [{ label: 'Submit Report', value: 'open', description: 'Privately report a concern to staff.', emoji: '🚩' }])] };
+    return { embeds: embedsWithHeader(config?.panel_header_image_url, embed), components: [createSelectRow(CustomIds.ReportSelect, 'Choose an action...', [{ label: 'Submit Report', value: 'open', description: 'Privately report a concern to staff.', emoji: '🚩' }])] };
   }
-  return { embeds: [embed], components: [createButtonRow([createPanelButton(CustomIds.ReportOpen, 'Submit Report', ButtonStyle.Danger, '🚩')])] };
+  return { embeds: embedsWithHeader(config?.panel_header_image_url, embed), components: [createButtonRow([createPanelButton(CustomIds.ReportOpen, 'Submit Report', ButtonStyle.Danger, '🚩')])] };
 }
 
 function buildPublicApplicationPanel(type) {
   const embed = createBaseEmbed({ title: type.panel_title || `${type.name} Application`, description: type.panel_description || type.description || 'Use this panel to start a DM-based application.', color: parseHexColor(type.panel_color, SlickBotColors.PRIMARY), footer: `SlickBot Applications · ${getPanelDisplayMode(type.panel_display_mode)}` });
   const customId = `${CustomIds.ApplicationApplyPrefix}${type.id}`;
   if (getPanelDisplayMode(type.panel_display_mode) === 'DROPDOWN') {
-    return { embeds: [embed], components: [createSelectRow(`${CustomIds.ApplicationSelectPrefix}${type.id}`, 'Choose an action...', [{ label: `Start ${type.name}`.slice(0, 100), value: type.id, description: 'Start this DM-based application.', emoji: '📝' }])] };
+    return { embeds: embedsWithHeader(type?.panel_header_image_url, embed), components: [createSelectRow(`${CustomIds.ApplicationSelectPrefix}${type.id}`, 'Choose an action...', [{ label: `Start ${type.name}`.slice(0, 100), value: type.id, description: 'Start this DM-based application.', emoji: '📝' }])] };
   }
-  return { embeds: [embed], components: [createButtonRow([createPanelButton(customId, 'Start Application', ButtonStyle.Primary, '📝')])] };
+  return { embeds: embedsWithHeader(type?.panel_header_image_url, embed), components: [createButtonRow([createPanelButton(customId, 'Start Application', ButtonStyle.Primary, '📝')])] };
 }
 
 function buildPublicAppealPanel(config = null) {
   const embed = createBaseEmbed({ title: config?.panel_title || 'Submit an Appeal', description: config?.panel_description || 'Use this panel to submit an appeal for staff review.', color: parseHexColor(config?.panel_color, SlickBotColors.INFO), footer: `SlickBot Appeals · ${getPanelDisplayMode(config?.panel_display_mode)}` });
   if (getPanelDisplayMode(config?.panel_display_mode) === 'DROPDOWN') {
-    return { embeds: [embed], components: [createSelectRow(CustomIds.AppealSelect, 'Choose an action...', [{ label: 'Submit Appeal', value: 'open', description: 'Submit an appeal for staff review.', emoji: '⚖️' }])] };
+    return { embeds: embedsWithHeader(config?.panel_header_image_url, embed), components: [createSelectRow(CustomIds.AppealSelect, 'Choose an action...', [{ label: 'Submit Appeal', value: 'open', description: 'Submit an appeal for staff review.', emoji: '⚖️' }])] };
   }
-  return { embeds: [embed], components: [createButtonRow([createPanelButton(CustomIds.AppealOpen, 'Submit Appeal', ButtonStyle.Primary, '⚖️')])] };
+  return { embeds: embedsWithHeader(config?.panel_header_image_url, embed), components: [createButtonRow([createPanelButton(CustomIds.AppealOpen, 'Submit Appeal', ButtonStyle.Primary, '⚖️')])] };
 }
 
 module.exports = {

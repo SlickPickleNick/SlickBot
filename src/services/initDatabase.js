@@ -924,6 +924,25 @@ async function initDatabase() {
 
   await query(`CREATE INDEX IF NOT EXISTS idx_role_panel_options_panel ON role_panel_options(panel_id, active);`);
 
+  // v0.6.2: ticket thread mode, complete reviewer routing, and optional panel header images
+  await query(`ALTER TABLE ticket_configs ADD COLUMN IF NOT EXISTS staff_team_id TEXT;`).catch(() => {});
+  await query(`ALTER TABLE ticket_configs ADD COLUMN IF NOT EXISTS escalated_role_id TEXT;`).catch(() => {});
+  await query(`ALTER TABLE ticket_configs ADD COLUMN IF NOT EXISTS escalated_team_id TEXT;`).catch(() => {});
+  await query(`ALTER TABLE ticket_configs ADD COLUMN IF NOT EXISTS ticket_mode TEXT NOT NULL DEFAULT 'CHANNEL';`).catch(() => {});
+  await query(`ALTER TABLE ticket_configs ADD COLUMN IF NOT EXISTS thread_host_channel_id TEXT;`).catch(() => {});
+  await query(`ALTER TABLE ticket_configs ADD COLUMN IF NOT EXISTS panel_header_image_url TEXT;`).catch(() => {});
+  await query(`ALTER TABLE ticket_types ADD COLUMN IF NOT EXISTS ticket_mode TEXT;`).catch(() => {});
+  await query(`ALTER TABLE ticket_types ADD COLUMN IF NOT EXISTS thread_host_channel_id TEXT;`).catch(() => {});
+  await query(`ALTER TABLE ticket_types ADD COLUMN IF NOT EXISTS panel_header_image_url TEXT;`).catch(() => {});
+  await query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS ticket_mode TEXT NOT NULL DEFAULT 'CHANNEL';`).catch(() => {});
+  await query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS parent_channel_id TEXT;`).catch(() => {});
+  await query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS reviewer_role_ids JSONB NOT NULL DEFAULT '[]'::jsonb;`).catch(() => {});
+  await query(`ALTER TABLE report_configs ADD COLUMN IF NOT EXISTS panel_header_image_url TEXT;`).catch(() => {});
+  await query(`ALTER TABLE application_types ADD COLUMN IF NOT EXISTS panel_header_image_url TEXT;`).catch(() => {});
+  await query(`ALTER TABLE appeal_configs ADD COLUMN IF NOT EXISTS panel_header_image_url TEXT;`).catch(() => {});
+  await query(`ALTER TABLE birthday_configs ADD COLUMN IF NOT EXISTS panel_header_image_url TEXT;`).catch(() => {});
+  await query(`ALTER TABLE role_panels ADD COLUMN IF NOT EXISTS panel_header_image_url TEXT;`).catch(() => {});
+
 }
 
 if (require.main === module) {
@@ -937,6 +956,7 @@ if (require.main === module) {
       await closeDatabase().catch(() => {});
       process.exit(1);
     });
+
 }
 
 module.exports = { initDatabase };
