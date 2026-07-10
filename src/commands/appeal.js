@@ -7,77 +7,12 @@ const { buildAppealsPanel, buildPublicAppealPanel } = require('../modules/suppor
 const { createSuccessEmbed } = require('../modules/ui/uiService');
 const { recordPublishedPanel } = require('../modules/panels/publishedPanelService');
 const { refreshPublishedPanel, formatRefreshSummary } = require('../modules/panels/panelUpdateService');
-
 const appeals = new AppealService();
-
-module.exports = {
-  data: new SlashCommandBuilder()
-    .setName('appeal')
-    .setDescription('Appeal system tools.')
-    .addSubcommand((subcommand) => subcommand.setName('manager').setDescription('Open the appeal manager panel.'))
-    .addSubcommand((subcommand) =>
-      subcommand
-        .setName('setup')
-        .setDescription('Set appeal review settings.')
-        .addChannelOption((option) => option.setName('review_channel').setDescription('Private staff appeal review channel.').addChannelTypes(ChannelType.GuildText).setRequired(true))
-        .addBooleanOption((option) => option.setName('dm_decision').setDescription('DM users when their appeal is approved or denied.').setRequired(false))
-        .addBooleanOption((option) => option.setName('dm_include_submission').setDescription('Include original appeal submission in the decision DM.').setRequired(false))
-        .addStringOption((option) => option.setName('panel_title').setDescription('Public appeal panel title.').setRequired(false).setMaxLength(100))
-        .addStringOption((option) => option.setName('panel_description').setDescription('Public appeal panel description.').setRequired(false).setMaxLength(800))
-        .addStringOption((option) => option.setName('panel_color').setDescription('Panel accent color, example: #5aa7ff.').setRequired(false).setMaxLength(7))
-        .addStringOption((option) => option.setName('display_mode').setDescription('Public panel component style.').setRequired(false).addChoices({ name: 'Buttons', value: 'BUTTONS' }, { name: 'Dropdown menu', value: 'DROPDOWN' }))
-    )
-    .addSubcommand((subcommand) =>
-      subcommand
-        .setName('panel')
-        .setDescription('Post a public appeal launcher panel.')
-        .addChannelOption((option) => option.setName('channel').setDescription('Channel to post the panel in. Defaults to current channel.').addChannelTypes(ChannelType.GuildText).setRequired(false))
-    )
-    .addSubcommand((subcommand) =>
-      subcommand
-        .setName('submit')
-        .setDescription('Submit an appeal.')
-        .addStringOption((option) => option.setName('reason').setDescription('Why should staff review this?').setRequired(true).setMaxLength(1000))
-        .addIntegerOption((option) => option.setName('case_number').setDescription('Case number if known.').setRequired(false).setMinValue(1))
-        .addStringOption((option) => option.setName('details').setDescription('Additional context.').setRequired(false).setMaxLength(1000))
-    ),
-  actionKey: ActionKeys.AppealsPanel,
-  moduleKey: ModuleKeys.APPEALS,
-  getActionKey(interaction) {
-    const subcommand = interaction.options.getSubcommand();
-    if (subcommand === 'setup') return ActionKeys.AppealsConfigure;
-    if (subcommand === 'manager') return ActionKeys.AppealsManager;
-    if (subcommand === 'panel') return ActionKeys.AppealsPostPanel;
-    if (subcommand === 'submit') return ActionKeys.AppealsSubmit;
-    return ActionKeys.AppealsReview;
-  },
-  isPublic(interaction) {
-    return interaction.options.getSubcommand() === 'submit';
-  },
-  async execute(interaction, ctx) {
-    const subcommand = interaction.options.getSubcommand();
-    await ctx.permissions.ensureGuildConfig(interaction.guildId, interaction.guild ? interaction.guild.name : null);
-
-    if (subcommand === 'manager') return replyPrivate(interaction, await buildAppealsPanel(interaction.guildId));
-
-    if (subcommand === 'setup') {
-      const channel = interaction.options.getChannel('review_channel', true);
-      const config = await appeals.updateConfig(interaction.guildId, { reviewChannelId: channel.id, dmDecisionEnabled: interaction.options.getBoolean('dm_decision') || false, dmIncludeSubmission: interaction.options.getBoolean('dm_include_submission') || false, panelTitle: interaction.options.getString('panel_title') || null, panelDescription: interaction.options.getString('panel_description') || null, panelColor: interaction.options.getString('panel_color') || null, panelDisplayMode: interaction.options.getString('display_mode') || null });
-      await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'setup', title: 'Appeal Settings Updated', body: `Appeal review channel set to <#${channel.id}> by ${interaction.user.tag}.`, actorUserId: interaction.user.id }).catch(() => {});
-      const refresh = await refreshPublishedPanel(ctx.client, interaction.guildId, 'appeal', '*').catch(() => null);
-      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Appeal System Configured', [`Review Channel: <#${channel.id}>`, `DM Decisions: **${config.dm_decision_enabled ? 'Enabled' : 'Disabled'}**`, `Include Submission in DM: **${config.dm_include_submission ? 'Enabled' : 'Disabled'}**`, formatRefreshSummary(refresh)].filter(Boolean).join('\n'))] });
-    }
-
-    if (subcommand === 'panel') {
-      const channel = interaction.options.getChannel('channel') || interaction.channel;
-      const message = await channel.send(buildPublicAppealPanel(await appeals.getConfig(interaction.guildId)));
-      await recordPublishedPanel({ guildId: interaction.guildId, panelType: 'appeal', panelRef: '*', channelId: channel.id, messageId: message.id });
-      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Appeal Panel Posted', `Panel posted in <#${channel.id}>. Future appeal panel edits will update this message automatically.`)] });
-    }
-
-    if (subcommand === 'submit') {
-      const appeal = await appeals.submitAppeal({ interaction, client: ctx.client, logger: ctx.logger, caseNumber: interaction.options.getInteger('case_number') || null, reason: interaction.options.getString('reason', true), details: interaction.options.getString('details') || null });
-      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Appeal Submitted', `Appeal #${appeal.appeal_number} was sent to staff.`)] });
-    }
-  }
+module.exports = { data: new SlashCommandBuilder().setName('appeal').setDescription('Appeal system tools.')
+  .addSubcommand((s)=>s.setName('manager').setDescription('Open the appeal manager panel.'))
+  .addSubcommand((s)=>s.setName('setup').setDescription('Set appeal review settings.').addChannelOption((o)=>o.setName('review_channel').setDescription('Private staff appeal review channel.').addChannelTypes(ChannelType.GuildText).setRequired(true)).addBooleanOption((o)=>o.setName('dm_decision').setDescription('DM users when their appeal is approved or denied.').setRequired(false)).addBooleanOption((o)=>o.setName('dm_include_submission').setDescription('Include original appeal submission in the decision DM.').setRequired(false)).addStringOption((o)=>o.setName('panel_title').setDescription('Public appeal panel title.').setRequired(false).setMaxLength(100)).addStringOption((o)=>o.setName('panel_description').setDescription('Public appeal panel description.').setRequired(false).setMaxLength(800)).addStringOption((o)=>o.setName('panel_color').setDescription('Panel accent color, example: #5aa7ff.').setRequired(false).setMaxLength(7)).addStringOption((o)=>o.setName('display_mode').setDescription('Public panel component style.').setRequired(false).addChoices({name:'Buttons',value:'BUTTONS'},{name:'Dropdown menu',value:'DROPDOWN'})))
+  .addSubcommand((s)=>s.setName('panel').setDescription('Post a public appeal launcher panel.').addChannelOption((o)=>o.setName('channel').setDescription('Channel to post the panel in. Defaults to current channel.').addChannelTypes(ChannelType.GuildText).setRequired(false)))
+  .addSubcommand((s)=>s.setName('submit').setDescription('Submit an appeal.').addStringOption((o)=>o.setName('reason').setDescription('Why should staff review this?').setRequired(true).setMaxLength(1000)).addIntegerOption((o)=>o.setName('case_number').setDescription('Case number if known.').setRequired(false).setMinValue(1)).addStringOption((o)=>o.setName('details').setDescription('Additional context.').setRequired(false).setMaxLength(1000))), actionKey:ActionKeys.AppealsPanel,moduleKey:ModuleKeys.APPEALS,
+  getActionKey(i){const s=i.options.getSubcommand();if(s==='setup')return ActionKeys.AppealsConfigure;if(s==='manager')return ActionKeys.AppealsManager;if(s==='panel')return ActionKeys.AppealsPostPanel;if(s==='submit')return ActionKeys.AppealsSubmit;return ActionKeys.AppealsReview;}, isPublic(i){return i.options.getSubcommand()==='submit';},
+  async execute(i,ctx){const s=i.options.getSubcommand();await ctx.permissions.ensureGuildConfig(i.guildId,i.guild?.name||null);if(s==='manager')return replyPrivate(i,await buildAppealsPanel(i.guildId));if(s==='setup'){const c=i.options.getChannel('review_channel',true);const cfg=await appeals.updateConfig(i.guildId,{reviewChannelId:c.id,dmDecisionEnabled:i.options.getBoolean('dm_decision')||false,dmIncludeSubmission:i.options.getBoolean('dm_include_submission')||false,panelTitle:i.options.getString('panel_title')||null,panelDescription:i.options.getString('panel_description')||null,panelColor:i.options.getString('panel_color')||null,panelDisplayMode:i.options.getString('display_mode')||null});const r=await refreshPublishedPanel(ctx.client,i.guildId,'appeal','*').catch(()=>null);return replyPrivate(i,{embeds:[createSuccessEmbed('Appeal System Configured',[`Review Channel: <#${c.id}>`,`DM Decisions: **${cfg.dm_decision_enabled?'Enabled':'Disabled'}**`,`Include Submission in DM: **${cfg.dm_include_submission?'Enabled':'Disabled'}**`,formatRefreshSummary(r)].filter(Boolean).join('\n'))]});}if(s==='panel'){const c=i.options.getChannel('channel')||i.channel;const m=await c.send(buildPublicAppealPanel(await appeals.getConfig(i.guildId)));await recordPublishedPanel({guildId:i.guildId,panelType:'appeal',panelRef:'*',channelId:c.id,messageId:m.id});return replyPrivate(i,{embeds:[createSuccessEmbed('Appeal Panel Posted',`Panel posted in <#${c.id}>. Future appeal panel edits will update this message automatically.`)]});}const a=await appeals.submitAppeal({interaction:i,client:ctx.client,logger:ctx.logger,caseNumber:i.options.getInteger('case_number')||null,reason:i.options.getString('reason',true),details:i.options.getString('details')||null});return replyPrivate(i,{embeds:[createSuccessEmbed('Appeal Submitted',`Appeal #${a.appeal_number} was sent to staff.`)]});}
 };

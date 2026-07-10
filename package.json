@@ -1,8 +1,8 @@
 {
   "name": "slickbot",
-  "version": "0.6.2",
+  "version": "0.7.0",
   "private": true,
-  "description": "SlickBot all-in-one Discord server management bot with role bundle fixes, XP multiplier roles, XP curve analysis, and expanded leveling information.",
+  "description": "SlickBot all-in-one Discord server management bot with channel tickets, panel media, leveling, and Join-to-Create voice rooms.",
   "main": "src/index.js",
   "engines": {
     "node": ">=22.12.0"

@@ -36,10 +36,7 @@ module.exports = {
   },
   async execute(interaction, ctx) {
     const sub = interaction.options.getSubcommand();
-    if (sub === 'manager') {
-      return replyPrivate(interaction, await stats.buildManagerPanel(interaction.guild));
-    }
-
+    if (sub === 'manager') return replyPrivate(interaction, await stats.buildManagerPanel(interaction.guild));
     if (sub === 'setup') {
       const config = await stats.setup(interaction.guildId, {
         enabled: interaction.options.getBoolean('enabled') ?? true,
@@ -56,7 +53,6 @@ module.exports = {
       const result = await stats.updateStats(interaction.guild, ctx.logger, 'configuration').catch(() => null);
       return replyPrivate(interaction, { embeds: [createSuccessEmbed('Server Stats Configured', `Server stats are **${config.enabled ? 'enabled' : 'disabled'}**.${result?.ok ? ` Updated **${result.updated}** channel(s).${result.reason ? ` ${result.reason}` : ''}` : ''}`)] });
     }
-
     if (sub === 'refresh') {
       const result = await stats.updateStats(interaction.guild, ctx.logger, 'manual refresh');
       if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Stats Not Updated', result.reason)] });

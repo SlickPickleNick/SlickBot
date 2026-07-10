@@ -46,7 +46,6 @@ function isCoreModule(moduleKey) {
   return coreModules.includes(moduleKey);
 }
 
-
 const implementedModules = Object.freeze([
   ModuleKeys.PERMISSIONS,
   ModuleKeys.LOGGING,
@@ -62,7 +61,8 @@ const implementedModules = Object.freeze([
   ModuleKeys.GIVEAWAYS,
   ModuleKeys.BIRTHDAYS,
   ModuleKeys.LEVELING,
-  ModuleKeys.SERVER_STATS
+  ModuleKeys.SERVER_STATS,
+  ModuleKeys.JOIN_TO_CREATE
 ]);
 
 function isImplementedModule(moduleKey) {

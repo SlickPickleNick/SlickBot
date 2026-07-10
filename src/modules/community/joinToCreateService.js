@@ -293,6 +293,8 @@ class JoinToCreateService {
       return { ok: false, reason: 'The room was created, but SlickBot could not move the member into it.' };
     }
 
+    await this.sendOwnerControlPanel(channel, member, record);
+
     await logger?.log({
       guildId: guild.id,
       eventKey: 'join-to-create-created',
@@ -303,6 +305,37 @@ class JoinToCreateService {
     }).catch(() => {});
 
     return { ok: true, channel, record, reused: false };
+  }
+
+  async sendOwnerControlPanel(channel, member, record) {
+    if (!channel || typeof channel.send !== 'function') return null;
+    const payload = {
+      content: `<@${member.id}>`,
+      embeds: [createBaseEmbed({
+        title: 'Your Temporary Voice Room',
+        description: [
+          `You created <#${channel.id}> and currently own this room.`,
+          '',
+          '## Room Controls',
+          '`/voice rename name:<new name>` — Rename the room',
+          '`/voice limit amount:<0-99>` — Set the member limit; use `0` for unlimited',
+          '`/voice lock` — Prevent new members from joining',
+          '`/voice unlock` — Reopen the room',
+          '`/voice permit user:<member>` — Allow a member into a locked room',
+          '`/voice reject user:<member>` — Remove and block a member',
+          '`/voice transfer user:<member>` — Transfer room ownership',
+          '`/voice info` — View the current room settings',
+          '',
+          'If the owner leaves while others remain, another member can use `/voice claim`. The room is deleted automatically when it becomes empty.'
+        ].join('\n'),
+        color: SlickBotColors.INFO,
+        footer: 'SlickBot Join-to-Create'
+      })]
+    };
+    return channel.send(payload).catch((error) => {
+      console.error('Failed to send Join-to-Create owner panel:', error);
+      return null;
+    });
   }
 
   async cleanupChannelIfEmpty(guild, channelId, logger) {
