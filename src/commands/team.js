@@ -1,2 +1,200 @@
-const {SlashCommandBuilder}=require('discord.js');const {ModuleKeys}=require('../modules/moduleRegistry');const {ActionKeys}=require('../modules/permissions/actionKeys');const {replyPrivate}=require('../utils/reply');const {query}=require('../services/db');const {createSuccessEmbed,createWarningEmbed,createBaseEmbed,SlickBotColors}=require('../modules/ui/uiService');async function getTeam(g,n){return(await query(`SELECT * FROM permission_teams WHERE guild_id=$1 AND LOWER(name)=LOWER($2) LIMIT 1`,[g,n])).rows[0]||null;}
-module.exports={data:new SlashCommandBuilder().setName('team').setDescription('Manage SlickBot permission teams.').addSubcommand(s=>s.setName('create').setDescription('Create a permission team.').addStringOption(o=>o.setName('name').setDescription('Team name.').setRequired(true)).addStringOption(o=>o.setName('description').setDescription('Description.').setRequired(false))).addSubcommand(s=>s.setName('add-role').setDescription('Add a role to a team.').addStringOption(o=>o.setName('team').setDescription('Team name.').setRequired(true)).addRoleOption(o=>o.setName('role').setDescription('Role.').setRequired(true))).addSubcommand(s=>s.setName('remove-role').setDescription('Remove a role from a team.').addStringOption(o=>o.setName('team').setDescription('Team name.').setRequired(true)).addRoleOption(o=>o.setName('role').setDescription('Role.').setRequired(true))).addSubcommand(s=>s.setName('add-user').setDescription('Add a user to a team.').addStringOption(o=>o.setName('team').setDescription('Team name.').setRequired(true)).addUserOption(o=>o.setName('user').setDescription('User.').setRequired(true))).addSubcommand(s=>s.setName('remove-user').setDescription('Remove a user from a team.').addStringOption(o=>o.setName('team').setDescription('Team name.').setRequired(true)).addUserOption(o=>o.setName('user').setDescription('User.').setRequired(true))).addSubcommand(s=>s.setName('allow').setDescription('Allow a team to use an action.').addStringOption(o=>o.setName('team').setDescription('Team name.').setRequired(true)).addStringOption(o=>o.setName('action').setDescription('Action key.').setRequired(true)).addChannelOption(o=>o.setName('channel').setDescription('Optional channel scope.').setRequired(false))).addSubcommand(s=>s.setName('list').setDescription('List permission teams.')),moduleKey:ModuleKeys.PERMISSIONS,actionKey:ActionKeys.TeamsManage,async execute(i){const s=i.options.getSubcommand();if(s==='create'){const r=await query(`INSERT INTO permission_teams(guild_id,name,description) VALUES($1,$2,$3) ON CONFLICT(guild_id,name) DO UPDATE SET description=EXCLUDED.description,updated_at=NOW() RETURNING *`,[i.guildId,i.options.getString('name',true),i.options.getString('description')||null]);return replyPrivate(i,{embeds:[createSuccessEmbed('Team Saved',`Saved **${r.rows[0].name}**.`)]});}if(s==='list'){const rows=(await query(`SELECT * FROM permission_teams WHERE guild_id=$1 ORDER BY name`,[i.guildId])).rows;return replyPrivate(i,{embeds:[createBaseEmbed({title:'Permission Teams',description:rows.length?rows.map(t=>`• **${t.name}**${t.description?` — ${t.description}`:''}`).join('\n'):'No teams configured.',color:rows.length?SlickBotColors.INFO:SlickBotColors.WARNING})]});}const t=await getTeam(i.guildId,i.options.getString('team',true));if(!t)return replyPrivate(i,{embeds:[createWarningEmbed('Team Not Found','Create the team first.')]});if(s==='add-role'||s==='remove-role'){const r=i.options.getRole('role',true);if(s==='add-role')await query(`INSERT INTO permission_team_roles(team_id,role_id) VALUES($1,$2) ON CONFLICT(team_id,role_id) DO NOTHING`,[t.id,r.id]);else await query(`DELETE FROM permission_team_roles WHERE team_id=$1 AND role_id=$2`,[t.id,r.id]);return replyPrivate(i,{embeds:[createSuccessEmbed('Team Updated',`${r} was ${s==='add-role'?'added to':'removed from'} **${t.name}**.`)]});}if(s==='add-user'||s==='remove-user'){const u=i.options.getUser('user',true);if(s==='add-user')await query(`INSERT INTO permission_team_users(team_id,user_id) VALUES($1,$2) ON CONFLICT(team_id,user_id) DO NOTHING`,[t.id,u.id]);else await query(`DELETE FROM permission_team_users WHERE team_id=$1 AND user_id=$2`,[t.id,u.id]);return replyPrivate(i,{embeds:[createSuccessEmbed('Team Updated',`${u} was ${s==='add-user'?'added to':'removed from'} **${t.name}**.`)]});}await query(`INSERT INTO command_permissions(guild_id,team_id,action_key,allow,channel_scope) VALUES($1,$2,$3,true,$4) ON CONFLICT(team_id,action_key,channel_scope) DO UPDATE SET allow=true,updated_at=NOW()`,[i.guildId,t.id,i.options.getString('action',true),i.options.getChannel('channel')?.id||'*']);return replyPrivate(i,{embeds:[createSuccessEmbed('Permission Added',`**${t.name}** can use \`${i.options.getString('action',true)}\`.`)]});}};
+const { SlashCommandBuilder } = require('discord.js');
+const { ModuleKeys } = require('../modules/moduleRegistry');
+const { ActionKeys, defaultTeamPermissions } = require('../modules/permissions/actionKeys');
+const { replyPrivate } = require('../utils/reply');
+const { createBaseEmbed, SlickBotColors } = require('../modules/ui/uiService');
+const { query } = require('../services/db');
+
+module.exports = {
+  data: new SlashCommandBuilder()
+    .setName('team')
+    .setDescription('Manage SlickBot permission teams.')
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName('create')
+        .setDescription('Create a permission team.')
+        .addStringOption((option) => option.setName('name').setDescription('Team name.').setRequired(true))
+        .addStringOption((option) => option.setName('description').setDescription('Team description.').setRequired(false))
+    )
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName('add-role')
+        .setDescription('Add a Discord role to a permission team.')
+        .addStringOption((option) => option.setName('team').setDescription('Team name.').setRequired(true))
+        .addRoleOption((option) => option.setName('role').setDescription('Role to add.').setRequired(true))
+    )
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName('remove-role')
+        .setDescription('Remove a Discord role from a permission team.')
+        .addStringOption((option) => option.setName('team').setDescription('Team name.').setRequired(true))
+        .addRoleOption((option) => option.setName('role').setDescription('Role to remove.').setRequired(true))
+    )
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName('allow')
+        .setDescription('Allow a team to use an action key.')
+        .addStringOption((option) => option.setName('team').setDescription('Team name.').setRequired(true))
+        .addStringOption((option) => option.setName('action_key').setDescription('Example: moderation.warn').setRequired(true))
+    )
+
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName('delete')
+        .setDescription('Delete a non-system permission team.')
+        .addStringOption((option) => option.setName('name').setDescription('Team name.').setRequired(true))
+        .addBooleanOption((option) => option.setName('confirm').setDescription('Must be true to delete the team.').setRequired(true))
+    )
+    .addSubcommand((subcommand) => subcommand.setName('list').setDescription('List permission teams.')),
+  actionKey: ActionKeys.TeamsManage,
+  moduleKey: ModuleKeys.PERMISSIONS,
+  async execute(interaction, ctx) {
+    const subcommand = interaction.options.getSubcommand();
+
+    await ctx.permissions.ensureGuildConfig(interaction.guildId, interaction.guild ? interaction.guild.name : null);
+
+    if (subcommand === 'create') {
+      const name = interaction.options.getString('name', true).trim();
+      const description = interaction.options.getString('description', false);
+      const result = await query(
+        `INSERT INTO permission_teams (guild_id, name, description)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (guild_id, name)
+         DO UPDATE SET description = EXCLUDED.description, updated_at = NOW()
+         RETURNING id`,
+        [interaction.guildId, name, description]
+      );
+
+      const teamId = result.rows[0].id;
+
+      await ctx.logger.log({
+        guildId: interaction.guildId,
+        eventKey: 'permission-team',
+        title: 'Permission Team Saved',
+        body: [`Team: **${name}**`, `Updated By: <@${interaction.user.id}>`].join('\n'),
+        metadata: { teamName: name, actorUserId: interaction.user.id }
+      });
+
+      await replyPrivate(interaction, { embeds: [createBaseEmbed({ title: 'Permission Team Saved', description: `Team **${name}** created/updated. Use \`/permissions command-allow-team\` or \`/permissions module-allow-team\` to grant access.`, color: SlickBotColors.SUCCESS })] });
+      return;
+    }
+
+    if (subcommand === 'add-role' || subcommand === 'remove-role') {
+      const teamName = interaction.options.getString('team', true).trim();
+      const role = interaction.options.getRole('role', true);
+      const team = await getTeam(interaction.guildId, teamName);
+
+      if (!team) {
+        await replyPrivate(interaction, { embeds: [createBaseEmbed({ title: 'Team Not Found', description: `Team **${teamName}** was not found.`, color: SlickBotColors.WARNING })] });
+        return;
+      }
+
+      if (subcommand === 'add-role') {
+        await query(
+          `INSERT INTO permission_team_roles (team_id, role_id)
+           VALUES ($1, $2)
+           ON CONFLICT (team_id, role_id) DO NOTHING`,
+          [team.id, role.id]
+        );
+        await ctx.logger.log({
+          guildId: interaction.guildId,
+          eventKey: 'permission-team',
+          title: 'Role Added to Permission Team',
+          body: [`Team: **${teamName}**`, `Role: ${role}`, `Updated By: <@${interaction.user.id}>`].join('\n'),
+          metadata: { teamName, roleId: role.id, actorUserId: interaction.user.id }
+        });
+
+        await replyPrivate(interaction, { embeds: [createBaseEmbed({ title: 'Role Added to Team', description: `Added ${role} to **${teamName}**.`, color: SlickBotColors.SUCCESS })] });
+        return;
+      }
+
+      await query(`DELETE FROM permission_team_roles WHERE team_id = $1 AND role_id = $2`, [team.id, role.id]);
+      await ctx.logger.log({
+        guildId: interaction.guildId,
+        eventKey: 'permission-team',
+        title: 'Role Removed from Permission Team',
+        body: [`Team: **${teamName}**`, `Role: ${role}`, `Updated By: <@${interaction.user.id}>`].join('\n'),
+        metadata: { teamName, roleId: role.id, actorUserId: interaction.user.id }
+      });
+
+      await replyPrivate(interaction, { embeds: [createBaseEmbed({ title: 'Role Removed from Team', description: `Removed ${role} from **${teamName}**.`, color: SlickBotColors.INFO })] });
+      return;
+    }
+
+    if (subcommand === 'allow') {
+      const teamName = interaction.options.getString('team', true).trim();
+      const actionKey = interaction.options.getString('action_key', true).trim();
+      const team = await getTeam(interaction.guildId, teamName);
+
+      if (!team) {
+        await replyPrivate(interaction, { embeds: [createBaseEmbed({ title: 'Team Not Found', description: `Team **${teamName}** was not found.`, color: SlickBotColors.WARNING })] });
+        return;
+      }
+
+      await query(
+        `INSERT INTO command_permissions (guild_id, team_id, action_key, allow, channel_scope)
+         VALUES ($1, $2, $3, true, '*')
+         ON CONFLICT (team_id, action_key, channel_scope)
+         DO UPDATE SET allow = true, updated_at = NOW()`,
+        [interaction.guildId, team.id, actionKey]
+      );
+
+      await ctx.logger.log({
+        guildId: interaction.guildId,
+        eventKey: 'permission-team',
+        title: 'Team Permission Added',
+        body: [`Team: **${teamName}**`, `Action Key: \`${actionKey}\``, `Updated By: <@${interaction.user.id}>`].join('\n'),
+        metadata: { teamName, actionKey, actorUserId: interaction.user.id }
+      });
+
+      await replyPrivate(interaction, { embeds: [createBaseEmbed({ title: 'Team Permission Added', description: `Allowed **${teamName}** to use \`${actionKey}\`.`, color: SlickBotColors.SUCCESS })] });
+      return;
+    }
+
+
+    if (subcommand === 'delete') {
+      const teamName = interaction.options.getString('name', true).trim();
+      const confirmed = interaction.options.getBoolean('confirm', true);
+      if (!confirmed) return replyPrivate(interaction, { embeds: [createBaseEmbed({ title: 'Delete Not Confirmed', description: 'Run the command again with `confirm:true` to delete this team.', color: SlickBotColors.WARNING })] });
+      const team = await getTeam(interaction.guildId, teamName);
+      if (!team) return replyPrivate(interaction, { embeds: [createBaseEmbed({ title: 'Team Not Found', description: `Team **${teamName}** was not found.`, color: SlickBotColors.WARNING })] });
+      if (team.is_system_team) return replyPrivate(interaction, { embeds: [createBaseEmbed({ title: 'System Team Locked', description: 'System teams cannot be deleted.', color: SlickBotColors.ERROR })] });
+      await query(`DELETE FROM permission_teams WHERE guild_id = $1 AND id = $2`, [interaction.guildId, team.id]);
+      await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'permission-team', title: 'Permission Team Deleted', body: `Team **${team.name}** was deleted by <@${interaction.user.id}>.`, actorUserId: interaction.user.id }).catch(() => {});
+      return replyPrivate(interaction, { embeds: [createBaseEmbed({ title: 'Team Deleted', description: `Deleted team **${team.name}**.`, color: SlickBotColors.SUCCESS })] });
+    }
+
+    if (subcommand === 'list') {
+      const teams = await query(
+        `SELECT pt.id, pt.name, pt.description,
+                COALESCE(COUNT(DISTINCT ptr.role_id), 0) AS role_count,
+                COALESCE(COUNT(DISTINCT ptu.user_id), 0) AS user_count
+         FROM permission_teams pt
+         LEFT JOIN permission_team_roles ptr ON ptr.team_id = pt.id
+         LEFT JOIN permission_team_users ptu ON ptu.team_id = pt.id
+         WHERE pt.guild_id = $1
+         GROUP BY pt.id, pt.name, pt.description
+         ORDER BY pt.name ASC`,
+        [interaction.guildId]
+      );
+
+      if (teams.rowCount === 0) {
+        await replyPrivate(interaction, { embeds: [createBaseEmbed({ title: 'No Teams Found', description: 'Run `/setup` first to create the Bot Owners team.', color: SlickBotColors.WARNING })] });
+        return;
+      }
+
+      const output = teams.rows
+        .map((team) => `**${team.name}** — ${team.role_count} role(s), ${team.user_count} user(s)${team.description ? `\n${team.description}` : ''}`)
+        .join('\n\n');
+      await replyPrivate(interaction, { embeds: [createBaseEmbed({ title: 'SlickBot Permission Teams', description: output, color: SlickBotColors.INFO })] });
+    }
+  }
+};
+
+async function getTeam(guildId, teamName) {
+  const result = await query(
+    `SELECT * FROM permission_teams WHERE guild_id = $1 AND LOWER(name) = LOWER($2) LIMIT 1`,
+    [guildId, teamName]
+  );
+  return result.rows[0] || null;
+}

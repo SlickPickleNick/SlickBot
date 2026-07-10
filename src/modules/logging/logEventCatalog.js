@@ -1,39 +1,204 @@
 const LogModuleCatalog = Object.freeze([
-  { key:'core',label:'Core / System',description:'Startup, setup, module changes, permissions, and bot status updates.',defaultDelivery:'IMMEDIATE' },
-  { key:'moderation',label:'Moderation',description:'Moderation actions, case updates, and staff user notes.',defaultDelivery:'IMMEDIATE' },
-  { key:'member',label:'Member Logs',description:'Joins, leaves, nickname changes, role changes, and member profile updates.',defaultDelivery:'IMMEDIATE' },
-  { key:'message',label:'Message Logs',description:'Message edits and deletions.',defaultDelivery:'IMMEDIATE' },
-  { key:'voice',label:'Voice Logs',description:'Voice joins, leaves, and moves.',defaultDelivery:'IMMEDIATE' },
-  { key:'tickets',label:'Tickets',description:'Ticket opens, claims, priority changes, closes, and transcript activity.',defaultDelivery:'IMMEDIATE' },
-  { key:'reports',label:'Reports',description:'User-submitted reports and staff report decisions.',defaultDelivery:'IMMEDIATE' },
-  { key:'applications',label:'Applications',description:'Application submissions and review actions.',defaultDelivery:'IMMEDIATE' },
-  { key:'appeals',label:'Appeals',description:'Appeal submissions and review actions.',defaultDelivery:'IMMEDIATE' },
-  { key:'scheduled-messages',label:'Scheduled Messages',description:'Scheduled announcement activity.',defaultDelivery:'IMMEDIATE' },
-  { key:'welcome',label:'Welcome / Auto Roles',description:'Welcome messages, DM welcomes, and auto role activity.',defaultDelivery:'IMMEDIATE' },
-  { key:'reaction-roles',label:'Reaction / Button Roles',description:'Self-assignable role panel configuration and role toggles.',defaultDelivery:'IMMEDIATE' },
-  { key:'giveaways',label:'Giveaways',description:'Giveaway creation, entries, endings, and rerolls.',defaultDelivery:'IMMEDIATE' },
-  { key:'birthdays',label:'Birthdays',description:'Birthday profile changes, birthday announcements, and birthday role activity.',defaultDelivery:'IMMEDIATE' },
-  { key:'leveling',label:'Leveling / XP',description:'Leveling configuration, level-ups, and staff XP adjustments.',defaultDelivery:'IMMEDIATE' },
-  { key:'server-stats',label:'Server Stats',description:'Member, human, bot, and voice counter channel updates.',defaultDelivery:'IMMEDIATE' },
-  { key:'join-to-create',label:'Join-to-Create Voice',description:'Temporary voice room configuration, creation, controls, and cleanup.',defaultDelivery:'IMMEDIATE' }
+  {
+    key: 'core',
+    label: 'Core / System',
+    description: 'Startup, setup, module changes, permissions, and bot status updates.',
+    defaultDelivery: 'IMMEDIATE'
+  },
+  {
+    key: 'moderation',
+    label: 'Moderation',
+    description: 'Moderation actions, case updates, and staff user notes.',
+    defaultDelivery: 'IMMEDIATE'
+  },
+  {
+    key: 'member',
+    label: 'Member Logs',
+    description: 'Joins, leaves, nickname changes, role changes, and member profile updates.',
+    defaultDelivery: 'IMMEDIATE'
+  },
+  {
+    key: 'message',
+    label: 'Message Logs',
+    description: 'Message edits and deletions.',
+    defaultDelivery: 'IMMEDIATE'
+  },
+  {
+    key: 'voice',
+    label: 'Voice Logs',
+    description: 'Voice joins, leaves, and moves.',
+    defaultDelivery: 'IMMEDIATE'
+  },
+  {
+    key: 'tickets',
+    label: 'Tickets',
+    description: 'Ticket opens, claims, priority changes, closes, and transcript activity.',
+    defaultDelivery: 'IMMEDIATE'
+  },
+  {
+    key: 'reports',
+    label: 'Reports',
+    description: 'User-submitted reports and staff report decisions.',
+    defaultDelivery: 'IMMEDIATE'
+  },
+  {
+    key: 'applications',
+    label: 'Applications',
+    description: 'Application submissions and review actions.',
+    defaultDelivery: 'IMMEDIATE'
+  },
+  {
+    key: 'appeals',
+    label: 'Appeals',
+    description: 'Appeal submissions and review actions.',
+    defaultDelivery: 'IMMEDIATE'
+  },
+  {
+    key: 'scheduled-messages',
+    label: 'Scheduled Messages',
+    description: 'Scheduled announcement activity.',
+    defaultDelivery: 'IMMEDIATE'
+  },
+  {
+    key: 'welcome',
+    label: 'Welcome / Auto Roles',
+    description: 'Welcome messages, DM welcomes, and auto role activity.',
+    defaultDelivery: 'IMMEDIATE'
+  },
+  {
+    key: 'reaction-roles',
+    label: 'Reaction / Button Roles',
+    description: 'Self-assignable role panel configuration and role toggles.',
+    defaultDelivery: 'IMMEDIATE'
+  },
+  {
+    key: 'giveaways',
+    label: 'Giveaways',
+    description: 'Giveaway creation, entries, endings, and rerolls.',
+    defaultDelivery: 'IMMEDIATE'
+  },
+  {
+    key: 'birthdays',
+    label: 'Birthdays',
+    description: 'Birthday profile changes, birthday announcements, and birthday role activity.',
+    defaultDelivery: 'IMMEDIATE'
+  },
+  {
+    key: 'leveling',
+    label: 'Leveling / XP',
+    description: 'Leveling configuration, level-ups, and staff XP adjustments.',
+    defaultDelivery: 'IMMEDIATE'
+  },
+  {
+    key: 'server-stats',
+    label: 'Server Stats',
+    description: 'Member, human, bot, and voice counter channel updates.',
+    defaultDelivery: 'IMMEDIATE'
+  }
 ]);
-const E=(key,moduleKey,label,description)=>({key,moduleKey,label,description,defaultDelivery:'IMMEDIATE'});
-const LogEventCatalog=Object.freeze([
-E('system','core','System','Startup, health, tests, and general bot events.'),E('setup','core','Setup','Server setup and configuration actions.'),E('module-config','core','Module Config','Module enable/disable changes.'),E('permission-team','core','Permission Teams','Team and permission changes.'),E('status','core','Status','Bot status and activity changes.'),E('panel-config','core','Panel Config','Panel setup and deletion actions.'),
-E('moderation','moderation','Moderation Actions','Warns, timeouts, kicks, bans, and bulk actions.'),E('cases','moderation','Cases','Case creation and case status updates.'),E('user-notes','moderation','User Notes','Private staff notes for users.'),
-E('member-join','member','Member Joins','Members joining the server.'),E('member-leave','member','Member Leaves','Members leaving the server.'),E('member-update','member','Member Updates','General member profile/server-profile updates.'),E('member-nickname','member','Nickname Changes','Member nickname changes.'),E('member-roles','member','Role Changes','Member role additions and removals.'),
-E('message-delete','message','Message Deletes','Deleted message logs.'),E('message-edit','message','Message Edits','Edited message logs.'),E('voice-join','voice','Voice Joins','Users joining voice channels.'),E('voice-leave','voice','Voice Leaves','Users leaving voice channels.'),E('voice-move','voice','Voice Moves','Users moving between voice channels.'),
-E('ticket-open','tickets','Ticket Opened','A user opened a support ticket.'),E('ticket-claim','tickets','Ticket Claimed','A staff member claimed a ticket.'),E('ticket-priority','tickets','Ticket Priority','A ticket priority changed.'),E('ticket-close','tickets','Ticket Closed','A ticket was closed.'),E('ticket-transcript','tickets','Ticket Transcript','A ticket transcript was generated.'),E('ticket-escalate','tickets','Ticket Escalated','A ticket was escalated.'),E('ticket-user-add','tickets','Ticket User Added','A staff member added a user.'),
-E('report-submit','reports','Report Submitted','A user submitted a report.'),E('report-review','reports','Report Reviewed','Staff reviewed a report.'),E('report-claim','reports','Report Claimed','Staff claimed an open report.'),E('report-note','reports','Report Details Added','Staff added review details.'),
-E('application-start','applications','Application Started','A user started an application.'),E('application-submit','applications','Application Submitted','A user submitted an application.'),E('application-review','applications','Application Reviewed','Staff reviewed an application.'),E('appeal-submit','appeals','Appeal Submitted','A user submitted an appeal.'),E('appeal-review','appeals','Appeal Reviewed','Staff reviewed an appeal.'),
-E('scheduled-messages','scheduled-messages','Scheduled Messages','Scheduled announcement activity.'),E('welcome-config','welcome','Welcome Config','Welcome settings changed.'),E('welcome-member','welcome','Welcome Member','Welcome and auto role activity.'),E('auto-role-config','welcome','Auto Role Config','Auto role configuration changed.'),E('reaction-role-config','reaction-roles','Role Panel Config','Role panel setup changes.'),E('reaction-role-toggle','reaction-roles','Role Panel Used','User self-role actions.'),E('giveaway-config','giveaways','Giveaway Config','Giveaway defaults changed.'),E('giveaway-created','giveaways','Giveaway Created','A giveaway was created.'),E('giveaway-entry','giveaways','Giveaway Entry','A user entered a giveaway.'),E('giveaway-ended','giveaways','Giveaway Ended','A giveaway ended.'),E('giveaway-rerolled','giveaways','Giveaway Rerolled','Winners were rerolled.'),E('birthday-config','birthdays','Birthday Config','Birthday settings changed.'),E('birthday-profile','birthdays','Birthday Profile','A birthday was saved or removed.'),E('birthday-active','birthdays','Birthday Active','A birthday was announced.'),E('birthday-ended','birthdays','Birthday Ended','A birthday role was removed.'),E('leveling-config','leveling','Leveling Config','Leveling settings changed.'),E('leveling-level-up','leveling','Level Up','A member reached a level.'),E('leveling-adjustment','leveling','XP Adjustment','Staff changed XP.'),E('server-stats-config','server-stats','Server Stats Config','Server stats settings changed.'),E('server-stats-update','server-stats','Server Stats Updated','Counter channels were refreshed.'),
-E('join-to-create-config','join-to-create','Join-to-Create Config','Temporary voice room settings changed.'),E('join-to-create-created','join-to-create','Room Created','A temporary voice room was created.'),E('join-to-create-deleted','join-to-create','Room Deleted','A temporary voice room was removed.'),E('join-to-create-updated','join-to-create','Room Updated','A room owner changed room settings.'),E('join-to-create-access','join-to-create','Room Access','A member was permitted or rejected.'),E('join-to-create-owner','join-to-create','Room Ownership','Room ownership changed.')
+
+const LogEventCatalog = Object.freeze([
+  { key: 'system', moduleKey: 'core', label: 'System', description: 'Startup, health, tests, and general bot events.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'setup', moduleKey: 'core', label: 'Setup', description: 'Server setup and configuration actions.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'module-config', moduleKey: 'core', label: 'Module Config', description: 'Module enable/disable changes.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'permission-team', moduleKey: 'core', label: 'Permission Teams', description: 'Team and permission changes.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'status', moduleKey: 'core', label: 'Status', description: 'Bot status and activity changes.', defaultDelivery: 'IMMEDIATE' },
+
+  { key: 'moderation', moduleKey: 'moderation', label: 'Moderation Actions', description: 'Warns, timeouts, kicks, bans, and bulk actions.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'cases', moduleKey: 'moderation', label: 'Cases', description: 'Case creation and case status updates.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'user-notes', moduleKey: 'moderation', label: 'User Notes', description: 'Private staff notes for users.', defaultDelivery: 'IMMEDIATE' },
+
+  { key: 'member-join', moduleKey: 'member', label: 'Member Joins', description: 'Members joining the server.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'member-leave', moduleKey: 'member', label: 'Member Leaves', description: 'Members leaving the server.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'member-update', moduleKey: 'member', label: 'Member Updates', description: 'General member profile/server-profile updates.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'member-nickname', moduleKey: 'member', label: 'Nickname Changes', description: 'Member nickname changes.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'member-roles', moduleKey: 'member', label: 'Role Changes', description: 'Member role additions and removals.', defaultDelivery: 'IMMEDIATE' },
+
+  { key: 'message-delete', moduleKey: 'message', label: 'Message Deletes', description: 'Deleted message logs.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'message-edit', moduleKey: 'message', label: 'Message Edits', description: 'Edited message logs.', defaultDelivery: 'IMMEDIATE' },
+
+  { key: 'voice-join', moduleKey: 'voice', label: 'Voice Joins', description: 'Users joining voice channels.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'voice-leave', moduleKey: 'voice', label: 'Voice Leaves', description: 'Users leaving voice channels.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'voice-move', moduleKey: 'voice', label: 'Voice Moves', description: 'Users moving between voice channels.', defaultDelivery: 'IMMEDIATE' },
+
+  { key: 'ticket-open', moduleKey: 'tickets', label: 'Ticket Opened', description: 'A user opened a support ticket.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'ticket-claim', moduleKey: 'tickets', label: 'Ticket Claimed', description: 'A staff member claimed a ticket.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'ticket-priority', moduleKey: 'tickets', label: 'Ticket Priority', description: 'A ticket priority changed.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'ticket-close', moduleKey: 'tickets', label: 'Ticket Closed', description: 'A ticket was closed.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'ticket-transcript', moduleKey: 'tickets', label: 'Ticket Transcript', description: 'A ticket transcript was generated.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'ticket-escalate', moduleKey: 'tickets', label: 'Ticket Escalated', description: 'A ticket was escalated to a higher review role or team.', defaultDelivery: 'IMMEDIATE' },
+
+  { key: 'report-submit', moduleKey: 'reports', label: 'Report Submitted', description: 'A user submitted a report.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'report-review', moduleKey: 'reports', label: 'Report Reviewed', description: 'Staff reviewed a report.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'report-claim', moduleKey: 'reports', label: 'Report Claimed', description: 'Staff claimed an open report.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'report-note', moduleKey: 'reports', label: 'Report Details Added', description: 'Staff added review details to a report.', defaultDelivery: 'IMMEDIATE' },
+
+  { key: 'application-start', moduleKey: 'applications', label: 'Application Started', description: 'A user started a DM-based application.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'application-submit', moduleKey: 'applications', label: 'Application Submitted', description: 'A user submitted an application.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'application-review', moduleKey: 'applications', label: 'Application Reviewed', description: 'Staff reviewed an application.', defaultDelivery: 'IMMEDIATE' },
+
+  { key: 'appeal-submit', moduleKey: 'appeals', label: 'Appeal Submitted', description: 'A user submitted an appeal.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'appeal-review', moduleKey: 'appeals', label: 'Appeal Reviewed', description: 'Staff reviewed an appeal.', defaultDelivery: 'IMMEDIATE' },
+
+  { key: 'scheduled-messages', moduleKey: 'scheduled-messages', label: 'Scheduled Messages', description: 'Scheduled announcement activity.', defaultDelivery: 'IMMEDIATE' },
+
+  { key: 'welcome-config', moduleKey: 'welcome', label: 'Welcome Config', description: 'Welcome message and DM configuration changes.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'welcome-member', moduleKey: 'welcome', label: 'Welcome Member', description: 'Welcome message and auto role actions on member join.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'auto-role-config', moduleKey: 'welcome', label: 'Auto Role Config', description: 'Auto role configuration changes.', defaultDelivery: 'IMMEDIATE' },
+
+  { key: 'reaction-role-config', moduleKey: 'reaction-roles', label: 'Role Panel Config', description: 'Self-assignable role panel setup changes.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'reaction-role-toggle', moduleKey: 'reaction-roles', label: 'Role Panel Used', description: 'User role self-assignment actions.', defaultDelivery: 'IMMEDIATE' },
+
+  { key: 'giveaway-config', moduleKey: 'giveaways', label: 'Giveaway Config', description: 'Giveaway setup and default changes.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'giveaway-created', moduleKey: 'giveaways', label: 'Giveaway Created', description: 'A giveaway was created.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'giveaway-entry', moduleKey: 'giveaways', label: 'Giveaway Entry', description: 'A user entered a giveaway.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'giveaway-ended', moduleKey: 'giveaways', label: 'Giveaway Ended', description: 'A giveaway ended and winners were selected.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'giveaway-rerolled', moduleKey: 'giveaways', label: 'Giveaway Rerolled', description: 'Giveaway winners were rerolled.', defaultDelivery: 'IMMEDIATE' },
+
+  { key: 'birthday-config', moduleKey: 'birthdays', label: 'Birthday Config', description: 'Birthday system settings changed.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'birthday-profile', moduleKey: 'birthdays', label: 'Birthday Profile', description: 'A user saved or removed their birthday.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'birthday-active', moduleKey: 'birthdays', label: 'Birthday Active', description: 'A birthday was announced or a birthday role was added.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'birthday-ended', moduleKey: 'birthdays', label: 'Birthday Ended', description: 'A birthday role was removed after the birthday passed.', defaultDelivery: 'IMMEDIATE' },
+
+  { key: 'leveling-config', moduleKey: 'leveling', label: 'Leveling Config', description: 'Leveling settings and role rewards changed.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'leveling-level-up', moduleKey: 'leveling', label: 'Level Up', description: 'A member reached a new level.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'leveling-adjustment', moduleKey: 'leveling', label: 'XP Adjustment', description: 'Staff manually changed or reset XP.', defaultDelivery: 'IMMEDIATE' },
+
+  { key: 'server-stats-config', moduleKey: 'server-stats', label: 'Server Stats Config', description: 'Server stats configuration changed.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'server-stats-update', moduleKey: 'server-stats', label: 'Server Stats Updated', description: 'Server stat counter channels were refreshed.', defaultDelivery: 'IMMEDIATE' }
 ]);
-const StarterLogModuleKeys=Object.freeze(['core','moderation']);
-const StarterLogEventKeys=Object.freeze(['system','setup','module-config','permission-team','status','moderation','cases','user-notes']);
-function getLogModule(key){return LogModuleCatalog.find(x=>x.key===key)||null;}
-function getLogEvent(key){return LogEventCatalog.find(x=>x.key===key)||null;}
-function getLogModuleChoices(){return LogModuleCatalog.slice(0,25).map(x=>({name:x.label,value:x.key}));}
-function getLogEventChoices(){return LogEventCatalog.slice(0,25).map(x=>({name:`${x.label} (${x.moduleKey})`,value:x.key}));}
-function getEventsForModule(key){return LogEventCatalog.filter(x=>x.moduleKey===key);}
-module.exports={LogModuleCatalog,LogEventCatalog,StarterLogModuleKeys,StarterLogEventKeys,getLogModule,getLogEvent,getLogModuleChoices,getLogEventChoices,getEventsForModule};
+
+const StarterLogModuleKeys = Object.freeze(['core', 'moderation']);
+const StarterLogEventKeys = Object.freeze(['system', 'setup', 'module-config', 'permission-team', 'status', 'moderation', 'cases', 'user-notes']);
+
+function getLogModule(moduleKey) {
+  return LogModuleCatalog.find((module) => module.key === moduleKey) || null;
+}
+
+function getLogEvent(eventKey) {
+  return LogEventCatalog.find((event) => event.key === eventKey) || null;
+}
+
+function getLogModuleChoices() {
+  return LogModuleCatalog.slice(0, 25).map((module) => ({ name: module.label, value: module.key }));
+}
+
+function getLogEventChoices() {
+  return LogEventCatalog.slice(0, 25).map((event) => ({ name: `${event.label} (${event.moduleKey})`, value: event.key }));
+}
+
+function getEventsForModule(moduleKey) {
+  return LogEventCatalog.filter((event) => event.moduleKey === moduleKey);
+}
+
+module.exports = {
+  LogModuleCatalog,
+  LogEventCatalog,
+  StarterLogModuleKeys,
+  StarterLogEventKeys,
+  getLogModule,
+  getLogEvent,
+  getLogModuleChoices,
+  getLogEventChoices,
+  getEventsForModule
+};

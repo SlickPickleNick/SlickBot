@@ -1,2 +1,360 @@
-const {SlashCommandBuilder}=require('discord.js');const {ModuleKeys}=require('../modules/moduleRegistry');const {ActionKeys}=require('../modules/permissions/actionKeys');const {replyPrivate}=require('../utils/reply');const {createSuccessEmbed,createWarningEmbed}=require('../modules/ui/uiService');const {ModerationService}=require('../modules/moderation/moderationService');const mod=new ModerationService();function duration(v){const m=String(v||'').match(/^(\d+)(m|h|d|w)$/i);return m?Number(m[1])*({m:60000,h:3600000,d:86400000,w:604800000}[m[2].toLowerCase()]):null;}
-module.exports={data:new SlashCommandBuilder().setName('mod').setDescription('Moderation actions.').addSubcommand(s=>s.setName('warn').setDescription('Warn a member.').addUserOption(o=>o.setName('user').setDescription('Member.').setRequired(true)).addStringOption(o=>o.setName('reason').setDescription('Reason.').setRequired(true).setMaxLength(1000))).addSubcommand(s=>s.setName('timeout').setDescription('Timeout a member.').addUserOption(o=>o.setName('user').setDescription('Member.').setRequired(true)).addStringOption(o=>o.setName('duration').setDescription('Duration, e.g. 30m or 2h.').setRequired(true)).addStringOption(o=>o.setName('reason').setDescription('Reason.').setRequired(true))).addSubcommand(s=>s.setName('untimeout').setDescription('Remove a timeout.').addUserOption(o=>o.setName('user').setDescription('Member.').setRequired(true)).addStringOption(o=>o.setName('reason').setDescription('Reason.').setRequired(false))).addSubcommand(s=>s.setName('kick').setDescription('Kick a member.').addUserOption(o=>o.setName('user').setDescription('Member.').setRequired(true)).addStringOption(o=>o.setName('reason').setDescription('Reason.').setRequired(true))).addSubcommand(s=>s.setName('ban').setDescription('Ban a user.').addUserOption(o=>o.setName('user').setDescription('User.').setRequired(true)).addStringOption(o=>o.setName('reason').setDescription('Reason.').setRequired(true))).addSubcommand(s=>s.setName('unban').setDescription('Unban a user ID.').addStringOption(o=>o.setName('user_id').setDescription('User ID.').setRequired(true)).addStringOption(o=>o.setName('reason').setDescription('Reason.').setRequired(false))),moduleKey:ModuleKeys.MODERATION,getActionKey(i){const s=i.options.getSubcommand();return({warn:ActionKeys.ModerationWarn,timeout:ActionKeys.ModerationTimeout,untimeout:ActionKeys.ModerationUntimeout,kick:ActionKeys.ModerationKick,ban:ActionKeys.ModerationBan,unban:ActionKeys.ModerationUnban})[s]||ActionKeys.ModerationPanel;},async execute(i,ctx){const s=i.options.getSubcommand(),reason=i.options.getString('reason')||'No reason provided.';let c;if(s==='warn'){const u=i.options.getUser('user',true);c=await mod.warn({interaction:i,target:u,reason,logger:ctx.logger});}else if(s==='timeout'){const u=i.options.getUser('user',true),m=await i.guild.members.fetch(u.id),ms=duration(i.options.getString('duration',true));if(!ms)return replyPrivate(i,{embeds:[createWarningEmbed('Invalid Duration','Use a duration such as `30m`, `2h`, `1d`, or `1w`.')]});c=await mod.timeout({interaction:i,member:m,durationMs:ms,reason,logger:ctx.logger});}else if(s==='untimeout'){const u=i.options.getUser('user',true),m=await i.guild.members.fetch(u.id);c=await mod.untimeout({interaction:i,member:m,reason,logger:ctx.logger});}else if(s==='kick'){const u=i.options.getUser('user',true),m=await i.guild.members.fetch(u.id);c=await mod.kick({interaction:i,member:m,reason,logger:ctx.logger});}else if(s==='ban')c=await mod.ban({interaction:i,user:i.options.getUser('user',true),reason,logger:ctx.logger});else c=await mod.unban({interaction:i,userId:i.options.getString('user_id',true),reason,logger:ctx.logger});return replyPrivate(i,{embeds:[createSuccessEmbed('Moderation Action Complete',`Case **#${c.case_number}** created for **${c.action_type}**.`)]});}};
+const { SlashCommandBuilder } = require('discord.js');
+const { ModuleKeys } = require('../modules/moduleRegistry');
+const { ActionKeys } = require('../modules/permissions/actionKeys');
+const { replyPrivate } = require('../utils/reply');
+const { ModerationService } = require('../modules/moderation/moderationService');
+const { buildModerationPanel, buildCaseEmbed } = require('../modules/moderation/moderationUi');
+const { createBaseEmbed, SlickBotColors } = require('../modules/ui/uiService');
+
+const moderation = new ModerationService();
+
+module.exports = {
+  data: new SlashCommandBuilder()
+    .setName('mod')
+    .setDescription('Moderation tools for SlickBot.')
+    .addSubcommand((subcommand) => subcommand.setName('panel').setDescription('Open the moderation control panel.'))
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName('warn')
+        .setDescription('Create a warning case for a user.')
+        .addUserOption((option) => option.setName('user').setDescription('User to warn.').setRequired(true))
+        .addStringOption((option) => option.setName('reason').setDescription('Reason for the warning.').setRequired(true).setMaxLength(1000))
+        .addStringOption((option) => option.setName('evidence').setDescription('Optional evidence or context.').setRequired(false).setMaxLength(1000))
+        .addBooleanOption((option) => option.setName('dm_user').setDescription('Try to DM the user. Defaults to false.').setRequired(false))
+    )
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName('timeout')
+        .setDescription('Timeout a user and create a moderation case.')
+        .addUserOption((option) => option.setName('user').setDescription('User to timeout.').setRequired(true))
+        .addIntegerOption((option) => option.setName('minutes').setDescription('Timeout duration in minutes.').setRequired(true).setMinValue(1).setMaxValue(40320))
+        .addStringOption((option) => option.setName('reason').setDescription('Reason for the timeout.').setRequired(true).setMaxLength(1000))
+        .addStringOption((option) => option.setName('evidence').setDescription('Optional evidence or context.').setRequired(false).setMaxLength(1000))
+    )
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName('untimeout')
+        .setDescription('Remove an active timeout from a user and create a moderation case.')
+        .addUserOption((option) => option.setName('user').setDescription('User whose timeout should be removed.').setRequired(true))
+        .addStringOption((option) => option.setName('reason').setDescription('Optional reason for removing the timeout.').setRequired(false).setMaxLength(1000))
+    )
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName('kick')
+        .setDescription('Kick a user and create a moderation case.')
+        .addUserOption((option) => option.setName('user').setDescription('User to kick.').setRequired(true))
+        .addStringOption((option) => option.setName('reason').setDescription('Reason for the kick.').setRequired(true).setMaxLength(1000))
+        .addStringOption((option) => option.setName('evidence').setDescription('Optional evidence or context.').setRequired(false).setMaxLength(1000))
+    )
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName('ban')
+        .setDescription('Ban a user and create a moderation case.')
+        .addUserOption((option) => option.setName('user').setDescription('User to ban.').setRequired(true))
+        .addStringOption((option) => option.setName('reason').setDescription('Reason for the ban.').setRequired(true).setMaxLength(1000))
+        .addIntegerOption((option) => option.setName('delete_message_days').setDescription('Delete recent messages from 0–7 days.').setRequired(false).setMinValue(0).setMaxValue(7))
+        .addStringOption((option) => option.setName('evidence').setDescription('Optional evidence or context.').setRequired(false).setMaxLength(1000))
+    )
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName('unban')
+        .setDescription('Unban a user ID and create a moderation case.')
+        .addStringOption((option) => option.setName('user_id').setDescription('Discord user ID to unban.').setRequired(true).setMinLength(15).setMaxLength(25))
+        .addStringOption((option) => option.setName('reason').setDescription('Optional reason for the unban.').setRequired(false).setMaxLength(1000))
+    )
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName('massban')
+        .setDescription('Bulk ban user IDs and create moderation cases.')
+        .addStringOption((option) => option.setName('user_ids').setDescription('Comma or space-separated user IDs. Max 25.').setRequired(true).setMaxLength(1200))
+        .addStringOption((option) => option.setName('reason').setDescription('Reason for the mass ban.').setRequired(true).setMaxLength(1000))
+        .addIntegerOption((option) => option.setName('delete_message_days').setDescription('Delete recent messages from 0–7 days.').setRequired(false).setMinValue(0).setMaxValue(7))
+    ),
+  actionKey: ActionKeys.ModerationPanel,
+  moduleKey: ModuleKeys.MODERATION,
+  getActionKey(interaction) {
+    const subcommand = interaction.options.getSubcommand();
+    if (subcommand === 'warn') return ActionKeys.ModerationWarn;
+    if (subcommand === 'timeout') return ActionKeys.ModerationTimeout;
+    if (subcommand === 'untimeout') return ActionKeys.ModerationUntimeout;
+    if (subcommand === 'kick') return ActionKeys.ModerationKick;
+    if (subcommand === 'ban') return ActionKeys.ModerationBan;
+    if (subcommand === 'unban') return ActionKeys.ModerationUnban;
+    if (subcommand === 'massban') return ActionKeys.ModerationMassBan;
+    return ActionKeys.ModerationPanel;
+  },
+  async execute(interaction, ctx) {
+    const subcommand = interaction.options.getSubcommand();
+    await ctx.permissions.ensureGuildConfig(interaction.guildId, interaction.guild ? interaction.guild.name : null);
+
+    if (subcommand === 'panel') {
+      await replyPrivate(interaction, await buildModerationPanel(interaction.guildId));
+      return;
+    }
+
+    if (subcommand === 'warn') {
+      await handleWarn(interaction, ctx);
+      return;
+    }
+
+    if (subcommand === 'timeout') {
+      await handleTimeout(interaction, ctx);
+      return;
+    }
+
+    if (subcommand === 'untimeout') {
+      await handleUntimeout(interaction, ctx);
+      return;
+    }
+
+    if (subcommand === 'kick') {
+      await handleKick(interaction, ctx);
+      return;
+    }
+
+    if (subcommand === 'ban') {
+      await handleBan(interaction, ctx);
+      return;
+    }
+
+    if (subcommand === 'unban') {
+      await handleUnban(interaction, ctx);
+      return;
+    }
+
+    if (subcommand === 'massban') {
+      await handleMassBan(interaction, ctx);
+    }
+  }
+};
+
+async function handleWarn(interaction, ctx) {
+  const target = interaction.options.getUser('user', true);
+  const reason = interaction.options.getString('reason', true);
+  const evidence = interaction.options.getString('evidence', false);
+  const dmUser = interaction.options.getBoolean('dm_user') ?? false;
+
+  const caseRecord = await createAndLogCase(interaction, ctx, {
+    target,
+    actionType: 'WARN',
+    reason,
+    evidence,
+    metadata: { dmUser }
+  });
+
+  let dmStatus = 'Not sent.';
+  if (dmUser) {
+    dmStatus = await target.send(`You received a warning in ${interaction.guild.name}: ${reason}`).then(() => 'Sent.').catch(() => 'Failed or blocked.');
+  }
+
+  const embed = buildCaseEmbed(caseRecord, 'Warning Case Created')
+    .addFields({ name: 'DM Status', value: dmStatus, inline: true });
+  await replyPrivate(interaction, { embeds: [embed] });
+}
+
+async function handleTimeout(interaction, ctx) {
+  const target = interaction.options.getUser('user', true);
+  const minutes = interaction.options.getInteger('minutes', true);
+  const reason = interaction.options.getString('reason', true);
+  const evidence = interaction.options.getString('evidence', false);
+  const member = await interaction.guild.members.fetch(target.id).catch(() => null);
+
+  if (!member) {
+    await replyPrivate(interaction, { embeds: [createBaseEmbed({ title: 'Member Not Found', description: 'That user is not currently available as a server member.', color: SlickBotColors.WARNING })] });
+    return;
+  }
+
+  await member.timeout(minutes * 60 * 1000, reason);
+  const expiresAt = new Date(Date.now() + minutes * 60 * 1000).toISOString();
+  const caseRecord = await createAndLogCase(interaction, ctx, {
+    target,
+    actionType: 'TIMEOUT',
+    reason,
+    evidence,
+    durationSeconds: minutes * 60,
+    expiresAt
+  });
+
+  await replyPrivate(interaction, { embeds: [buildCaseEmbed(caseRecord, 'Timeout Applied')] });
+}
+
+async function handleUntimeout(interaction, ctx) {
+  const target = interaction.options.getUser('user', true);
+  const reason = interaction.options.getString('reason') || 'Timeout removed by moderator.';
+  const member = await interaction.guild.members.fetch(target.id).catch(() => null);
+
+  if (!member) {
+    await replyPrivate(interaction, { embeds: [createBaseEmbed({ title: 'Member Not Found', description: 'That user is not currently available as a server member.', color: SlickBotColors.WARNING })] });
+    return;
+  }
+
+  await member.timeout(null, reason);
+  const caseRecord = await createAndLogCase(interaction, ctx, {
+    target,
+    actionType: 'UNTIMEOUT',
+    reason,
+    status: 'CLOSED'
+  });
+
+  await replyPrivate(interaction, { embeds: [buildCaseEmbed(caseRecord, 'Timeout Removed')] });
+}
+
+async function handleKick(interaction, ctx) {
+  const target = interaction.options.getUser('user', true);
+  const reason = interaction.options.getString('reason', true);
+  const evidence = interaction.options.getString('evidence', false);
+  const member = await interaction.guild.members.fetch(target.id).catch(() => null);
+
+  if (!member) {
+    await replyPrivate(interaction, { embeds: [createBaseEmbed({ title: 'Member Not Found', description: 'That user is not currently available as a server member.', color: SlickBotColors.WARNING })] });
+    return;
+  }
+
+  await member.kick(reason);
+  const caseRecord = await createAndLogCase(interaction, ctx, {
+    target,
+    actionType: 'KICK',
+    reason,
+    evidence,
+    status: 'CLOSED'
+  });
+
+  await replyPrivate(interaction, { embeds: [buildCaseEmbed(caseRecord, 'User Kicked')] });
+}
+
+async function handleBan(interaction, ctx) {
+  const target = interaction.options.getUser('user', true);
+  const reason = interaction.options.getString('reason', true);
+  const evidence = interaction.options.getString('evidence', false);
+  const deleteDays = interaction.options.getInteger('delete_message_days') ?? 0;
+
+  await interaction.guild.members.ban(target.id, {
+    reason,
+    deleteMessageSeconds: deleteDays * 24 * 60 * 60
+  });
+
+  const caseRecord = await createAndLogCase(interaction, ctx, {
+    target,
+    actionType: 'BAN',
+    reason,
+    evidence,
+    status: 'CLOSED',
+    metadata: { deleteMessageDays: deleteDays }
+  });
+
+  await replyPrivate(interaction, { embeds: [buildCaseEmbed(caseRecord, 'User Banned')] });
+}
+
+async function handleUnban(interaction, ctx) {
+  const userId = interaction.options.getString('user_id', true).trim();
+  const reason = interaction.options.getString('reason') || 'Ban removed by moderator.';
+
+  if (!/^\d{15,25}$/.test(userId)) {
+    await replyPrivate(interaction, { embeds: [createBaseEmbed({ title: 'Invalid User ID', description: 'Provide a valid Discord user ID.', color: SlickBotColors.WARNING })] });
+    return;
+  }
+
+  const target = await interaction.client.users.fetch(userId).catch(() => ({ id: userId, tag: userId }));
+  await interaction.guild.members.unban(userId, reason);
+  const caseRecord = await createAndLogCase(interaction, ctx, {
+    target,
+    actionType: 'UNBAN',
+    reason,
+    status: 'CLOSED'
+  });
+
+  await replyPrivate(interaction, { embeds: [buildCaseEmbed(caseRecord, 'User Unbanned')] });
+}
+
+async function handleMassBan(interaction, ctx) {
+  const raw = interaction.options.getString('user_ids', true);
+  const reason = interaction.options.getString('reason', true);
+  const deleteDays = interaction.options.getInteger('delete_message_days') ?? 0;
+  const ids = Array.from(new Set(raw.split(/[\s,]+/).map((item) => item.trim()).filter(Boolean))).slice(0, 25);
+
+  if (ids.length === 0) {
+    await replyPrivate(interaction, { embeds: [createBaseEmbed({ title: 'No User IDs Found', description: 'Provide at least one user ID.', color: SlickBotColors.WARNING })] });
+    return;
+  }
+
+  const results = [];
+  for (const userId of ids) {
+    try {
+      await interaction.guild.members.ban(userId, {
+        reason,
+        deleteMessageSeconds: deleteDays * 24 * 60 * 60
+      });
+      await moderation.createCase({
+        guildId: interaction.guildId,
+        targetUserId: userId,
+        targetUserTag: null,
+        actorUserId: interaction.user.id,
+        actionType: 'MASS_BAN',
+        reason,
+        status: 'CLOSED',
+        metadata: { deleteMessageDays: deleteDays }
+      });
+      results.push(`✅ ${userId}`);
+    } catch (error) {
+      results.push(`❌ ${userId} — ${error.message || 'Failed'}`);
+    }
+  }
+
+  await ctx.logger.log({
+    guildId: interaction.guildId,
+    eventKey: 'moderation',
+    title: 'Mass Ban Completed',
+    body: [`Moderator: <@${interaction.user.id}>`, `Reason: ${reason}`, '', results.join('\n')].join('\n'),
+    metadata: { moderatorId: interaction.user.id, userIds: ids, reason, deleteDays }
+  });
+
+  await replyPrivate(interaction, {
+    embeds: [createBaseEmbed({
+      title: 'Mass Ban Completed',
+      description: results.join('\n'),
+      color: results.some((line) => line.startsWith('❌')) ? SlickBotColors.WARNING : SlickBotColors.SUCCESS
+    })]
+  });
+}
+
+async function createAndLogCase(interaction, ctx, input) {
+  const caseRecord = await moderation.createCase({
+    guildId: interaction.guildId,
+    targetUserId: input.target.id,
+    targetUserTag: input.target.tag,
+    actorUserId: interaction.user.id,
+    actionType: input.actionType,
+    reason: input.reason,
+    status: input.status || 'OPEN',
+    durationSeconds: input.durationSeconds || null,
+    expiresAt: input.expiresAt || null,
+    evidence: input.evidence || null,
+    metadata: input.metadata || null
+  });
+
+  await ctx.logger.writeAudit({
+    guildId: interaction.guildId,
+    actorUserId: interaction.user.id,
+    actionKey: `moderation.${input.actionType.toLowerCase()}`,
+    targetType: 'User',
+    targetId: input.target.id,
+    summary: `${input.actionType} case #${caseRecord.case_number} created for ${input.target.tag}.`,
+    metadata: { caseNumber: caseRecord.case_number, reason: input.reason }
+  });
+
+  await ctx.logger.log({
+    guildId: interaction.guildId,
+    eventKey: 'moderation',
+    title: `${input.actionType} • Case #${caseRecord.case_number}`,
+    body: [
+      `Target: <@${input.target.id}> \`${input.target.id}\``,
+      `Moderator: <@${interaction.user.id}>`,
+      `Status: **${caseRecord.status}**`,
+      '',
+      `Reason: ${input.reason}`
+    ].join('\n'),
+    metadata: { caseNumber: caseRecord.case_number, targetUserId: input.target.id, actorUserId: interaction.user.id }
+  });
+
+  return caseRecord;
+}

@@ -1,18 +1,743 @@
-const {ModalBuilder,ActionRowBuilder,TextInputBuilder,TextInputStyle}=require('discord.js');const {CustomIds}=require('../modules/ui/customIds');const {replyPrivate,acknowledgeQuietly}=require('../utils/reply');const {createSuccessEmbed,createWarningEmbed}=require('../modules/ui/uiService');const {buildSetupPanel,buildModulesPanel,buildLoggingPanel,buildTeamsPanel,buildPermissionsPanel,buildCommunityPanel}=require('../modules/ui/panels');const {buildSupportPanel,buildTicketsPanel,buildReportsPanel,buildApplicationsPanel,buildAppealsPanel}=require('../modules/support/supportUi');const {buildModerationPanel,buildRecentCasesPanel}=require('../modules/moderation/moderationUi');const {buildStatusPanel}=require('../commands/status');const welcome=require('../modules/community/welcomeService');const roles=require('../modules/community/rolePanelService');const {GiveawayService,ENTRY_PREFIX}=require('../modules/community/giveawayService');const {BirthdayService}=require('../modules/community/birthdayService');const {ScheduledMessageService}=require('../modules/automation/scheduledMessageService');const {ServerStatsService}=require('../modules/community/serverStatsService');const {LevelingService}=require('../modules/community/levelingService');const {JoinToCreateService}=require('../modules/community/joinToCreateService');const {TicketService,ReportService,ApplicationService,AppealService,buildTicketModal,buildReportModal,buildAppealModal,buildAppealReasonModal}=require('../modules/support/supportService');const {query}=require('./db');
-const giveaways=new GiveawayService(),birthdays=new BirthdayService(),scheduled=new ScheduledMessageService(),stats=new ServerStatsService(),leveling=new LevelingService(),voice=new JoinToCreateService(),tickets=new TicketService(),reports=new ReportService(),apps=new ApplicationService(),appeals=new AppealService();
-async function update(i,p){if(i.deferred||i.replied)return i.editReply(p);if(i.update)return i.update(p);return replyPrivate(i,p);}
-async function handleComponentInteraction(i,ctx){if(i.isButton())return button(i,ctx);if(i.isStringSelectMenu())return select(i,ctx);if(i.isModalSubmit())return modal(i,ctx);return false;}
-async function button(i,ctx){const id=i.customId;
- if(id===CustomIds.SetupRefresh)return update(i,await buildSetupPanel(i.guildId,i.guild?.name));if(id===CustomIds.SetupModules||id===CustomIds.ModulesRefresh)return update(i,await buildModulesPanel(i.guildId));if(id===CustomIds.SetupLogging||id===CustomIds.LoggingRefresh)return update(i,await buildLoggingPanel(i.guildId));if(id===CustomIds.SetupTeams)return update(i,await buildTeamsPanel(i.guildId));if(id===CustomIds.SetupPermissions||id===CustomIds.PermissionsRefresh)return update(i,await buildPermissionsPanel(i.guildId));if(id===CustomIds.SetupCommunity)return update(i,await buildCommunityPanel(i.guildId));if(id===CustomIds.SetupModeration||id===CustomIds.ModerationRefresh)return update(i,await buildModerationPanel(i.guildId));if(id===CustomIds.CasesRefresh)return update(i,await buildRecentCasesPanel(i.guildId));if(id===CustomIds.SetupSupport||id===CustomIds.SupportRefresh)return update(i,await buildSupportPanel(i.guildId));if(id===CustomIds.TicketsRefresh)return update(i,await buildTicketsPanel(i.guildId));if(id===CustomIds.ReportsRefresh)return update(i,await buildReportsPanel(i.guildId));if(id===CustomIds.ApplicationsRefresh)return update(i,await buildApplicationsPanel(i.guildId));if(id===CustomIds.AppealsRefresh)return update(i,await buildAppealsPanel(i.guildId));if(id===CustomIds.WelcomeRefresh)return update(i,await welcome.buildWelcomePanel(i.guildId));if(id===CustomIds.RolePanelsRefresh)return update(i,await roles.buildRoleManagerPanel(i.guildId));if(id===CustomIds.GiveawaysRefresh)return update(i,await giveaways.buildManagerPanel(i.guildId));if(id===CustomIds.BirthdaysRefresh)return update(i,await birthdays.buildManagerPanel(i.guildId));if(id===CustomIds.ScheduledMessagesRefresh)return update(i,await scheduled.buildManagerPanel(i.guildId));if(id===CustomIds.ServerStatsRefresh)return update(i,await stats.buildManagerPanel(i.guild));if(id===CustomIds.LevelingRefresh)return update(i,await leveling.buildManagerPanel(i.guildId));if(id===CustomIds.JoinToCreateRefresh)return update(i,await voice.buildManagerPanel(i.guild));
- if(id===CustomIds.ResetCancel)return update(i,{embeds:[createSuccessEmbed('Reset Cancelled','No data was changed.')],components:[]});if(id===CustomIds.ResetConfirm){if(i.guild.ownerId!==i.user.id)return replyPrivate(i,{embeds:[createWarningEmbed('Server Owner Required','Only the server owner can reset SlickBot.')]});await query('DELETE FROM guild_configs WHERE guild_id=$1',[i.guildId]);await ctx.permissions.ensureGuildConfig(i.guildId,i.guild.name);return update(i,{embeds:[createSuccessEmbed('SlickBot Reset Complete','Server configuration was reset.')],components:[]});}
- if(id===CustomIds.TicketOpen){const t=await tickets.ensureDefaultType(i.guildId);await i.showModal(buildTicketModal(t));return true;}if(id.startsWith(CustomIds.TicketOpenTypePrefix)){const t=await tickets.getTypeById(i.guildId,id.slice(CustomIds.TicketOpenTypePrefix.length));if(!t)return replyPrivate(i,{embeds:[createWarningEmbed('Ticket Type Not Found','The selected ticket type is unavailable.')]});await i.showModal(buildTicketModal(t));return true;}if(id===CustomIds.TicketClaim){const r=await tickets.claimTicket({interaction:i,logger:ctx.logger});return replyPrivate(i,{embeds:[r.ok?createSuccessEmbed('Ticket Claimed',`Ticket #${r.ticket.ticket_number} is assigned to you.`):createWarningEmbed('Ticket Not Found',r.reason)]});}if(id===CustomIds.TicketEscalate){const r=await tickets.escalateTicket({interaction:i,logger:ctx.logger,reason:'Escalated from the ticket control panel.'});return replyPrivate(i,{embeds:[r.ok?createSuccessEmbed('Ticket Escalated',`Ticket #${r.ticket.ticket_number} was escalated.`):createWarningEmbed('Ticket Not Escalated',r.reason)]});}if(id===CustomIds.TicketCloseReason){const m=new ModalBuilder().setCustomId(CustomIds.TicketCloseReasonModal).setTitle('Close Ticket').addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('reason').setLabel('Close reason').setStyle(TextInputStyle.Paragraph).setRequired(true).setMaxLength(1000)));await i.showModal(m);return true;}
- if(id===CustomIds.ReportOpen){await i.showModal(buildReportModal());return true;}if(id.startsWith(CustomIds.ReportClaimPrefix)){const r=await reports.claimReport({guildId:i.guildId,reportId:id.slice(CustomIds.ReportClaimPrefix.length),reviewer:i.user,logger:ctx.logger});if(r)await reports.refreshReviewMessage({client:ctx.client,report:r});return replyPrivate(i,{embeds:[r?createSuccessEmbed('Report Claimed',`Report #${r.report_number} was claimed.`):createWarningEmbed('Report Not Found','The report is unavailable.')]});}if(id.startsWith(CustomIds.ReportResolvePrefix)||id.startsWith(CustomIds.ReportDismissPrefix)){const resolve=id.startsWith(CustomIds.ReportResolvePrefix),rid=id.slice((resolve?CustomIds.ReportResolvePrefix:CustomIds.ReportDismissPrefix).length),r=await reports.reviewReport({guildId:i.guildId,reportId:rid,reviewer:i.user,status:resolve?'RESOLVED':'DISMISSED',logger:ctx.logger});if(r)await reports.refreshReviewMessage({client:ctx.client,report:r});return replyPrivate(i,{embeds:[r?createSuccessEmbed('Report Reviewed',`Report #${r.report_number} marked **${r.status}**.`):createWarningEmbed('Report Not Found','The report is unavailable.')]});}
- if(id.startsWith(CustomIds.ApplicationApplyPrefix)){const t=await apps.getTypeById(i.guildId,id.slice(CustomIds.ApplicationApplyPrefix.length)),r=t?await apps.startApplicationDm({interaction:i,client:ctx.client,logger:ctx.logger,applicationType:t}):{ok:false,reason:'Application type not found.'};return replyPrivate(i,{embeds:[r.ok?createSuccessEmbed('Application Started',`Check your DMs for **${r.questionCount}** question(s).`):createWarningEmbed('Application Not Started',r.reason)]});}if(id.startsWith(CustomIds.ApplicationApprovePrefix)||id.startsWith(CustomIds.ApplicationDenyPrefix)){const approved=id.startsWith(CustomIds.ApplicationApprovePrefix),sid=id.slice((approved?CustomIds.ApplicationApprovePrefix:CustomIds.ApplicationDenyPrefix).length),r=await apps.reviewApplication({interaction:i,client:ctx.client,logger:ctx.logger,submissionId:sid,status:approved?'APPROVED':'DENIED'});return replyPrivate(i,{embeds:[r?createSuccessEmbed('Application Reviewed',`Application #${r.submission_number} marked **${r.status}**.`):createWarningEmbed('Application Not Found','The application is unavailable.')]});}
- if(id===CustomIds.AppealOpen){await i.showModal(buildAppealModal());return true;}if(id.startsWith(CustomIds.AppealApproveReasonPrefix)||id.startsWith(CustomIds.AppealDenyReasonPrefix)){const approved=id.startsWith(CustomIds.AppealApproveReasonPrefix),aid=id.slice((approved?CustomIds.AppealApproveReasonPrefix:CustomIds.AppealDenyReasonPrefix).length);await i.showModal(buildAppealReasonModal(aid,approved?'APPROVED':'DENIED'));return true;}
- if(id.startsWith(ENTRY_PREFIX)){const r=await giveaways.enter(i.guildId,id.slice(ENTRY_PREFIX.length),i.user,ctx.logger);return replyPrivate(i,{embeds:[r.ok?createSuccessEmbed('Giveaway Entry Confirmed','You are entered.'):createWarningEmbed('Entry Not Added',r.reason)],deleteAfterSeconds:8});}
- if(id.startsWith('slickbot:rolepanel:')){const [, ,panelId,optionId]=id.split(':');const r=await roles.toggleRole({interaction:i,panelId,optionId,logger:ctx.logger});if(!r.ok)return replyPrivate(i,{embeds:[createWarningEmbed('Role Not Updated',r.reason)]});await acknowledgeQuietly(i);return true;}
- if(id.startsWith(CustomIds.ApplicationCancelPrefix)){const s=await apps.cancelSession({sessionId:id.slice(CustomIds.ApplicationCancelPrefix.length),user:i.user,logger:ctx.logger});return update(i,{embeds:[s?createSuccessEmbed('Application Cancelled','Your application was cancelled.'):createWarningEmbed('Application Not Found','The session is no longer active.')],components:[]});}if(id.startsWith(CustomIds.ApplicationSubmitPrefix)){const r=await apps.submitSession({sessionId:id.slice(CustomIds.ApplicationSubmitPrefix.length),user:i.user,client:ctx.client,logger:ctx.logger});return update(i,{embeds:[r.ok?createSuccessEmbed('Application Submitted',`Application #${r.submission.submission_number} was sent to staff.`):createWarningEmbed('Application Not Submitted',r.reason)],components:[]});}
- if(id===CustomIds.BirthdaySetOpen)return replyPrivate(i,{embeds:[createSuccessEmbed('Set Your Birthday','Use `/birthday set month:<1-12> day:<1-31>` to save your birthday.')]});return false;}
-async function select(i,ctx){if(i.customId===CustomIds.ModulesSelect){const key=i.values[0];const {isCoreModule,isImplementedModule}=require('../modules/moduleRegistry');if(isCoreModule(key)||!isImplementedModule(key))return replyPrivate(i,{embeds:[createWarningEmbed('Module Not Changed',isCoreModule(key)?'Core modules cannot be disabled.':'This module is not implemented.')]});const cur=(await query('SELECT enabled FROM module_configs WHERE guild_id=$1 AND module_key=$2',[i.guildId,key])).rows[0]?.enabled;await query(`INSERT INTO module_configs(guild_id,module_key,enabled) VALUES($1,$2,$3) ON CONFLICT(guild_id,module_key) DO UPDATE SET enabled=EXCLUDED.enabled,updated_at=NOW()`,[i.guildId,key,!cur]);return update(i,await buildModulesPanel(i.guildId));}if(i.customId===CustomIds.TicketTypeSelect){const t=await tickets.getTypeById(i.guildId,i.values[0]);if(t)await i.showModal(buildTicketModal(t));return true;}if(i.customId.startsWith(CustomIds.RolePanelSelectPrefix)){const p=i.customId.slice(CustomIds.RolePanelSelectPrefix.length);for(const o of i.values)await roles.toggleRole({interaction:i,panelId:p,optionId:o,logger:ctx.logger});await acknowledgeQuietly(i);return true;}return false;}
-async function modal(i,ctx){const id=i.customId;if(id.startsWith(CustomIds.TicketModalPrefix)||id===CustomIds.TicketModal){const typeId=id.startsWith(CustomIds.TicketModalPrefix)?id.slice(CustomIds.TicketModalPrefix.length):null,t=typeId&&typeId!=='default'?await tickets.getTypeById(i.guildId,typeId):await tickets.ensureDefaultType(i.guildId),qs=Array.isArray(t.questions)?t.questions:JSON.parse(t.questions||'[]'),answers={};for(const [n,q]of qs.slice(0,4).entries())answers[q.label||`Question ${n+1}`]=i.fields.getTextInputValue(`q${n}`);const r=await tickets.createTicket({interaction:i,client:ctx.client,logger:ctx.logger,ticketType:t,subject:i.fields.getTextInputValue('subject'),answers});return replyPrivate(i,{embeds:[r.ok?createSuccessEmbed('Ticket Created',`Your ticket was created: <#${r.channel.id}>.`):createWarningEmbed('Ticket Not Created',r.reason)]});}if(id===CustomIds.TicketCloseReasonModal){const r=await tickets.closeTicket({interaction:i,client:ctx.client,logger:ctx.logger,reason:i.fields.getTextInputValue('reason')});return replyPrivate(i,{embeds:[r.ok?createSuccessEmbed('Ticket Closed',`Ticket #${r.ticket.ticket_number} was closed.`):createWarningEmbed('Ticket Not Found',r.reason)]});}if(id===CustomIds.ReportModal){const target=i.fields.getTextInputValue('target')||'',r=await reports.createReport({interaction:i,client:ctx.client,logger:ctx.logger,type:'Panel Report',details:target?`Target/Context: ${target}\n\n${i.fields.getTextInputValue('details')}`:i.fields.getTextInputValue('details')});return replyPrivate(i,{embeds:[createSuccessEmbed('Report Submitted',`Report #${r.report_number} was sent to staff.`)]});}if(id===CustomIds.AppealModal){const raw=i.fields.getTextInputValue('case_number')||'',a=await appeals.submitAppeal({interaction:i,client:ctx.client,logger:ctx.logger,caseNumber:raw?Number(raw.replace(/\D/g,'')):null,reason:i.fields.getTextInputValue('reason'),details:i.fields.getTextInputValue('details')||null});return replyPrivate(i,{embeds:[createSuccessEmbed('Appeal Submitted',`Appeal #${a.appeal_number} was sent to staff.`)]});}if(id.startsWith(CustomIds.AppealReasonModalPrefix)){const [status,appealId]=id.slice(CustomIds.AppealReasonModalPrefix.length).split(':'),a=await appeals.reviewAppeal({interaction:i,client:ctx.client,logger:ctx.logger,appealId,status,reason:i.fields.getTextInputValue('reason')||null});return replyPrivate(i,{embeds:[a?createSuccessEmbed('Appeal Reviewed',`Appeal #${a.appeal_number} marked **${a.status}**.`):createWarningEmbed('Appeal Not Found','The appeal is unavailable.')]});}return false;}
-module.exports={handleComponentInteraction};
+const { CustomIds } = require('../modules/ui/customIds');
+const { ActionKeys } = require('../modules/permissions/actionKeys');
+const { ModuleKeys, isCoreModule } = require('../modules/moduleRegistry');
+const { query } = require('./db');
+const { replyPrivate, acknowledgeQuietly } = require('../utils/reply');
+const { buildSetupPanel, buildModulesPanel, buildLoggingPanel, buildTeamsPanel, buildPermissionsPanel, buildCommunityPanel } = require('../modules/ui/panels');
+const { buildModerationPanel, buildRecentCasesPanel } = require('../modules/moderation/moderationUi');
+const { buildStatusPanel } = require('../commands/status');
+const { createBaseEmbed, createSuccessEmbed, createWarningEmbed, SlickBotColors } = require('../modules/ui/uiService');
+const { updatePanelDesign } = require('../modules/panels/panelDesignService');
+const { refreshPublishedPanel, refreshPublishedPanelFromResult, formatRefreshSummary } = require('../modules/panels/panelUpdateService');
+const { parsePanelDesignModalId } = require('../modules/panels/panelModals');
+const { ActivityTypeNames, PresenceStatus } = require('../modules/status/statusService');
+const { buildSupportPanel, buildTicketsPanel, buildReportsPanel, buildApplicationsPanel, buildAppealsPanel } = require('../modules/support/supportUi');
+const { buildWelcomePanel } = require('../modules/community/welcomeService');
+const { GiveawayService } = require('../modules/community/giveawayService');
+const { BirthdayService, buildBirthdayDayModal, buildBirthdayTimezoneModal, isValidDate } = require('../modules/community/birthdayService');
+const { ScheduledMessageService } = require('../modules/automation/scheduledMessageService');
+const { ServerStatsService } = require('../modules/community/serverStatsService');
+const { LevelingService } = require('../modules/community/levelingService');
+const { buildRoleManagerPanel, toggleRole } = require('../modules/community/rolePanelService');
+const {
+  TicketService,
+  ReportService,
+  ApplicationService,
+  AppealService,
+  buildTicketModal,
+  buildReportModal,
+  buildReportDetailsModal,
+  buildAppealModal,
+  buildAppealReasonModal,
+  buildReportReviewPayload
+} = require('../modules/support/supportService');
+
+const tickets = new TicketService();
+const reports = new ReportService();
+const applications = new ApplicationService();
+const appeals = new AppealService();
+const giveaways = new GiveawayService();
+const birthdays = new BirthdayService();
+const scheduledMessages = new ScheduledMessageService();
+const serverStats = new ServerStatsService();
+const leveling = new LevelingService();
+
+async function handleComponentInteraction(interaction, ctx) {
+  if (!interaction.guildId) {
+    if (interaction.isButton() && interaction.customId.startsWith(CustomIds.ApplicationCancelPrefix)) {
+      const sessionId = interaction.customId.slice(CustomIds.ApplicationCancelPrefix.length);
+      const session = await applications.cancelSession({ sessionId, user: interaction.user, logger: ctx.logger });
+      if (!session) return replyPrivate(interaction, { embeds: [createWarningEmbed('Application Not Cancelled', 'This application session was not found or is no longer active.')] });
+      await interaction.update({ embeds: [createSuccessEmbed('Application Cancelled', 'Your application was cancelled. Nothing was sent to the server.')], components: [] });
+      return true;
+    }
+    if (interaction.isButton() && interaction.customId.startsWith(CustomIds.ApplicationSubmitPrefix)) {
+      const sessionId = interaction.customId.slice(CustomIds.ApplicationSubmitPrefix.length);
+      const result = await applications.submitSession({ sessionId, user: interaction.user, client: ctx.client, logger: ctx.logger });
+      if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Application Not Submitted', result.reason)] });
+      const confirmation = result.applicationType?.submission_confirmation_message || `Your ${result.applicationType?.name || 'application'} application was submitted as #${result.submission.submission_number}.`;
+      await interaction.update({ embeds: [createSuccessEmbed('Application Submitted', confirmation.replaceAll('{number}', String(result.submission.submission_number)).replaceAll('{type}', result.applicationType?.name || 'application'))], components: [] });
+      return true;
+    }
+    await replyPrivate(interaction, 'This control can only be used inside a server.');
+    return true;
+  }
+
+  if (interaction.isButton()) return handleButton(interaction, ctx);
+  if (interaction.isStringSelectMenu()) return handleSelect(interaction, ctx);
+  if (interaction.isModalSubmit()) return handleModal(interaction, ctx);
+  return false;
+}
+
+async function handleButton(interaction, ctx) {
+  const id = interaction.customId;
+
+
+
+  if (id === CustomIds.ResetCancel) {
+    await updatePanel(interaction, { embeds: [createSuccessEmbed('Reset Cancelled', 'No SlickBot data was changed.')], components: [] });
+    return true;
+  }
+
+  if (id === CustomIds.ResetConfirm) {
+    if (!interaction.guild || interaction.guild.ownerId !== interaction.user.id) {
+      await replyPrivate(interaction, { embeds: [createWarningEmbed('Server Owner Required', 'Only the Discord server owner can confirm this reset.')] });
+      return true;
+    }
+    await query(`DELETE FROM guild_configs WHERE guild_id = $1`, [interaction.guildId]);
+    await ctx.permissions.ensureGuildConfig(interaction.guildId, interaction.guild.name);
+    await ctx.permissions.ensureOwnerTeam(interaction.guildId, interaction.user.id);
+    await ctx.logger.writeAudit({ guildId: interaction.guildId, actorUserId: interaction.user.id, actionKey: ActionKeys.ServerReset, targetType: 'GuildConfig', targetId: interaction.guildId, summary: 'SlickBot server data reset to fresh install.' }).catch(() => {});
+    await updatePanel(interaction, { embeds: [createSuccessEmbed('SlickBot Reset Complete', 'SlickBot data and configuration for this server has been reset. Run `/setup` to configure it again.')], components: [] });
+    return true;
+  }
+
+  if (id === CustomIds.SetupRefresh) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.Setup, ModuleKeys.PERMISSIONS))) return true;
+    await updatePanel(interaction, await buildSetupPanel(interaction.guildId, interaction.guild ? interaction.guild.name : null));
+    return true;
+  }
+
+  if (id === CustomIds.SetupModules || id === CustomIds.ModulesRefresh) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.ModulesManage, ModuleKeys.PERMISSIONS))) return true;
+    await updatePanel(interaction, await buildModulesPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id === CustomIds.SetupLogging || id === CustomIds.LoggingRefresh) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.LoggingView, ModuleKeys.LOGGING))) return true;
+    await updatePanel(interaction, await buildLoggingPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id === CustomIds.SetupTeams) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.TeamsManage, ModuleKeys.PERMISSIONS))) return true;
+    await updatePanel(interaction, await buildTeamsPanel(interaction.guildId));
+    return true;
+  }
+
+
+  if (id === CustomIds.SetupPermissions || id === CustomIds.PermissionsRefresh) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.PermissionsPanel, ModuleKeys.PERMISSIONS))) return true;
+    await updatePanel(interaction, await buildPermissionsPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id === CustomIds.SetupModeration || id === CustomIds.ModerationRefresh) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.ModerationPanel, ModuleKeys.MODERATION))) return true;
+    await updatePanel(interaction, await buildModerationPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id === CustomIds.CasesRefresh) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.CasesView, ModuleKeys.MODERATION))) return true;
+    await updatePanel(interaction, await buildRecentCasesPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id === CustomIds.SetupSupport || id === CustomIds.SupportRefresh) {
+    if (!(await requireAnySupportAction(interaction, ctx))) return true;
+    await updatePanel(interaction, await buildSupportPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id === CustomIds.SetupCommunity) {
+    if (!(await requireAnyCommunityAction(interaction, ctx))) return true;
+    await updatePanel(interaction, await buildCommunityPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id === CustomIds.WelcomeRefresh) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.WelcomeView, ModuleKeys.WELCOME))) return true;
+    await updatePanel(interaction, await buildWelcomePanel(interaction.guildId));
+    return true;
+  }
+
+  if (id === CustomIds.RolePanelsRefresh) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.RolePanelsView, ModuleKeys.REACTION_ROLES))) return true;
+    await updatePanel(interaction, await buildRoleManagerPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id === CustomIds.GiveawaysRefresh) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.GiveawaysView, ModuleKeys.GIVEAWAYS))) return true;
+    await updatePanel(interaction, await giveaways.buildManagerPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id === CustomIds.BirthdaysRefresh) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.BirthdaysView, ModuleKeys.BIRTHDAYS))) return true;
+    await updatePanel(interaction, await birthdays.buildManagerPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id === CustomIds.ScheduledMessagesRefresh) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.ScheduledMessagesView, ModuleKeys.SCHEDULED_MESSAGES))) return true;
+    await updatePanel(interaction, await scheduledMessages.buildManagerPanel(interaction.guildId));
+    return true;
+  }
+
+
+  if (id === CustomIds.LevelingRefresh) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.LevelingView, ModuleKeys.LEVELING))) return true;
+    await updatePanel(interaction, await leveling.buildManagerPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id === CustomIds.ServerStatsRefresh) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.ServerStatsView, ModuleKeys.SERVER_STATS))) return true;
+    await updatePanel(interaction, await serverStats.buildManagerPanel(interaction.guild));
+    return true;
+  }
+
+  if (id === CustomIds.TicketsRefresh) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.TicketsManager, ModuleKeys.TICKETS))) return true;
+    await updatePanel(interaction, await buildTicketsPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id === CustomIds.ReportsRefresh) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.ReportsManager, ModuleKeys.REPORTS))) return true;
+    await updatePanel(interaction, await buildReportsPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id === CustomIds.ApplicationsRefresh) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.ApplicationsManager, ModuleKeys.APPLICATIONS))) return true;
+    await applications.ensureDefaultType(interaction.guildId);
+    await updatePanel(interaction, await buildApplicationsPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id === CustomIds.AppealsRefresh) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.AppealsManager, ModuleKeys.APPEALS))) return true;
+    await updatePanel(interaction, await buildAppealsPanel(interaction.guildId));
+    return true;
+  }
+
+
+  if (id === CustomIds.BirthdaySetOpen) {
+    if (!(await requireModuleOnly(interaction, ctx, ModuleKeys.BIRTHDAYS))) return true;
+    const config = await birthdays.getConfig(interaction.guildId).catch(() => ({ timezone: 'America/New_York' }));
+    const session = birthdays.createSetupSession({ guildId: interaction.guildId, userId: interaction.user.id, defaultTimezone: config?.timezone || 'America/New_York' });
+    await replyPrivate(interaction, birthdays.buildSetupSessionPayload(session));
+    return true;
+  }
+
+
+  if (id.startsWith(CustomIds.BirthdayDayPrefix)) {
+    const sessionId = id.slice(CustomIds.BirthdayDayPrefix.length).split(':')[0];
+    const session = birthdays.getSetupSession(sessionId, interaction.user.id);
+    if (!session) return replyPrivate(interaction, { embeds: [createWarningEmbed('Birthday Setup Not Found', 'This birthday setup session expired or belongs to another user.')], deleteAfterSeconds: 10 });
+    await interaction.showModal(buildBirthdayDayModal(session));
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.BirthdayTimezoneCustomPrefix)) {
+    const sessionId = id.slice(CustomIds.BirthdayTimezoneCustomPrefix.length);
+    const session = birthdays.getSetupSession(sessionId, interaction.user.id);
+    if (!session) return replyPrivate(interaction, { embeds: [createWarningEmbed('Birthday Setup Not Found', 'This birthday setup session expired or belongs to another user.')], deleteAfterSeconds: 10 });
+    await interaction.showModal(buildBirthdayTimezoneModal(session));
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.BirthdayCancelPrefix)) {
+    const sessionId = id.slice(CustomIds.BirthdayCancelPrefix.length);
+    const session = birthdays.getSetupSession(sessionId, interaction.user.id);
+    if (!session) return replyPrivate(interaction, { embeds: [createWarningEmbed('Birthday Setup Not Found', 'This birthday setup session expired or belongs to another user.')], deleteAfterSeconds: 10 });
+    birthdays.cancelSetupSession(sessionId);
+    await updatePanel(interaction, { embeds: [createSuccessEmbed('Birthday Setup Cancelled', 'Your birthday was not changed.')], components: [] });
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.BirthdaySavePrefix)) {
+    const sessionId = id.slice(CustomIds.BirthdaySavePrefix.length);
+    const session = birthdays.getSetupSession(sessionId, interaction.user.id);
+    if (!session) return replyPrivate(interaction, { embeds: [createWarningEmbed('Birthday Setup Not Found', 'This birthday setup session expired or belongs to another user.')], deleteAfterSeconds: 10 });
+    const result = await birthdays.setBirthday({ guildId: interaction.guildId, user: interaction.user, month: session.month, day: session.day, timezone: session.timezone });
+    birthdays.cancelSetupSession(sessionId);
+    if (!result.ok) return updatePanel(interaction, { embeds: [createWarningEmbed('Birthday Not Saved', result.reason)], components: [] });
+    await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'birthday-profile', title: 'Birthday Saved', body: `User: <@${interaction.user.id}>\nBirthday: **${require('../modules/community/birthdayService').formatBirthday(result.profile.birth_month, result.profile.birth_day)}**`, actorUserId: interaction.user.id }).catch(() => {});
+    await updatePanel(interaction, { embeds: [createSuccessEmbed('Birthday Saved', `Your birthday was saved for **${require('../modules/community/birthdayService').formatBirthday(result.profile.birth_month, result.profile.birth_day)}** with timezone **${result.profile.timezone || 'server default'}**.`)], components: [] });
+    return true;
+  }
+
+  if (id.startsWith('slickbot:rolepanel:')) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.RolePanelsUse, ModuleKeys.REACTION_ROLES))) return true;
+    const [, , panelId, optionId] = id.split(':');
+    const result = await toggleRole({ interaction, panelId, optionId, logger: ctx.logger });
+    if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Role Not Updated', result.reason)], deleteAfterSeconds: 10 });
+    await acknowledgeQuietly(interaction);
+    return true;
+  }
+
+
+  if (id.startsWith('slickbot:giveaway:enter:')) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.GiveawaysEnter, ModuleKeys.GIVEAWAYS))) return true;
+    const giveawayId = id.slice('slickbot:giveaway:enter:'.length);
+    const result = await giveaways.enterGiveaway({ interaction, giveawayId, logger: ctx.logger });
+    if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Giveaway Entry Failed', result.reason)], deleteAfterSeconds: 10 });
+    if (!result.alreadyEntered) await giveaways.refreshGiveawayMessage(ctx.client, interaction.guildId, giveawayId).catch(() => {});
+    return replyPrivate(interaction, { embeds: [createSuccessEmbed(result.alreadyEntered ? 'Already Entered' : 'Giveaway Entered', result.alreadyEntered ? 'You are already entered in this giveaway.' : 'You have been entered in the giveaway.')], deleteAfterSeconds: 10 });
+  }
+
+  if (id === CustomIds.TicketOpen || id.startsWith(CustomIds.TicketOpenTypePrefix)) {
+    if (!(await requireModuleOnly(interaction, ctx, ModuleKeys.TICKETS))) return true;
+    const typeId = id.startsWith(CustomIds.TicketOpenTypePrefix) ? id.slice(CustomIds.TicketOpenTypePrefix.length) : null;
+    const type = typeId ? await tickets.getTypeById(interaction.guildId, typeId) : await tickets.ensureDefaultType(interaction.guildId);
+    await interaction.showModal(buildTicketModal(type));
+    return true;
+  }
+
+  if (id === CustomIds.TicketClaim) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.TicketsClaim, ModuleKeys.TICKETS))) return true;
+    const result = await tickets.claimTicket({ interaction, logger: ctx.logger });
+    if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Ticket Not Found', result.reason)] });
+    await interaction.reply({ embeds: [createSuccessEmbed('Ticket Claimed', `Ticket #${result.ticket.ticket_number} is now assigned to <@${interaction.user.id}>.`)] });
+    return true;
+  }
+
+  if (id === CustomIds.TicketEscalate) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.TicketsManage, ModuleKeys.TICKETS))) return true;
+    const result = await tickets.escalateTicket({ interaction, logger: ctx.logger, reason: 'Escalated from ticket control button.' });
+    if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Ticket Not Escalated', result.reason)] });
+    await interaction.reply({ content: result.roleIds.map((roleId) => `<@&${roleId}>`).join(' '), embeds: [createSuccessEmbed('Ticket Escalated', `Ticket #${result.ticket.ticket_number} has been escalated.`)] });
+    return true;
+  }
+
+  if (id === CustomIds.TicketCloseReason || id === CustomIds.TicketClose) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.TicketsClose, ModuleKeys.TICKETS))) return true;
+    await interaction.showModal(buildTicketCloseReasonModal());
+    return true;
+  }
+
+  if (id === CustomIds.ReportOpen) {
+    if (!(await requireModuleOnly(interaction, ctx, ModuleKeys.REPORTS))) return true;
+    await interaction.showModal(buildReportModal());
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.ReportClaimPrefix)) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.ReportsClaim, ModuleKeys.REPORTS))) return true;
+    const reportId = id.slice(CustomIds.ReportClaimPrefix.length);
+    const report = await reports.claimReport({ guildId: interaction.guildId, reportId, reviewer: interaction.user, logger: ctx.logger });
+    if (!report) return replyPrivate(interaction, { embeds: [createWarningEmbed('Report Not Found', 'The report could not be found or is already closed.')] });
+    await updatePanel(interaction, buildReportReviewPayload(report));
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.ReportResolvePrefix) || id.startsWith(CustomIds.ReportDismissPrefix)) {
+    const status = id.startsWith(CustomIds.ReportResolvePrefix) ? 'RESOLVED' : 'DISMISSED';
+    const action = status === 'RESOLVED' ? ActionKeys.ReportsResolve : ActionKeys.ReportsDismiss;
+    if (!(await requireAction(interaction, ctx, action, ModuleKeys.REPORTS))) return true;
+    const reportId = id.replace(CustomIds.ReportResolvePrefix, '').replace(CustomIds.ReportDismissPrefix, '');
+    const report = await reports.reviewReport({ guildId: interaction.guildId, reportId, reviewer: interaction.user, status, logger: ctx.logger });
+    if (!report) return replyPrivate(interaction, { embeds: [createWarningEmbed('Report Not Found', 'The report could not be found.')] });
+    await updatePanel(interaction, { embeds: [createSuccessEmbed('Report Updated', `Report #${report.report_number} marked **${report.status}**.`)], components: [] });
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.ReportDetailsPrefix)) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.ReportsReview, ModuleKeys.REPORTS))) return true;
+    await interaction.showModal(buildReportDetailsModal(id.slice(CustomIds.ReportDetailsPrefix.length)));
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.ReportOpenTicketPrefix)) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.ReportsOpenTicket, ModuleKeys.REPORTS))) return true;
+    const reportId = id.slice(CustomIds.ReportOpenTicketPrefix.length);
+    const report = await reports.getReport(interaction.guildId, reportId);
+    if (!report) return replyPrivate(interaction, { embeds: [createWarningEmbed('Report Not Found', 'The report could not be found.')] });
+    const openerUser = await ctx.client.users.fetch(report.reporter_user_id).catch(() => null);
+    if (!openerUser) return replyPrivate(interaction, { embeds: [createWarningEmbed('User Not Found', 'Could not fetch the report submitter.')] });
+    const reviewerRoleIds = await reports.getReviewerRoleIds(interaction.guildId);
+    const result = await tickets.createTicket({ interaction, client: ctx.client, logger: ctx.logger, openerUser, actorUser: interaction.user, type: 'Report Follow-Up', subject: `Report #${report.report_number} Follow-Up`, details: report.details, reviewerRoleIdsOverride: reviewerRoleIds, skipTicketLimit: true });
+    if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Ticket Not Created', result.reason)] });
+    await reports.linkTicket({ guildId: interaction.guildId, reportId, ticketId: result.ticket.id });
+    await interaction.reply({ embeds: [createSuccessEmbed('Follow-Up Ticket Opened', `Created <#${result.channel.id}> for report #${report.report_number}.`)] });
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.ApplicationApplyPrefix)) {
+    if (!(await requireModuleOnly(interaction, ctx, ModuleKeys.APPLICATIONS))) return true;
+    const typeId = id.slice(CustomIds.ApplicationApplyPrefix.length);
+    const type = await applications.getTypeById(interaction.guildId, typeId);
+    if (!type || !type.enabled) return replyPrivate(interaction, { embeds: [createWarningEmbed('Application Unavailable', 'This application type is not currently available.')] });
+    const result = await applications.startApplicationDm({ interaction, client: ctx.client, logger: ctx.logger, applicationType: type });
+    if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Application Not Started', result.reason)] });
+    await replyPrivate(interaction, { embeds: [createSuccessEmbed('Application Started', `I sent you a DM with the first question. Question count: **${result.questionCount}**.`)] });
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.ApplicationApprovePrefix) || id.startsWith(CustomIds.ApplicationDenyPrefix)) {
+    const isApprove = id.startsWith(CustomIds.ApplicationApprovePrefix);
+    const action = isApprove ? ActionKeys.ApplicationsApprove : ActionKeys.ApplicationsDeny;
+    if (!(await requireAction(interaction, ctx, action, ModuleKeys.APPLICATIONS))) return true;
+    const submissionId = id.slice(isApprove ? CustomIds.ApplicationApprovePrefix.length : CustomIds.ApplicationDenyPrefix.length);
+    const submission = await applications.reviewApplication({ interaction, client: ctx.client, logger: ctx.logger, submissionId, status: isApprove ? 'APPROVED' : 'DENIED' });
+    if (!submission) return replyPrivate(interaction, { embeds: [createWarningEmbed('Application Not Found', 'The application could not be found.')] });
+    await updatePanel(interaction, { embeds: [createSuccessEmbed('Application Reviewed', `Application #${submission.submission_number} marked **${submission.status}**.`)], components: [] });
+    return true;
+  }
+
+  if (id === CustomIds.AppealOpen) {
+    if (!(await requireModuleOnly(interaction, ctx, ModuleKeys.APPEALS))) return true;
+    await interaction.showModal(buildAppealModal());
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.AppealApproveReasonPrefix) || id.startsWith(CustomIds.AppealDenyReasonPrefix)) {
+    const isApprove = id.startsWith(CustomIds.AppealApproveReasonPrefix);
+    const action = isApprove ? ActionKeys.AppealsApprove : ActionKeys.AppealsDeny;
+    if (!(await requireAction(interaction, ctx, action, ModuleKeys.APPEALS))) return true;
+    const appealId = id.slice(isApprove ? CustomIds.AppealApproveReasonPrefix.length : CustomIds.AppealDenyReasonPrefix.length);
+    await interaction.showModal(buildAppealReasonModal(appealId, isApprove ? 'APPROVED' : 'DENIED'));
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.AppealApprovePrefix) || id.startsWith(CustomIds.AppealDenyPrefix)) {
+    const isApprove = id.startsWith(CustomIds.AppealApprovePrefix);
+    const action = isApprove ? ActionKeys.AppealsApprove : ActionKeys.AppealsDeny;
+    if (!(await requireAction(interaction, ctx, action, ModuleKeys.APPEALS))) return true;
+    const appealId = id.slice(isApprove ? CustomIds.AppealApprovePrefix.length : CustomIds.AppealDenyPrefix.length);
+    const appeal = await appeals.reviewAppeal({ interaction, client: ctx.client, logger: ctx.logger, appealId, status: isApprove ? 'APPROVED' : 'DENIED' });
+    if (!appeal) return replyPrivate(interaction, { embeds: [createWarningEmbed('Appeal Not Found', 'The appeal could not be found.')] });
+    await updatePanel(interaction, { embeds: [createSuccessEmbed('Appeal Reviewed', `Appeal #${appeal.appeal_number} marked **${appeal.status}**.`)], components: [] });
+    return true;
+  }
+
+  if (id === CustomIds.SetupStatus || id === CustomIds.StatusRefresh) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.StatusView, ModuleKeys.STATUS))) return true;
+    await updatePanel(interaction, await buildStatusPanel(interaction.guildId, ctx));
+    return true;
+  }
+
+  if (id === CustomIds.LoggingFlush) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.LoggingConfigure, ModuleKeys.LOGGING))) return true;
+    await ctx.logger.flushGuildBatches(interaction.guildId);
+    await updatePanel(interaction, await buildLoggingPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id === CustomIds.LoggingTest) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.LoggingConfigure, ModuleKeys.LOGGING))) return true;
+    await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'system', title: 'SlickBot Test Log', body: `Test log created by ${interaction.user.tag}.`, actorUserId: interaction.user.id });
+    await updatePanel(interaction, await buildLoggingPanel(interaction.guildId));
+    return true;
+  }
+
+  if ([CustomIds.StatusQuickOnline, CustomIds.StatusQuickIdle, CustomIds.StatusQuickDnd, CustomIds.StatusClear].includes(id)) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.StatusManage, ModuleKeys.STATUS))) return true;
+    if (id === CustomIds.StatusClear) {
+      await ctx.status.clearPresence(interaction.guildId, true);
+      await updatePanel(interaction, await buildStatusPanel(interaction.guildId, ctx, 'Status cleared.'));
+      return true;
+    }
+    const status = id === CustomIds.StatusQuickOnline ? PresenceStatus.ONLINE : id === CustomIds.StatusQuickIdle ? PresenceStatus.IDLE : PresenceStatus.DND;
+    const saved = await ctx.status.getSavedPresence(interaction.guildId);
+    const next = saved || { activityType: ActivityTypeNames.WATCHING, activityText: 'the server', activityUrl: null };
+    await ctx.status.applyPresence({ ...next, status });
+    await ctx.status.savePresence(interaction.guildId, { ...next, status });
+    await updatePanel(interaction, await buildStatusPanel(interaction.guildId, ctx, `Status set to ${status}.`));
+    return true;
+  }
+
+  return false;
+}
+
+async function handleSelect(interaction, ctx) {
+  const id = interaction.customId;
+  if (id === CustomIds.ModulesSelect) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.ModulesManage, ModuleKeys.PERMISSIONS))) return true;
+    const moduleKey = interaction.values[0];
+    if (!isImplementedModuleSafe(moduleKey)) {
+      await updatePanel(interaction, { embeds: [createBaseEmbed({ title: 'Module Coming Soon', description: `**${moduleKey}** has not been built yet, so it cannot be enabled or disabled.`, color: SlickBotColors.WARNING })], components: (await buildModulesPanel(interaction.guildId)).components });
+      return true;
+    }
+    if (isCoreModule(moduleKey)) {
+      await updatePanel(interaction, { embeds: [createBaseEmbed({ title: 'Core Module Locked', description: `**${moduleKey}** is a core SlickBot module and cannot be disabled.`, color: SlickBotColors.WARNING })], components: (await buildModulesPanel(interaction.guildId)).components });
+      return true;
+    }
+    const current = await query(`SELECT enabled FROM module_configs WHERE guild_id = $1 AND module_key = $2 LIMIT 1`, [interaction.guildId, moduleKey]);
+    const nextEnabled = !(current.rows[0]?.enabled);
+    await query(`INSERT INTO module_configs (guild_id, module_key, enabled) VALUES ($1, $2, $3) ON CONFLICT (guild_id, module_key) DO UPDATE SET enabled = EXCLUDED.enabled, updated_at = NOW()`, [interaction.guildId, moduleKey, nextEnabled]);
+    await ctx.logger.writeAudit({ guildId: interaction.guildId, actorUserId: interaction.user.id, actionKey: ActionKeys.ModulesManage, targetType: 'ModuleConfig', targetId: moduleKey, summary: `${moduleKey} module ${nextEnabled ? 'enabled' : 'disabled'} from interactive panel.` });
+    await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'module-config', title: `Module ${nextEnabled ? 'Enabled' : 'Disabled'}`, body: [`Module: **${moduleKey}**`, `Updated By: <@${interaction.user.id}>`, 'Source: Interactive panel'].join('\n'), metadata: { moduleKey, enabled: nextEnabled, actorUserId: interaction.user.id } });
+    await updatePanel(interaction, await buildModulesPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id === CustomIds.TicketTypeSelect) {
+    if (!(await requireModuleOnly(interaction, ctx, ModuleKeys.TICKETS))) return true;
+    const typeId = interaction.values[0];
+    const type = await tickets.getTypeById(interaction.guildId, typeId);
+    if (!type || type.enabled === false) return replyPrivate(interaction, { embeds: [createWarningEmbed('Ticket Type Unavailable', 'This ticket type is not currently available.')] });
+    await interaction.showModal(buildTicketModal(type));
+    return true;
+  }
+
+  if (id === CustomIds.ReportSelect) {
+    if (!(await requireModuleOnly(interaction, ctx, ModuleKeys.REPORTS))) return true;
+    await interaction.showModal(buildReportModal());
+    return true;
+  }
+
+  if (id === CustomIds.AppealSelect) {
+    if (!(await requireModuleOnly(interaction, ctx, ModuleKeys.APPEALS))) return true;
+    await interaction.showModal(buildAppealModal());
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.ApplicationSelectPrefix)) {
+    if (!(await requireModuleOnly(interaction, ctx, ModuleKeys.APPLICATIONS))) return true;
+    const typeId = interaction.values[0] || id.slice(CustomIds.ApplicationSelectPrefix.length);
+    const type = await applications.getTypeById(interaction.guildId, typeId);
+    if (!type || !type.enabled) return replyPrivate(interaction, { embeds: [createWarningEmbed('Application Unavailable', 'This application type is not currently available.')] });
+    const result = await applications.startApplicationDm({ interaction, client: ctx.client, logger: ctx.logger, applicationType: type });
+    if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Application Not Started', result.reason)] });
+    await replyPrivate(interaction, { embeds: [createSuccessEmbed('Application Started', `I sent you a DM with the first question. Question count: **${result.questionCount}**.`)] });
+    return true;
+  }
+
+
+  if (id.startsWith(CustomIds.BirthdayMonthPrefix)) {
+    const sessionId = id.slice(CustomIds.BirthdayMonthPrefix.length);
+    const session = birthdays.getSetupSession(sessionId, interaction.user.id);
+    if (!session) return replyPrivate(interaction, { embeds: [createWarningEmbed('Birthday Setup Not Found', 'This birthday setup session expired or belongs to another user.')], deleteAfterSeconds: 10 });
+    birthdays.updateSetupSession(session, { month: Number(interaction.values[0]) });
+    await updatePanel(interaction, birthdays.buildSetupSessionPayload(session));
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.BirthdayDayPrefix)) {
+    const rest = id.slice(CustomIds.BirthdayDayPrefix.length);
+    const sessionId = rest.split(':')[0];
+    const session = birthdays.getSetupSession(sessionId, interaction.user.id);
+    if (!session) return replyPrivate(interaction, { embeds: [createWarningEmbed('Birthday Setup Not Found', 'This birthday setup session expired or belongs to another user.')], deleteAfterSeconds: 10 });
+    birthdays.updateSetupSession(session, { day: Number(interaction.values[0]) });
+    await updatePanel(interaction, birthdays.buildSetupSessionPayload(session));
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.BirthdayTimezonePrefix)) {
+    const sessionId = id.slice(CustomIds.BirthdayTimezonePrefix.length);
+    const session = birthdays.getSetupSession(sessionId, interaction.user.id);
+    if (!session) return replyPrivate(interaction, { embeds: [createWarningEmbed('Birthday Setup Not Found', 'This birthday setup session expired or belongs to another user.')], deleteAfterSeconds: 10 });
+    birthdays.updateSetupSession(session, { timezone: interaction.values[0] });
+    await updatePanel(interaction, birthdays.buildSetupSessionPayload(session));
+    return true;
+  }
+
+  if (id === CustomIds.BirthdayListSelect) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.BirthdaysView, ModuleKeys.BIRTHDAYS))) return true;
+    await updatePanel(interaction, await birthdays.buildListPanel(interaction.guildId, interaction.values[0] || 'ALL'));
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.RolePanelSelectPrefix)) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.RolePanelsUse, ModuleKeys.REACTION_ROLES))) return true;
+    const panelId = id.slice(CustomIds.RolePanelSelectPrefix.length);
+    const optionId = interaction.values[0];
+    const result = await toggleRole({ interaction, panelId, optionId, logger: ctx.logger });
+    if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Role Not Updated', result.reason)], deleteAfterSeconds: 10 });
+    await acknowledgeQuietly(interaction);
+    return true;
+  }
+
+  return false;
+}
+
+async function handleModal(interaction, ctx) {
+  const id = interaction.customId;
+
+  if (id.startsWith(CustomIds.BirthdayDayModalPrefix)) {
+    const sessionId = id.slice(CustomIds.BirthdayDayModalPrefix.length);
+    const session = birthdays.getSetupSession(sessionId, interaction.user.id);
+    if (!session) return replyPrivate(interaction, { embeds: [createWarningEmbed('Birthday Setup Not Found', 'This birthday setup session expired or belongs to another user.')], deleteAfterSeconds: 10 });
+    const day = Number(interaction.fields.getTextInputValue('day'));
+    birthdays.updateSetupSession(session, { day: Number.isInteger(day) ? day : null });
+    await updatePanel(interaction, birthdays.buildSetupSessionPayload(session));
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.BirthdayTimezoneModalPrefix)) {
+    const sessionId = id.slice(CustomIds.BirthdayTimezoneModalPrefix.length);
+    const session = birthdays.getSetupSession(sessionId, interaction.user.id);
+    if (!session) return replyPrivate(interaction, { embeds: [createWarningEmbed('Birthday Setup Not Found', 'This birthday setup session expired or belongs to another user.')], deleteAfterSeconds: 10 });
+    const timezone = interaction.fields.getTextInputValue('timezone');
+    birthdays.updateSetupSession(session, { timezone });
+    await updatePanel(interaction, birthdays.buildSetupSessionPayload(session));
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.TicketModalPrefix) || id === CustomIds.TicketModal) {
+    if (!(await requireModuleOnly(interaction, ctx, ModuleKeys.TICKETS))) return true;
+    const typeId = id.startsWith(CustomIds.TicketModalPrefix) ? id.slice(CustomIds.TicketModalPrefix.length) : null;
+    const ticketType = typeId && typeId !== 'default' ? await tickets.getTypeById(interaction.guildId, typeId) : await tickets.ensureDefaultType(interaction.guildId);
+    const questions = parseQuestions(ticketType?.questions);
+    const answers = {};
+    questions.slice(0, 4).forEach((question, index) => {
+      const value = interaction.fields.getTextInputValue(`q${index}`);
+      answers[question.label || `Question ${index + 1}`] = value;
+    });
+    const result = await tickets.createTicket({ interaction, client: ctx.client, logger: ctx.logger, ticketType, subject: interaction.fields.getTextInputValue('subject'), answers });
+    if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Ticket Not Created', result.reason)] });
+    await replyPrivate(interaction, { embeds: [createSuccessEmbed('Ticket Created', `Your ticket was created: <#${result.channel.id}>.`)] });
+    return true;
+  }
+
+  if (id === CustomIds.TicketCloseReasonModal) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.TicketsClose, ModuleKeys.TICKETS))) return true;
+    const reason = interaction.fields.getTextInputValue('reason') || 'No reason provided.';
+    const result = await tickets.closeTicket({ interaction, client: ctx.client, logger: ctx.logger, reason });
+    if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Ticket Not Found', result.reason)] });
+    await interaction.reply({ embeds: [createSuccessEmbed('Ticket Closed', `Ticket #${result.ticket.ticket_number} closed. Transcript sent: **${result.transcriptSent ? 'Yes' : 'No'}**.`)] });
+    if (result.shouldDelete) scheduleTicketDeletion(interaction.channel, result.deleteSeconds || 10).catch((error) => console.error('Failed to schedule ticket deletion:', error));
+    return true;
+  }
+
+  if (id === CustomIds.ReportModal) {
+    if (!(await requireModuleOnly(interaction, ctx, ModuleKeys.REPORTS))) return true;
+    const target = interaction.fields.getTextInputValue('target') || '';
+    const details = interaction.fields.getTextInputValue('details');
+    const report = await reports.createReport({ interaction, client: ctx.client, logger: ctx.logger, type: 'Panel Report', details: target ? `Target/Context: ${target}\n\n${details}` : details });
+    await replyPrivate(interaction, { embeds: [createSuccessEmbed('Report Submitted', `Report #${report.report_number} was sent to staff.`)] });
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.ReportDetailsModalPrefix)) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.ReportsReview, ModuleKeys.REPORTS))) return true;
+    const reportId = id.slice(CustomIds.ReportDetailsModalPrefix.length);
+    const report = await reports.addDetails({ guildId: interaction.guildId, reportId, reviewer: interaction.user, details: interaction.fields.getTextInputValue('details'), logger: ctx.logger });
+    if (!report) return replyPrivate(interaction, { embeds: [createWarningEmbed('Report Not Found', 'The report could not be found.')] });
+    await reports.refreshReviewMessage({ client: ctx.client, report }).catch(() => {});
+    await replyPrivate(interaction, { embeds: [createSuccessEmbed('Report Details Added', `Details were added to report #${report.report_number}.`)] });
+    return true;
+  }
+
+  if (id === CustomIds.AppealModal) {
+    if (!(await requireModuleOnly(interaction, ctx, ModuleKeys.APPEALS))) return true;
+    const rawCase = interaction.fields.getTextInputValue('case_number') || '';
+    const caseNumber = rawCase.trim() ? Number(rawCase.replace(/[^0-9]/g, '')) : null;
+    const appeal = await appeals.submitAppeal({ interaction, client: ctx.client, logger: ctx.logger, caseNumber: Number.isFinite(caseNumber) ? caseNumber : null, reason: interaction.fields.getTextInputValue('reason'), details: interaction.fields.getTextInputValue('details') || null });
+    await replyPrivate(interaction, { embeds: [createSuccessEmbed('Appeal Submitted', `Appeal #${appeal.appeal_number} was sent to staff.`)] });
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.AppealReasonModalPrefix)) {
+    const rest = id.slice(CustomIds.AppealReasonModalPrefix.length);
+    const [status, appealId] = rest.split(':');
+    const action = status === 'APPROVED' ? ActionKeys.AppealsApprove : ActionKeys.AppealsDeny;
+    if (!(await requireAction(interaction, ctx, action, ModuleKeys.APPEALS))) return true;
+    const reason = interaction.fields.getTextInputValue('reason') || null;
+    const appeal = await appeals.reviewAppeal({ interaction, client: ctx.client, logger: ctx.logger, appealId, status, reason });
+    if (!appeal) return replyPrivate(interaction, { embeds: [createWarningEmbed('Appeal Not Found', 'The appeal could not be found.')] });
+    await replyPrivate(interaction, { embeds: [createSuccessEmbed('Appeal Reviewed', `Appeal #${appeal.appeal_number} marked **${appeal.status}**.`)] });
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.PanelDesignModalPrefix)) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.PanelsConfigure, ModuleKeys.PERMISSIONS))) return true;
+    const { target, name } = parsePanelDesignModalId(id);
+    const result = await updatePanelDesign({
+      guildId: interaction.guildId,
+      target,
+      name,
+      title: interaction.fields.getTextInputValue('title') || null,
+      description: interaction.fields.getTextInputValue('description') || null,
+      color: interaction.fields.getTextInputValue('color') || null
+    });
+    if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Panel Not Updated', result.reason)] });
+    await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'setup', title: 'Panel Design Updated', body: `${result.target} was updated by ${interaction.user.tag}.`, actorUserId: interaction.user.id }).catch(() => {});
+    const refresh = await refreshPublishedPanelFromResult(ctx.client, interaction.guildId, result).catch(() => null);
+    await replyPrivate(interaction, { embeds: [createSuccessEmbed('Panel Design Updated', `${result.target} design settings were updated.${formatRefreshSummary(refresh) || '\nFuture posted panels will use the new design.'}`)] });
+    return true;
+  }
+
+  return false;
+}
+
+function parseQuestions(value) {
+  if (!value) return [];
+  if (typeof value === 'object') return Array.isArray(value) ? value : [];
+  try { return JSON.parse(value); } catch { return []; }
+}
+
+function buildTicketCloseReasonModal() {
+  const { ModalBuilder, ActionRowBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
+  return new ModalBuilder()
+    .setCustomId(CustomIds.TicketCloseReasonModal)
+    .setTitle('Close Ticket With Reason')
+    .addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('reason').setLabel('Close reason').setStyle(TextInputStyle.Paragraph).setRequired(true).setMaxLength(1000)));
+}
+
+async function requireAnySupportAction(interaction, ctx) {
+  const checks = [[ActionKeys.TicketsManager, ModuleKeys.TICKETS], [ActionKeys.ReportsManager, ModuleKeys.REPORTS], [ActionKeys.ApplicationsManager, ModuleKeys.APPLICATIONS], [ActionKeys.AppealsManager, ModuleKeys.APPEALS]];
+  for (const [action, moduleKey] of checks) {
+    const result = await ctx.permissions.checkInteraction(interaction, action, moduleKey);
+    if (result.allowed) return true;
+  }
+  await replyPrivate(interaction, { embeds: [createBaseEmbed({ title: 'Permission Required', description: 'You need access to at least one support workflow module.', color: SlickBotColors.ERROR })] });
+  return false;
+}
+
+
+async function requireAnyCommunityAction(interaction, ctx) {
+  const checks = [[ActionKeys.WelcomeView, ModuleKeys.WELCOME], [ActionKeys.RolePanelsView, ModuleKeys.REACTION_ROLES], [ActionKeys.GiveawaysView, ModuleKeys.GIVEAWAYS], [ActionKeys.BirthdaysView, ModuleKeys.BIRTHDAYS], [ActionKeys.LevelingView, ModuleKeys.LEVELING], [ActionKeys.ScheduledMessagesView, ModuleKeys.SCHEDULED_MESSAGES], [ActionKeys.ServerStatsView, ModuleKeys.SERVER_STATS]];
+  for (const [action, moduleKey] of checks) {
+    const result = await ctx.permissions.checkInteraction(interaction, action, moduleKey);
+    if (result.allowed) return true;
+  }
+  await replyPrivate(interaction, { embeds: [createBaseEmbed({ title: 'Permission Required', description: 'You need access to at least one community module.', color: SlickBotColors.ERROR })] });
+  return false;
+}
+
+async function requireModuleOnly(interaction, ctx, moduleKey) {
+  await ctx.permissions.ensureGuildConfig(interaction.guildId, interaction.guild ? interaction.guild.name : null);
+  if (await ctx.permissions.isIgnored(interaction.guildId, interaction.user.id)) {
+    await replyPrivate(interaction, { embeds: [createWarningEmbed('Access Blocked', 'You are currently blocked from interacting with SlickBot.')] });
+    return false;
+  }
+  const enabled = await ctx.permissions.isModuleEnabled(interaction.guildId, moduleKey);
+  if (enabled) return true;
+  await replyPrivate(interaction, { embeds: [createWarningEmbed('Module Disabled', `The ${moduleKey} module is disabled.`)] });
+  return false;
+}
+
+async function requireAction(interaction, ctx, actionKey, moduleKey) {
+  const result = await ctx.permissions.checkInteraction(interaction, actionKey, moduleKey);
+  if (result.allowed) return true;
+  await replyPrivate(interaction, { embeds: [createBaseEmbed({ title: 'Permission Required', description: result.reason || 'You do not have permission to use this control.', color: SlickBotColors.ERROR })] });
+  return false;
+}
+
+async function updatePanel(interaction, payload) {
+  if (interaction.deferred || interaction.replied) {
+    await interaction.editReply(payload);
+    return;
+  }
+  if (typeof interaction.update === 'function') {
+    await interaction.update(payload);
+    return;
+  }
+  await replyPrivate(interaction, payload);
+}
+
+
+async function scheduleTicketDeletion(channel, seconds = 10) {
+  if (!channel || typeof channel.send !== 'function') return;
+  const total = Math.max(3, Math.min(Number(seconds) || 10, 60));
+  const message = await channel.send({ embeds: [createWarningEmbed('Ticket Closing', `Ticket will close in **${total}** second(s).`)] }).catch(() => null);
+  if (!message) return;
+  for (let remaining = total - 1; remaining >= 1; remaining -= 1) {
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    await message.edit({ embeds: [createWarningEmbed('Ticket Closing', `Ticket will close in **${remaining}** second(s).`)] }).catch(() => {});
+  }
+  await channel.delete('SlickBot ticket closed and transcript completed.').catch(() => {});
+}
+
+function isImplementedModuleSafe(moduleKey) {
+  return require('../modules/moduleRegistry').isImplementedModule(moduleKey);
+}
+
+module.exports = { handleComponentInteraction };

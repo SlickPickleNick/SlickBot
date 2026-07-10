@@ -1,18 +1,160 @@
-const {SlashCommandBuilder,ChannelType,AttachmentBuilder}=require('discord.js');const {ModuleKeys}=require('../modules/moduleRegistry');const {ActionKeys}=require('../modules/permissions/actionKeys');const {replyPrivate}=require('../utils/reply');const {createSuccessEmbed,createWarningEmbed,createBaseEmbed,SlickBotColors}=require('../modules/ui/uiService');const {LevelingService,formatMultiplier}=require('../modules/community/levelingService');const levels=new LevelingService();
-module.exports={data:new SlashCommandBuilder().setName('level').setDescription('Leveling and XP tools.')
-.addSubcommand(s=>s.setName('manager').setDescription('Open the leveling manager.'))
-.addSubcommand(s=>s.setName('setup').setDescription('Configure leveling.').addBooleanOption(o=>o.setName('enabled').setDescription('Enable XP awards.').setRequired(false)).addIntegerOption(o=>o.setName('xp_min').setDescription('Minimum XP.').setMinValue(1).setMaxValue(1000).setRequired(false)).addIntegerOption(o=>o.setName('xp_max').setDescription('Maximum XP.').setMinValue(1).setMaxValue(1000).setRequired(false)).addIntegerOption(o=>o.setName('cooldown').setDescription('Cooldown seconds.').setMinValue(1).setMaxValue(3600).setRequired(false)).addIntegerOption(o=>o.setName('minimum_length').setDescription('Minimum message length.').setMinValue(1).setMaxValue(500).setRequired(false)).addChannelOption(o=>o.setName('level_up_channel').setDescription('Level-up announcement channel.').addChannelTypes(ChannelType.GuildText).setRequired(false)).addStringOption(o=>o.setName('level_up_message').setDescription('Announcement template.').setRequired(false).setMaxLength(1000)).addStringOption(o=>o.setName('level_up_mode').setDescription('Announcement mode.').addChoices({name:'All levels',value:'ALL_LEVELS'},{name:'Reward levels only',value:'ROLE_REWARDS_ONLY'}).setRequired(false)))
-.addSubcommand(s=>s.setName('rank').setDescription('View a member rank.').addUserOption(o=>o.setName('user').setDescription('Member to view.').setRequired(false)))
-.addSubcommand(s=>s.setName('leaderboard').setDescription('View the XP leaderboard.'))
-.addSubcommand(s=>s.setName('role-add').setDescription('Add a level role reward.').addIntegerOption(o=>o.setName('level').setDescription('Required level.').setMinValue(1).setRequired(true)).addRoleOption(o=>o.setName('role').setDescription('Role reward.').setRequired(true)))
-.addSubcommand(s=>s.setName('role-remove').setDescription('Remove a level reward.').addIntegerOption(o=>o.setName('level').setDescription('Level.').setMinValue(1).setRequired(true)).addRoleOption(o=>o.setName('role').setDescription('Specific role.').setRequired(false)))
-.addSubcommand(s=>s.setName('multiplier-add').setDescription('Add an XP multiplier role.').addRoleOption(o=>o.setName('role').setDescription('Multiplier role.').setRequired(true)).addNumberOption(o=>o.setName('multiplier').setDescription('XP multiplier.').setMinValue(.1).setMaxValue(100).setRequired(true)))
-.addSubcommand(s=>s.setName('multiplier-remove').setDescription('Remove an XP multiplier role.').addRoleOption(o=>o.setName('role').setDescription('Role.').setRequired(true)))
-.addSubcommand(s=>s.setName('multiplier-list').setDescription('List multiplier roles.'))
-.addSubcommand(s=>s.setName('ignored-channel-add').setDescription('Ignore a channel for XP.').addChannelOption(o=>o.setName('channel').setDescription('Channel.').addChannelTypes(ChannelType.GuildText).setRequired(true)))
-.addSubcommand(s=>s.setName('ignored-channel-remove').setDescription('Stop ignoring a channel.').addChannelOption(o=>o.setName('channel').setDescription('Channel.').addChannelTypes(ChannelType.GuildText).setRequired(true)))
-.addSubcommand(s=>s.setName('ignored-role-add').setDescription('Ignore a role for XP.').addRoleOption(o=>o.setName('role').setDescription('Role.').setRequired(true)))
-.addSubcommand(s=>s.setName('ignored-role-remove').setDescription('Stop ignoring a role.').addRoleOption(o=>o.setName('role').setDescription('Role.').setRequired(true)))
-.addSubcommand(s=>s.setName('set-xp').setDescription('Set a member XP.').addUserOption(o=>o.setName('user').setDescription('Member.').setRequired(true)).addIntegerOption(o=>o.setName('xp').setDescription('XP amount.').setMinValue(0).setRequired(true)))
-.addSubcommand(s=>s.setName('reset').setDescription('Reset a member XP.').addUserOption(o=>o.setName('user').setDescription('Member.').setRequired(true)))
-.addSubcommand(s=>s.setName('analyze').setDescription('Analyze the XP curve.').addIntegerOption(o=>o.setName('max_level').setDescription('Maximum level.').setMinValue(1).setMaxValue(1000).setRequired(false)).addNumberOption(o=>o.setName('multiplier').setDescription('Multiplier to model.').setMinValue(.1).setMaxValue(100).setRequired(false))),moduleKey:ModuleKeys.LEVELING,getActionKey(i){const s=i.options.getSubcommand();if(['rank','leaderboard'].includes(s))return ActionKeys.LevelingUse;if(['manager','multiplier-list','analyze'].includes(s))return ActionKeys.LevelingView;if(['set-xp','reset'].includes(s))return ActionKeys.LevelingAdjust;return ActionKeys.LevelingConfigure;},isPublic(i){return['rank','leaderboard'].includes(i.options.getSubcommand());},async execute(i,ctx){const s=i.options.getSubcommand();if(s==='manager')return replyPrivate(i,await levels.buildManagerPanel(i.guildId));if(s==='setup'){const c=await levels.saveConfig(i.guildId,{enabled:i.options.getBoolean('enabled')??undefined,xpMin:i.options.getInteger('xp_min')??undefined,xpMax:i.options.getInteger('xp_max')??undefined,cooldownSeconds:i.options.getInteger('cooldown')??undefined,minimumMessageLength:i.options.getInteger('minimum_length')??undefined,levelUpChannelId:i.options.getChannel('level_up_channel')?.id??undefined,levelUpMessage:i.options.getString('level_up_message')??undefined,levelUpAnnounceMode:i.options.getString('level_up_mode')??undefined});return replyPrivate(i,{embeds:[createSuccessEmbed('Leveling Configured',`Status: **${c.enabled?'Enabled':'Disabled'}**\nXP: **${c.xp_min}–${c.xp_max}**\nCooldown: **${c.cooldown_seconds}s**`)]});}if(s==='rank'){const u=i.options.getUser('user')||i.user;return replyPrivate(i,{embeds:[levels.buildRankEmbed(u,await levels.getRank(i.guildId,u.id))]});}if(s==='leaderboard')return replyPrivate(i,{embeds:[levels.buildLeaderboardEmbed(await levels.leaderboard(i.guildId))]});if(s==='role-add'){const l=i.options.getInteger('level',true),r=i.options.getRole('role',true);await levels.addRoleReward(i.guildId,l,r.id);return replyPrivate(i,{embeds:[createSuccessEmbed('Role Reward Added',`Level **${l}** → ${r}`)]});}if(s==='role-remove'){const l=i.options.getInteger('level',true),r=i.options.getRole('role');const rows=await levels.removeRoleReward(i.guildId,l,r?.id);return replyPrivate(i,{embeds:[rows.length?createSuccessEmbed('Role Reward Removed',`Removed **${rows.length}** reward(s).`):createWarningEmbed('No Reward Found','No matching active reward was found.')]});}if(s==='multiplier-add'){const r=i.options.getRole('role',true),m=i.options.getNumber('multiplier',true);await levels.addMultiplierRole(i.guildId,r.id,m);return replyPrivate(i,{embeds:[createSuccessEmbed('Multiplier Role Added',`${r} grants **${formatMultiplier(m)} XP**.`)]});}if(s==='multiplier-remove'){const r=i.options.getRole('role',true);return replyPrivate(i,{embeds:[await levels.removeMultiplierRole(i.guildId,r.id)?createSuccessEmbed('Multiplier Removed',`${r} no longer grants an XP multiplier.`):createWarningEmbed('Multiplier Not Found','No active multiplier was found.')]});}if(s==='multiplier-list'){const rs=await levels.listMultiplierRoles(i.guildId);return replyPrivate(i,{embeds:[createBaseEmbed({title:'XP Multiplier Roles',description:rs.length?rs.map(x=>`• <@&${x.role_id}> — **${formatMultiplier(x.multiplier)}**`).join('\n'):'No multiplier roles configured.',color:rs.length?SlickBotColors.INFO:SlickBotColors.WARNING})]});}if(s.startsWith('ignored-channel-')){const c=i.options.getChannel('channel',true);if(s.endsWith('add'))await levels.addIgnoredChannel(i.guildId,c.id);else await levels.removeIgnoredChannel(i.guildId,c.id);return replyPrivate(i,{embeds:[createSuccessEmbed('Ignored Channels Updated',`${c} ${s.endsWith('add')?'will not award':'can award'} XP.`)]});}if(s.startsWith('ignored-role-')){const r=i.options.getRole('role',true);if(s.endsWith('add'))await levels.addIgnoredRole(i.guildId,r.id);else await levels.removeIgnoredRole(i.guildId,r.id);return replyPrivate(i,{embeds:[createSuccessEmbed('Ignored Roles Updated',`${r} ${s.endsWith('add')?'will not award':'can award'} XP.`)]});}if(s==='set-xp'){const u=i.options.getUser('user',true),p=await levels.setXp(i.guildId,u,i.options.getInteger('xp',true));return replyPrivate(i,{embeds:[createSuccessEmbed('XP Updated',`${u} now has **${p.xp} XP** and is level **${p.level}**.`)]});}if(s==='reset'){const u=i.options.getUser('user',true);await levels.resetProfile(i.guildId,u.id);return replyPrivate(i,{embeds:[createSuccessEmbed('XP Reset',`${u}'s XP profile was reset.`)]});}const c=await levels.getConfig(i.guildId)||{xp_min:15,xp_max:25};const a=levels.buildXpAnalysis(c,i.options.getInteger('max_level')||100,i.options.getNumber('multiplier')||1);return replyPrivate(i,{embeds:[levels.buildXpAnalysisEmbed(a)],files:[new AttachmentBuilder(Buffer.from(levels.buildXpAnalysisCsv(a)),{name:'slickbot-xp-analysis.csv'})]});}};
+const { SlashCommandBuilder, ChannelType, AttachmentBuilder } = require('discord.js');
+const { ModuleKeys } = require('../modules/moduleRegistry');
+const { ActionKeys } = require('../modules/permissions/actionKeys');
+const { replyPrivate } = require('../utils/reply');
+const { createSuccessEmbed, createWarningEmbed, createBaseEmbed, SlickBotColors } = require('../modules/ui/uiService');
+const { LevelingService, formatMultiplier } = require('../modules/community/levelingService');
+
+const leveling = new LevelingService();
+
+module.exports = {
+  data: new SlashCommandBuilder()
+    .setName('level')
+    .setDescription('Manage SlickBot leveling and XP.')
+    .addSubcommand((sub) => sub.setName('manager').setDescription('Open the leveling manager.'))
+    .addSubcommand((sub) => sub.setName('setup').setDescription('Configure automatic message XP.')
+      .addBooleanOption((o) => o.setName('enabled').setDescription('Enable or disable XP awards.').setRequired(false))
+      .addIntegerOption((o) => o.setName('xp_min').setDescription('Minimum XP per eligible message.').setMinValue(1).setMaxValue(1000).setRequired(false))
+      .addIntegerOption((o) => o.setName('xp_max').setDescription('Maximum XP per eligible message.').setMinValue(1).setMaxValue(1000).setRequired(false))
+      .addIntegerOption((o) => o.setName('cooldown_seconds').setDescription('XP cooldown per user.').setMinValue(5).setMaxValue(86400).setRequired(false))
+      .addIntegerOption((o) => o.setName('minimum_length').setDescription('Minimum message length for XP.').setMinValue(1).setMaxValue(500).setRequired(false))
+      .addChannelOption((o) => o.setName('level_up_channel').setDescription('Channel for level-up announcements.').addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement).setRequired(false))
+      .addStringOption((o) => o.setName('level_up_message').setDescription('Supports {user}, {username}, {level}, {roles}, and {server}.').setMaxLength(1500).setRequired(false))
+      .addStringOption((o) => o.setName('level_up_mode').setDescription('Choose which level-ups are announced.').setRequired(false).addChoices(
+        { name: 'Announce every level', value: 'ALL_LEVELS' },
+        { name: 'Only announce levels with role rewards', value: 'ROLE_REWARDS_ONLY' }
+      )))
+    .addSubcommand((sub) => sub.setName('rank').setDescription('View a user’s XP rank.').addUserOption((o) => o.setName('user').setDescription('User to view. Defaults to you.').setRequired(false)))
+    .addSubcommand((sub) => sub.setName('leaderboard').setDescription('View the top XP users.'))
+    .addSubcommand((sub) => sub.setName('role-add').setDescription('Assign a role automatically at a level.')
+      .addIntegerOption((o) => o.setName('level').setDescription('Required level.').setMinValue(1).setMaxValue(10000).setRequired(true))
+      .addRoleOption((o) => o.setName('role').setDescription('Role to assign.').setRequired(true)))
+    .addSubcommand((sub) => sub.setName('role-remove').setDescription('Remove a level role reward.')
+      .addIntegerOption((o) => o.setName('level').setDescription('Reward level.').setMinValue(1).setMaxValue(10000).setRequired(true))
+      .addRoleOption((o) => o.setName('role').setDescription('Specific role to remove. Leave blank to remove all rewards at this level.').setRequired(false)))
+    .addSubcommand((sub) => sub.setName('multiplier-add').setDescription('Add or update an XP multiplier role.')
+      .addRoleOption((o) => o.setName('role').setDescription('Role that receives multiplied message XP.').setRequired(true))
+      .addNumberOption((o) => o.setName('multiplier').setDescription('XP multiplier, such as 1.5 or 2.').setMinValue(0.1).setMaxValue(100).setRequired(true)))
+    .addSubcommand((sub) => sub.setName('multiplier-remove').setDescription('Remove an XP multiplier role.')
+      .addRoleOption((o) => o.setName('role').setDescription('Multiplier role to remove.').setRequired(true)))
+    .addSubcommand((sub) => sub.setName('multiplier-list').setDescription('List configured XP multiplier roles.'))
+    .addSubcommand((sub) => sub.setName('analyze').setDescription('Analyze the XP curve and export all levels to CSV.')
+      .addIntegerOption((o) => o.setName('max_level').setDescription('Highest level to analyze. Defaults to 100.').setMinValue(1).setMaxValue(1000).setRequired(false))
+      .addNumberOption((o) => o.setName('multiplier').setDescription('Optional multiplier to use in message estimates.').setMinValue(0.1).setMaxValue(100).setRequired(false)))
+    .addSubcommand((sub) => sub.setName('ignored-channel-add').setDescription('Prevent XP in a channel.').addChannelOption((o) => o.setName('channel').setDescription('Channel to ignore.').addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement).setRequired(true)))
+    .addSubcommand((sub) => sub.setName('ignored-channel-remove').setDescription('Allow XP in a previously ignored channel.').addChannelOption((o) => o.setName('channel').setDescription('Channel to remove from the ignore list.').addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement).setRequired(true)))
+    .addSubcommand((sub) => sub.setName('ignored-role-add').setDescription('Prevent XP for members with a role.').addRoleOption((o) => o.setName('role').setDescription('Role to ignore.').setRequired(true)))
+    .addSubcommand((sub) => sub.setName('ignored-role-remove').setDescription('Remove a role from the XP ignore list.').addRoleOption((o) => o.setName('role').setDescription('Role to remove.').setRequired(true)))
+    .addSubcommand((sub) => sub.setName('set-xp').setDescription('Set a user’s total XP.').addUserOption((o) => o.setName('user').setDescription('User to update.').setRequired(true)).addIntegerOption((o) => o.setName('xp').setDescription('New total XP.').setMinValue(0).setMaxValue(2147483647).setRequired(true)))
+    .addSubcommand((sub) => sub.setName('reset').setDescription('Reset a user’s XP profile.').addUserOption((o) => o.setName('user').setDescription('User to reset.').setRequired(true)).addBooleanOption((o) => o.setName('confirm').setDescription('Must be true to reset the profile.').setRequired(true))),
+  moduleKey: ModuleKeys.LEVELING,
+  actionKey: ActionKeys.LevelingView,
+  getActionKey(interaction) {
+    const sub = interaction.options.getSubcommand();
+    if (sub === 'rank' || sub === 'leaderboard') return ActionKeys.LevelingUse;
+    if (sub === 'manager' || sub === 'multiplier-list' || sub === 'analyze') return ActionKeys.LevelingView;
+    if (sub === 'set-xp' || sub === 'reset') return ActionKeys.LevelingAdjust;
+    return ActionKeys.LevelingConfigure;
+  },
+  isPublic(interaction) {
+    return ['rank', 'leaderboard'].includes(interaction.options.getSubcommand());
+  },
+  async execute(interaction, ctx) {
+    const sub = interaction.options.getSubcommand();
+    if (sub === 'manager') return replyPrivate(interaction, await leveling.buildManagerPanel(interaction.guildId));
+
+    if (sub === 'setup') {
+      const config = await leveling.saveConfig(interaction.guildId, {
+        enabled: interaction.options.getBoolean('enabled') ?? undefined,
+        xpMin: interaction.options.getInteger('xp_min') ?? undefined,
+        xpMax: interaction.options.getInteger('xp_max') ?? undefined,
+        cooldownSeconds: interaction.options.getInteger('cooldown_seconds') ?? undefined,
+        minimumMessageLength: interaction.options.getInteger('minimum_length') ?? undefined,
+        levelUpChannelId: interaction.options.getChannel('level_up_channel')?.id,
+        levelUpMessage: interaction.options.getString('level_up_message') ?? undefined,
+        levelUpAnnounceMode: interaction.options.getString('level_up_mode') ?? undefined
+      });
+      await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'leveling-config', title: 'Leveling Config Updated', body: `Updated By: <@${interaction.user.id}>\nXP: **${config.xp_min}–${config.xp_max}**\nCooldown: **${config.cooldown_seconds}s**\nAnnouncements: **${config.level_up_announce_mode === 'ROLE_REWARDS_ONLY' ? 'Reward levels only' : 'All levels'}**`, actorUserId: interaction.user.id });
+      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Leveling Configuration Saved', `Message XP is **${config.enabled ? 'enabled' : 'disabled'}**.\nXP Range: **${config.xp_min}–${config.xp_max}**\nCooldown: **${config.cooldown_seconds}s**\nAnnouncements: **${config.level_up_announce_mode === 'ROLE_REWARDS_ONLY' ? 'Reward levels only' : 'All levels'}**`)] });
+    }
+
+    if (sub === 'rank') {
+      const user = interaction.options.getUser('user') || interaction.user;
+      return replyPrivate(interaction, { embeds: [leveling.buildRankEmbed(user, await leveling.getRank(interaction.guildId, user.id))], deleteAfterSeconds: 15 });
+    }
+    if (sub === 'leaderboard') return replyPrivate(interaction, { embeds: [leveling.buildLeaderboardEmbed(await leveling.leaderboard(interaction.guildId, 10))], deleteAfterSeconds: 20 });
+
+    if (sub === 'role-add') {
+      const level = interaction.options.getInteger('level', true);
+      const role = interaction.options.getRole('role', true);
+      await leveling.addRoleReward(interaction.guildId, level, role.id);
+      await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'leveling-config', title: 'Level Role Added', body: `Level: **${level}**\nRole: ${role}\nUpdated By: <@${interaction.user.id}>`, actorUserId: interaction.user.id }).catch(() => {});
+      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Level Role Added', `${role} will be assigned at level **${level}**.`)] });
+    }
+    if (sub === 'role-remove') {
+      const level = interaction.options.getInteger('level', true);
+      const role = interaction.options.getRole('role');
+      const removed = await leveling.removeRoleReward(interaction.guildId, level, role?.id || null);
+      return replyPrivate(interaction, { embeds: [removed.length ? createSuccessEmbed('Level Role Removed', `Removed **${removed.length}** reward(s) at level **${level}**.`) : createWarningEmbed('No Reward Found', 'No matching active level-role reward was found.')] });
+    }
+
+    if (sub === 'multiplier-add') {
+      const role = interaction.options.getRole('role', true);
+      const multiplier = interaction.options.getNumber('multiplier', true);
+      const saved = await leveling.addMultiplierRole(interaction.guildId, role.id, multiplier);
+      await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'leveling-config', title: 'XP Multiplier Role Saved', body: `Role: ${role}\nMultiplier: **${formatMultiplier(saved.multiplier)}**\nUpdated By: <@${interaction.user.id}>`, actorUserId: interaction.user.id }).catch(() => {});
+      return replyPrivate(interaction, { embeds: [createSuccessEmbed('XP Multiplier Saved', `${role} now earns **${formatMultiplier(saved.multiplier)} XP** per eligible message. If a user has multiple multiplier roles, the highest multiplier is used.`)] });
+    }
+    if (sub === 'multiplier-remove') {
+      const role = interaction.options.getRole('role', true);
+      const removed = await leveling.removeMultiplierRole(interaction.guildId, role.id);
+      return replyPrivate(interaction, { embeds: [removed ? createSuccessEmbed('XP Multiplier Removed', `${role} no longer provides an XP multiplier.`) : createWarningEmbed('Multiplier Not Found', `${role} is not an active multiplier role.`)] });
+    }
+    if (sub === 'multiplier-list') {
+      const multipliers = await leveling.listMultiplierRoles(interaction.guildId);
+      return replyPrivate(interaction, { embeds: [createBaseEmbed({
+        title: 'SlickBot XP Multiplier Roles',
+        description: multipliers.length
+          ? multipliers.map((item) => `<@&${item.role_id}> — **${formatMultiplier(item.multiplier)} XP**`).join('\n')
+          : 'No XP multiplier roles are configured.',
+        color: multipliers.length ? SlickBotColors.PRIMARY : SlickBotColors.WARNING
+      })] });
+    }
+
+    if (sub === 'analyze') {
+      const config = await leveling.getConfig(interaction.guildId) || await leveling.saveConfig(interaction.guildId, {});
+      const maxLevel = interaction.options.getInteger('max_level') || 100;
+      const multiplier = interaction.options.getNumber('multiplier') || 1;
+      const analysis = leveling.buildXpAnalysis(config, maxLevel, multiplier);
+      const csv = leveling.buildXpAnalysisCsv(analysis);
+      const attachment = new AttachmentBuilder(Buffer.from(csv, 'utf8'), { name: `slickbot-xp-levels-1-${analysis.maxLevel}.csv` });
+      return replyPrivate(interaction, { embeds: [leveling.buildXpAnalysisEmbed(analysis)], files: [attachment] });
+    }
+
+    if (sub === 'ignored-channel-add' || sub === 'ignored-channel-remove') {
+      const channel = interaction.options.getChannel('channel', true);
+      if (sub.endsWith('add')) await leveling.addIgnoredChannel(interaction.guildId, channel.id); else await leveling.removeIgnoredChannel(interaction.guildId, channel.id);
+      return replyPrivate(interaction, { embeds: [createSuccessEmbed('XP Channel List Updated', `${channel} was ${sub.endsWith('add') ? 'added to' : 'removed from'} the ignored channel list.`)] });
+    }
+    if (sub === 'ignored-role-add' || sub === 'ignored-role-remove') {
+      const role = interaction.options.getRole('role', true);
+      if (sub.endsWith('add')) await leveling.addIgnoredRole(interaction.guildId, role.id); else await leveling.removeIgnoredRole(interaction.guildId, role.id);
+      return replyPrivate(interaction, { embeds: [createSuccessEmbed('XP Role List Updated', `${role} was ${sub.endsWith('add') ? 'added to' : 'removed from'} the ignored role list.`)] });
+    }
+
+    if (sub === 'set-xp') {
+      const user = interaction.options.getUser('user', true);
+      const xp = interaction.options.getInteger('xp', true);
+      const profile = await leveling.setXp(interaction.guildId, user, xp);
+      await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'leveling-adjustment', title: 'XP Adjusted', body: `User: <@${user.id}>\nXP: **${profile.xp}**\nLevel: **${profile.level}**\nUpdated By: <@${interaction.user.id}>`, actorUserId: interaction.user.id });
+      return replyPrivate(interaction, { embeds: [createSuccessEmbed('XP Updated', `${user} now has **${Number(profile.xp).toLocaleString()} XP** and is level **${profile.level}**.`)] });
+    }
+
+    if (sub === 'reset') {
+      const user = interaction.options.getUser('user', true);
+      if (!interaction.options.getBoolean('confirm', true)) return replyPrivate(interaction, { embeds: [createWarningEmbed('Confirmation Required', 'Set `confirm` to true to reset this XP profile.')] });
+      const removed = await leveling.resetProfile(interaction.guildId, user.id);
+      return replyPrivate(interaction, { embeds: [removed ? createSuccessEmbed('XP Profile Reset', `Reset the leveling profile for ${user}.`) : createBaseEmbed({ title: 'No XP Profile Found', description: `${user} does not have a leveling profile.`, color: SlickBotColors.WARNING })] });
+    }
+  }
+};

@@ -1,57 +1,272 @@
 const { ModuleKeys } = require('../moduleRegistry');
 
 const ActionKeys = Object.freeze({
-  BotPing: 'bot.ping', Setup: 'setup.run', TeamsManage: 'permissions.teams.manage', PermissionsPanel: 'permissions.panel', PermissionsManage: 'permissions.manage', PermissionsIgnore: 'permissions.ignore', ModulesManage: 'permissions.modules.manage',
-  LoggingConfigure: 'logging.configure', LoggingView: 'logging.view', StatusView: 'status.view', StatusManage: 'status.manage',
-  ModerationPanel: 'moderation.panel', ModerationWarn: 'moderation.warn', ModerationTimeout: 'moderation.timeout', ModerationUntimeout: 'moderation.untimeout', ModerationKick: 'moderation.kick', ModerationBan: 'moderation.ban', ModerationUnban: 'moderation.unban', ModerationMassBan: 'moderation.massban', CasesView: 'cases.view', CasesManage: 'cases.manage', UserNotesView: 'user-notes.view', UserNotesManage: 'user-notes.manage',
-  TicketsOpen: 'tickets.open', TicketsManager: 'tickets.manager', TicketsPostPanel: 'tickets.panel.post', TicketsConfigure: 'tickets.configure', TicketsPanel: 'tickets.panel', TicketsManage: 'tickets.manage', TicketsClaim: 'tickets.claim', TicketsClose: 'tickets.close',
-  ReportsSubmit: 'reports.submit', ReportsManager: 'reports.manager', ReportsPostPanel: 'reports.panel.post', ReportsConfigure: 'reports.configure', ReportsPanel: 'reports.panel', ReportsReview: 'reports.review', ReportsClaim: 'reports.claim', ReportsResolve: 'reports.resolve', ReportsDismiss: 'reports.dismiss', ReportsOpenTicket: 'reports.open-ticket',
-  ApplicationsApply: 'applications.apply', ApplicationsManager: 'applications.manager', ApplicationsPostPanel: 'applications.panel.post', ApplicationsConfigure: 'applications.configure', ApplicationsPanel: 'applications.panel', ApplicationsReview: 'applications.review', ApplicationsApprove: 'applications.approve', ApplicationsDeny: 'applications.deny',
-  AppealsSubmit: 'appeals.submit', AppealsManager: 'appeals.manager', AppealsPostPanel: 'appeals.panel.post', AppealsConfigure: 'appeals.configure', AppealsPanel: 'appeals.panel', AppealsReview: 'appeals.review', AppealsApprove: 'appeals.approve', AppealsDeny: 'appeals.deny',
-  WelcomeView: 'welcome.view', WelcomeConfigure: 'welcome.configure', WelcomeTest: 'welcome.test',
-  RolePanelsView: 'reaction-roles.view', RolePanelsConfigure: 'reaction-roles.configure', RolePanelsPost: 'reaction-roles.panel.post', RolePanelsUse: 'reaction-roles.use',
-  GiveawaysView: 'giveaways.view', GiveawaysConfigure: 'giveaways.configure', GiveawaysCreate: 'giveaways.create', GiveawaysEnd: 'giveaways.end', GiveawaysReroll: 'giveaways.reroll', GiveawaysEnter: 'giveaways.enter',
-  BirthdaysUse: 'birthdays.use', BirthdaysView: 'birthdays.view', BirthdaysConfigure: 'birthdays.configure',
-  ScheduledMessagesView: 'scheduled-messages.view', ScheduledMessagesConfigure: 'scheduled-messages.configure', ScheduledMessagesCreate: 'scheduled-messages.create', ScheduledMessagesCancel: 'scheduled-messages.cancel', ScheduledMessagesSendNow: 'scheduled-messages.send-now',
-  ServerStatsView: 'server-stats.view', ServerStatsConfigure: 'server-stats.configure', ServerStatsRefresh: 'server-stats.refresh',
-  LevelingUse: 'leveling.use', LevelingView: 'leveling.view', LevelingConfigure: 'leveling.configure', LevelingAdjust: 'leveling.adjust',
-  JoinToCreateUse: 'join-to-create.use', JoinToCreateView: 'join-to-create.view', JoinToCreateConfigure: 'join-to-create.configure', JoinToCreateManage: 'join-to-create.manage',
-  PanelsConfigure: 'panels.configure', ServerReset: 'server.reset'
+  BotPing: 'bot.ping',
+  Setup: 'setup.run',
+  TeamsManage: 'permissions.teams.manage',
+  PermissionsPanel: 'permissions.panel',
+  PermissionsManage: 'permissions.manage',
+  PermissionsIgnore: 'permissions.ignore',
+  ModulesManage: 'permissions.modules.manage',
+  LoggingConfigure: 'logging.configure',
+  LoggingView: 'logging.view',
+  StatusView: 'status.view',
+  StatusManage: 'status.manage',
+
+  ModerationPanel: 'moderation.panel',
+  ModerationWarn: 'moderation.warn',
+  ModerationTimeout: 'moderation.timeout',
+  ModerationUntimeout: 'moderation.untimeout',
+  ModerationKick: 'moderation.kick',
+  ModerationBan: 'moderation.ban',
+  ModerationUnban: 'moderation.unban',
+  ModerationMassBan: 'moderation.massban',
+  CasesView: 'cases.view',
+  CasesManage: 'cases.manage',
+  UserNotesView: 'user-notes.view',
+  UserNotesManage: 'user-notes.manage',
+
+  TicketsOpen: 'tickets.open',
+  TicketsManager: 'tickets.manager',
+  TicketsPostPanel: 'tickets.panel.post',
+  TicketsConfigure: 'tickets.configure',
+  TicketsPanel: 'tickets.panel',
+  TicketsManage: 'tickets.manage',
+  TicketsClaim: 'tickets.claim',
+  TicketsClose: 'tickets.close',
+
+  ReportsSubmit: 'reports.submit',
+  ReportsManager: 'reports.manager',
+  ReportsPostPanel: 'reports.panel.post',
+  ReportsConfigure: 'reports.configure',
+  ReportsPanel: 'reports.panel',
+  ReportsReview: 'reports.review',
+  ReportsClaim: 'reports.claim',
+  ReportsResolve: 'reports.resolve',
+  ReportsDismiss: 'reports.dismiss',
+  ReportsOpenTicket: 'reports.open-ticket',
+
+  ApplicationsApply: 'applications.apply',
+  ApplicationsManager: 'applications.manager',
+  ApplicationsPostPanel: 'applications.panel.post',
+  ApplicationsConfigure: 'applications.configure',
+  ApplicationsPanel: 'applications.panel',
+  ApplicationsReview: 'applications.review',
+  ApplicationsApprove: 'applications.approve',
+  ApplicationsDeny: 'applications.deny',
+
+  AppealsSubmit: 'appeals.submit',
+  AppealsManager: 'appeals.manager',
+  AppealsPostPanel: 'appeals.panel.post',
+  AppealsConfigure: 'appeals.configure',
+  AppealsPanel: 'appeals.panel',
+  AppealsReview: 'appeals.review',
+  AppealsApprove: 'appeals.approve',
+  AppealsDeny: 'appeals.deny',
+
+  WelcomeView: 'welcome.view',
+  WelcomeConfigure: 'welcome.configure',
+  WelcomeTest: 'welcome.test',
+
+  RolePanelsView: 'reaction-roles.view',
+  RolePanelsConfigure: 'reaction-roles.configure',
+  RolePanelsPost: 'reaction-roles.panel.post',
+  RolePanelsUse: 'reaction-roles.use',
+
+  GiveawaysView: 'giveaways.view',
+  GiveawaysConfigure: 'giveaways.configure',
+  GiveawaysCreate: 'giveaways.create',
+  GiveawaysEnd: 'giveaways.end',
+  GiveawaysReroll: 'giveaways.reroll',
+  GiveawaysEnter: 'giveaways.enter',
+
+  BirthdaysUse: 'birthdays.use',
+  BirthdaysView: 'birthdays.view',
+  BirthdaysConfigure: 'birthdays.configure',
+
+  ScheduledMessagesView: 'scheduled-messages.view',
+  ScheduledMessagesConfigure: 'scheduled-messages.configure',
+  ScheduledMessagesCreate: 'scheduled-messages.create',
+  ScheduledMessagesCancel: 'scheduled-messages.cancel',
+  ScheduledMessagesSendNow: 'scheduled-messages.send-now',
+
+  ServerStatsView: 'server-stats.view',
+  ServerStatsConfigure: 'server-stats.configure',
+  ServerStatsRefresh: 'server-stats.refresh',
+
+  LevelingUse: 'leveling.use',
+  LevelingView: 'leveling.view',
+  LevelingConfigure: 'leveling.configure',
+  LevelingAdjust: 'leveling.adjust',
+
+  PanelsConfigure: 'panels.configure',
+
+  ServerReset: 'server.reset'
 });
 
-const PermissionLevels = Object.freeze({ EVERYONE: 'EVERYONE', MODERATOR: 'MODERATOR', SENIOR_MODERATOR: 'SENIOR_MODERATOR', OWNER: 'OWNER' });
-const permissionLevelRank = Object.freeze({ EVERYONE: 0, MODERATOR: 1, SENIOR_MODERATOR: 2, OWNER: 3 });
+const PermissionLevels = Object.freeze({
+  EVERYONE: 'EVERYONE',
+  MODERATOR: 'MODERATOR',
+  SENIOR_MODERATOR: 'SENIOR_MODERATOR',
+  OWNER: 'OWNER'
+});
+
+const permissionLevelRank = Object.freeze({
+  EVERYONE: 0,
+  MODERATOR: 1,
+  SENIOR_MODERATOR: 2,
+  OWNER: 3
+});
 
 const defaultActionLevels = Object.freeze({
   [ActionKeys.BotPing]: PermissionLevels.EVERYONE,
-  [ActionKeys.Setup]: PermissionLevels.SENIOR_MODERATOR, [ActionKeys.TeamsManage]: PermissionLevels.OWNER, [ActionKeys.PermissionsPanel]: PermissionLevels.SENIOR_MODERATOR, [ActionKeys.PermissionsManage]: PermissionLevels.OWNER, [ActionKeys.PermissionsIgnore]: PermissionLevels.SENIOR_MODERATOR, [ActionKeys.ModulesManage]: PermissionLevels.SENIOR_MODERATOR,
-  [ActionKeys.LoggingView]: PermissionLevels.MODERATOR, [ActionKeys.LoggingConfigure]: PermissionLevels.SENIOR_MODERATOR, [ActionKeys.StatusView]: PermissionLevels.MODERATOR, [ActionKeys.StatusManage]: PermissionLevels.SENIOR_MODERATOR,
-  [ActionKeys.ModerationPanel]: PermissionLevels.MODERATOR, [ActionKeys.ModerationWarn]: PermissionLevels.MODERATOR, [ActionKeys.ModerationTimeout]: PermissionLevels.MODERATOR, [ActionKeys.ModerationUntimeout]: PermissionLevels.MODERATOR, [ActionKeys.ModerationKick]: PermissionLevels.SENIOR_MODERATOR, [ActionKeys.ModerationBan]: PermissionLevels.SENIOR_MODERATOR, [ActionKeys.ModerationUnban]: PermissionLevels.SENIOR_MODERATOR, [ActionKeys.ModerationMassBan]: PermissionLevels.OWNER, [ActionKeys.CasesView]: PermissionLevels.MODERATOR, [ActionKeys.CasesManage]: PermissionLevels.SENIOR_MODERATOR, [ActionKeys.UserNotesView]: PermissionLevels.MODERATOR, [ActionKeys.UserNotesManage]: PermissionLevels.MODERATOR,
-  [ActionKeys.TicketsOpen]: PermissionLevels.EVERYONE, [ActionKeys.TicketsPanel]: PermissionLevels.MODERATOR, [ActionKeys.TicketsManager]: PermissionLevels.MODERATOR, [ActionKeys.TicketsPostPanel]: PermissionLevels.SENIOR_MODERATOR, [ActionKeys.TicketsConfigure]: PermissionLevels.SENIOR_MODERATOR, [ActionKeys.TicketsManage]: PermissionLevels.MODERATOR, [ActionKeys.TicketsClaim]: PermissionLevels.MODERATOR, [ActionKeys.TicketsClose]: PermissionLevels.MODERATOR,
-  [ActionKeys.ReportsSubmit]: PermissionLevels.EVERYONE, [ActionKeys.ReportsPanel]: PermissionLevels.MODERATOR, [ActionKeys.ReportsManager]: PermissionLevels.MODERATOR, [ActionKeys.ReportsPostPanel]: PermissionLevels.SENIOR_MODERATOR, [ActionKeys.ReportsConfigure]: PermissionLevels.SENIOR_MODERATOR, [ActionKeys.ReportsReview]: PermissionLevels.MODERATOR, [ActionKeys.ReportsClaim]: PermissionLevels.MODERATOR, [ActionKeys.ReportsResolve]: PermissionLevels.MODERATOR, [ActionKeys.ReportsDismiss]: PermissionLevels.MODERATOR, [ActionKeys.ReportsOpenTicket]: PermissionLevels.MODERATOR,
-  [ActionKeys.ApplicationsApply]: PermissionLevels.EVERYONE, [ActionKeys.ApplicationsPanel]: PermissionLevels.MODERATOR, [ActionKeys.ApplicationsManager]: PermissionLevels.MODERATOR, [ActionKeys.ApplicationsPostPanel]: PermissionLevels.SENIOR_MODERATOR, [ActionKeys.ApplicationsConfigure]: PermissionLevels.SENIOR_MODERATOR, [ActionKeys.ApplicationsReview]: PermissionLevels.MODERATOR, [ActionKeys.ApplicationsApprove]: PermissionLevels.SENIOR_MODERATOR, [ActionKeys.ApplicationsDeny]: PermissionLevels.SENIOR_MODERATOR,
-  [ActionKeys.AppealsSubmit]: PermissionLevels.EVERYONE, [ActionKeys.AppealsPanel]: PermissionLevels.MODERATOR, [ActionKeys.AppealsManager]: PermissionLevels.MODERATOR, [ActionKeys.AppealsPostPanel]: PermissionLevels.SENIOR_MODERATOR, [ActionKeys.AppealsConfigure]: PermissionLevels.SENIOR_MODERATOR, [ActionKeys.AppealsReview]: PermissionLevels.MODERATOR, [ActionKeys.AppealsApprove]: PermissionLevels.SENIOR_MODERATOR, [ActionKeys.AppealsDeny]: PermissionLevels.SENIOR_MODERATOR,
-  [ActionKeys.WelcomeView]: PermissionLevels.MODERATOR, [ActionKeys.WelcomeConfigure]: PermissionLevels.SENIOR_MODERATOR, [ActionKeys.WelcomeTest]: PermissionLevels.SENIOR_MODERATOR,
-  [ActionKeys.RolePanelsView]: PermissionLevels.MODERATOR, [ActionKeys.RolePanelsConfigure]: PermissionLevels.SENIOR_MODERATOR, [ActionKeys.RolePanelsPost]: PermissionLevels.SENIOR_MODERATOR, [ActionKeys.RolePanelsUse]: PermissionLevels.EVERYONE, [ActionKeys.PanelsConfigure]: PermissionLevels.SENIOR_MODERATOR,
-  [ActionKeys.GiveawaysView]: PermissionLevels.MODERATOR, [ActionKeys.GiveawaysConfigure]: PermissionLevels.SENIOR_MODERATOR, [ActionKeys.GiveawaysCreate]: PermissionLevels.MODERATOR, [ActionKeys.GiveawaysEnd]: PermissionLevels.MODERATOR, [ActionKeys.GiveawaysReroll]: PermissionLevels.MODERATOR, [ActionKeys.GiveawaysEnter]: PermissionLevels.EVERYONE,
-  [ActionKeys.BirthdaysUse]: PermissionLevels.EVERYONE, [ActionKeys.BirthdaysView]: PermissionLevels.MODERATOR, [ActionKeys.BirthdaysConfigure]: PermissionLevels.SENIOR_MODERATOR,
-  [ActionKeys.ScheduledMessagesView]: PermissionLevels.MODERATOR, [ActionKeys.ScheduledMessagesConfigure]: PermissionLevels.SENIOR_MODERATOR, [ActionKeys.ScheduledMessagesCreate]: PermissionLevels.SENIOR_MODERATOR, [ActionKeys.ScheduledMessagesCancel]: PermissionLevels.SENIOR_MODERATOR, [ActionKeys.ScheduledMessagesSendNow]: PermissionLevels.SENIOR_MODERATOR,
-  [ActionKeys.ServerStatsView]: PermissionLevels.MODERATOR, [ActionKeys.ServerStatsConfigure]: PermissionLevels.SENIOR_MODERATOR, [ActionKeys.ServerStatsRefresh]: PermissionLevels.MODERATOR,
-  [ActionKeys.LevelingUse]: PermissionLevels.EVERYONE, [ActionKeys.LevelingView]: PermissionLevels.MODERATOR, [ActionKeys.LevelingConfigure]: PermissionLevels.SENIOR_MODERATOR, [ActionKeys.LevelingAdjust]: PermissionLevels.SENIOR_MODERATOR,
-  [ActionKeys.JoinToCreateUse]: PermissionLevels.EVERYONE, [ActionKeys.JoinToCreateView]: PermissionLevels.MODERATOR, [ActionKeys.JoinToCreateConfigure]: PermissionLevels.SENIOR_MODERATOR, [ActionKeys.JoinToCreateManage]: PermissionLevels.SENIOR_MODERATOR,
+
+  [ActionKeys.Setup]: PermissionLevels.SENIOR_MODERATOR,
+  [ActionKeys.TeamsManage]: PermissionLevels.OWNER,
+  [ActionKeys.PermissionsPanel]: PermissionLevels.SENIOR_MODERATOR,
+  [ActionKeys.PermissionsManage]: PermissionLevels.OWNER,
+  [ActionKeys.PermissionsIgnore]: PermissionLevels.SENIOR_MODERATOR,
+  [ActionKeys.ModulesManage]: PermissionLevels.SENIOR_MODERATOR,
+
+  [ActionKeys.LoggingView]: PermissionLevels.MODERATOR,
+  [ActionKeys.LoggingConfigure]: PermissionLevels.SENIOR_MODERATOR,
+  [ActionKeys.StatusView]: PermissionLevels.MODERATOR,
+  [ActionKeys.StatusManage]: PermissionLevels.SENIOR_MODERATOR,
+
+  [ActionKeys.ModerationPanel]: PermissionLevels.MODERATOR,
+  [ActionKeys.ModerationWarn]: PermissionLevels.MODERATOR,
+  [ActionKeys.ModerationTimeout]: PermissionLevels.MODERATOR,
+  [ActionKeys.ModerationUntimeout]: PermissionLevels.MODERATOR,
+  [ActionKeys.ModerationKick]: PermissionLevels.SENIOR_MODERATOR,
+  [ActionKeys.ModerationBan]: PermissionLevels.SENIOR_MODERATOR,
+  [ActionKeys.ModerationUnban]: PermissionLevels.SENIOR_MODERATOR,
+  [ActionKeys.ModerationMassBan]: PermissionLevels.OWNER,
+  [ActionKeys.CasesView]: PermissionLevels.MODERATOR,
+  [ActionKeys.CasesManage]: PermissionLevels.SENIOR_MODERATOR,
+  [ActionKeys.UserNotesView]: PermissionLevels.MODERATOR,
+  [ActionKeys.UserNotesManage]: PermissionLevels.MODERATOR,
+
+  [ActionKeys.TicketsOpen]: PermissionLevels.EVERYONE,
+  [ActionKeys.TicketsPanel]: PermissionLevels.MODERATOR,
+  [ActionKeys.TicketsManager]: PermissionLevels.MODERATOR,
+  [ActionKeys.TicketsPostPanel]: PermissionLevels.SENIOR_MODERATOR,
+  [ActionKeys.TicketsConfigure]: PermissionLevels.SENIOR_MODERATOR,
+  [ActionKeys.TicketsManage]: PermissionLevels.MODERATOR,
+  [ActionKeys.TicketsClaim]: PermissionLevels.MODERATOR,
+  [ActionKeys.TicketsClose]: PermissionLevels.MODERATOR,
+
+  [ActionKeys.ReportsSubmit]: PermissionLevels.EVERYONE,
+  [ActionKeys.ReportsPanel]: PermissionLevels.MODERATOR,
+  [ActionKeys.ReportsManager]: PermissionLevels.MODERATOR,
+  [ActionKeys.ReportsPostPanel]: PermissionLevels.SENIOR_MODERATOR,
+  [ActionKeys.ReportsConfigure]: PermissionLevels.SENIOR_MODERATOR,
+  [ActionKeys.ReportsReview]: PermissionLevels.MODERATOR,
+  [ActionKeys.ReportsClaim]: PermissionLevels.MODERATOR,
+  [ActionKeys.ReportsResolve]: PermissionLevels.MODERATOR,
+  [ActionKeys.ReportsDismiss]: PermissionLevels.MODERATOR,
+  [ActionKeys.ReportsOpenTicket]: PermissionLevels.MODERATOR,
+
+  [ActionKeys.ApplicationsApply]: PermissionLevels.EVERYONE,
+  [ActionKeys.ApplicationsPanel]: PermissionLevels.MODERATOR,
+  [ActionKeys.ApplicationsManager]: PermissionLevels.MODERATOR,
+  [ActionKeys.ApplicationsPostPanel]: PermissionLevels.SENIOR_MODERATOR,
+  [ActionKeys.ApplicationsConfigure]: PermissionLevels.SENIOR_MODERATOR,
+  [ActionKeys.ApplicationsReview]: PermissionLevels.MODERATOR,
+  [ActionKeys.ApplicationsApprove]: PermissionLevels.SENIOR_MODERATOR,
+  [ActionKeys.ApplicationsDeny]: PermissionLevels.SENIOR_MODERATOR,
+
+  [ActionKeys.AppealsSubmit]: PermissionLevels.EVERYONE,
+  [ActionKeys.AppealsPanel]: PermissionLevels.MODERATOR,
+  [ActionKeys.AppealsManager]: PermissionLevels.MODERATOR,
+  [ActionKeys.AppealsPostPanel]: PermissionLevels.SENIOR_MODERATOR,
+  [ActionKeys.AppealsConfigure]: PermissionLevels.SENIOR_MODERATOR,
+  [ActionKeys.AppealsReview]: PermissionLevels.MODERATOR,
+  [ActionKeys.AppealsApprove]: PermissionLevels.SENIOR_MODERATOR,
+  [ActionKeys.AppealsDeny]: PermissionLevels.SENIOR_MODERATOR,
+
+  [ActionKeys.WelcomeView]: PermissionLevels.MODERATOR,
+  [ActionKeys.WelcomeConfigure]: PermissionLevels.SENIOR_MODERATOR,
+  [ActionKeys.WelcomeTest]: PermissionLevels.SENIOR_MODERATOR,
+
+  [ActionKeys.RolePanelsView]: PermissionLevels.MODERATOR,
+  [ActionKeys.RolePanelsConfigure]: PermissionLevels.SENIOR_MODERATOR,
+  [ActionKeys.RolePanelsPost]: PermissionLevels.SENIOR_MODERATOR,
+  [ActionKeys.RolePanelsUse]: PermissionLevels.EVERYONE,
+  [ActionKeys.PanelsConfigure]: PermissionLevels.SENIOR_MODERATOR,
+
+  [ActionKeys.GiveawaysView]: PermissionLevels.MODERATOR,
+  [ActionKeys.GiveawaysConfigure]: PermissionLevels.SENIOR_MODERATOR,
+  [ActionKeys.GiveawaysCreate]: PermissionLevels.MODERATOR,
+  [ActionKeys.GiveawaysEnd]: PermissionLevels.MODERATOR,
+  [ActionKeys.GiveawaysReroll]: PermissionLevels.MODERATOR,
+  [ActionKeys.GiveawaysEnter]: PermissionLevels.EVERYONE,
+
+  [ActionKeys.BirthdaysUse]: PermissionLevels.EVERYONE,
+  [ActionKeys.BirthdaysView]: PermissionLevels.MODERATOR,
+  [ActionKeys.BirthdaysConfigure]: PermissionLevels.SENIOR_MODERATOR,
+
+  [ActionKeys.ScheduledMessagesView]: PermissionLevels.MODERATOR,
+  [ActionKeys.ScheduledMessagesConfigure]: PermissionLevels.SENIOR_MODERATOR,
+  [ActionKeys.ScheduledMessagesCreate]: PermissionLevels.SENIOR_MODERATOR,
+  [ActionKeys.ScheduledMessagesCancel]: PermissionLevels.SENIOR_MODERATOR,
+  [ActionKeys.ScheduledMessagesSendNow]: PermissionLevels.SENIOR_MODERATOR,
+
+  [ActionKeys.ServerStatsView]: PermissionLevels.MODERATOR,
+  [ActionKeys.ServerStatsConfigure]: PermissionLevels.SENIOR_MODERATOR,
+  [ActionKeys.ServerStatsRefresh]: PermissionLevels.MODERATOR,
+
+  [ActionKeys.LevelingUse]: PermissionLevels.EVERYONE,
+  [ActionKeys.LevelingView]: PermissionLevels.MODERATOR,
+  [ActionKeys.LevelingConfigure]: PermissionLevels.SENIOR_MODERATOR,
+  [ActionKeys.LevelingAdjust]: PermissionLevels.SENIOR_MODERATOR,
+
   [ActionKeys.ServerReset]: PermissionLevels.OWNER
 });
 
 const defaultModuleLevels = Object.freeze({
-  [ModuleKeys.PERMISSIONS]: PermissionLevels.EVERYONE, [ModuleKeys.LOGGING]: PermissionLevels.MODERATOR, [ModuleKeys.STATUS]: PermissionLevels.MODERATOR, [ModuleKeys.MODERATION]: PermissionLevels.MODERATOR,
-  [ModuleKeys.TICKETS]: PermissionLevels.EVERYONE, [ModuleKeys.REPORTS]: PermissionLevels.EVERYONE, [ModuleKeys.APPLICATIONS]: PermissionLevels.EVERYONE, [ModuleKeys.APPEALS]: PermissionLevels.EVERYONE,
-  [ModuleKeys.SCHEDULED_MESSAGES]: PermissionLevels.SENIOR_MODERATOR, [ModuleKeys.WELCOME]: PermissionLevels.MODERATOR, [ModuleKeys.REACTION_ROLES]: PermissionLevels.EVERYONE, [ModuleKeys.GIVEAWAYS]: PermissionLevels.MODERATOR,
-  [ModuleKeys.BIRTHDAYS]: PermissionLevels.EVERYONE, [ModuleKeys.LEVELING]: PermissionLevels.EVERYONE, [ModuleKeys.SERVER_STATS]: PermissionLevels.MODERATOR, [ModuleKeys.JOIN_TO_CREATE]: PermissionLevels.EVERYONE,
-  [ModuleKeys.CUSTOM_COMMANDS]: PermissionLevels.EVERYONE, [ModuleKeys.UTILITY]: PermissionLevels.EVERYONE
+  [ModuleKeys.PERMISSIONS]: PermissionLevels.EVERYONE,
+  [ModuleKeys.LOGGING]: PermissionLevels.MODERATOR,
+  [ModuleKeys.STATUS]: PermissionLevels.MODERATOR,
+  [ModuleKeys.MODERATION]: PermissionLevels.MODERATOR,
+  [ModuleKeys.TICKETS]: PermissionLevels.EVERYONE,
+  [ModuleKeys.REPORTS]: PermissionLevels.EVERYONE,
+  [ModuleKeys.APPLICATIONS]: PermissionLevels.EVERYONE,
+  [ModuleKeys.APPEALS]: PermissionLevels.EVERYONE,
+  [ModuleKeys.SCHEDULED_MESSAGES]: PermissionLevels.SENIOR_MODERATOR,
+  [ModuleKeys.WELCOME]: PermissionLevels.MODERATOR,
+  [ModuleKeys.REACTION_ROLES]: PermissionLevels.EVERYONE,
+  [ModuleKeys.GIVEAWAYS]: PermissionLevels.MODERATOR,
+  [ModuleKeys.BIRTHDAYS]: PermissionLevels.EVERYONE,
+  [ModuleKeys.LEVELING]: PermissionLevels.EVERYONE,
+  [ModuleKeys.SERVER_STATS]: PermissionLevels.MODERATOR,
+  [ModuleKeys.JOIN_TO_CREATE]: PermissionLevels.EVERYONE,
+  [ModuleKeys.CUSTOM_COMMANDS]: PermissionLevels.EVERYONE,
+  [ModuleKeys.UTILITY]: PermissionLevels.EVERYONE
 });
 
-const defaultPublicActions = Object.freeze([ActionKeys.BotPing, ActionKeys.TicketsOpen, ActionKeys.ReportsSubmit, ActionKeys.ApplicationsApply, ActionKeys.AppealsSubmit, ActionKeys.RolePanelsUse, ActionKeys.GiveawaysEnter, ActionKeys.BirthdaysUse, ActionKeys.LevelingUse, ActionKeys.JoinToCreateUse]);
-const defaultTeamPermissions = Object.freeze(Object.values(ActionKeys));
-const PERMISSION_DEFAULTS_VERSION = '0.7.0';
+const defaultPublicActions = Object.freeze([
+  ActionKeys.BotPing,
+  ActionKeys.TicketsOpen,
+  ActionKeys.ReportsSubmit,
+  ActionKeys.ApplicationsApply,
+  ActionKeys.AppealsSubmit,
+  ActionKeys.RolePanelsUse,
+  ActionKeys.GiveawaysEnter,
+  ActionKeys.BirthdaysUse,
+  ActionKeys.LevelingUse
+]);
 
-module.exports = { ActionKeys, defaultTeamPermissions, PermissionLevels, permissionLevelRank, defaultActionLevels, defaultModuleLevels, defaultPublicActions, PERMISSION_DEFAULTS_VERSION };
+const defaultTeamPermissions = Object.freeze(Object.values(ActionKeys));
+
+const PERMISSION_DEFAULTS_VERSION = '0.6.1';
+
+module.exports = {
+  ActionKeys,
+  defaultTeamPermissions,
+  PermissionLevels,
+  permissionLevelRank,
+  defaultActionLevels,
+  defaultModuleLevels,
+  defaultPublicActions,
+  PERMISSION_DEFAULTS_VERSION
+};

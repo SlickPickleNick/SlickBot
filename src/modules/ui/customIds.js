@@ -1,3 +1,101 @@
 const CustomIds = Object.freeze({
-SetupRefresh:'slickbot:setup:refresh',SetupModules:'slickbot:setup:modules',SetupLogging:'slickbot:setup:logging',SetupStatus:'slickbot:setup:status',SetupTeams:'slickbot:setup:teams',SetupPermissions:'slickbot:setup:permissions',ResetConfirm:'slickbot:reset:confirm',ResetCancel:'slickbot:reset:cancel',PermissionsRefresh:'slickbot:permissions:refresh',PermissionsModuleSelect:'slickbot:permissions:module-select',PermissionsCommandSelect:'slickbot:permissions:command-select',ApplicationCancelPrefix:'slickbot:application:cancel:',ApplicationSubmitPrefix:'slickbot:application:submit:',SetupModeration:'slickbot:setup:moderation',SetupSupport:'slickbot:setup:support',SetupCommunity:'slickbot:setup:community',WelcomeRefresh:'slickbot:welcome:refresh',RolePanelsRefresh:'slickbot:rolepanels:refresh',GiveawaysRefresh:'slickbot:giveaways:refresh',BirthdaysRefresh:'slickbot:birthdays:refresh',ScheduledMessagesRefresh:'slickbot:scheduled-messages:refresh',ServerStatsRefresh:'slickbot:server-stats:refresh',LevelingRefresh:'slickbot:leveling:refresh',JoinToCreateRefresh:'slickbot:join-to-create:refresh',ModulesSelect:'slickbot:modules:select',ModulesRefresh:'slickbot:modules:refresh',LoggingRefresh:'slickbot:logging:refresh',LoggingFlush:'slickbot:logging:flush',LoggingTest:'slickbot:logging:test',StatusRefresh:'slickbot:status:refresh',StatusQuickOnline:'slickbot:status:quick-online',StatusQuickIdle:'slickbot:status:quick-idle',StatusQuickDnd:'slickbot:status:quick-dnd',StatusClear:'slickbot:status:clear',ModerationRefresh:'slickbot:moderation:refresh',CasesRefresh:'slickbot:cases:refresh',SupportRefresh:'slickbot:support:refresh',TicketsRefresh:'slickbot:tickets:refresh',TicketOpen:'slickbot:ticket:open',TicketOpenTypePrefix:'slickbot:ticket:open-type:',TicketTypeSelect:'slickbot:ticket:select-type',TicketClaim:'slickbot:ticket:claim',TicketClose:'slickbot:ticket:close',TicketCloseReason:'slickbot:ticket:close-reason',TicketEscalate:'slickbot:ticket:escalate',ReportsRefresh:'slickbot:reports:refresh',ReportOpen:'slickbot:report:open',ReportSelect:'slickbot:report:select',ReportClaimPrefix:'slickbot:report:claim:',ReportResolvePrefix:'slickbot:report:resolve:',ReportDismissPrefix:'slickbot:report:dismiss:',ReportDetailsPrefix:'slickbot:report:details:',ReportOpenTicketPrefix:'slickbot:report:ticket:',ApplicationsRefresh:'slickbot:applications:refresh',ApplicationApplyPrefix:'slickbot:application:apply:',ApplicationSelectPrefix:'slickbot:application:select:',ApplicationApprovePrefix:'slickbot:application:approve:',ApplicationDenyPrefix:'slickbot:application:deny:',AppealsRefresh:'slickbot:appeals:refresh',AppealOpen:'slickbot:appeal:open',AppealSelect:'slickbot:appeal:select',AppealApprovePrefix:'slickbot:appeal:approve:',AppealDenyPrefix:'slickbot:appeal:deny:',AppealApproveReasonPrefix:'slickbot:appeal:approve-reason:',AppealDenyReasonPrefix:'slickbot:appeal:deny-reason:',TicketModalPrefix:'slickbot:modal:ticket:',TicketModal:'slickbot:modal:ticket',TicketCloseReasonModal:'slickbot:modal:ticket-close-reason',ReportModal:'slickbot:modal:report',ReportDetailsModalPrefix:'slickbot:modal:report-details:',AppealModal:'slickbot:modal:appeal',AppealReasonModalPrefix:'slickbot:modal:appeal-reason:',ApplicationModalPrefix:'slickbot:modal:application:',PanelDesignModalPrefix:'slickbot:modal:panel-design:',RolePanelSelectPrefix:'slickbot:rolepanel-select:',BirthdaySetOpen:'slickbot:birthday:set-open',BirthdaySavePrefix:'slickbot:birthday:save:',BirthdayCancelPrefix:'slickbot:birthday:cancel:',BirthdayMonthPrefix:'slickbot:birthday:month:',BirthdayDayPrefix:'slickbot:birthday:day:',BirthdayDayModalPrefix:'slickbot:modal:birthday-day:',BirthdayTimezonePrefix:'slickbot:birthday:timezone:',BirthdayTimezoneCustomPrefix:'slickbot:birthday:timezone-custom:',BirthdayTimezoneModalPrefix:'slickbot:modal:birthday-timezone:',BirthdayListSelect:'slickbot:birthday:list-select'});
-module.exports={CustomIds};
+  SetupRefresh: 'slickbot:setup:refresh',
+  SetupModules: 'slickbot:setup:modules',
+  SetupLogging: 'slickbot:setup:logging',
+  SetupStatus: 'slickbot:setup:status',
+  SetupTeams: 'slickbot:setup:teams',
+
+  SetupPermissions: 'slickbot:setup:permissions',
+  ResetConfirm: 'slickbot:reset:confirm',
+  ResetCancel: 'slickbot:reset:cancel',
+  PermissionsRefresh: 'slickbot:permissions:refresh',
+  PermissionsModuleSelect: 'slickbot:permissions:module-select',
+  PermissionsCommandSelect: 'slickbot:permissions:command-select',
+
+  ApplicationCancelPrefix: 'slickbot:application:cancel:',
+  ApplicationSubmitPrefix: 'slickbot:application:submit:',
+  SetupModeration: 'slickbot:setup:moderation',
+  SetupSupport: 'slickbot:setup:support',
+  SetupCommunity: 'slickbot:setup:community',
+  WelcomeRefresh: 'slickbot:welcome:refresh',
+  RolePanelsRefresh: 'slickbot:rolepanels:refresh',
+  GiveawaysRefresh: 'slickbot:giveaways:refresh',
+  BirthdaysRefresh: 'slickbot:birthdays:refresh',
+  ScheduledMessagesRefresh: 'slickbot:scheduled-messages:refresh',
+  ServerStatsRefresh: 'slickbot:server-stats:refresh',
+  LevelingRefresh: 'slickbot:leveling:refresh',
+
+  ModulesSelect: 'slickbot:modules:select',
+  ModulesRefresh: 'slickbot:modules:refresh',
+
+  LoggingRefresh: 'slickbot:logging:refresh',
+  LoggingFlush: 'slickbot:logging:flush',
+  LoggingTest: 'slickbot:logging:test',
+
+  StatusRefresh: 'slickbot:status:refresh',
+  StatusQuickOnline: 'slickbot:status:quick-online',
+  StatusQuickIdle: 'slickbot:status:quick-idle',
+  StatusQuickDnd: 'slickbot:status:quick-dnd',
+  StatusClear: 'slickbot:status:clear',
+
+  ModerationRefresh: 'slickbot:moderation:refresh',
+  CasesRefresh: 'slickbot:cases:refresh',
+
+  SupportRefresh: 'slickbot:support:refresh',
+  TicketsRefresh: 'slickbot:tickets:refresh',
+  TicketOpen: 'slickbot:ticket:open',
+  TicketOpenTypePrefix: 'slickbot:ticket:open-type:',
+  TicketTypeSelect: 'slickbot:ticket:select-type',
+  TicketClaim: 'slickbot:ticket:claim',
+  TicketClose: 'slickbot:ticket:close',
+  TicketCloseReason: 'slickbot:ticket:close-reason',
+  TicketEscalate: 'slickbot:ticket:escalate',
+
+  ReportsRefresh: 'slickbot:reports:refresh',
+  ReportOpen: 'slickbot:report:open',
+  ReportSelect: 'slickbot:report:select',
+  ReportClaimPrefix: 'slickbot:report:claim:',
+  ReportResolvePrefix: 'slickbot:report:resolve:',
+  ReportDismissPrefix: 'slickbot:report:dismiss:',
+  ReportDetailsPrefix: 'slickbot:report:details:',
+  ReportOpenTicketPrefix: 'slickbot:report:ticket:',
+
+  ApplicationsRefresh: 'slickbot:applications:refresh',
+  ApplicationApplyPrefix: 'slickbot:application:apply:',
+  ApplicationSelectPrefix: 'slickbot:application:select:',
+  ApplicationApprovePrefix: 'slickbot:application:approve:',
+  ApplicationDenyPrefix: 'slickbot:application:deny:',
+
+  AppealsRefresh: 'slickbot:appeals:refresh',
+  AppealOpen: 'slickbot:appeal:open',
+  AppealSelect: 'slickbot:appeal:select',
+  AppealApprovePrefix: 'slickbot:appeal:approve:',
+  AppealDenyPrefix: 'slickbot:appeal:deny:',
+  AppealApproveReasonPrefix: 'slickbot:appeal:approve-reason:',
+  AppealDenyReasonPrefix: 'slickbot:appeal:deny-reason:',
+
+  TicketModalPrefix: 'slickbot:modal:ticket:',
+  TicketModal: 'slickbot:modal:ticket',
+  TicketCloseReasonModal: 'slickbot:modal:ticket-close-reason',
+  ReportModal: 'slickbot:modal:report',
+  ReportDetailsModalPrefix: 'slickbot:modal:report-details:',
+  AppealModal: 'slickbot:modal:appeal',
+  AppealReasonModalPrefix: 'slickbot:modal:appeal-reason:',
+  ApplicationModalPrefix: 'slickbot:modal:application:',
+  PanelDesignModalPrefix: 'slickbot:modal:panel-design:',
+
+  RolePanelSelectPrefix: 'slickbot:rolepanel-select:',
+
+  BirthdaySetOpen: 'slickbot:birthday:set-open',
+  BirthdaySavePrefix: 'slickbot:birthday:save:',
+  BirthdayCancelPrefix: 'slickbot:birthday:cancel:',
+  BirthdayMonthPrefix: 'slickbot:birthday:month:',
+  BirthdayDayPrefix: 'slickbot:birthday:day:',
+  BirthdayDayModalPrefix: 'slickbot:modal:birthday-day:',
+  BirthdayTimezonePrefix: 'slickbot:birthday:timezone:',
+  BirthdayTimezoneCustomPrefix: 'slickbot:birthday:timezone-custom:',
+  BirthdayTimezoneModalPrefix: 'slickbot:modal:birthday-timezone:',
+  BirthdayListSelect: 'slickbot:birthday:list-select'
+});
+
+module.exports = { CustomIds };

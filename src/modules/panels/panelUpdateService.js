@@ -1,10 +1,61 @@
 const { updatePublishedPanelsForRefs } = require('./publishedPanelService');
-const { buildPublicTicketPanel,buildPublicReportPanel,buildPublicApplicationPanel,buildPublicAppealPanel }=require('../support/supportUi');
-const { TicketService,ReportService,ApplicationService,AppealService }=require('../support/supportService');
-const roles=require('../community/rolePanelService');const {BirthdayService}=require('../community/birthdayService');
-const tickets=new TicketService(),reports=new ReportService(),apps=new ApplicationService(),appeals=new AppealService(),birthdays=new BirthdayService();
-async function buildPayload(g,t,r='*'){if(t==='ticket')return buildPublicTicketPanel(await tickets.listTypes(g),await tickets.getConfig(g));if(t==='report')return buildPublicReportPanel(await reports.getConfig(g));if(t==='appeal')return buildPublicAppealPanel(await appeals.getConfig(g));if(t==='application'){const x=await apps.getTypeById(g,r)||await apps.getTypeByName(g,r);return x?buildPublicApplicationPanel(x):null;}if(t==='birthday')return birthdays.buildPublicPanel(g);if(t==='role'){const p=await roles.getPanelById(g,r)||await roles.getPanelByName(g,r);return p?roles.buildRolePanelMessage(p):null;}return null;}
-async function refreshPublishedPanel(client,g,t,r='*',extra=[]){if(t==='role'){const p=await roles.getPanelById(g,r)||await roles.getPanelByName(g,r);return p?roles.updatePublishedRolePanelMessages(client,g,p):{updated:0,total:0};}const payload=await buildPayload(g,t,r);return payload?updatePublishedPanelsForRefs(client,{guildId:g,panelType:t,panelRefs:[...new Set([String(r),...extra.map(String)])],payload}):{updated:0,total:0};}
-async function refreshPublishedPanelFromResult(c,g,r){return r?.panelType?refreshPublishedPanel(c,g,r.panelType,r.panelRef||'*',r.altPanelRefs||[]):{updated:0,total:0};}
-function formatRefreshSummary(r){return r?.total?`\nLive panels updated: **${r.updated}/${r.total}**.`:'';}
-module.exports={buildPayload,refreshPublishedPanel,refreshPublishedPanelFromResult,formatRefreshSummary};
+const { buildPublicTicketPanel, buildPublicReportPanel, buildPublicApplicationPanel, buildPublicAppealPanel } = require('../support/supportUi');
+const { TicketService, ReportService, ApplicationService, AppealService } = require('../support/supportService');
+const rolePanels = require('../community/rolePanelService');
+const { BirthdayService } = require('../community/birthdayService');
+
+const tickets = new TicketService();
+const reports = new ReportService();
+const applications = new ApplicationService();
+const appeals = new AppealService();
+const birthdays = new BirthdayService();
+
+async function buildPayload(guildId, panelType, panelRef = '*') {
+  if (panelType === 'ticket') return buildPublicTicketPanel(await tickets.listTypes(guildId), await tickets.getConfig(guildId));
+  if (panelType === 'report') return buildPublicReportPanel(await reports.getConfig(guildId));
+  if (panelType === 'appeal') return buildPublicAppealPanel(await appeals.getConfig(guildId));
+  if (panelType === 'application') {
+    const type = await applications.getTypeById(guildId, panelRef) || await applications.getTypeByName?.(guildId, panelRef);
+    if (!type) return null;
+    return buildPublicApplicationPanel(type);
+  }
+  if (panelType === 'birthday') return birthdays.buildPublicPanel(guildId);
+  if (panelType === 'role') {
+    const panel = await rolePanels.getPanelById(guildId, panelRef) || await rolePanels.getPanelByName(guildId, panelRef);
+    if (!panel) return null;
+    return rolePanels.buildRolePanelMessage(panel);
+  }
+  return null;
+}
+
+function refsForPanel(panelRef = '*', extraRefs = []) {
+  return [...new Set([panelRef, ...extraRefs].filter((item) => item != null && String(item).trim() !== '').map(String))];
+}
+
+async function refreshPublishedPanel(client, guildId, panelType, panelRef = '*', extraRefs = []) {
+  if (panelType === 'role') {
+    const panel = await rolePanels.getPanelById(guildId, panelRef) || await rolePanels.getPanelByName(guildId, panelRef);
+    if (!panel) return { updated: 0, removed: 0, total: 0 };
+    return rolePanels.updatePublishedRolePanelMessages(client, guildId, panel);
+  }
+  const payload = await buildPayload(guildId, panelType, panelRef);
+  if (!payload) return { updated: 0, removed: 0, total: 0 };
+  return updatePublishedPanelsForRefs(client, { guildId, panelType, panelRefs: refsForPanel(panelRef, extraRefs), payload });
+}
+
+async function refreshPublishedPanelFromResult(client, guildId, result) {
+  if (!result?.panelType) return { updated: 0, removed: 0, total: 0 };
+  return refreshPublishedPanel(client, guildId, result.panelType, result.panelRef || '*', result.altPanelRefs || []);
+}
+
+function formatRefreshSummary(result) {
+  if (!result || !result.total) return '';
+  return `\nLive panels updated: **${result.updated}/${result.total}**.`;
+}
+
+module.exports = {
+  buildPayload,
+  refreshPublishedPanel,
+  refreshPublishedPanelFromResult,
+  formatRefreshSummary
+};

@@ -1,14 +1,105 @@
-const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, StringSelectMenuBuilder } = require('discord.js');
-const SlickBotColors = Object.freeze({ PRIMARY:0x7869ff, SUCCESS:0x35d07f, WARNING:0xf2b84b, ERROR:0xff5c7a, INFO:0x5aa7ff, MUTED:0x2b2f3a });
-function createBaseEmbed({title,description,color=SlickBotColors.PRIMARY,footer='SlickBot Control Panel'}) { return new EmbedBuilder().setColor(color).setTitle(title).setDescription(description||null).setFooter({text:footer}).setTimestamp(new Date()); }
-function createSuccessEmbed(title,description){return createBaseEmbed({title,description,color:SlickBotColors.SUCCESS});}
-function createWarningEmbed(title,description){return createBaseEmbed({title,description,color:SlickBotColors.WARNING});}
-function createErrorEmbed(title,description){return createBaseEmbed({title,description,color:SlickBotColors.ERROR});}
-function createInfoEmbed(title,description){return createBaseEmbed({title,description,color:SlickBotColors.INFO});}
-function createButtonRow(buttons){return new ActionRowBuilder().addComponents(buttons);}
-function createPanelButton(customId,label,style=ButtonStyle.Secondary,emoji=undefined){const b=new ButtonBuilder().setCustomId(customId).setLabel(label).setStyle(style);if(emoji)b.setEmoji(emoji);return b;}
-function createLinkButton(url,label,emoji=undefined){const b=new ButtonBuilder().setURL(url).setLabel(label).setStyle(ButtonStyle.Link);if(emoji)b.setEmoji(emoji);return b;}
-function createSelectRow(customId,placeholder,options,minValues=1,maxValues=1){return new ActionRowBuilder().addComponents(new StringSelectMenuBuilder().setCustomId(customId).setPlaceholder(placeholder).setMinValues(minValues).setMaxValues(maxValues).addOptions(options));}
-function formatEnabled(enabled){return enabled?'Enabled':'Disabled';}
-function formatStatusBadge(status){const s=String(status||'').toLowerCase();if(s==='online')return'Online';if(s==='idle')return'Idle';if(s==='dnd')return'Do Not Disturb';if(s==='invisible')return'Invisible';return'Unknown';}
-module.exports={SlickBotColors,createBaseEmbed,createSuccessEmbed,createWarningEmbed,createErrorEmbed,createInfoEmbed,createButtonRow,createPanelButton,createLinkButton,createSelectRow,formatEnabled,formatStatusBadge,ButtonStyle};
+const {
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  EmbedBuilder,
+  StringSelectMenuBuilder
+} = require('discord.js');
+
+const SlickBotColors = Object.freeze({
+  PRIMARY: 0x7869ff,
+  SUCCESS: 0x35d07f,
+  WARNING: 0xf2b84b,
+  ERROR: 0xff5c7a,
+  INFO: 0x5aa7ff,
+  MUTED: 0x2b2f3a
+});
+
+function createBaseEmbed({ title, description, color = SlickBotColors.PRIMARY, footer = 'SlickBot Control Panel' }) {
+  return new EmbedBuilder()
+    .setColor(color)
+    .setTitle(title)
+    .setDescription(description || null)
+    .setFooter({ text: footer })
+    .setTimestamp(new Date());
+}
+
+function createSuccessEmbed(title, description) {
+  return createBaseEmbed({ title, description, color: SlickBotColors.SUCCESS });
+}
+
+function createWarningEmbed(title, description) {
+  return createBaseEmbed({ title, description, color: SlickBotColors.WARNING });
+}
+
+function createErrorEmbed(title, description) {
+  return createBaseEmbed({ title, description, color: SlickBotColors.ERROR });
+}
+
+function createInfoEmbed(title, description) {
+  return createBaseEmbed({ title, description, color: SlickBotColors.INFO });
+}
+
+function createButtonRow(buttons) {
+  return new ActionRowBuilder().addComponents(buttons);
+}
+
+function createPanelButton(customId, label, style = ButtonStyle.Secondary, emoji = undefined) {
+  const button = new ButtonBuilder()
+    .setCustomId(customId)
+    .setLabel(label)
+    .setStyle(style);
+
+  if (emoji) button.setEmoji(emoji);
+  return button;
+}
+
+function createLinkButton(url, label, emoji = undefined) {
+  const button = new ButtonBuilder()
+    .setURL(url)
+    .setLabel(label)
+    .setStyle(ButtonStyle.Link);
+
+  if (emoji) button.setEmoji(emoji);
+  return button;
+}
+
+function createSelectRow(customId, placeholder, options, minValues = 1, maxValues = 1) {
+  return new ActionRowBuilder().addComponents(
+    new StringSelectMenuBuilder()
+      .setCustomId(customId)
+      .setPlaceholder(placeholder)
+      .setMinValues(minValues)
+      .setMaxValues(maxValues)
+      .addOptions(options)
+  );
+}
+
+function formatEnabled(enabled) {
+  return enabled ? 'Enabled' : 'Disabled';
+}
+
+function formatStatusBadge(status) {
+  const normalized = String(status || '').toLowerCase();
+  if (normalized === 'online') return 'Online';
+  if (normalized === 'idle') return 'Idle';
+  if (normalized === 'dnd') return 'Do Not Disturb';
+  if (normalized === 'invisible') return 'Invisible';
+  return 'Unknown';
+}
+
+module.exports = {
+  SlickBotColors,
+  createBaseEmbed,
+  createSuccessEmbed,
+  createWarningEmbed,
+  createErrorEmbed,
+  createInfoEmbed,
+  createButtonRow,
+  createPanelButton,
+  createLinkButton,
+  createSelectRow,
+  formatEnabled,
+  formatStatusBadge,
+  ButtonStyle
+};

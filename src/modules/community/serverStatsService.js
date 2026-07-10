@@ -1,9 +1,128 @@
+const { ChannelType } = require('discord.js');
 const { query } = require('../../services/db');
 const { createBaseEmbed, SlickBotColors } = require('../ui/uiService');
-class ServerStatsService {
-  async getConfig(guildId){const r=await query('SELECT * FROM server_stats_configs WHERE guild_id=$1 LIMIT 1',[guildId]);return r.rows[0]||null;}
-  async setup(guildId,input){const old=await this.getConfig(guildId)||{};const v={enabled:input.enabled??old.enabled??true,member:input.memberChannelId??old.member_channel_id??null,human:input.humanChannelId??old.human_channel_id??null,bot:input.botChannelId??old.bot_channel_id??null,voice:input.voiceChannelId??old.voice_channel_id??null,mt:input.memberTemplate??old.member_template??'Members: {members}',ht:input.humanTemplate??old.human_template??'Humans: {humans}',bt:input.botTemplate??old.bot_template??'Bots: {bots}',vt:input.voiceTemplate??old.voice_template??'In Voice: {voice}'};const r=await query(`INSERT INTO server_stats_configs(guild_id,enabled,member_channel_id,human_channel_id,bot_channel_id,voice_channel_id,member_template,human_template,bot_template,voice_template) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT(guild_id) DO UPDATE SET enabled=EXCLUDED.enabled,member_channel_id=EXCLUDED.member_channel_id,human_channel_id=EXCLUDED.human_channel_id,bot_channel_id=EXCLUDED.bot_channel_id,voice_channel_id=EXCLUDED.voice_channel_id,member_template=EXCLUDED.member_template,human_template=EXCLUDED.human_template,bot_template=EXCLUDED.bot_template,voice_template=EXCLUDED.voice_template,updated_at=NOW() RETURNING *`,[guildId,v.enabled,v.member,v.human,v.bot,v.voice,v.mt,v.ht,v.bt,v.vt]);return r.rows[0];}
-  async updateStats(guild,logger,reason='update'){const c=await this.getConfig(guild.id);if(!c||c.enabled===false)return{ok:false,reason:'Server stats are not enabled.',updated:0};await guild.members.fetch().catch(()=>{});const members=guild.memberCount||guild.members.cache.size;const bots=guild.members.cache.filter(m=>m.user.bot).size;const humans=Math.max(0,members-bots);const voice=guild.channels.cache.filter(ch=>ch.isVoiceBased?.()).reduce((n,ch)=>n+ch.members.size,0);const items=[[c.member_channel_id,c.member_template,{members}],[c.human_channel_id,c.human_template,{humans}],[c.bot_channel_id,c.bot_template,{bots}],[c.voice_channel_id,c.voice_template,{voice}]];let updated=0;for(const[id,tpl,data]of items){if(!id)continue;const ch=await guild.channels.fetch(id).catch(()=>null);if(!ch)continue;let name=String(tpl||'').replaceAll('{members}',members).replaceAll('{humans}',humans).replaceAll('{bots}',bots).replaceAll('{voice}',voice).slice(0,100);if(name&&ch.name!==name&&await ch.setName(name,`SlickBot stats: ${reason}`).then(()=>true).catch(()=>false))updated++;}await logger?.log({guildId:guild.id,eventKey:'server-stats-update',title:'Server Stats Updated',body:`Updated **${updated}** channel(s).`,metadata:{reason,updated}}).catch(()=>{});return{ok:true,updated};}
-  async buildManagerPanel(guild){const c=await this.getConfig(guild.id);return{embeds:[createBaseEmbed({title:'Server Stats Manager',description:c?[`Status: **${c.enabled?'Enabled':'Disabled'}**`,`Member Counter: ${c.member_channel_id?`<#${c.member_channel_id}>`:'Not set'}`,`Human Counter: ${c.human_channel_id?`<#${c.human_channel_id}>`:'Not set'}`,`Bot Counter: ${c.bot_channel_id?`<#${c.bot_channel_id}>`:'Not set'}`,`Voice Counter: ${c.voice_channel_id?`<#${c.voice_channel_id}>`:'Not set'}`].join('\n'):'Run `/stats setup` to configure server counters.',color:c?SlickBotColors.PRIMARY:SlickBotColors.WARNING})]};}
+
+function renderTemplate(template, counts) {
+  return String(template || '')
+    .replaceAll('{members}', String(counts.members))
+    .replaceAll('{humans}', String(counts.humans))
+    .replaceAll('{bots}', String(counts.bots))
+    .replaceAll('{voice}', String(counts.voice));
 }
-module.exports={ServerStatsService};
+
+class ServerStatsService {
+  async getConfig(guildId) {
+    const result = await query(`SELECT * FROM server_stats_configs WHERE guild_id = $1 LIMIT 1`, [guildId]);
+    if (result.rows[0]) return result.rows[0];
+    const created = await query(
+      `INSERT INTO server_stats_configs (guild_id) VALUES ($1)
+       ON CONFLICT (guild_id) DO UPDATE SET updated_at = NOW()
+       RETURNING *`,
+      [guildId]
+    );
+    return created.rows[0];
+  }
+
+  async setup(guildId, input = {}) {
+    const result = await query(
+      `INSERT INTO server_stats_configs (
+        guild_id, enabled, member_channel_id, human_channel_id, bot_channel_id, voice_channel_id,
+        member_template, human_template, bot_template, voice_template
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+       ON CONFLICT (guild_id) DO UPDATE SET
+         enabled = EXCLUDED.enabled,
+         member_channel_id = COALESCE(EXCLUDED.member_channel_id, server_stats_configs.member_channel_id),
+         human_channel_id = COALESCE(EXCLUDED.human_channel_id, server_stats_configs.human_channel_id),
+         bot_channel_id = COALESCE(EXCLUDED.bot_channel_id, server_stats_configs.bot_channel_id),
+         voice_channel_id = COALESCE(EXCLUDED.voice_channel_id, server_stats_configs.voice_channel_id),
+         member_template = COALESCE(EXCLUDED.member_template, server_stats_configs.member_template),
+         human_template = COALESCE(EXCLUDED.human_template, server_stats_configs.human_template),
+         bot_template = COALESCE(EXCLUDED.bot_template, server_stats_configs.bot_template),
+         voice_template = COALESCE(EXCLUDED.voice_template, server_stats_configs.voice_template),
+         updated_at = NOW()
+       RETURNING *`,
+      [
+        guildId,
+        typeof input.enabled === 'boolean' ? input.enabled : true,
+        input.memberChannelId || null,
+        input.humanChannelId || null,
+        input.botChannelId || null,
+        input.voiceChannelId || null,
+        input.memberTemplate || 'Members: {members}',
+        input.humanTemplate || 'Humans: {humans}',
+        input.botTemplate || 'Bots: {bots}',
+        input.voiceTemplate || 'In Voice: {voice}'
+      ]
+    );
+    return result.rows[0];
+  }
+
+  async counts(guild) {
+    await guild.members.fetch().catch(() => null);
+    const members = guild.memberCount || guild.members.cache.size;
+    const humans = guild.members.cache.filter((member) => !member.user.bot).size || members;
+    const bots = guild.members.cache.filter((member) => member.user.bot).size;
+    const voice = guild.channels.cache
+      .filter((channel) => channel.type === ChannelType.GuildVoice || channel.type === ChannelType.GuildStageVoice)
+      .reduce((total, channel) => total + (channel.members?.filter((member) => !member.user.bot).size || 0), 0);
+    return { members, humans, bots, voice };
+  }
+
+  async updateStats(guild, logger = null, reason = 'manual') {
+    const config = await this.getConfig(guild.id);
+    if (!config.enabled) return { ok: false, reason: 'Server stats are disabled.' };
+    const counts = await this.counts(guild);
+    const updates = [
+      { id: config.member_channel_id, name: renderTemplate(config.member_template || 'Members: {members}', counts), key: 'members' },
+      { id: config.human_channel_id, name: renderTemplate(config.human_template || 'Humans: {humans}', counts), key: 'humans' },
+      { id: config.bot_channel_id, name: renderTemplate(config.bot_template || 'Bots: {bots}', counts), key: 'bots' },
+      { id: config.voice_channel_id, name: renderTemplate(config.voice_template || 'In Voice: {voice}', counts), key: 'voice' }
+    ].filter((item) => item.id);
+
+    if (!updates.length) {
+      return { ok: true, updated: 0, counts, config, reason: 'No server stat channels are configured yet.' };
+    }
+
+    let updated = 0;
+    let attempted = 0;
+    for (const item of updates) {
+      const channel = await guild.channels.fetch(item.id).catch(() => null);
+      if (!channel || typeof channel.setName !== 'function') continue;
+      if (channel.name === item.name) continue;
+      attempted += 1;
+      const renamed = await channel.setName(item.name, `SlickBot server stats update: ${reason}`).then(() => true).catch(() => false);
+      if (renamed) updated += 1;
+    }
+
+    await query(`UPDATE server_stats_configs SET last_updated_at = NOW(), updated_at = NOW() WHERE guild_id = $1`, [guild.id]).catch(() => {});
+    await logger?.log({
+      guildId: guild.id,
+      eventKey: 'server-stats-update',
+      title: 'Server Stats Updated',
+      body: `Updated Channels: **${updated}**\nAttempted Renames: **${attempted}**\nMembers: **${counts.members}**\nHumans: **${counts.humans}**\nBots: **${counts.bots}**\nIn Voice: **${counts.voice}**`,
+      metadata: { counts, updated, attempted, reason }
+    }).catch(() => {});
+
+    return { ok: true, updated, counts, config };
+  }
+
+  async buildManagerPanel(guild) {
+    const config = await this.getConfig(guild.id);
+    const counts = await this.counts(guild).catch(() => ({ members: guild.memberCount || 0, humans: 0, bots: 0, voice: 0 }));
+    const lines = [
+      `Status: **${config.enabled ? 'Enabled' : 'Disabled'}**`,
+      `Member Counter: ${config.member_channel_id ? `<#${config.member_channel_id}>` : 'Not set'} · \`${config.member_template || 'Members: {members}'}\``,
+      `Human Counter: ${config.human_channel_id ? `<#${config.human_channel_id}>` : 'Not set'} · \`${config.human_template || 'Humans: {humans}'}\``,
+      `Bot Counter: ${config.bot_channel_id ? `<#${config.bot_channel_id}>` : 'Not set'} · \`${config.bot_template || 'Bots: {bots}'}\``,
+      `Voice Counter: ${config.voice_channel_id ? `<#${config.voice_channel_id}>` : 'Not set'} · \`${config.voice_template || 'In Voice: {voice}'}\``,
+      '',
+      '**Current Counts**',
+      `Members: **${counts.members}** · Humans: **${counts.humans}** · Bots: **${counts.bots}** · In Voice: **${counts.voice}**`,
+      '',
+      'Use `/stats setup` to configure channel counters and `/stats refresh` to update them now.'
+    ];
+    return { embeds: [createBaseEmbed({ title: 'SlickBot Server Stats Center', description: lines.join('\n'), color: (config.member_channel_id || config.voice_channel_id) ? SlickBotColors.SUCCESS : SlickBotColors.WARNING })] };
+  }
+}
+
+module.exports = { ServerStatsService };

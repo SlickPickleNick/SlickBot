@@ -16,6 +16,9 @@ function canUseInteractionReply(interaction) {
 }
 
 async function deleteEphemeralResponse(interaction, response, isFollowUp = false) {
+  // Discord ephemeral messages can normally be deleted, but the exact method
+  // differs between original interaction replies and follow-up webhook replies.
+  // Try all supported deletion paths and silently ignore Discord-side expiry.
   try {
     if (response?.id && interaction?.webhook?.deleteMessage) {
       await interaction.webhook.deleteMessage(response.id);
@@ -78,6 +81,8 @@ async function replyPrivate(interaction, options) {
 }
 
 async function acknowledgeQuietly(interaction) {
+  // Best for basic user actions on persistent panels, such as role toggles.
+  // It avoids creating a separate ephemeral confirmation popup.
   if (!interaction || interaction.deferred || interaction.replied) return;
   if (typeof interaction.deferUpdate === 'function') {
     await interaction.deferUpdate();

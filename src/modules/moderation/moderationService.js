@@ -1,20 +1,151 @@
 const { query } = require('../../services/db');
-function formatCaseLine(c){return `#${c.case_number} **${c.action_type}** <@${c.target_user_id}> — ${c.reason||'No reason'} · ${c.status}`;}
-class ModerationService{
- async nextCase(g){return Number((await query('SELECT COALESCE(MAX(case_number),0)+1 n FROM moderation_cases WHERE guild_id=$1',[g])).rows[0].n);}
- async createCase(i){const n=await this.nextCase(i.guildId);return(await query(`INSERT INTO moderation_cases(guild_id,case_number,target_user_id,target_user_tag,actor_user_id,action_type,reason,status,duration_seconds,expires_at,evidence,metadata) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb) RETURNING *`,[i.guildId,n,i.targetUser.id,i.targetUser.tag,i.actorUser?.id||null,i.actionType,i.reason||null,i.status||'OPEN',i.durationSeconds||null,i.expiresAt||null,i.evidence||null,JSON.stringify(i.metadata||{})])).rows[0];}
- async getCase(g,n){return(await query('SELECT * FROM moderation_cases WHERE guild_id=$1 AND case_number=$2 LIMIT 1',[g,n])).rows[0]||null;}
- async listCases(g,limit=15){return(await query('SELECT * FROM moderation_cases WHERE guild_id=$1 ORDER BY case_number DESC LIMIT $2',[g,limit])).rows;}
- async updateCaseReason(g,n,reason){return(await query('UPDATE moderation_cases SET reason=$1,updated_at=NOW() WHERE guild_id=$2 AND case_number=$3 RETURNING *',[reason,g,n])).rows[0]||null;}
- async closeCase(g,n){return(await query(`UPDATE moderation_cases SET status='CLOSED',updated_at=NOW() WHERE guild_id=$1 AND case_number=$2 RETURNING *`,[g,n])).rows[0]||null;}
- async addNote({guildId,targetUser,actorUser,note}){const n=Number((await query('SELECT COALESCE(MAX(note_number),0)+1 n FROM user_notes WHERE guild_id=$1',[guildId])).rows[0].n);return(await query(`INSERT INTO user_notes(guild_id,note_number,target_user_id,target_user_tag,actor_user_id,note,is_active) VALUES($1,$2,$3,$4,$5,$6,true) RETURNING *`,[guildId,n,targetUser.id,targetUser.tag,actorUser.id,note])).rows[0];}
- async listNotes(g,u){return(await query(`SELECT * FROM user_notes WHERE guild_id=$1 AND target_user_id=$2 AND is_active=true ORDER BY note_number DESC LIMIT 25`,[g,u])).rows;}
- async removeNote(g,n){return(await query(`UPDATE user_notes SET is_active=false,updated_at=NOW() WHERE guild_id=$1 AND note_number=$2 RETURNING *`,[g,n])).rows[0]||null;}
- async warn({interaction,target,reason,logger}){const c=await this.createCase({guildId:interaction.guildId,targetUser:target,actorUser:interaction.user,actionType:'WARN',reason});await target.send?.(`You were warned in **${interaction.guild.name}**. Reason: ${reason}`).catch(()=>{});await logger?.log({guildId:interaction.guildId,eventKey:'moderation',title:'Member Warned',body:`Target: <@${target.id}>\nReason: ${reason}`,actorUserId:interaction.user.id}).catch(()=>{});return c;}
- async timeout({interaction,member,durationMs,reason,logger}){await member.timeout(durationMs,reason);const c=await this.createCase({guildId:interaction.guildId,targetUser:member.user,actorUser:interaction.user,actionType:'TIMEOUT',reason,durationSeconds:Math.floor(durationMs/1000),expiresAt:new Date(Date.now()+durationMs)});await logger?.log({guildId:interaction.guildId,eventKey:'moderation',title:'Member Timed Out',body:`Target: <@${member.id}>\nReason: ${reason}`,actorUserId:interaction.user.id}).catch(()=>{});return c;}
- async untimeout({interaction,member,reason,logger}){await member.timeout(null,reason);return this.createCase({guildId:interaction.guildId,targetUser:member.user,actorUser:interaction.user,actionType:'UNTIMEOUT',reason,status:'CLOSED'});}
- async kick({interaction,member,reason}){const user=member.user;await member.kick(reason);return this.createCase({guildId:interaction.guildId,targetUser:user,actorUser:interaction.user,actionType:'KICK',reason,status:'CLOSED'});}
- async ban({interaction,user,reason}){await interaction.guild.members.ban(user,{reason});return this.createCase({guildId:interaction.guildId,targetUser:user,actorUser:interaction.user,actionType:'BAN',reason});}
- async unban({interaction,userId,reason}){const u=await interaction.client.users.fetch(userId);await interaction.guild.members.unban(userId,reason);return this.createCase({guildId:interaction.guildId,targetUser:u,actorUser:interaction.user,actionType:'UNBAN',reason,status:'CLOSED'});}
+const { truncate } = require('../../utils/format');
+
+class ModerationService {
+  async createCase(input) {
+    const nextResult = await query(
+      `SELECT COALESCE(MAX(case_number), 0) + 1 AS next_number
+       FROM moderation_cases
+       WHERE guild_id = $1`,
+      [input.guildId]
+    );
+
+    const caseNumber = Number(nextResult.rows[0]?.next_number || 1);
+    const result = await query(
+      `INSERT INTO moderation_cases
+       (guild_id, case_number, target_user_id, target_user_tag, actor_user_id, action_type, reason, status, duration_seconds, expires_at, evidence, metadata)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+       RETURNING *`,
+      [
+        input.guildId,
+        caseNumber,
+        input.targetUserId,
+        input.targetUserTag || null,
+        input.actorUserId || null,
+        input.actionType,
+        input.reason || null,
+        input.status || 'OPEN',
+        input.durationSeconds || null,
+        input.expiresAt || null,
+        input.evidence || null,
+        input.metadata ? JSON.stringify(input.metadata) : null
+      ]
+    );
+
+    return result.rows[0];
+  }
+
+  async getCase(guildId, caseNumber) {
+    const result = await query(
+      `SELECT * FROM moderation_cases WHERE guild_id = $1 AND case_number = $2 LIMIT 1`,
+      [guildId, caseNumber]
+    );
+    return result.rows[0] || null;
+  }
+
+  async listUserCases(guildId, targetUserId, limit = 10) {
+    const result = await query(
+      `SELECT * FROM moderation_cases
+       WHERE guild_id = $1 AND target_user_id = $2
+       ORDER BY created_at DESC
+       LIMIT $3`,
+      [guildId, targetUserId, limit]
+    );
+    return result.rows;
+  }
+
+  async listRecentCases(guildId, limit = 10) {
+    const result = await query(
+      `SELECT * FROM moderation_cases
+       WHERE guild_id = $1
+       ORDER BY created_at DESC
+       LIMIT $2`,
+      [guildId, limit]
+    );
+    return result.rows;
+  }
+
+  async updateCaseStatus(guildId, caseNumber, status, actorUserId, note = null) {
+    const result = await query(
+      `UPDATE moderation_cases
+       SET status = $1,
+           metadata = COALESCE(metadata, '{}'::jsonb) || $2::jsonb,
+           updated_at = NOW()
+       WHERE guild_id = $3 AND case_number = $4
+       RETURNING *`,
+      [
+        status,
+        JSON.stringify({ lastStatusUpdateBy: actorUserId, lastStatusNote: note, lastStatusUpdateAt: new Date().toISOString() }),
+        guildId,
+        caseNumber
+      ]
+    );
+    return result.rows[0] || null;
+  }
+
+  async addUserNote(input) {
+    const nextResult = await query(
+      `SELECT COALESCE(MAX(note_number), 0) + 1 AS next_number
+       FROM user_notes
+       WHERE guild_id = $1`,
+      [input.guildId]
+    );
+
+    const noteNumber = Number(nextResult.rows[0]?.next_number || 1);
+    const result = await query(
+      `INSERT INTO user_notes
+       (guild_id, note_number, target_user_id, target_user_tag, actor_user_id, note)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING *`,
+      [
+        input.guildId,
+        noteNumber,
+        input.targetUserId,
+        input.targetUserTag || null,
+        input.actorUserId || null,
+        input.note
+      ]
+    );
+
+    return result.rows[0];
+  }
+
+  async listUserNotes(guildId, targetUserId, includeInactive = false, limit = 10) {
+    const result = await query(
+      `SELECT * FROM user_notes
+       WHERE guild_id = $1
+         AND target_user_id = $2
+         AND ($3::boolean = true OR is_active = true)
+       ORDER BY created_at DESC
+       LIMIT $4`,
+      [guildId, targetUserId, includeInactive, limit]
+    );
+    return result.rows;
+  }
+
+  async removeUserNote(guildId, noteNumber, actorUserId) {
+    const result = await query(
+      `UPDATE user_notes
+       SET is_active = false,
+           updated_at = NOW()
+       WHERE guild_id = $1 AND note_number = $2
+       RETURNING *`,
+      [guildId, noteNumber]
+    );
+    return result.rows[0] || null;
+  }
 }
-module.exports={ModerationService,formatCaseLine};
+
+function formatCaseLine(item) {
+  return `#${item.case_number} • **${item.action_type}** • ${item.status} • <@${item.target_user_id}>\n${truncate(item.reason || 'No reason provided.', 140)}`;
+}
+
+function formatNoteLine(item) {
+  return `#${item.note_number} • ${item.is_active ? 'Active' : 'Removed'} • <@${item.target_user_id}>\n${truncate(item.note || 'No note text.', 180)}`;
+}
+
+module.exports = {
+  ModerationService,
+  formatCaseLine,
+  formatNoteLine
+};
