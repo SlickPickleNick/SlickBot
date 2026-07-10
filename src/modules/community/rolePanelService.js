@@ -155,10 +155,17 @@ async function listPanels(guildId) {
   return result.rows;
 }
 
+function buildOptionKey(roleIds) {
+  const ids = normalizeRoleIds(roleIds).sort();
+  if (!ids.length) return null;
+  return ids.length === 1 ? `role:${ids[0]}` : `bundle:${ids.join(',')}`;
+}
+
 async function addOption({ guildId, panelName, roleId = null, roleIds = null, label = '', emoji = null, description = null, buttonColor = null }) {
   const normalizedRoleIds = normalizeRoleIds(roleIds && roleIds.length ? roleIds : roleId);
   const primaryRoleId = normalizedRoleIds[0];
-  if (!primaryRoleId) return null;
+  const optionKey = buildOptionKey(normalizedRoleIds);
+  if (!primaryRoleId || !optionKey) return null;
 
   const normalizedButtonColor = normalizeHexColor(buttonColor, '#5865f2');
   const normalizedLabel = String(label || '').trim();
@@ -168,10 +175,11 @@ async function addOption({ guildId, panelName, roleId = null, roleIds = null, la
   const count = await query(`SELECT COUNT(*)::int AS count FROM role_panel_options WHERE panel_id = $1 AND active = true`, [panel.id]);
   const displayOrder = (count.rows[0]?.count || 0) + 1;
   const result = await query(
-    `INSERT INTO role_panel_options (panel_id, role_id, role_ids, label, emoji, description, button_color, display_order)
-     VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7, $8)
-     ON CONFLICT (panel_id, role_id)
-     DO UPDATE SET role_ids = EXCLUDED.role_ids,
+    `INSERT INTO role_panel_options (panel_id, role_id, role_ids, option_key, label, emoji, description, button_color, display_order)
+     VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7, $8, $9)
+     ON CONFLICT (panel_id, option_key)
+     DO UPDATE SET role_id = EXCLUDED.role_id,
+                   role_ids = EXCLUDED.role_ids,
                    label = EXCLUDED.label,
                    emoji = EXCLUDED.emoji,
                    description = EXCLUDED.description,
@@ -179,7 +187,7 @@ async function addOption({ guildId, panelName, roleId = null, roleIds = null, la
                    active = true,
                    updated_at = NOW()
      RETURNING *`,
-    [panel.id, primaryRoleId, JSON.stringify(normalizedRoleIds), normalizedLabel, normalizedEmoji, description, normalizedButtonColor, displayOrder]
+    [panel.id, primaryRoleId, JSON.stringify(normalizedRoleIds), optionKey, normalizedLabel, normalizedEmoji, description, normalizedButtonColor, displayOrder]
   );
   return { panel, option: result.rows[0] };
 }
@@ -228,7 +236,17 @@ function parseBulkEntries(raw) {
 async function removeOption({ guildId, panelName, roleId }) {
   const panel = await getPanelByName(guildId, panelName);
   if (!panel) return null;
-  const result = await query(`UPDATE role_panel_options SET active = false, updated_at = NOW() WHERE panel_id = $1 AND role_id = $2 RETURNING *`, [panel.id, roleId]);
+  // Remove only the standalone option for this role. Bundles that also contain
+  // the role remain intact and can be removed separately by clearing/rebuilding
+  // the panel options.
+  const optionKey = buildOptionKey([roleId]);
+  const result = await query(
+    `UPDATE role_panel_options
+     SET active = false, updated_at = NOW()
+     WHERE panel_id = $1 AND option_key = $2
+     RETURNING *`,
+    [panel.id, optionKey]
+  );
   return result.rows[0] || null;
 }
 
@@ -630,6 +648,7 @@ module.exports = {
   buildRoleManagerPanel,
   updatePublishedRolePanelMessages,
   optionRoleIds,
+  buildOptionKey,
   formatRoleMentions,
   normalizeDisplayMode,
   MAX_NATIVE_REACTION_OPTIONS

@@ -492,6 +492,28 @@ async function initDatabase() {
   await query(`ALTER TABLE role_panel_options ADD COLUMN IF NOT EXISTS role_ids JSONB;`).catch(() => {});
   await query(`UPDATE role_panel_options SET role_ids = jsonb_build_array(role_id) WHERE role_ids IS NULL;`).catch(() => {});
 
+  // v0.6.1: allow a standalone role option and a bundle containing that same role
+  // to coexist. Earlier versions uniquely keyed options by the first role ID,
+  // which caused adding a bundle to overwrite the standalone option.
+  await query(`ALTER TABLE role_panel_options ADD COLUMN IF NOT EXISTS option_key TEXT;`).catch(() => {});
+  await query(`
+    UPDATE role_panel_options AS option
+    SET option_key = CASE
+      WHEN jsonb_array_length(COALESCE(option.role_ids, jsonb_build_array(option.role_id))) > 1
+        THEN 'bundle:' || (
+          SELECT string_agg(role_value, ',' ORDER BY role_value)
+          FROM jsonb_array_elements_text(COALESCE(option.role_ids, jsonb_build_array(option.role_id))) AS roles(role_value)
+        )
+      ELSE 'role:' || option.role_id
+    END
+    WHERE option.option_key IS NULL
+       OR option.option_key = ''
+       OR option.option_key LIKE 'bundle:legacy:%';
+  `).catch(() => {});
+  await query(`ALTER TABLE role_panel_options DROP CONSTRAINT IF EXISTS role_panel_options_panel_id_role_id_key;`).catch(() => {});
+  await query(`ALTER TABLE role_panel_options ALTER COLUMN option_key SET NOT NULL;`).catch(() => {});
+  await query(`CREATE UNIQUE INDEX IF NOT EXISTS uq_role_panel_options_panel_option_key ON role_panel_options(panel_id, option_key);`).catch(() => {});
+
   await query(`
     CREATE TABLE IF NOT EXISTS panel_messages (
       id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
@@ -723,8 +745,24 @@ async function initDatabase() {
     );
   `);
 
+  await query(`ALTER TABLE leveling_configs ADD COLUMN IF NOT EXISTS level_up_announce_mode TEXT NOT NULL DEFAULT 'ALL_LEVELS';`).catch(() => {});
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS leveling_multiplier_roles (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      role_id TEXT NOT NULL,
+      multiplier NUMERIC(8,3) NOT NULL DEFAULT 1.000,
+      active BOOLEAN NOT NULL DEFAULT true,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(guild_id, role_id)
+    );
+  `);
+
   await query(`CREATE INDEX IF NOT EXISTS idx_leveling_profiles_rank ON leveling_profiles(guild_id, xp DESC);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_leveling_rewards ON leveling_role_rewards(guild_id, level, active);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_leveling_multipliers ON leveling_multiplier_roles(guild_id, active, multiplier DESC);`);
 
   await query(`
     CREATE TABLE IF NOT EXISTS role_permission_levels (

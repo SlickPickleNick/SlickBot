@@ -1,6 +1,6 @@
 # SlickBot Project Plan
 
-## Current Version: 0.6.0
+## Current Version: 0.6.1
 
 SlickBot is being built as a modular all-in-one Discord server management bot for the SlickPickleNick community.
 
@@ -29,12 +29,13 @@ SlickBot is being built as a modular all-in-one Discord server management bot fo
 - Server stats
 - Leveling / XP
 
-## v0.6.0 Scope
+## v0.6.1 Scope
 
-- Fixed native reaction-role syncing so more than four options can be added reliably.
-- Added retry/pacing and Discord’s 20-unique-reaction limit handling.
-- Added `/mod untimeout` and `/mod unban`.
-- Added the Leveling & XP module with automatic message XP, rank/leaderboard views, ignored channels/roles, level-up announcements, and level-role rewards.
+- Fixed role bundles so they no longer overwrite a standalone option that uses the bundle’s first role.
+- Added XP multiplier roles with configurable multiplier values.
+- Added configurable level-up announcement behavior for all levels or reward levels only.
+- Added XP curve analysis with CSV export for every selected level.
+- Added the public `/levels info` panel explaining the server leveling system.
 
 ## Future Modules
 

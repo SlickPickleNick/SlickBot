@@ -1,8 +1,8 @@
 {
   "name": "slickbot",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "private": true,
-  "description": "SlickBot all-in-one Discord server management bot with expanded native reaction roles, reverse moderation actions, and leveling/XP.",
+  "description": "SlickBot all-in-one Discord server management bot with role bundle fixes, XP multiplier roles, XP curve analysis, and expanded leveling information.",
   "main": "src/index.js",
   "engines": {
     "node": ">=22.12.0"

@@ -4,7 +4,60 @@ SlickBot is an all-in-one Discord server management bot built for the SlickPickl
 
 ## Version
 
-Current package: **v0.6.0**
+Current package: **v0.6.1**
+
+## v0.6.1 Updates
+
+### Role Bundle Preservation Fix
+
+- Role panel options now use separate unique keys for standalone roles and role bundles.
+- Adding a bundle that begins with a role already used by a standalone button no longer replaces that standalone option.
+- Example: a standalone `@stream-notifications` option can coexist with a bundle containing `@stream-notifications`, `@announcement-notifications`, and other roles.
+- Removing a standalone role option no longer removes bundles that also contain that role.
+
+### XP Multiplier Roles
+
+```text
+/level multiplier-add
+/level multiplier-remove
+/level multiplier-list
+```
+
+Multiplier roles increase the XP awarded for eligible messages. If a member has more than one multiplier role, SlickBot uses the highest configured multiplier rather than stacking them.
+
+Example:
+
+```text
+/level multiplier-add role:@Subscribers multiplier:1.5
+/level multiplier-add role:@VIP multiplier:2
+```
+
+### Level-Up Announcement Modes
+
+`/level setup` now includes `level_up_mode`:
+
+```text
+ALL_LEVELS
+ROLE_REWARDS_ONLY
+```
+
+This allows level-up messages to be sent for every level or only when the member reaches a level with a configured role reward.
+
+### XP Curve Analysis
+
+```text
+/level analyze max_level:100 multiplier:1
+```
+
+The command provides milestone estimates and a CSV containing every analyzed level, total XP requirements, XP from the previous level, and estimated eligible messages.
+
+### Public Leveling Information
+
+```text
+/levels info
+```
+
+This posts a public information embed explaining how XP is earned, cooldowns, multiplier roles, role rewards, announcement behavior, and user commands.
 
 ## v0.6.0 Updates
 

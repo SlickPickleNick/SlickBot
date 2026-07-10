@@ -1,9 +1,9 @@
-const { SlashCommandBuilder, ChannelType } = require('discord.js');
+const { SlashCommandBuilder, ChannelType, AttachmentBuilder } = require('discord.js');
 const { ModuleKeys } = require('../modules/moduleRegistry');
 const { ActionKeys } = require('../modules/permissions/actionKeys');
 const { replyPrivate } = require('../utils/reply');
 const { createSuccessEmbed, createWarningEmbed, createBaseEmbed, SlickBotColors } = require('../modules/ui/uiService');
-const { LevelingService } = require('../modules/community/levelingService');
+const { LevelingService, formatMultiplier } = require('../modules/community/levelingService');
 
 const leveling = new LevelingService();
 
@@ -19,7 +19,11 @@ module.exports = {
       .addIntegerOption((o) => o.setName('cooldown_seconds').setDescription('XP cooldown per user.').setMinValue(5).setMaxValue(86400).setRequired(false))
       .addIntegerOption((o) => o.setName('minimum_length').setDescription('Minimum message length for XP.').setMinValue(1).setMaxValue(500).setRequired(false))
       .addChannelOption((o) => o.setName('level_up_channel').setDescription('Channel for level-up announcements.').addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement).setRequired(false))
-      .addStringOption((o) => o.setName('level_up_message').setDescription('Supports {user}, {username}, {level}, and {server}.').setMaxLength(1500).setRequired(false)))
+      .addStringOption((o) => o.setName('level_up_message').setDescription('Supports {user}, {username}, {level}, {roles}, and {server}.').setMaxLength(1500).setRequired(false))
+      .addStringOption((o) => o.setName('level_up_mode').setDescription('Choose which level-ups are announced.').setRequired(false).addChoices(
+        { name: 'Announce every level', value: 'ALL_LEVELS' },
+        { name: 'Only announce levels with role rewards', value: 'ROLE_REWARDS_ONLY' }
+      )))
     .addSubcommand((sub) => sub.setName('rank').setDescription('View a user’s XP rank.').addUserOption((o) => o.setName('user').setDescription('User to view. Defaults to you.').setRequired(false)))
     .addSubcommand((sub) => sub.setName('leaderboard').setDescription('View the top XP users.'))
     .addSubcommand((sub) => sub.setName('role-add').setDescription('Assign a role automatically at a level.')
@@ -28,6 +32,15 @@ module.exports = {
     .addSubcommand((sub) => sub.setName('role-remove').setDescription('Remove a level role reward.')
       .addIntegerOption((o) => o.setName('level').setDescription('Reward level.').setMinValue(1).setMaxValue(10000).setRequired(true))
       .addRoleOption((o) => o.setName('role').setDescription('Specific role to remove. Leave blank to remove all rewards at this level.').setRequired(false)))
+    .addSubcommand((sub) => sub.setName('multiplier-add').setDescription('Add or update an XP multiplier role.')
+      .addRoleOption((o) => o.setName('role').setDescription('Role that receives multiplied message XP.').setRequired(true))
+      .addNumberOption((o) => o.setName('multiplier').setDescription('XP multiplier, such as 1.5 or 2.').setMinValue(0.1).setMaxValue(100).setRequired(true)))
+    .addSubcommand((sub) => sub.setName('multiplier-remove').setDescription('Remove an XP multiplier role.')
+      .addRoleOption((o) => o.setName('role').setDescription('Multiplier role to remove.').setRequired(true)))
+    .addSubcommand((sub) => sub.setName('multiplier-list').setDescription('List configured XP multiplier roles.'))
+    .addSubcommand((sub) => sub.setName('analyze').setDescription('Analyze the XP curve and export all levels to CSV.')
+      .addIntegerOption((o) => o.setName('max_level').setDescription('Highest level to analyze. Defaults to 100.').setMinValue(1).setMaxValue(1000).setRequired(false))
+      .addNumberOption((o) => o.setName('multiplier').setDescription('Optional multiplier to use in message estimates.').setMinValue(0.1).setMaxValue(100).setRequired(false)))
     .addSubcommand((sub) => sub.setName('ignored-channel-add').setDescription('Prevent XP in a channel.').addChannelOption((o) => o.setName('channel').setDescription('Channel to ignore.').addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement).setRequired(true)))
     .addSubcommand((sub) => sub.setName('ignored-channel-remove').setDescription('Allow XP in a previously ignored channel.').addChannelOption((o) => o.setName('channel').setDescription('Channel to remove from the ignore list.').addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement).setRequired(true)))
     .addSubcommand((sub) => sub.setName('ignored-role-add').setDescription('Prevent XP for members with a role.').addRoleOption((o) => o.setName('role').setDescription('Role to ignore.').setRequired(true)))
@@ -39,7 +52,7 @@ module.exports = {
   getActionKey(interaction) {
     const sub = interaction.options.getSubcommand();
     if (sub === 'rank' || sub === 'leaderboard') return ActionKeys.LevelingUse;
-    if (sub === 'manager') return ActionKeys.LevelingView;
+    if (sub === 'manager' || sub === 'multiplier-list' || sub === 'analyze') return ActionKeys.LevelingView;
     if (sub === 'set-xp' || sub === 'reset') return ActionKeys.LevelingAdjust;
     return ActionKeys.LevelingConfigure;
   },
@@ -58,10 +71,11 @@ module.exports = {
         cooldownSeconds: interaction.options.getInteger('cooldown_seconds') ?? undefined,
         minimumMessageLength: interaction.options.getInteger('minimum_length') ?? undefined,
         levelUpChannelId: interaction.options.getChannel('level_up_channel')?.id,
-        levelUpMessage: interaction.options.getString('level_up_message') ?? undefined
+        levelUpMessage: interaction.options.getString('level_up_message') ?? undefined,
+        levelUpAnnounceMode: interaction.options.getString('level_up_mode') ?? undefined
       });
-      await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'leveling-config', title: 'Leveling Config Updated', body: `Updated By: <@${interaction.user.id}>\nXP: **${config.xp_min}–${config.xp_max}**\nCooldown: **${config.cooldown_seconds}s**`, actorUserId: interaction.user.id });
-      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Leveling Configuration Saved', `Message XP is **${config.enabled ? 'enabled' : 'disabled'}**.\nXP Range: **${config.xp_min}–${config.xp_max}**\nCooldown: **${config.cooldown_seconds}s**`)] });
+      await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'leveling-config', title: 'Leveling Config Updated', body: `Updated By: <@${interaction.user.id}>\nXP: **${config.xp_min}–${config.xp_max}**\nCooldown: **${config.cooldown_seconds}s**\nAnnouncements: **${config.level_up_announce_mode === 'ROLE_REWARDS_ONLY' ? 'Reward levels only' : 'All levels'}**`, actorUserId: interaction.user.id });
+      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Leveling Configuration Saved', `Message XP is **${config.enabled ? 'enabled' : 'disabled'}**.\nXP Range: **${config.xp_min}–${config.xp_max}**\nCooldown: **${config.cooldown_seconds}s**\nAnnouncements: **${config.level_up_announce_mode === 'ROLE_REWARDS_ONLY' ? 'Reward levels only' : 'All levels'}**`)] });
     }
 
     if (sub === 'rank') {
@@ -74,6 +88,7 @@ module.exports = {
       const level = interaction.options.getInteger('level', true);
       const role = interaction.options.getRole('role', true);
       await leveling.addRoleReward(interaction.guildId, level, role.id);
+      await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'leveling-config', title: 'Level Role Added', body: `Level: **${level}**\nRole: ${role}\nUpdated By: <@${interaction.user.id}>`, actorUserId: interaction.user.id }).catch(() => {});
       return replyPrivate(interaction, { embeds: [createSuccessEmbed('Level Role Added', `${role} will be assigned at level **${level}**.`)] });
     }
     if (sub === 'role-remove') {
@@ -81,6 +96,39 @@ module.exports = {
       const role = interaction.options.getRole('role');
       const removed = await leveling.removeRoleReward(interaction.guildId, level, role?.id || null);
       return replyPrivate(interaction, { embeds: [removed.length ? createSuccessEmbed('Level Role Removed', `Removed **${removed.length}** reward(s) at level **${level}**.`) : createWarningEmbed('No Reward Found', 'No matching active level-role reward was found.')] });
+    }
+
+    if (sub === 'multiplier-add') {
+      const role = interaction.options.getRole('role', true);
+      const multiplier = interaction.options.getNumber('multiplier', true);
+      const saved = await leveling.addMultiplierRole(interaction.guildId, role.id, multiplier);
+      await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'leveling-config', title: 'XP Multiplier Role Saved', body: `Role: ${role}\nMultiplier: **${formatMultiplier(saved.multiplier)}**\nUpdated By: <@${interaction.user.id}>`, actorUserId: interaction.user.id }).catch(() => {});
+      return replyPrivate(interaction, { embeds: [createSuccessEmbed('XP Multiplier Saved', `${role} now earns **${formatMultiplier(saved.multiplier)} XP** per eligible message. If a user has multiple multiplier roles, the highest multiplier is used.`)] });
+    }
+    if (sub === 'multiplier-remove') {
+      const role = interaction.options.getRole('role', true);
+      const removed = await leveling.removeMultiplierRole(interaction.guildId, role.id);
+      return replyPrivate(interaction, { embeds: [removed ? createSuccessEmbed('XP Multiplier Removed', `${role} no longer provides an XP multiplier.`) : createWarningEmbed('Multiplier Not Found', `${role} is not an active multiplier role.`)] });
+    }
+    if (sub === 'multiplier-list') {
+      const multipliers = await leveling.listMultiplierRoles(interaction.guildId);
+      return replyPrivate(interaction, { embeds: [createBaseEmbed({
+        title: 'SlickBot XP Multiplier Roles',
+        description: multipliers.length
+          ? multipliers.map((item) => `<@&${item.role_id}> — **${formatMultiplier(item.multiplier)} XP**`).join('\n')
+          : 'No XP multiplier roles are configured.',
+        color: multipliers.length ? SlickBotColors.PRIMARY : SlickBotColors.WARNING
+      })] });
+    }
+
+    if (sub === 'analyze') {
+      const config = await leveling.getConfig(interaction.guildId) || await leveling.saveConfig(interaction.guildId, {});
+      const maxLevel = interaction.options.getInteger('max_level') || 100;
+      const multiplier = interaction.options.getNumber('multiplier') || 1;
+      const analysis = leveling.buildXpAnalysis(config, maxLevel, multiplier);
+      const csv = leveling.buildXpAnalysisCsv(analysis);
+      const attachment = new AttachmentBuilder(Buffer.from(csv, 'utf8'), { name: `slickbot-xp-levels-1-${analysis.maxLevel}.csv` });
+      return replyPrivate(interaction, { embeds: [leveling.buildXpAnalysisEmbed(analysis)], files: [attachment] });
     }
 
     if (sub === 'ignored-channel-add' || sub === 'ignored-channel-remove') {

@@ -42,6 +42,17 @@ function progressBar(current, total, length = 12) {
   return `${'█'.repeat(filled)}${'░'.repeat(Math.max(0, length - filled))}`;
 }
 
+function normalizeAnnouncementMode(value) {
+  return String(value || 'ALL_LEVELS').toUpperCase() === 'ROLE_REWARDS_ONLY'
+    ? 'ROLE_REWARDS_ONLY'
+    : 'ALL_LEVELS';
+}
+
+function formatMultiplier(value) {
+  const number = Number(value || 1);
+  return `${Number.isInteger(number) ? number.toFixed(0) : number.toFixed(2).replace(/0+$/, '').replace(/\.$/, '')}×`;
+}
+
 class LevelingService {
   async getConfig(guildId) {
     const result = await query(`SELECT * FROM leveling_configs WHERE guild_id = $1 LIMIT 1`, [guildId]);
@@ -58,6 +69,7 @@ class LevelingService {
       minimumMessageLength: Math.max(1, Math.min(500, Number(values.minimumMessageLength ?? current?.minimum_message_length ?? 3))),
       levelUpChannelId: values.levelUpChannelId === undefined ? current?.level_up_channel_id ?? null : values.levelUpChannelId,
       levelUpMessage: values.levelUpMessage ?? current?.level_up_message ?? 'Congratulations {user}! You reached level **{level}**.',
+      levelUpAnnounceMode: normalizeAnnouncementMode(values.levelUpAnnounceMode ?? current?.level_up_announce_mode),
       ignoredChannels: values.ignoredChannels ?? safeArray(current?.ignored_channel_ids),
       ignoredRoles: values.ignoredRoles ?? safeArray(current?.ignored_role_ids)
     };
@@ -65,8 +77,8 @@ class LevelingService {
 
     const result = await query(
       `INSERT INTO leveling_configs
-       (guild_id, enabled, xp_min, xp_max, cooldown_seconds, minimum_message_length, level_up_channel_id, level_up_message, ignored_channel_ids, ignored_role_ids)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10::jsonb)
+       (guild_id, enabled, xp_min, xp_max, cooldown_seconds, minimum_message_length, level_up_channel_id, level_up_message, level_up_announce_mode, ignored_channel_ids, ignored_role_ids)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11::jsonb)
        ON CONFLICT (guild_id)
        DO UPDATE SET enabled = EXCLUDED.enabled,
                      xp_min = EXCLUDED.xp_min,
@@ -75,11 +87,12 @@ class LevelingService {
                      minimum_message_length = EXCLUDED.minimum_message_length,
                      level_up_channel_id = EXCLUDED.level_up_channel_id,
                      level_up_message = EXCLUDED.level_up_message,
+                     level_up_announce_mode = EXCLUDED.level_up_announce_mode,
                      ignored_channel_ids = EXCLUDED.ignored_channel_ids,
                      ignored_role_ids = EXCLUDED.ignored_role_ids,
                      updated_at = NOW()
        RETURNING *`,
-      [guildId, config.enabled, config.xpMin, config.xpMax, config.cooldownSeconds, config.minimumMessageLength, config.levelUpChannelId, config.levelUpMessage, JSON.stringify(config.ignoredChannels), JSON.stringify(config.ignoredRoles)]
+      [guildId, config.enabled, config.xpMin, config.xpMax, config.cooldownSeconds, config.minimumMessageLength, config.levelUpChannelId, config.levelUpMessage, config.levelUpAnnounceMode, JSON.stringify(config.ignoredChannels), JSON.stringify(config.ignoredRoles)]
     );
     return result.rows[0];
   }
@@ -147,6 +160,53 @@ class LevelingService {
     return result.rows;
   }
 
+  async addMultiplierRole(guildId, roleId, multiplier) {
+    const safeMultiplier = Math.max(0.1, Math.min(100, Number(multiplier) || 1));
+    const result = await query(
+      `INSERT INTO leveling_multiplier_roles (guild_id, role_id, multiplier, active)
+       VALUES ($1,$2,$3,true)
+       ON CONFLICT (guild_id, role_id)
+       DO UPDATE SET multiplier = EXCLUDED.multiplier, active = true, updated_at = NOW()
+       RETURNING *`,
+      [guildId, roleId, safeMultiplier]
+    );
+    return result.rows[0];
+  }
+
+  async removeMultiplierRole(guildId, roleId) {
+    const result = await query(
+      `UPDATE leveling_multiplier_roles SET active = false, updated_at = NOW()
+       WHERE guild_id = $1 AND role_id = $2 RETURNING *`,
+      [guildId, roleId]
+    );
+    return result.rows[0] || null;
+  }
+
+  async listMultiplierRoles(guildId) {
+    const result = await query(
+      `SELECT * FROM leveling_multiplier_roles
+       WHERE guild_id = $1 AND active = true
+       ORDER BY multiplier DESC, created_at ASC`,
+      [guildId]
+    );
+    return result.rows;
+  }
+
+  async getApplicableMultiplier(guildId, memberRoleIds) {
+    const roleIds = [...new Set((memberRoleIds || []).map(String))];
+    if (!roleIds.length) return { multiplier: 1, roleId: null };
+    const result = await query(
+      `SELECT role_id, multiplier
+       FROM leveling_multiplier_roles
+       WHERE guild_id = $1 AND active = true AND role_id = ANY($2)
+       ORDER BY multiplier DESC
+       LIMIT 1`,
+      [guildId, roleIds]
+    );
+    if (!result.rows.length) return { multiplier: 1, roleId: null };
+    return { multiplier: Math.max(0.1, Number(result.rows[0].multiplier) || 1), roleId: result.rows[0].role_id };
+  }
+
   async setXp(guildId, user, xp) {
     const safeXp = Math.max(0, Math.floor(Number(xp) || 0));
     const level = levelFromXp(safeXp);
@@ -182,7 +242,9 @@ class LevelingService {
 
     const minXp = Number(config.xp_min || 15);
     const maxXp = Number(config.xp_max || 25);
-    const gained = Math.floor(Math.random() * (maxXp - minXp + 1)) + minXp;
+    const baseGained = Math.floor(Math.random() * (maxXp - minXp + 1)) + minXp;
+    const multiplierData = await this.getApplicableMultiplier(message.guild.id, memberRoleIds);
+    const gained = Math.max(1, Math.round(baseGained * multiplierData.multiplier));
     const oldLevel = Number(existing?.level || 0);
     const newXp = Number(existing?.xp || 0) + gained;
     const newLevel = levelFromXp(newXp);
@@ -203,7 +265,7 @@ class LevelingService {
     const profile = result.rows[0];
 
     if (newLevel > oldLevel) await this.handleLevelUp(message, member, profile, oldLevel, config, logger);
-    return { awarded: true, gained, profile, leveledUp: newLevel > oldLevel };
+    return { awarded: true, baseGained, multiplier: multiplierData.multiplier, multiplierRoleId: multiplierData.roleId, gained, profile, leveledUp: newLevel > oldLevel };
   }
 
   async handleLevelUp(message, member, profile, oldLevel, config, logger) {
@@ -219,14 +281,17 @@ class LevelingService {
       }
     }
 
-    if (config.level_up_channel_id) {
+    const announceMode = normalizeAnnouncementMode(config.level_up_announce_mode);
+    const shouldAnnounce = announceMode === 'ALL_LEVELS' || rewards.rows.length > 0;
+    if (shouldAnnounce && config.level_up_channel_id) {
       const channel = await message.guild.channels.fetch(config.level_up_channel_id).catch(() => null);
       if (channel && typeof channel.send === 'function') {
         const content = String(config.level_up_message || 'Congratulations {user}! You reached level **{level}**.')
           .replaceAll('{user}', `<@${message.author.id}>`)
           .replaceAll('{username}', message.author.username)
           .replaceAll('{level}', String(profile.level))
-          .replaceAll('{server}', message.guild.name);
+          .replaceAll('{server}', message.guild.name)
+          .replaceAll('{roles}', assignedRoles.length ? assignedRoles.map((id) => `<@&${id}>`).join(', ') : 'No new role reward');
         await channel.send({ content }).catch(() => {});
       }
     }
@@ -235,17 +300,120 @@ class LevelingService {
       guildId: message.guild.id,
       eventKey: 'leveling-level-up',
       title: 'Member Leveled Up',
-      body: [`User: <@${message.author.id}>`, `New Level: **${profile.level}**`, assignedRoles.length ? `Roles Added: ${assignedRoles.map((id) => `<@&${id}>`).join(', ')}` : null].filter(Boolean).join('\n'),
+      body: [`User: <@${message.author.id}>`, `New Level: **${profile.level}**`, assignedRoles.length ? `Roles Added: ${assignedRoles.map((id) => `<@&${id}>`).join(', ')}` : null, `Announcement: **${shouldAnnounce ? 'Eligible' : 'Reward levels only'}**`].filter(Boolean).join('\n'),
       actorUserId: message.author.id,
-      metadata: { userId: message.author.id, level: profile.level, assignedRoles }
+      metadata: { userId: message.author.id, level: profile.level, assignedRoles, announceMode, announced: shouldAnnounce }
     }).catch(() => {});
+  }
+
+  buildXpAnalysis(config, maxLevel = 100, multiplier = 1) {
+    const safeMaxLevel = Math.max(1, Math.min(1000, Number(maxLevel) || 100));
+    const safeMultiplier = Math.max(0.1, Math.min(100, Number(multiplier) || 1));
+    const averageBaseXp = (Number(config?.xp_min || 15) + Number(config?.xp_max || 25)) / 2;
+    const averageAward = Math.max(0.1, averageBaseXp * safeMultiplier);
+    const rows = [];
+    for (let level = 1; level <= safeMaxLevel; level += 1) {
+      const totalXp = totalXpForLevel(level);
+      const previousXp = totalXpForLevel(level - 1);
+      const incrementalXp = totalXp - previousXp;
+      rows.push({
+        level,
+        incrementalXp,
+        totalXp,
+        estimatedMessagesForLevel: Math.ceil(incrementalXp / averageAward),
+        estimatedMessagesTotal: Math.ceil(totalXp / averageAward)
+      });
+    }
+    return { rows, averageBaseXp, averageAward, multiplier: safeMultiplier, maxLevel: safeMaxLevel };
+  }
+
+  buildXpAnalysisCsv(analysis) {
+    const lines = ['Level,XP From Previous Level,Total XP Required,Estimated Messages For Level,Estimated Messages Total'];
+    for (const row of analysis.rows) {
+      lines.push([row.level, row.incrementalXp, row.totalXp, row.estimatedMessagesForLevel, row.estimatedMessagesTotal].join(','));
+    }
+    return `${lines.join('\n')}\n`;
+  }
+
+  buildXpAnalysisEmbed(analysis) {
+    const milestoneLevels = [1, 5, 10, 25, 50, 100, analysis.maxLevel]
+      .filter((value, index, values) => value <= analysis.maxLevel && values.indexOf(value) === index)
+      .sort((a, b) => a - b);
+    const milestones = milestoneLevels.map((level) => {
+      const row = analysis.rows[level - 1];
+      return `Level **${level}** — **${row.totalXp.toLocaleString()} XP** · ~**${row.estimatedMessagesTotal.toLocaleString()}** eligible messages`;
+    });
+    return createBaseEmbed({
+      title: 'SlickBot XP Curve Analysis',
+      description: [
+        `Levels analyzed: **1–${analysis.maxLevel}**`,
+        `Average base award: **${analysis.averageBaseXp.toFixed(1)} XP**`,
+        `Analysis multiplier: **${formatMultiplier(analysis.multiplier)}**`,
+        `Average adjusted award: **${analysis.averageAward.toFixed(1)} XP**`,
+        '',
+        ...milestones,
+        '',
+        'The attached CSV includes every analyzed level. Estimates assume every eligible message earns XP and do not account for cooldown downtime.'
+      ].join('\n'),
+      color: SlickBotColors.INFO
+    });
+  }
+
+  async buildInfoEmbed(guild) {
+    const config = await this.getConfig(guild.id);
+    const [rewards, multipliers] = await Promise.all([
+      this.listRoleRewards(guild.id),
+      this.listMultiplierRoles(guild.id)
+    ]);
+    if (!config) {
+      return createBaseEmbed({
+        title: 'How SlickBot Levels Work',
+        description: 'The Leveling module has not been configured yet.',
+        color: SlickBotColors.WARNING
+      });
+    }
+
+    const multiplierLines = multipliers.length
+      ? multipliers.map((item) => `<@&${item.role_id}> — **${formatMultiplier(item.multiplier)} XP**`).join('\n')
+      : 'No multiplier roles are configured.';
+    const rewardLines = rewards.length
+      ? rewards.slice(0, 15).map((item) => `Level **${item.level}** — <@&${item.role_id}>`).join('\n')
+      : 'No level-role rewards are configured.';
+
+    return createBaseEmbed({
+      title: 'How SlickBot Levels Work',
+      description: [
+        '**Earning XP**',
+        `Send eligible messages to earn a random **${config.xp_min}–${config.xp_max} XP**.`,
+        `XP can be earned once every **${config.cooldown_seconds} seconds** per user.`,
+        `Messages must contain at least **${config.minimum_message_length} characters**. Bot messages, ignored channels, and ignored roles do not earn XP.`,
+        '',
+        '**Multiplier Roles**',
+        multiplierLines,
+        multipliers.length > 1 ? '\nIf you have multiple multiplier roles, SlickBot uses the **highest multiplier** rather than stacking them.' : '',
+        '',
+        '**Level Rewards**',
+        rewardLines,
+        '',
+        `Level-up announcements: **${normalizeAnnouncementMode(config.level_up_announce_mode) === 'ROLE_REWARDS_ONLY' ? 'Only levels with role rewards' : 'Every level'}**`,
+        config.level_up_channel_id ? `Announcement channel: <#${config.level_up_channel_id}>` : 'Announcement channel: Not configured',
+        '',
+        '**Commands**',
+        '`/level rank` — View your XP and level progress',
+        '`/level leaderboard` — View the top XP users',
+        '`/levels info` — Show this information panel'
+      ].filter(Boolean).join('\n'),
+      color: SlickBotColors.PRIMARY,
+      footer: `SlickBot Leveling · ${guild.name}`
+    });
   }
 
   async buildManagerPanel(guildId) {
     const config = await this.getConfig(guildId);
-    const [profiles, rewards] = await Promise.all([
+    const [profiles, rewards, multipliers] = await Promise.all([
       query(`SELECT COUNT(*)::int AS count FROM leveling_profiles WHERE guild_id = $1`, [guildId]),
-      this.listRoleRewards(guildId)
+      this.listRoleRewards(guildId),
+      this.listMultiplierRoles(guildId)
     ]);
     return {
       embeds: [createBaseEmbed({
@@ -257,10 +425,12 @@ class LevelingService {
               `Cooldown: **${config.cooldown_seconds}s**`,
               `Minimum Message Length: **${config.minimum_message_length}**`,
               `Level-Up Channel: ${config.level_up_channel_id ? `<#${config.level_up_channel_id}>` : 'Not configured'}`,
+              `Announcement Mode: **${normalizeAnnouncementMode(config.level_up_announce_mode) === 'ROLE_REWARDS_ONLY' ? 'Reward levels only' : 'All levels'}**`,
               `Profiles: **${profiles.rows[0]?.count || 0}**`,
               `Role Rewards: **${rewards.length}**`,
+              `Multiplier Roles: **${multipliers.length}**`,
               '',
-              'Use `/level setup`, `/level role-add`, and the ignore-list commands to configure this module.'
+              'Use `/level setup`, `/level role-add`, `/level multiplier-add`, and `/level analyze` to configure and review this module.'
             ].join('\n')
           : 'Leveling has not been configured. Run `/level setup` to create the default configuration.',
         color: config ? SlickBotColors.PRIMARY : SlickBotColors.WARNING
@@ -295,4 +465,11 @@ class LevelingService {
   }
 }
 
-module.exports = { LevelingService, totalXpForLevel, levelFromXp, progressForProfile };
+module.exports = {
+  LevelingService,
+  totalXpForLevel,
+  levelFromXp,
+  progressForProfile,
+  normalizeAnnouncementMode,
+  formatMultiplier
+};
