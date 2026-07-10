@@ -1,3 +1,12 @@
+// v0.7.0 compatibility patches are loaded before commands so direct command
+// deployment, validation, and normal bot startup all see the same module state.
+require('../modules/moduleRegistryJoinToCreate');
+require('../modules/permissions/actionKeysJoinToCreate');
+require('../modules/logging/logEventCatalogJoinToCreate');
+require('../modules/ui/panelsJoinToCreate');
+require('../services/interactionRouterJoinToCreate');
+require('../modules/community/joinToCreateBootstrap');
+
 const pingCommand = require('./ping');
 const setupCommand = require('./setup');
 const teamCommand = require('./team');
@@ -22,6 +31,7 @@ const scheduleCommand = require('./schedule');
 const statsCommand = require('./stats');
 const levelCommand = require('./level');
 const levelsCommand = require('./levels');
+const voiceCommand = require('./voice');
 
 const commands = [
   pingCommand,
@@ -47,7 +57,8 @@ const commands = [
   scheduleCommand,
   statsCommand,
   levelCommand,
-  levelsCommand
+  levelsCommand,
+  voiceCommand
 ];
 
 const commandMap = new Map(commands.map((command) => [command.data.name, command]));
