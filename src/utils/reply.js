@@ -65,7 +65,11 @@ async function replyPrivate(interaction, options) {
 
   let response;
   let isFollowUp = false;
-  if (interaction.deferred || interaction.replied) {
+  if (interaction.deferred && !interaction.replied && typeof interaction.editReply === 'function') {
+    const editPayload = { ...payload };
+    delete editPayload.flags;
+    response = await interaction.editReply(editPayload);
+  } else if (interaction.replied) {
     isFollowUp = true;
     response = await interaction.followUp({ ...payload, fetchReply: deleteAfterSeconds > 0 });
   } else {

@@ -17,6 +17,7 @@ const { GiveawayService } = require('../modules/community/giveawayService');
 const { BirthdayService, buildBirthdayDayModal, buildBirthdayTimezoneModal, isValidDate } = require('../modules/community/birthdayService');
 const { ScheduledMessageService } = require('../modules/automation/scheduledMessageService');
 const { ServerStatsService } = require('../modules/community/serverStatsService');
+const { LevelingService } = require('../modules/community/levelingService');
 const { buildRoleManagerPanel, toggleRole } = require('../modules/community/rolePanelService');
 const {
   TicketService,
@@ -39,6 +40,7 @@ const giveaways = new GiveawayService();
 const birthdays = new BirthdayService();
 const scheduledMessages = new ScheduledMessageService();
 const serverStats = new ServerStatsService();
+const leveling = new LevelingService();
 
 async function handleComponentInteraction(interaction, ctx) {
   if (!interaction.guildId) {
@@ -175,6 +177,12 @@ async function handleButton(interaction, ctx) {
     return true;
   }
 
+
+  if (id === CustomIds.LevelingRefresh) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.LevelingView, ModuleKeys.LEVELING))) return true;
+    await updatePanel(interaction, await leveling.buildManagerPanel(interaction.guildId));
+    return true;
+  }
 
   if (id === CustomIds.ServerStatsRefresh) {
     if (!(await requireAction(interaction, ctx, ActionKeys.ServerStatsView, ModuleKeys.SERVER_STATS))) return true;
@@ -675,7 +683,7 @@ async function requireAnySupportAction(interaction, ctx) {
 
 
 async function requireAnyCommunityAction(interaction, ctx) {
-  const checks = [[ActionKeys.WelcomeView, ModuleKeys.WELCOME], [ActionKeys.RolePanelsView, ModuleKeys.REACTION_ROLES], [ActionKeys.GiveawaysView, ModuleKeys.GIVEAWAYS], [ActionKeys.BirthdaysView, ModuleKeys.BIRTHDAYS], [ActionKeys.ScheduledMessagesView, ModuleKeys.SCHEDULED_MESSAGES], [ActionKeys.ServerStatsView, ModuleKeys.SERVER_STATS]];
+  const checks = [[ActionKeys.WelcomeView, ModuleKeys.WELCOME], [ActionKeys.RolePanelsView, ModuleKeys.REACTION_ROLES], [ActionKeys.GiveawaysView, ModuleKeys.GIVEAWAYS], [ActionKeys.BirthdaysView, ModuleKeys.BIRTHDAYS], [ActionKeys.LevelingView, ModuleKeys.LEVELING], [ActionKeys.ScheduledMessagesView, ModuleKeys.SCHEDULED_MESSAGES], [ActionKeys.ServerStatsView, ModuleKeys.SERVER_STATS]];
   for (const [action, moduleKey] of checks) {
     const result = await ctx.permissions.checkInteraction(interaction, action, moduleKey);
     if (result.allowed) return true;

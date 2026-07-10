@@ -4,43 +4,45 @@ SlickBot is an all-in-one Discord server management bot built for the SlickPickl
 
 ## Version
 
-Current package: **v0.5.6**
+Current package: **v0.6.0**
 
-## v0.5.6 Updates
+## v0.6.0 Updates
 
-### Multi-Role Reaction Role Options
+### Expanded Native Reaction Roles
 
-- Role panel options can now assign/remove multiple roles at once.
-- Use `/roles add-bundle` to create one button/dropdown/reaction option that controls a bundle of roles.
-- Bulk add also supports multiple roles in the first column, such as `@RoleOne,@RoleTwo|Label|emoji|#5865f2`.
+- Fixed the setup path that could stop after only a few native reactions.
+- Reaction panel posting now defers the Discord interaction before syncing reactions.
+- Reaction sync uses pacing and retry handling.
+- One message supports up to 20 unique configured reaction options.
+- Missing, duplicate, failed, and over-limit reaction options are reported after posting.
 
-### Native Reaction Role Display Mode
-
-Reaction role panels now support a third display mode:
-
-```text
-BUTTONS
-DROPDOWN
-REACTIONS
-```
-
-Buttons remain the default.
-
-Use:
+### Reverse Moderation Actions
 
 ```text
-/roles display-mode panel:ColorRoles display_mode:REACTIONS
+/mod untimeout
+/mod unban
 ```
 
-When posted in `REACTIONS` mode, SlickBot adds the configured emojis as native Discord reactions on the message.
+Both actions create moderation cases, audit entries, and moderation logs.
 
-- Adding a reaction gives the linked role or role bundle.
-- Removing the reaction removes the linked role or role bundle.
-- Single-mode panels remove other roles/reactions from the same panel when a user selects a new reaction.
-- Multi-mode panels allow users to select multiple reactions.
+### Leveling & XP Module
 
-Native reaction mode requires configured emojis on the role options.
+```text
+/level manager
+/level setup
+/level rank
+/level leaderboard
+/level role-add
+/level role-remove
+/level ignored-channel-add
+/level ignored-channel-remove
+/level ignored-role-add
+/level ignored-role-remove
+/level set-xp
+/level reset
+```
 
+Includes automatic message XP, cooldowns, minimum message length, ignored channels and roles, level-up announcements, rank/leaderboard embeds, staff XP adjustments, and automatic level-role rewards.
 
 ## v0.5.4 Updates
 
@@ -186,6 +188,8 @@ NODE_ENV=production
 /birthday test
 /schedule setup default_channel:#announcements enabled:true
 /schedule manager
+/level setup
+/level manager
 ```
 
 Optional log setup:

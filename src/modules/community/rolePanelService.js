@@ -3,6 +3,12 @@ const { query } = require('../../services/db');
 const { createBaseEmbed, SlickBotColors } = require('../ui/uiService');
 const { updatePublishedPanelsForRefs } = require('../panels/publishedPanelService');
 
+const MAX_NATIVE_REACTION_OPTIONS = 20;
+
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function normalizeHexColor(color, fallback = '#7869ff') {
   if (!color) return fallback;
   const value = String(color).trim();
@@ -397,26 +403,62 @@ function optionMatchesReaction(option, reaction) {
   return configuredEmojiKeys(option.emoji).includes(reactionKey);
 }
 
+async function reactWithRetry(message, emoji, attempts = 3) {
+  let lastError = null;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      await message.react(emoji);
+      return { ok: true };
+    } catch (error) {
+      lastError = error;
+      if (attempt < attempts) await wait(500 * attempt);
+    }
+  }
+  return { ok: false, error: lastError };
+}
+
 async function syncReactionPanelMessage(message, panel) {
   const displayMode = normalizeDisplayMode(panel?.panel_display_mode || 'BUTTONS');
-  if (displayMode !== 'REACTIONS') return { added: 0, skipped: 0 };
+  if (displayMode !== 'REACTIONS') return { added: 0, skipped: 0, failed: 0, limited: 0 };
 
   const options = await getPanelOptions(panel.id);
-  let added = 0;
+  const uniqueOptions = [];
+  const seenEmojiKeys = new Set();
   let skipped = 0;
+
   for (const option of options) {
     if (!option.emoji) {
       skipped += 1;
       continue;
     }
-    try {
-      await message.react(option.emoji);
-      added += 1;
-    } catch (_error) {
+    const keys = configuredEmojiKeys(option.emoji);
+    const primaryKey = keys.find(Boolean) || String(option.emoji);
+    if (seenEmojiKeys.has(primaryKey)) {
       skipped += 1;
+      continue;
     }
+    seenEmojiKeys.add(primaryKey);
+    uniqueOptions.push(option);
   }
-  return { added, skipped };
+
+  const usable = uniqueOptions.slice(0, MAX_NATIVE_REACTION_OPTIONS);
+  const limited = Math.max(0, uniqueOptions.length - usable.length);
+  let added = 0;
+  let failed = 0;
+
+  for (const option of usable) {
+    const alreadyPresent = message.reactions?.cache?.some((reaction) => optionMatchesReaction(option, reaction));
+    if (alreadyPresent) {
+      added += 1;
+      continue;
+    }
+    const result = await reactWithRetry(message, option.emoji);
+    if (result.ok) added += 1;
+    else failed += 1;
+    await wait(175);
+  }
+
+  return { added, skipped, failed, limited, totalConfigured: options.length, maxSupported: MAX_NATIVE_REACTION_OPTIONS };
 }
 
 async function removeOtherSingleModeReactions({ message, options, selectedOption, userId }) {
@@ -506,11 +548,47 @@ async function updatePublishedRolePanelMessages(client, guildId, panel) {
       const message = channel && typeof channel.messages?.fetch === 'function'
         ? await channel.messages.fetch(published.message_id).catch(() => null)
         : null;
-      if (message) await syncReactionPanelMessage(message, panel).catch(() => {});
+      if (message) {
+        // Reaction sync can take several seconds when a panel has many options.
+        // Run it outside the command response path so setup interactions do not time out.
+        syncReactionPanelMessage(message, panel).catch(() => {});
+      }
     }
   }
 
   return result;
+}
+
+async function syncAllPublishedReactionPanels(client, guildId) {
+  const panelsResult = await query(
+    `SELECT * FROM role_panels
+     WHERE guild_id = $1 AND active = true AND UPPER(panel_display_mode) = 'REACTIONS'
+     ORDER BY created_at ASC`,
+    [guildId]
+  );
+  const { getPublishedPanelsForRefs } = require('../panels/publishedPanelService');
+  let messages = 0;
+  let added = 0;
+  let failed = 0;
+  let limited = 0;
+
+  for (const panel of panelsResult.rows) {
+    const publishedRows = await getPublishedPanelsForRefs(guildId, 'role', [panel.id, panel.name]).catch(() => []);
+    for (const published of publishedRows) {
+      const channel = await client.channels.fetch(published.channel_id).catch(() => null);
+      const message = channel && typeof channel.messages?.fetch === 'function'
+        ? await channel.messages.fetch(published.message_id).catch(() => null)
+        : null;
+      if (!message) continue;
+      messages += 1;
+      const result = await syncReactionPanelMessage(message, panel).catch(() => ({ added: 0, failed: 1, limited: 0 }));
+      added += result.added || 0;
+      failed += result.failed || 0;
+      limited += result.limited || 0;
+    }
+  }
+
+  return { panels: panelsResult.rowCount, messages, added, failed, limited };
 }
 
 async function buildRoleManagerPanel(guildId) {
@@ -546,11 +624,13 @@ module.exports = {
   buildRolePanelMessage,
   getPanelOptions,
   syncReactionPanelMessage,
+  syncAllPublishedReactionPanels,
   handleReactionRole,
   toggleRole,
   buildRoleManagerPanel,
   updatePublishedRolePanelMessages,
   optionRoleIds,
   formatRoleMentions,
-  normalizeDisplayMode
+  normalizeDisplayMode,
+  MAX_NATIVE_REACTION_OPTIONS
 };

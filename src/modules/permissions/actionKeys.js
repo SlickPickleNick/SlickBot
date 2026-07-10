@@ -16,8 +16,10 @@ const ActionKeys = Object.freeze({
   ModerationPanel: 'moderation.panel',
   ModerationWarn: 'moderation.warn',
   ModerationTimeout: 'moderation.timeout',
+  ModerationUntimeout: 'moderation.untimeout',
   ModerationKick: 'moderation.kick',
   ModerationBan: 'moderation.ban',
+  ModerationUnban: 'moderation.unban',
   ModerationMassBan: 'moderation.massban',
   CasesView: 'cases.view',
   CasesManage: 'cases.manage',
@@ -92,6 +94,11 @@ const ActionKeys = Object.freeze({
   ServerStatsConfigure: 'server-stats.configure',
   ServerStatsRefresh: 'server-stats.refresh',
 
+  LevelingUse: 'leveling.use',
+  LevelingView: 'leveling.view',
+  LevelingConfigure: 'leveling.configure',
+  LevelingAdjust: 'leveling.adjust',
+
   PanelsConfigure: 'panels.configure',
 
   ServerReset: 'server.reset'
@@ -129,8 +136,10 @@ const defaultActionLevels = Object.freeze({
   [ActionKeys.ModerationPanel]: PermissionLevels.MODERATOR,
   [ActionKeys.ModerationWarn]: PermissionLevels.MODERATOR,
   [ActionKeys.ModerationTimeout]: PermissionLevels.MODERATOR,
+  [ActionKeys.ModerationUntimeout]: PermissionLevels.MODERATOR,
   [ActionKeys.ModerationKick]: PermissionLevels.SENIOR_MODERATOR,
   [ActionKeys.ModerationBan]: PermissionLevels.SENIOR_MODERATOR,
+  [ActionKeys.ModerationUnban]: PermissionLevels.SENIOR_MODERATOR,
   [ActionKeys.ModerationMassBan]: PermissionLevels.OWNER,
   [ActionKeys.CasesView]: PermissionLevels.MODERATOR,
   [ActionKeys.CasesManage]: PermissionLevels.SENIOR_MODERATOR,
@@ -206,6 +215,11 @@ const defaultActionLevels = Object.freeze({
   [ActionKeys.ServerStatsConfigure]: PermissionLevels.SENIOR_MODERATOR,
   [ActionKeys.ServerStatsRefresh]: PermissionLevels.MODERATOR,
 
+  [ActionKeys.LevelingUse]: PermissionLevels.EVERYONE,
+  [ActionKeys.LevelingView]: PermissionLevels.MODERATOR,
+  [ActionKeys.LevelingConfigure]: PermissionLevels.SENIOR_MODERATOR,
+  [ActionKeys.LevelingAdjust]: PermissionLevels.SENIOR_MODERATOR,
+
   [ActionKeys.ServerReset]: PermissionLevels.OWNER
 });
 
@@ -238,12 +252,13 @@ const defaultPublicActions = Object.freeze([
   ActionKeys.AppealsSubmit,
   ActionKeys.RolePanelsUse,
   ActionKeys.GiveawaysEnter,
-  ActionKeys.BirthdaysUse
+  ActionKeys.BirthdaysUse,
+  ActionKeys.LevelingUse
 ]);
 
 const defaultTeamPermissions = Object.freeze(Object.values(ActionKeys));
 
-const PERMISSION_DEFAULTS_VERSION = '0.5.3';
+const PERMISSION_DEFAULTS_VERSION = '0.6.0';
 
 module.exports = {
   ActionKeys,

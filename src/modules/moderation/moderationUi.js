@@ -50,7 +50,7 @@ async function buildModerationPanel(guildId) {
       '**Recent Cases**',
       truncate(recentLines, 2200),
       '',
-      'Use `/mod`, `/case`, and `/note` for moderation actions and lookups.'
+      'Use `/mod`, `/case`, and `/note` for moderation actions and lookups. Reverse actions are available through `/mod untimeout` and `/mod unban`.'
     ].join('\n'),
     color: SlickBotColors.PRIMARY
   });

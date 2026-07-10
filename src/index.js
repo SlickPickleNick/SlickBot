@@ -16,7 +16,8 @@ const { GiveawayService } = require('./modules/community/giveawayService');
 const { BirthdayService } = require('./modules/community/birthdayService');
 const { ScheduledMessageService } = require('./modules/automation/scheduledMessageService');
 const { ServerStatsService } = require('./modules/community/serverStatsService');
-const { handleReactionRole } = require('./modules/community/rolePanelService');
+const { LevelingService } = require('./modules/community/levelingService');
+const { handleReactionRole, syncAllPublishedReactionPanels } = require('./modules/community/rolePanelService');
 const { handleComponentInteraction } = require('./services/interactionRouter');
 
 const client = new Client({
@@ -43,6 +44,7 @@ const giveaways = new GiveawayService();
 const birthdays = new BirthdayService();
 const scheduledMessages = new ScheduledMessageService();
 const serverStats = new ServerStatsService();
+const leveling = new LevelingService();
 const healthServer = startHealthServer(client);
 
 client.once(Events.ClientReady, async (readyClient) => {
@@ -80,6 +82,15 @@ client.once(Events.ClientReady, async (readyClient) => {
       serverStats.updateStats(guild, logger, 'interval').catch(() => {});
     }
   }, 15 * 60 * 1000);
+
+  for (const guild of readyClient.guilds.cache.values()) {
+    const reactionRolesEnabled = await permissions.isModuleEnabled(guild.id, 'REACTION_ROLES').catch(() => false);
+    if (reactionRolesEnabled) {
+      syncAllPublishedReactionPanels(readyClient, guild.id)
+        .then((result) => console.log(`Reaction panel sync for ${guild.name}: ${result.messages} message(s), ${result.added} reaction(s) available.`))
+        .catch((error) => console.error(`Failed to sync reaction panels for ${guild.name}:`, error));
+    }
+  }
 });
 
 client.on(Events.GuildCreate, async (guild) => {
@@ -238,7 +249,17 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
 
 
 client.on(Events.MessageCreate, async (message) => {
-  if (message.author?.bot || message.guild) return;
+  if (message.author?.bot) return;
+
+  if (message.guild) {
+    if (await permissions.isIgnored(message.guild.id, message.author.id).catch(() => false)) return;
+    const levelingEnabled = await permissions.isModuleEnabled(message.guild.id, 'LEVELING').catch(() => false);
+    if (levelingEnabled) {
+      await leveling.processMessage(message, logger).catch((error) => console.error('Failed to process message XP:', error));
+    }
+    return;
+  }
+
   await applications.handleDmResponse({ message, client, logger }).catch((error) => {
     console.error('Failed to handle DM application response:', error);
   });

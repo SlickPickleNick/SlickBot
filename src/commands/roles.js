@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, ChannelType } = require('discord.js');
+const { SlashCommandBuilder, ChannelType, MessageFlags } = require('discord.js');
 const { ModuleKeys } = require('../modules/moduleRegistry');
 const { ActionKeys } = require('../modules/permissions/actionKeys');
 const { replyPrivate } = require('../utils/reply');
@@ -245,6 +245,7 @@ Removed: **${result.removed}** option(s)`, actorUserId: interaction.user.id }).c
     }
 
     if (sub === 'post-panel') {
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       const panel = await rolePanels.getPanelByName(interaction.guildId, interaction.options.getString('panel', true));
       if (!panel) return replyPrivate(interaction, { embeds: [createWarningEmbed('Panel Not Found', 'No active role panel was found with that name.')] });
       const options = await rolePanels.getPanelOptions(panel.id);
@@ -257,9 +258,14 @@ Removed: **${result.removed}** option(s)`, actorUserId: interaction.user.id }).c
       const channel = interaction.options.getChannel('channel', true);
       const message = await channel.send(payload);
       await recordPublishedPanel({ guildId: interaction.guildId, panelType: 'role', panelRef: panel.id, channelId: channel.id, messageId: message.id });
-      if (displayMode === 'REACTIONS') await rolePanels.syncReactionPanelMessage(message, panel).catch(() => {});
+      const reactionSync = displayMode === 'REACTIONS'
+        ? await rolePanels.syncReactionPanelMessage(message, panel).catch(() => ({ added: 0, failed: 1, limited: 0, skipped: 0 }))
+        : null;
       await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'reaction-role-config', title: 'Role Panel Posted', body: `Panel: **${panel.name}**\nChannel: <#${channel.id}>\nPosted By: <@${interaction.user.id}>`, actorUserId: interaction.user.id });
-      await replyPrivate(interaction, { embeds: [createSuccessEmbed('Role Panel Posted', `Posted **${panel.name}** to <#${channel.id}>.`)] });
+      const syncText = reactionSync
+        ? `\nNative reactions added: **${reactionSync.added}**${reactionSync.failed ? ` · Failed: **${reactionSync.failed}**` : ''}${reactionSync.limited ? ` · Not added due to Discord's 20-reaction limit: **${reactionSync.limited}**` : ''}`
+        : '';
+      await replyPrivate(interaction, { embeds: [createSuccessEmbed('Role Panel Posted', `Posted **${panel.name}** to <#${channel.id}>.${syncText}`)] });
     }
   }
 };

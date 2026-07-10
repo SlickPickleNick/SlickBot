@@ -84,6 +84,12 @@ const LogModuleCatalog = Object.freeze([
     defaultDelivery: 'IMMEDIATE'
   },
   {
+    key: 'leveling',
+    label: 'Leveling / XP',
+    description: 'Leveling configuration, level-ups, and staff XP adjustments.',
+    defaultDelivery: 'IMMEDIATE'
+  },
+  {
     key: 'server-stats',
     label: 'Server Stats',
     description: 'Member, human, bot, and voice counter channel updates.',
@@ -153,6 +159,10 @@ const LogEventCatalog = Object.freeze([
   { key: 'birthday-profile', moduleKey: 'birthdays', label: 'Birthday Profile', description: 'A user saved or removed their birthday.', defaultDelivery: 'IMMEDIATE' },
   { key: 'birthday-active', moduleKey: 'birthdays', label: 'Birthday Active', description: 'A birthday was announced or a birthday role was added.', defaultDelivery: 'IMMEDIATE' },
   { key: 'birthday-ended', moduleKey: 'birthdays', label: 'Birthday Ended', description: 'A birthday role was removed after the birthday passed.', defaultDelivery: 'IMMEDIATE' },
+
+  { key: 'leveling-config', moduleKey: 'leveling', label: 'Leveling Config', description: 'Leveling settings and role rewards changed.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'leveling-level-up', moduleKey: 'leveling', label: 'Level Up', description: 'A member reached a new level.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'leveling-adjustment', moduleKey: 'leveling', label: 'XP Adjustment', description: 'Staff manually changed or reset XP.', defaultDelivery: 'IMMEDIATE' },
 
   { key: 'server-stats-config', moduleKey: 'server-stats', label: 'Server Stats Config', description: 'Server stats configuration changed.', defaultDelivery: 'IMMEDIATE' },
   { key: 'server-stats-update', moduleKey: 'server-stats', label: 'Server Stats Updated', description: 'Server stat counter channels were refreshed.', defaultDelivery: 'IMMEDIATE' }

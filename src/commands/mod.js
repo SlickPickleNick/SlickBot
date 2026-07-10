@@ -33,6 +33,13 @@ module.exports = {
     )
     .addSubcommand((subcommand) =>
       subcommand
+        .setName('untimeout')
+        .setDescription('Remove an active timeout from a user and create a moderation case.')
+        .addUserOption((option) => option.setName('user').setDescription('User whose timeout should be removed.').setRequired(true))
+        .addStringOption((option) => option.setName('reason').setDescription('Optional reason for removing the timeout.').setRequired(false).setMaxLength(1000))
+    )
+    .addSubcommand((subcommand) =>
+      subcommand
         .setName('kick')
         .setDescription('Kick a user and create a moderation case.')
         .addUserOption((option) => option.setName('user').setDescription('User to kick.').setRequired(true))
@@ -50,6 +57,13 @@ module.exports = {
     )
     .addSubcommand((subcommand) =>
       subcommand
+        .setName('unban')
+        .setDescription('Unban a user ID and create a moderation case.')
+        .addStringOption((option) => option.setName('user_id').setDescription('Discord user ID to unban.').setRequired(true).setMinLength(15).setMaxLength(25))
+        .addStringOption((option) => option.setName('reason').setDescription('Optional reason for the unban.').setRequired(false).setMaxLength(1000))
+    )
+    .addSubcommand((subcommand) =>
+      subcommand
         .setName('massban')
         .setDescription('Bulk ban user IDs and create moderation cases.')
         .addStringOption((option) => option.setName('user_ids').setDescription('Comma or space-separated user IDs. Max 25.').setRequired(true).setMaxLength(1200))
@@ -62,8 +76,10 @@ module.exports = {
     const subcommand = interaction.options.getSubcommand();
     if (subcommand === 'warn') return ActionKeys.ModerationWarn;
     if (subcommand === 'timeout') return ActionKeys.ModerationTimeout;
+    if (subcommand === 'untimeout') return ActionKeys.ModerationUntimeout;
     if (subcommand === 'kick') return ActionKeys.ModerationKick;
     if (subcommand === 'ban') return ActionKeys.ModerationBan;
+    if (subcommand === 'unban') return ActionKeys.ModerationUnban;
     if (subcommand === 'massban') return ActionKeys.ModerationMassBan;
     return ActionKeys.ModerationPanel;
   },
@@ -86,6 +102,11 @@ module.exports = {
       return;
     }
 
+    if (subcommand === 'untimeout') {
+      await handleUntimeout(interaction, ctx);
+      return;
+    }
+
     if (subcommand === 'kick') {
       await handleKick(interaction, ctx);
       return;
@@ -93,6 +114,11 @@ module.exports = {
 
     if (subcommand === 'ban') {
       await handleBan(interaction, ctx);
+      return;
+    }
+
+    if (subcommand === 'unban') {
+      await handleUnban(interaction, ctx);
       return;
     }
 
@@ -152,6 +178,27 @@ async function handleTimeout(interaction, ctx) {
   await replyPrivate(interaction, { embeds: [buildCaseEmbed(caseRecord, 'Timeout Applied')] });
 }
 
+async function handleUntimeout(interaction, ctx) {
+  const target = interaction.options.getUser('user', true);
+  const reason = interaction.options.getString('reason') || 'Timeout removed by moderator.';
+  const member = await interaction.guild.members.fetch(target.id).catch(() => null);
+
+  if (!member) {
+    await replyPrivate(interaction, { embeds: [createBaseEmbed({ title: 'Member Not Found', description: 'That user is not currently available as a server member.', color: SlickBotColors.WARNING })] });
+    return;
+  }
+
+  await member.timeout(null, reason);
+  const caseRecord = await createAndLogCase(interaction, ctx, {
+    target,
+    actionType: 'UNTIMEOUT',
+    reason,
+    status: 'CLOSED'
+  });
+
+  await replyPrivate(interaction, { embeds: [buildCaseEmbed(caseRecord, 'Timeout Removed')] });
+}
+
 async function handleKick(interaction, ctx) {
   const target = interaction.options.getUser('user', true);
   const reason = interaction.options.getString('reason', true);
@@ -196,6 +243,27 @@ async function handleBan(interaction, ctx) {
   });
 
   await replyPrivate(interaction, { embeds: [buildCaseEmbed(caseRecord, 'User Banned')] });
+}
+
+async function handleUnban(interaction, ctx) {
+  const userId = interaction.options.getString('user_id', true).trim();
+  const reason = interaction.options.getString('reason') || 'Ban removed by moderator.';
+
+  if (!/^\d{15,25}$/.test(userId)) {
+    await replyPrivate(interaction, { embeds: [createBaseEmbed({ title: 'Invalid User ID', description: 'Provide a valid Discord user ID.', color: SlickBotColors.WARNING })] });
+    return;
+  }
+
+  const target = await interaction.client.users.fetch(userId).catch(() => ({ id: userId, tag: userId }));
+  await interaction.guild.members.unban(userId, reason);
+  const caseRecord = await createAndLogCase(interaction, ctx, {
+    target,
+    actionType: 'UNBAN',
+    reason,
+    status: 'CLOSED'
+  });
+
+  await replyPrivate(interaction, { embeds: [buildCaseEmbed(caseRecord, 'User Unbanned')] });
 }
 
 async function handleMassBan(interaction, ctx) {

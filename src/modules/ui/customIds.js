@@ -23,6 +23,7 @@ const CustomIds = Object.freeze({
   BirthdaysRefresh: 'slickbot:birthdays:refresh',
   ScheduledMessagesRefresh: 'slickbot:scheduled-messages:refresh',
   ServerStatsRefresh: 'slickbot:server-stats:refresh',
+  LevelingRefresh: 'slickbot:leveling:refresh',
 
   ModulesSelect: 'slickbot:modules:select',
   ModulesRefresh: 'slickbot:modules:refresh',

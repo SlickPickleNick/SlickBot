@@ -19,10 +19,12 @@ const { GiveawayService } = require('../community/giveawayService');
 const { BirthdayService } = require('../community/birthdayService');
 const { ScheduledMessageService } = require('../automation/scheduledMessageService');
 const { ServerStatsService } = require('../community/serverStatsService');
+const { LevelingService } = require('../community/levelingService');
 const giveaways = new GiveawayService();
 const birthdays = new BirthdayService();
 const scheduledMessages = new ScheduledMessageService();
 const serverStats = new ServerStatsService();
+const leveling = new LevelingService();
 
 async function ensureDefaultModules(guildId) {
   for (const moduleConfig of defaultModules) {
@@ -236,6 +238,21 @@ async function getModuleStatus(guildId, row) {
   }
 
 
+  if (row.module_key === 'LEVELING') {
+    const [cfg, profiles, rewards] = await Promise.all([
+      query(`SELECT enabled, level_up_channel_id FROM leveling_configs WHERE guild_id = $1 LIMIT 1`, [guildId]).catch(() => ({ rows: [] })),
+      query(`SELECT COUNT(*)::int AS count FROM leveling_profiles WHERE guild_id = $1`, [guildId]).catch(() => ({ rows: [{ count: 0 }] })),
+      query(`SELECT COUNT(*)::int AS count FROM leveling_role_rewards WHERE guild_id = $1 AND active = true`, [guildId]).catch(() => ({ rows: [{ count: 0 }] }))
+    ]);
+    const config = cfg.rows[0];
+    if (!config) return { moduleKey: row.module_key, core: false, state: 'NEEDS_CONFIG', emoji: '🟣', label: 'Needs configuration', note: 'Run /level setup' };
+    if (config.enabled === false) return { moduleKey: row.module_key, core: false, state: 'DISABLED', emoji: '🔴', label: 'Disabled', note: 'XP awards off' };
+    const rewardCount = rewards.rows[0]?.count || 0;
+    const profileCount = profiles.rows[0]?.count || 0;
+    if (config.level_up_channel_id || rewardCount > 0) return { moduleKey: row.module_key, core: false, state: 'READY', emoji: '🟢', label: 'Fully enabled', note: `${profileCount} profile(s)` };
+    return { moduleKey: row.module_key, core: false, state: 'PARTIAL', emoji: '🟠', label: 'Partially enabled', note: 'XP active; no rewards/announcement' };
+  }
+
   if (row.module_key === 'SERVER_STATS') {
     const cfg = await query(`SELECT enabled, member_channel_id, human_channel_id, bot_channel_id, voice_channel_id FROM server_stats_configs WHERE guild_id = $1 LIMIT 1`, [guildId]).catch(() => ({ rows: [] }));
     const config = cfg.rows[0] || {};
@@ -400,43 +417,55 @@ async function buildPermissionsPanel(guildId) {
 }
 
 
+function compactCommunityText(payload, fallback) {
+  const value = payload?.embeds?.[0]?.data?.description || fallback;
+  return String(value).length > 520 ? `${String(value).slice(0, 517)}...` : String(value);
+}
+
 async function buildCommunityPanel(guildId) {
   const welcomePayload = await buildWelcomePanel(guildId);
   const rolePayload = await buildRoleManagerPanel(guildId);
   const giveawayPayload = await giveaways.buildManagerPanel(guildId);
   const birthdayPayload = await birthdays.buildManagerPanel(guildId);
   const statsPayload = await serverStats.buildManagerPanel({ id: guildId, memberCount: 0, members: { fetch: async () => null, cache: { size: 0, filter: () => ({ size: 0 }) } }, channels: { cache: { filter: () => ({ reduce: () => 0 }) } } }).catch(() => ({ embeds: [{ data: { description: 'Server stats not configured.' } }] }));
+  const levelingPayload = await leveling.buildManagerPanel(guildId).catch(() => ({ embeds: [{ data: { description: 'Leveling not configured.' } }] }));
   const embed = createBaseEmbed({
     title: 'SlickBot Community Center',
     description: [
       '**Welcome / Auto Roles**',
-      welcomePayload.embeds[0].data.description || 'No welcome status available.',
+      compactCommunityText(welcomePayload, 'No welcome status available.'),
       '',
       '**Reaction / Button Roles**',
-      rolePayload.embeds[0].data.description || 'No role panel status available.',
+      compactCommunityText(rolePayload, 'No role panel status available.'),
       '',
       '**Giveaways**',
-      giveawayPayload.embeds[0].data.description || 'No giveaway status available.',
+      compactCommunityText(giveawayPayload, 'No giveaway status available.'),
       '',
       '**Birthdays**',
-      birthdayPayload.embeds[0].data.description || 'No birthday status available.',
+      compactCommunityText(birthdayPayload, 'No birthday status available.'),
+      '',
+      '**Leveling / XP**',
+      compactCommunityText(levelingPayload, 'No leveling status available.'),
       '',
       '**Server Stats**',
-      statsPayload.embeds[0].data.description || 'No server stats status available.',
+      compactCommunityText(statsPayload, 'No server stats status available.'),
       '',
-      'Use `/welcome manager`, `/roles manager`, `/giveaway manager`, `/birthday manager`, or `/stats manager` for focused setup controls.'
+      'Use `/welcome manager`, `/roles manager`, `/giveaway manager`, `/birthday manager`, `/level manager`, or `/stats manager` for focused setup controls.'
     ].join('\n'),
     color: SlickBotColors.INFO
   });
-  const row = createButtonRow([
+  const rowOne = createButtonRow([
     createPanelButton(CustomIds.WelcomeRefresh, 'Welcome', ButtonStyle.Secondary, '👋'),
     createPanelButton(CustomIds.RolePanelsRefresh, 'Role Panels', ButtonStyle.Secondary, '🎛️'),
     createPanelButton(CustomIds.GiveawaysRefresh, 'Giveaways', ButtonStyle.Secondary, '🎉'),
     createPanelButton(CustomIds.BirthdaysRefresh, 'Birthdays', ButtonStyle.Secondary, '🎂'),
+    createPanelButton(CustomIds.LevelingRefresh, 'Leveling', ButtonStyle.Secondary, '📈')
+  ]);
+  const rowTwo = createButtonRow([
     createPanelButton(CustomIds.ServerStatsRefresh, 'Stats', ButtonStyle.Secondary, '📊'),
     createPanelButton(CustomIds.SetupRefresh, 'Back', ButtonStyle.Primary, '↩️')
   ]);
-  return { embeds: [embed], components: [row] };
+  return { embeds: [embed], components: [rowOne, rowTwo] };
 }
 
 module.exports = {

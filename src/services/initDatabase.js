@@ -677,6 +677,56 @@ async function initDatabase() {
 
 
   await query(`
+    CREATE TABLE IF NOT EXISTS leveling_configs (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT UNIQUE NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      enabled BOOLEAN NOT NULL DEFAULT true,
+      xp_min INTEGER NOT NULL DEFAULT 15,
+      xp_max INTEGER NOT NULL DEFAULT 25,
+      cooldown_seconds INTEGER NOT NULL DEFAULT 60,
+      minimum_message_length INTEGER NOT NULL DEFAULT 3,
+      level_up_channel_id TEXT,
+      level_up_message TEXT NOT NULL DEFAULT 'Congratulations {user}! You reached level **{level}**.',
+      ignored_channel_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
+      ignored_role_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS leveling_profiles (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL,
+      user_tag TEXT,
+      xp BIGINT NOT NULL DEFAULT 0,
+      level INTEGER NOT NULL DEFAULT 0,
+      message_count INTEGER NOT NULL DEFAULT 0,
+      last_xp_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(guild_id, user_id)
+    );
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS leveling_role_rewards (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      level INTEGER NOT NULL,
+      role_id TEXT NOT NULL,
+      active BOOLEAN NOT NULL DEFAULT true,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(guild_id, level, role_id)
+    );
+  `);
+
+  await query(`CREATE INDEX IF NOT EXISTS idx_leveling_profiles_rank ON leveling_profiles(guild_id, xp DESC);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_leveling_rewards ON leveling_role_rewards(guild_id, level, active);`);
+
+  await query(`
     CREATE TABLE IF NOT EXISTS role_permission_levels (
       id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
       guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,

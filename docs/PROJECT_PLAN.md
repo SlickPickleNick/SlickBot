@@ -1,6 +1,6 @@
 # SlickBot Project Plan
 
-## Current Version: 0.5.4
+## Current Version: 0.6.0
 
 SlickBot is being built as a modular all-in-one Discord server management bot for the SlickPickleNick community.
 
@@ -27,18 +27,17 @@ SlickBot is being built as a modular all-in-one Discord server management bot fo
 - Birthdays
 - Scheduled messages
 - Server stats
+- Leveling / XP
 
-## v0.5.4 Scope
+## v0.6.0 Scope
 
-- Fixed reaction-role `/panel edit` live updates by exporting the role panel ID lookup used during refresh.
-- Added `/panel delete` for deleting/unposting tracked panel messages by target/name.
-- Updated `/panel setup` to create missing named role/application panels when needed.
-- Fixed the birthday **Enter Day** button/modal interaction failure.
-- Added Server Stats module with member, human, bot, and voice counter channel support.
+- Fixed native reaction-role syncing so more than four options can be added reliably.
+- Added retry/pacing and Discord’s 20-unique-reaction limit handling.
+- Added `/mod untimeout` and `/mod unban`.
+- Added the Leveling & XP module with automatic message XP, rank/leaderboard views, ignored channels/roles, level-up announcements, and level-role rewards.
 
 ## Future Modules
 
-- Leveling / XP
 - Join-to-create voice channels
 - Custom commands
 - Utility tools

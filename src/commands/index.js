@@ -20,6 +20,7 @@ const giveawayCommand = require('./giveaway');
 const birthdayCommand = require('./birthday');
 const scheduleCommand = require('./schedule');
 const statsCommand = require('./stats');
+const levelCommand = require('./level');
 
 const commands = [
   pingCommand,
@@ -43,7 +44,8 @@ const commands = [
   giveawayCommand,
   birthdayCommand,
   scheduleCommand,
-  statsCommand
+  statsCommand,
+  levelCommand
 ];
 
 const commandMap = new Map(commands.map((command) => [command.data.name, command]));
