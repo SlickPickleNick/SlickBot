@@ -96,6 +96,10 @@ const ActionKeys = Object.freeze({
   ServerStatsConfigure: 'server-stats.configure',
   ServerStatsRefresh: 'server-stats.refresh',
 
+  BotUpdatesView: 'bot-updates.view',
+  BotUpdatesConfigure: 'bot-updates.configure',
+  BotUpdatesSend: 'bot-updates.send',
+
   LevelingUse: 'leveling.use',
   LevelingView: 'leveling.view',
   LevelingConfigure: 'leveling.configure',
@@ -219,6 +223,10 @@ const defaultActionLevels = Object.freeze({
   [ActionKeys.ServerStatsConfigure]: PermissionLevels.SENIOR_MODERATOR,
   [ActionKeys.ServerStatsRefresh]: PermissionLevels.MODERATOR,
 
+  [ActionKeys.BotUpdatesView]: PermissionLevels.MODERATOR,
+  [ActionKeys.BotUpdatesConfigure]: PermissionLevels.SENIOR_MODERATOR,
+  [ActionKeys.BotUpdatesSend]: PermissionLevels.SENIOR_MODERATOR,
+
   [ActionKeys.LevelingUse]: PermissionLevels.EVERYONE,
   [ActionKeys.LevelingView]: PermissionLevels.MODERATOR,
   [ActionKeys.LevelingConfigure]: PermissionLevels.SENIOR_MODERATOR,
@@ -243,6 +251,7 @@ const defaultModuleLevels = Object.freeze({
   [ModuleKeys.BIRTHDAYS]: PermissionLevels.EVERYONE,
   [ModuleKeys.LEVELING]: PermissionLevels.EVERYONE,
   [ModuleKeys.SERVER_STATS]: PermissionLevels.MODERATOR,
+  [ModuleKeys.BOT_UPDATES]: PermissionLevels.MODERATOR,
   [ModuleKeys.JOIN_TO_CREATE]: PermissionLevels.EVERYONE,
   [ModuleKeys.CUSTOM_COMMANDS]: PermissionLevels.EVERYONE,
   [ModuleKeys.UTILITY]: PermissionLevels.EVERYONE
@@ -263,7 +272,7 @@ const defaultPublicActions = Object.freeze([
 
 const defaultTeamPermissions = Object.freeze(Object.values(ActionKeys));
 
-const PERMISSION_DEFAULTS_VERSION = '0.6.5';
+const PERMISSION_DEFAULTS_VERSION = '0.6.6';
 
 module.exports = {
   ActionKeys,

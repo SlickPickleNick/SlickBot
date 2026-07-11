@@ -713,7 +713,41 @@ async function initDatabase() {
   await query(`ALTER TABLE server_stats_configs ADD COLUMN IF NOT EXISTS bot_template TEXT NOT NULL DEFAULT 'Bots: {bots}';`).catch(() => {});
   await query(`ALTER TABLE server_stats_configs ADD COLUMN IF NOT EXISTS voice_template TEXT NOT NULL DEFAULT 'In Voice: {voice}';`).catch(() => {});
   await query(`ALTER TABLE server_stats_configs ADD COLUMN IF NOT EXISTS last_updated_at TIMESTAMPTZ;`).catch(() => {});
+  await query(`ALTER TABLE server_stats_configs ADD COLUMN IF NOT EXISTS last_error TEXT;`).catch(() => {});
 
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS bot_update_configs (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT UNIQUE NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      enabled BOOLEAN NOT NULL DEFAULT true,
+      channel_id TEXT,
+      ping_roles_enabled BOOLEAN NOT NULL DEFAULT true,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS bot_update_ping_roles (
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      role_id TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (guild_id, role_id)
+    );
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS bot_update_announcements (
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      version TEXT NOT NULL,
+      channel_id TEXT NOT NULL,
+      message_id TEXT NOT NULL,
+      announced_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (guild_id, version)
+    );
+  `);
 
   await query(`
     CREATE TABLE IF NOT EXISTS scheduled_message_configs (
@@ -952,6 +986,8 @@ async function initDatabase() {
   await query(`CREATE INDEX IF NOT EXISTS idx_command_permissions_action ON command_permissions(guild_id, action_key);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_log_module_settings_guild ON log_module_settings(guild_id, module_key);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_log_queue_pending ON log_queue_items(guild_id, event_key, flushed_at);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_bot_update_roles_guild ON bot_update_ping_roles(guild_id);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_bot_update_announcements_guild ON bot_update_announcements(guild_id, announced_at DESC);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_audit_logs_guild_created ON audit_logs(guild_id, created_at);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_bot_presence_guild ON bot_presence_settings(guild_id);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_moderation_cases_guild_target ON moderation_cases(guild_id, target_user_id, created_at DESC);`);

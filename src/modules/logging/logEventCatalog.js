@@ -94,6 +94,12 @@ const LogModuleCatalog = Object.freeze([
     label: 'Server Stats',
     description: 'Member, human, bot, and voice counter channel updates.',
     defaultDelivery: 'IMMEDIATE'
+  },
+  {
+    key: 'bot-updates',
+    label: 'Bot Updates',
+    description: 'SlickBot release announcement configuration and delivery.',
+    defaultDelivery: 'IMMEDIATE'
   }
 ]);
 
@@ -166,7 +172,12 @@ const LogEventCatalog = Object.freeze([
   { key: 'leveling-adjustment', moduleKey: 'leveling', label: 'XP Adjustment', description: 'Staff manually changed or reset XP.', defaultDelivery: 'IMMEDIATE' },
 
   { key: 'server-stats-config', moduleKey: 'server-stats', label: 'Server Stats Config', description: 'Server stats configuration changed.', defaultDelivery: 'IMMEDIATE' },
-  { key: 'server-stats-update', moduleKey: 'server-stats', label: 'Server Stats Updated', description: 'Server stat counter channels were refreshed.', defaultDelivery: 'IMMEDIATE' }
+  { key: 'server-stats-update', moduleKey: 'server-stats', label: 'Server Stats Updated', description: 'Server stat counter channels were refreshed.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'server-stats-error', moduleKey: 'server-stats', label: 'Server Stats Error', description: 'A server stat counter refresh had one or more channel update failures.', defaultDelivery: 'IMMEDIATE' },
+
+  { key: 'bot-update-config', moduleKey: 'bot-updates', label: 'Bot Updates Configured', description: 'Bot update announcement settings changed.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'bot-update-announcement', moduleKey: 'bot-updates', label: 'Bot Update Announced', description: 'SlickBot posted a release update message.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'bot-update-announcement-failed', moduleKey: 'bot-updates', label: 'Bot Update Announcement Failed', description: 'SlickBot could not post a configured release update message.', defaultDelivery: 'IMMEDIATE' }
 ]);
 
 const StarterLogModuleKeys = Object.freeze(['core', 'moderation']);

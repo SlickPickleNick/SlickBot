@@ -1,6 +1,6 @@
 # SlickBot Project Plan
 
-## Current Version: 0.6.4
+## Current Version: 0.6.6
 
 SlickBot is being built as a modular all-in-one Discord server management bot for the SlickPickleNick community.
 
@@ -27,7 +27,25 @@ SlickBot is being built as a modular all-in-one Discord server management bot fo
 - Birthdays
 - Scheduled messages
 - Server stats
+- Bot update announcements
 - Leveling / XP
+
+## v0.6.6 Scope
+
+### Bot Updates
+
+- Implemented the `BOT_UPDATES` module.
+- Added `/bot-updates` command group for setup, channel selection, optional role pings, previewing, manual sending, and enabling/disabling update announcements.
+- Added per-guild bot update configuration, ping-role tracking, and per-version announcement tracking.
+- Added startup announcement logic that avoids duplicate release posts after Railway restarts.
+- Added Bot Updates permission actions, module default permission level, module registry entry, logging events, diagnostics, and module-manager status logic.
+
+### Server Stats Reliability
+
+- Reworked server stats updates to support debounced event-triggered refreshes.
+- Reduced unnecessary member fetches during voice-state updates so voice counts use the voice channel cache instead of waiting on full guild member refreshes.
+- Added explicit server stats failure reporting and stored last refresh error text.
+- Increased periodic refresh cadence from 15 minutes to 5 minutes.
 
 ## v0.6.5 Scope
 

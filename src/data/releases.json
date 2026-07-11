@@ -1,0 +1,21 @@
+{
+  "0.6.6": {
+    "title": "SlickBot v0.6.6",
+    "summary": "Adds the Bot Updates module and improves server stats reliability for member and voice counters.",
+    "notes": [
+      "Added the Bot Updates module for configured release announcements with patch notes.",
+      "Added update-channel setup and optional role pings for bot update announcements.",
+      "Added preview and manual send tools for bot update messages.",
+      "Improved server stats refresh behavior with debounced event updates and clearer rename failure reporting.",
+      "Reduced unnecessary full member fetches during voice-state updates so voice counters can update more consistently."
+    ],
+    "commands": [
+      "/bot-updates setup",
+      "/bot-updates preview",
+      "/bot-updates send",
+      "/bot-updates role-add",
+      "/bot-updates role-remove",
+      "/bot-updates roles"
+    ]
+  }
+}

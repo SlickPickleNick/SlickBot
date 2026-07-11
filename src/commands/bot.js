@@ -80,6 +80,11 @@ const MODULE_CHECKS = {
   ],
   [ModuleKeys.SERVER_STATS]: [
     { name: 'Stats config', sql: 'SELECT COUNT(*)::int AS count FROM server_stats_configs WHERE guild_id = $1' }
+  ],
+  [ModuleKeys.BOT_UPDATES]: [
+    { name: 'Update config', sql: 'SELECT COUNT(*)::int AS count FROM bot_update_configs WHERE guild_id = $1' },
+    { name: 'Ping roles', sql: 'SELECT COUNT(*)::int AS count FROM bot_update_ping_roles WHERE guild_id = $1' },
+    { name: 'Announcements', sql: 'SELECT COUNT(*)::int AS count FROM bot_update_announcements WHERE guild_id = $1' }
   ]
 };
 

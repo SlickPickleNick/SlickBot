@@ -4,7 +4,41 @@ SlickBot is an all-in-one Discord server management bot built for the SlickPickl
 
 ## Version
 
-Current package: **v0.6.5**
+Current package: **v0.6.6**
+
+## v0.6.6 Updates
+
+### Bot Updates Module
+
+- Added a new **Bot Updates** module for sending configured SlickBot release announcements.
+- Added update-channel setup and optional role pings. Roles are not required.
+- Bot update messages include structured patch notes from `src/data/releases.json`.
+- Startup announcements are sent only when the module is enabled, a channel is configured, and the current version has not already been announced for that guild.
+- Added preview and manual send tools for testing release messages.
+
+New commands:
+
+```text
+/bot-updates panel
+/bot-updates setup channel:#updates role_1:@Role role_2:@Role role_3:@Role enabled:true ping_roles:true
+/bot-updates channel channel:#updates
+/bot-updates role-add role:@Role
+/bot-updates role-remove role:@Role
+/bot-updates roles
+/bot-updates clear-roles
+/bot-updates enable
+/bot-updates disable
+/bot-updates preview
+/bot-updates send force:false
+```
+
+### Server Stats Reliability
+
+- Server stats now uses debounced event updates for member joins/leaves and voice-state changes instead of renaming counters immediately on every event.
+- Voice-state refreshes avoid unnecessary full member fetches, improving consistency for the `In Voice` counter.
+- Periodic server stat refreshes now run every 5 minutes instead of every 15 minutes.
+- `/stats refresh` now reports channel rename failures instead of silently hiding them.
+- Server stats stores the latest refresh error in `server_stats_configs.last_error` and shows it in the manager panel.
 
 ## v0.6.5 Updates
 

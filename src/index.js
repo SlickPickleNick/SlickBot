@@ -16,6 +16,7 @@ const { GiveawayService } = require('./modules/community/giveawayService');
 const { BirthdayService } = require('./modules/community/birthdayService');
 const { ScheduledMessageService } = require('./modules/automation/scheduledMessageService');
 const { ServerStatsService } = require('./modules/community/serverStatsService');
+const { BotUpdatesService } = require('./modules/status/botUpdatesService');
 const { LevelingService } = require('./modules/community/levelingService');
 const { handleReactionRole, syncAllPublishedReactionPanels } = require('./modules/community/rolePanelService');
 const { handleComponentInteraction } = require('./services/interactionRouter');
@@ -44,6 +45,7 @@ const giveaways = new GiveawayService();
 const birthdays = new BirthdayService();
 const scheduledMessages = new ScheduledMessageService();
 const serverStats = new ServerStatsService();
+const botUpdates = new BotUpdatesService();
 const leveling = new LevelingService();
 const healthServer = startHealthServer(client);
 
@@ -55,6 +57,10 @@ client.once(Events.ClientReady, async (readyClient) => {
     await status.applySavedPresence(env.DISCORD_GUILD_ID);
   } else {
     await status.applySavedPresence(null);
+  }
+
+  for (const guild of readyClient.guilds.cache.values()) {
+    await permissions.ensureGuildConfig(guild.id, guild.name).catch((error) => console.error(`Failed to ensure guild config for ${guild.name}:`, error));
   }
 
   const flushMs = env.LOG_BATCH_FLUSH_SECONDS * 1000;
@@ -79,9 +85,15 @@ client.once(Events.ClientReady, async (readyClient) => {
 
   setInterval(() => {
     for (const guild of readyClient.guilds.cache.values()) {
-      serverStats.updateStats(guild, logger, 'interval').catch(() => {});
+      serverStats.updateStats(guild, logger, 'interval', { forceMemberFetch: true }).catch((error) => console.error(`Failed interval server stats update for ${guild.name}:`, error));
     }
-  }, 15 * 60 * 1000);
+  }, 5 * 60 * 1000);
+
+  for (const guild of readyClient.guilds.cache.values()) {
+    serverStats.scheduleUpdate(guild, logger, 'startup', 10 * 1000, { forceMemberFetch: true });
+  }
+
+  await botUpdates.announceStartup(readyClient, logger).catch((error) => console.error('Failed to process bot update announcements:', error));
 
   for (const guild of readyClient.guilds.cache.values()) {
     const reactionRolesEnabled = await permissions.isModuleEnabled(guild.id, 'REACTION_ROLES').catch(() => false);
@@ -118,11 +130,11 @@ client.on(Events.GuildMemberAdd, async (member) => {
   if (welcomeEnabled) {
     await handleWelcomeMemberJoin(member, logger).catch((error) => console.error('Failed to run welcome flow:', error));
   }
-  await serverStats.updateStats(member.guild, logger, 'member join').catch(() => {});
+  serverStats.scheduleUpdate(member.guild, logger, 'member join', 10 * 1000, { forceMemberFetch: true });
 });
 
 client.on(Events.GuildMemberRemove, async (member) => {
-  await serverStats.updateStats(member.guild, logger, 'member leave').catch(() => {});
+  serverStats.scheduleUpdate(member.guild, logger, 'member leave', 10 * 1000, { forceMemberFetch: true });
   await logger.log({
     guildId: member.guild.id,
     eventKey: 'member-leave',
@@ -244,7 +256,7 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
     }
   }).catch((error) => console.error('Failed to log voice state:', error));
   const guild = newState.guild || oldState.guild;
-  await serverStats.updateStats(guild, logger, 'voice state').catch(() => {});
+  serverStats.scheduleUpdate(guild, logger, 'voice state', 5 * 1000, { skipMemberFetch: true });
 });
 
 

@@ -56,14 +56,22 @@ module.exports = {
         voiceTemplate: interaction.options.getString('voice_template') || null
       });
       await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'server-stats-config', title: 'Server Stats Configured', body: `Updated By: <@${interaction.user.id}>`, actorUserId: interaction.user.id }).catch(() => {});
-      const result = await stats.updateStats(interaction.guild, ctx.logger, 'configuration').catch(() => null);
-      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Server Stats Configured', `Server stats are **${config.enabled ? 'enabled' : 'disabled'}**.${result?.ok ? ` Updated **${result.updated}** channel(s).${result.reason ? ` ${result.reason}` : ''}` : ''}`)] });
+      const result = await stats.updateStats(interaction.guild, ctx.logger, 'configuration', { forceMemberFetch: true }).catch((error) => ({ ok: false, reason: error instanceof Error ? error.message : String(error) }));
+      const details = result?.ok
+        ? `Updated **${result.updated}** channel(s).${result.reason ? ` ${result.reason}` : ''}`
+        : `Saved configuration, but refresh reported an issue: ${result?.reason || `${result?.failed || 0} channel update failure(s).`}`;
+      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Server Stats Configured', `Server stats are **${config.enabled ? 'enabled' : 'disabled'}**. ${details}`)] });
     }
 
     if (sub === 'refresh') {
-      const result = await stats.updateStats(interaction.guild, ctx.logger, 'manual refresh');
-      if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Stats Not Updated', result.reason)] });
-      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Server Stats Refreshed', `Updated **${result.updated}** configured counter channel(s).`)] });
+      const result = await stats.updateStats(interaction.guild, ctx.logger, 'manual refresh', { forceMemberFetch: true });
+      if (!result.ok) {
+        const failureLines = result.failures?.length
+          ? result.failures.map((failure) => `• ${failure.key}: ${failure.reason}`).join('\n')
+          : result.reason || 'No configured counter channels were updated.';
+        return replyPrivate(interaction, { embeds: [createWarningEmbed('Stats Refresh Had Issues', failureLines)] });
+      }
+      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Server Stats Refreshed', `Updated **${result.updated}** configured counter channel(s). ${result.skipped || 0} unchanged.`)] });
     }
   }
 };

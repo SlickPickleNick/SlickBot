@@ -262,6 +262,21 @@ async function getModuleStatus(guildId, row) {
     return { moduleKey: row.module_key, core: false, state: 'NEEDS_CONFIG', emoji: '🟣', label: 'Needs configuration', note: 'Run /stats setup' };
   }
 
+
+  if (row.module_key === 'BOT_UPDATES') {
+    const [cfg, roles, announced] = await Promise.all([
+      query(`SELECT enabled, channel_id, ping_roles_enabled FROM bot_update_configs WHERE guild_id = $1 LIMIT 1`, [guildId]).catch(() => ({ rows: [] })),
+      query(`SELECT COUNT(*)::int AS count FROM bot_update_ping_roles WHERE guild_id = $1`, [guildId]).catch(() => ({ rows: [{ count: 0 }] })),
+      query(`SELECT COUNT(*)::int AS count FROM bot_update_announcements WHERE guild_id = $1`, [guildId]).catch(() => ({ rows: [{ count: 0 }] }))
+    ]);
+    const config = cfg.rows[0] || {};
+    const roleCount = roles.rows[0]?.count || 0;
+    const announcementCount = announced.rows[0]?.count || 0;
+    if (config.channel_id && config.enabled !== false) return { moduleKey: row.module_key, core: false, state: 'READY', emoji: '🟢', label: 'Fully enabled', note: `${roleCount} ping role(s), ${announcementCount} sent` };
+    if (announcementCount > 0) return { moduleKey: row.module_key, core: false, state: 'PARTIAL', emoji: '🟠', label: 'Partially enabled', note: `${announcementCount} sent, setup needed` };
+    return { moduleKey: row.module_key, core: false, state: 'NEEDS_CONFIG', emoji: '🟣', label: 'Needs configuration', note: 'Run /bot-updates setup' };
+  }
+
   return { moduleKey: row.module_key, core: false, state: 'PARTIAL', emoji: '🟠', label: 'Partially enabled', note: 'Module shell only' };
 }
 

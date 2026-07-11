@@ -14,6 +14,7 @@ const ModuleKeys = Object.freeze({
   BIRTHDAYS: 'BIRTHDAYS',
   LEVELING: 'LEVELING',
   SERVER_STATS: 'SERVER_STATS',
+  BOT_UPDATES: 'BOT_UPDATES',
   JOIN_TO_CREATE: 'JOIN_TO_CREATE',
   CUSTOM_COMMANDS: 'CUSTOM_COMMANDS',
   UTILITY: 'UTILITY'
@@ -37,6 +38,7 @@ const defaultModules = [
   { key: ModuleKeys.BIRTHDAYS, enabled: true },
   { key: ModuleKeys.LEVELING, enabled: true },
   { key: ModuleKeys.SERVER_STATS, enabled: true },
+  { key: ModuleKeys.BOT_UPDATES, enabled: true },
   { key: ModuleKeys.JOIN_TO_CREATE, enabled: false },
   { key: ModuleKeys.CUSTOM_COMMANDS, enabled: false },
   { key: ModuleKeys.UTILITY, enabled: false }
@@ -62,7 +64,8 @@ const implementedModules = Object.freeze([
   ModuleKeys.GIVEAWAYS,
   ModuleKeys.BIRTHDAYS,
   ModuleKeys.LEVELING,
-  ModuleKeys.SERVER_STATS
+  ModuleKeys.SERVER_STATS,
+  ModuleKeys.BOT_UPDATES
 ]);
 
 function isImplementedModule(moduleKey) {
