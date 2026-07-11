@@ -29,6 +29,7 @@ module.exports = {
         .addStringOption((option) => option.setName('panel_title').setDescription('Public application panel title.').setRequired(false).setMaxLength(100))
         .addStringOption((option) => option.setName('panel_description').setDescription('Public application panel description.').setRequired(false).setMaxLength(800))
         .addStringOption((option) => option.setName('panel_color').setDescription('Panel accent color, example: #7869ff.').setRequired(false).setMaxLength(7))
+        .addStringOption((option) => option.setName('panel_header_image').setDescription('Optional image/media URL posted above the application panel embed.').setRequired(false).setMaxLength(1800))
         .addStringOption((option) => option.setName('display_mode').setDescription('Public panel component style.').setRequired(false).addChoices({ name: 'Buttons', value: 'BUTTONS' }, { name: 'Dropdown menu', value: 'DROPDOWN' }))
     )
     .addSubcommand((subcommand) =>
@@ -105,6 +106,7 @@ module.exports = {
         panelTitle: interaction.options.getString('panel_title') || null,
         panelDescription: interaction.options.getString('panel_description') || null,
         panelColor: interaction.options.getString('panel_color') || null,
+        panelHeaderImageUrl: interaction.options.getString('panel_header_image') || null,
         panelDisplayMode: interaction.options.getString('display_mode') || null
       });
       await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'setup', title: 'Application Settings Updated', body: `${type.name} application settings updated by ${interaction.user.tag}.`, actorUserId: interaction.user.id }).catch(() => {});

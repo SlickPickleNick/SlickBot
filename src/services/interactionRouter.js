@@ -645,7 +645,8 @@ async function handleModal(interaction, ctx) {
       name,
       title: interaction.fields.getTextInputValue('title') || null,
       description: interaction.fields.getTextInputValue('description') || null,
-      color: interaction.fields.getTextInputValue('color') || null
+      color: interaction.fields.getTextInputValue('color') || null,
+      headerImageUrl: interaction.fields.getTextInputValue('header_image') || null
     });
     if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Panel Not Updated', result.reason)] });
     await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'setup', title: 'Panel Design Updated', body: `${result.target} was updated by ${interaction.user.tag}.`, actorUserId: interaction.user.id }).catch(() => {});

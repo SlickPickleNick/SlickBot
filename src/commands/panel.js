@@ -42,6 +42,7 @@ module.exports = {
           { name: 'Title', value: 'title' },
           { name: 'Description', value: 'description' },
           { name: 'Accent Color', value: 'color' },
+          { name: 'Header Image', value: 'header_image' },
           { name: 'Display Mode', value: 'display_mode' }
         ))
         .addStringOption((option) => option.setName('name').setDescription('Required for application types or reaction-role panels.').setRequired(false).setMaxLength(80))
@@ -83,7 +84,7 @@ module.exports = {
             '• Birthdays',
             '• Reaction Roles, requires the role panel name',
             '',
-            'Guided setup preserves multiline descriptions, spacing, and custom accent colors such as `#7869ff`.',
+            'Guided setup preserves multiline descriptions, spacing, custom accent colors such as `#7869ff`, and optional header image/media URLs.',
             '',
             '`/panel design` still exists as a quick modal editor, but `/panel setup` and `/panel edit` are recommended for formatted panels.'
           ].join('\n'),

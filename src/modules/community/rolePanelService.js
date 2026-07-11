@@ -1,6 +1,6 @@
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder } = require('discord.js');
 const { query } = require('../../services/db');
-const { createBaseEmbed, SlickBotColors } = require('../ui/uiService');
+const { createBaseEmbed, SlickBotColors, withPanelHeaderImage } = require('../ui/uiService');
 const { updatePublishedPanelsForRefs } = require('../panels/publishedPanelService');
 
 const MAX_NATIVE_REACTION_OPTIONS = 20;
@@ -91,21 +91,22 @@ function emojiFromHex(color) {
 }
 
 
-async function createPanel({ guildId, name, title, description, color, mode = 'MULTI', displayMode = 'BUTTONS' }) {
+async function createPanel({ guildId, name, title, description, color, headerImageUrl = null, mode = 'MULTI', displayMode = 'BUTTONS' }) {
   const normalizedDisplayMode = normalizeDisplayMode(displayMode);
   const result = await query(
-    `INSERT INTO role_panels (guild_id, name, title, description, accent_color, mode, panel_display_mode)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
+    `INSERT INTO role_panels (guild_id, name, title, description, accent_color, mode, panel_header_image_url, panel_display_mode)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
      ON CONFLICT (guild_id, name)
      DO UPDATE SET title = EXCLUDED.title,
                    description = EXCLUDED.description,
                    accent_color = EXCLUDED.accent_color,
                    mode = EXCLUDED.mode,
+                   panel_header_image_url = COALESCE(EXCLUDED.panel_header_image_url, role_panels.panel_header_image_url),
                    panel_display_mode = EXCLUDED.panel_display_mode,
                    active = true,
                    updated_at = NOW()
      RETURNING *`,
-    [guildId, name, title || name, description || 'Select an option below to toggle a role.', normalizeHexColor(color), mode, normalizedDisplayMode]
+    [guildId, name, title || name, description || 'Select an option below to toggle a role.', normalizeHexColor(color), mode, headerImageUrl || null, normalizedDisplayMode]
   );
   return result.rows[0];
 }
@@ -346,7 +347,7 @@ async function buildRolePanelMessage(panel) {
 
   const rows = await buildRolePanelComponents(panel, options);
 
-  return { embeds: [embed], components: rows };
+  return withPanelHeaderImage({ embeds: [embed], components: rows }, panel.panel_header_image_url);
 }
 
 async function toggleRole({ interaction, panelId, optionId, logger }) {

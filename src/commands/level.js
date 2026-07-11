@@ -1,7 +1,7 @@
 const { SlashCommandBuilder, ChannelType, AttachmentBuilder } = require('discord.js');
 const { ModuleKeys } = require('../modules/moduleRegistry');
 const { ActionKeys } = require('../modules/permissions/actionKeys');
-const { replyPrivate } = require('../utils/reply');
+const { replyPrivate, replyPublic } = require('../utils/reply');
 const { createSuccessEmbed, createWarningEmbed, createBaseEmbed, SlickBotColors } = require('../modules/ui/uiService');
 const { LevelingService, formatMultiplier } = require('../modules/community/levelingService');
 
@@ -12,6 +12,7 @@ module.exports = {
     .setName('level')
     .setDescription('Manage SlickBot leveling and XP.')
     .addSubcommand((sub) => sub.setName('manager').setDescription('Open the leveling manager.'))
+    .addSubcommand((sub) => sub.setName('info').setDescription('Post the server leveling information panel.'))
     .addSubcommand((sub) => sub.setName('setup').setDescription('Configure automatic message XP.')
       .addBooleanOption((o) => o.setName('enabled').setDescription('Enable or disable XP awards.').setRequired(false))
       .addIntegerOption((o) => o.setName('xp_min').setDescription('Minimum XP per eligible message.').setMinValue(1).setMaxValue(1000).setRequired(false))
@@ -51,17 +52,18 @@ module.exports = {
   actionKey: ActionKeys.LevelingView,
   getActionKey(interaction) {
     const sub = interaction.options.getSubcommand();
-    if (sub === 'rank' || sub === 'leaderboard') return ActionKeys.LevelingUse;
+    if (['rank', 'leaderboard', 'info'].includes(sub)) return ActionKeys.LevelingUse;
     if (sub === 'manager' || sub === 'multiplier-list' || sub === 'analyze') return ActionKeys.LevelingView;
     if (sub === 'set-xp' || sub === 'reset') return ActionKeys.LevelingAdjust;
     return ActionKeys.LevelingConfigure;
   },
   isPublic(interaction) {
-    return ['rank', 'leaderboard'].includes(interaction.options.getSubcommand());
+    return ['rank', 'leaderboard', 'info'].includes(interaction.options.getSubcommand());
   },
   async execute(interaction, ctx) {
     const sub = interaction.options.getSubcommand();
     if (sub === 'manager') return replyPrivate(interaction, await leveling.buildManagerPanel(interaction.guildId));
+    if (sub === 'info') return replyPublic(interaction, { embeds: [await leveling.buildInfoEmbed(interaction.guild)] });
 
     if (sub === 'setup') {
       const config = await leveling.saveConfig(interaction.guildId, {

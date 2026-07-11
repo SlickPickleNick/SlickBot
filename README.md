@@ -4,7 +4,58 @@ SlickBot is an all-in-one Discord server management bot built for the SlickPickl
 
 ## Version
 
-Current package: **v0.6.1**
+Current package: **v0.6.2**
+
+## v0.6.2 Updates
+
+### Ticket Access and Escalation Fixes
+
+- New tickets now grant access only to the ticket opener and the configured non-escalated support role/team.
+- Escalating a ticket removes the non-escalated reviewer role/team access before granting the escalated role/team access.
+- Ticket escalation now supports both default escalation settings and ticket-type-specific escalation settings.
+- Ticket setup now supports default non-escalated and escalated Permission Teams.
+
+Updated setup options:
+
+```text
+/ticket setup staff_role:@Support staff_team:MODS escalated_role:@Escalated escalated_team:SENIOR MODS
+```
+
+### Add Users to Tickets
+
+Added:
+
+```text
+/ticket add-user user:@member reason:Optional context
+```
+
+This grants the selected user access to the current ticket channel and logs the ticket update.
+
+### Leveling Info Command Move
+
+The public leveling information panel now lives under the main leveling module command:
+
+```text
+/level info
+```
+
+The info panel was refreshed to be more member-facing, easier to scan, and focused on how XP, multiplier roles, rewards, announcements, and user commands work. Multiplier roles are listed from smallest multiplier to largest multiplier.
+
+### Optional Panel Header Images
+
+Public panels can now include an optional header image/media URL posted above the embed. This is available through panel setup/edit flows and module setup commands where applicable.
+
+Supported panel areas include:
+
+- Ticket panels
+- Report panels
+- Application panels
+- Appeal panels
+- Role panels
+- Giveaway panels
+- Birthday panels
+
+For general panel editing, use the header image field in `/panel setup`, `/panel edit`, or the panel design modal.
 
 ## v0.6.1 Updates
 
@@ -54,7 +105,7 @@ The command provides milestone estimates and a CSV containing every analyzed lev
 ### Public Leveling Information
 
 ```text
-/levels info
+/level info
 ```
 
 This posts a public information embed explaining how XP is earned, cooldowns, multiplier roles, role rewards, announcement behavior, and user commands.

@@ -127,6 +127,7 @@ const LogEventCatalog = Object.freeze([
   { key: 'ticket-close', moduleKey: 'tickets', label: 'Ticket Closed', description: 'A ticket was closed.', defaultDelivery: 'IMMEDIATE' },
   { key: 'ticket-transcript', moduleKey: 'tickets', label: 'Ticket Transcript', description: 'A ticket transcript was generated.', defaultDelivery: 'IMMEDIATE' },
   { key: 'ticket-escalate', moduleKey: 'tickets', label: 'Ticket Escalated', description: 'A ticket was escalated to a higher review role or team.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'ticket-update', moduleKey: 'tickets', label: 'Ticket Updated', description: 'Ticket access or details were updated.', defaultDelivery: 'IMMEDIATE' },
 
   { key: 'report-submit', moduleKey: 'reports', label: 'Report Submitted', description: 'A user submitted a report.', defaultDelivery: 'IMMEDIATE' },
   { key: 'report-review', moduleKey: 'reports', label: 'Report Reviewed', description: 'Staff reviewed a report.', defaultDelivery: 'IMMEDIATE' },

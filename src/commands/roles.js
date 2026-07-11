@@ -35,6 +35,7 @@ module.exports = {
         .addStringOption((option) => option.setName('description').setDescription('Panel description shown to users.').setRequired(false).setMaxLength(1500))
         .addStringOption((option) => option.setName('mode').setDescription('Allow one or multiple roles from this panel.').setRequired(false).addChoices({ name: 'Multiple roles', value: 'MULTI' }, { name: 'Single role', value: 'SINGLE' }))
         .addStringOption((option) => option.setName('color').setDescription('Panel accent color, such as #7869ff.').setRequired(false))
+        .addStringOption((option) => option.setName('header_image').setDescription('Optional image/media URL posted above the role panel embed.').setRequired(false).setMaxLength(1800))
         .addStringOption((option) => option.setName('display_mode').setDescription('Post this panel as buttons, a dropdown menu, or native message reactions.').setRequired(false).addChoices({ name: 'Buttons', value: 'BUTTONS' }, { name: 'Dropdown menu', value: 'DROPDOWN' }, { name: 'Native message reactions', value: 'REACTIONS' }))
     )
 
@@ -135,6 +136,7 @@ module.exports = {
         description: interaction.options.getString('description') || undefined,
         mode: interaction.options.getString('mode') || 'MULTI',
         color: interaction.options.getString('color') || undefined,
+        headerImageUrl: interaction.options.getString('header_image') || undefined,
         displayMode: interaction.options.getString('display_mode') || 'BUTTONS'
       });
       await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'reaction-role-config', title: 'Role Panel Saved', body: `Panel: **${panel.name}**\nUpdated By: <@${interaction.user.id}>`, actorUserId: interaction.user.id });

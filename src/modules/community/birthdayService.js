@@ -9,7 +9,7 @@ const {
 } = require('discord.js');
 const { query } = require('../../services/db');
 const { CustomIds } = require('../ui/customIds');
-const { createBaseEmbed, createSuccessEmbed, createWarningEmbed, SlickBotColors } = require('../ui/uiService');
+const { createBaseEmbed, createSuccessEmbed, createWarningEmbed, SlickBotColors, withPanelHeaderImage } = require('../ui/uiService');
 
 const MONTH_NAMES = [null, 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const BIRTHDAY_SESSIONS = new Map();
@@ -279,10 +279,10 @@ function buildBirthdayPublicPanel(config) {
     color: parseHexColor(config?.panel_color, SlickBotColors.PRIMARY),
     footer: 'SlickBot Birthdays'
   });
-  return {
+  return withPanelHeaderImage({
     embeds: [embed],
     components: [new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(CustomIds.BirthdaySetOpen).setLabel('Set Birthday').setStyle(ButtonStyle.Primary))]
-  };
+  }, config?.panel_header_image_url);
 }
 
 class BirthdayService {

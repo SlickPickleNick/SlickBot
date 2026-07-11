@@ -72,6 +72,25 @@ async function resolveTeamId(guildId, teamName) {
   return result.rows[0]?.id || null;
 }
 
+
+async function resolveReviewerRoleIds(ticketType, config) {
+  const staffTeamId = ticketType?.staff_team_id || config?.staff_team_id || null;
+  const teamRoleIds = await getTeamRoleIds(staffTeamId);
+  return [...new Set([
+    ticketType?.staff_role_id || config?.staff_role_id,
+    ...teamRoleIds
+  ].filter(Boolean))];
+}
+
+async function resolveEscalationRoleIds(ticketType, config) {
+  const escalationTeamId = ticketType?.escalated_team_id || config?.escalated_team_id || null;
+  const teamRoleIds = await getTeamRoleIds(escalationTeamId);
+  return [...new Set([
+    ticketType?.escalated_role_id || config?.escalated_role_id,
+    ...teamRoleIds
+  ].filter(Boolean))];
+}
+
 function buildQuestionLines(answers) {
   const parsed = parseJson(answers, {});
   const entries = Object.entries(parsed);
@@ -95,19 +114,23 @@ class TicketService {
 
   async updateConfig(guildId, input) {
     const result = await query(
-      `INSERT INTO ticket_configs (guild_id, category_id, log_channel_id, staff_role_id, ticket_limit, transcript_enabled, naming_format, panel_title, panel_description, panel_color, close_delete_seconds, panel_display_mode)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      `INSERT INTO ticket_configs (guild_id, category_id, log_channel_id, staff_role_id, staff_team_id, escalated_role_id, escalated_team_id, ticket_limit, transcript_enabled, naming_format, panel_title, panel_description, panel_color, panel_header_image_url, close_delete_seconds, panel_display_mode)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
        ON CONFLICT (guild_id)
        DO UPDATE SET
          category_id = COALESCE(EXCLUDED.category_id, ticket_configs.category_id),
          log_channel_id = COALESCE(EXCLUDED.log_channel_id, ticket_configs.log_channel_id),
          staff_role_id = COALESCE(EXCLUDED.staff_role_id, ticket_configs.staff_role_id),
+         staff_team_id = COALESCE(EXCLUDED.staff_team_id, ticket_configs.staff_team_id),
+         escalated_role_id = COALESCE(EXCLUDED.escalated_role_id, ticket_configs.escalated_role_id),
+         escalated_team_id = COALESCE(EXCLUDED.escalated_team_id, ticket_configs.escalated_team_id),
          ticket_limit = COALESCE(EXCLUDED.ticket_limit, ticket_configs.ticket_limit),
          transcript_enabled = COALESCE(EXCLUDED.transcript_enabled, ticket_configs.transcript_enabled),
          naming_format = COALESCE(EXCLUDED.naming_format, ticket_configs.naming_format),
          panel_title = COALESCE(EXCLUDED.panel_title, ticket_configs.panel_title),
          panel_description = COALESCE(EXCLUDED.panel_description, ticket_configs.panel_description),
          panel_color = COALESCE(EXCLUDED.panel_color, ticket_configs.panel_color),
+         panel_header_image_url = COALESCE(EXCLUDED.panel_header_image_url, ticket_configs.panel_header_image_url),
          close_delete_seconds = COALESCE(EXCLUDED.close_delete_seconds, ticket_configs.close_delete_seconds),
          panel_display_mode = COALESCE(EXCLUDED.panel_display_mode, ticket_configs.panel_display_mode),
          updated_at = NOW()
@@ -117,12 +140,16 @@ class TicketService {
         input.categoryId || null,
         input.logChannelId || null,
         input.staffRoleId || null,
+        input.staffTeamName ? await resolveTeamId(guildId, input.staffTeamName) : null,
+        input.escalatedRoleId || null,
+        input.escalatedTeamName ? await resolveTeamId(guildId, input.escalatedTeamName) : null,
         input.ticketLimit || null,
         typeof input.transcriptEnabled === 'boolean' ? input.transcriptEnabled : null,
         input.namingFormat || null,
         input.panelTitle || null,
         input.panelDescription || null,
         input.panelColor || null,
+        input.panelHeaderImageUrl || null,
         input.closeDeleteSeconds || null,
         input.panelDisplayMode || null
       ]
@@ -134,16 +161,19 @@ class TicketService {
   async ensureDefaultType(guildId) {
     const cfg = await this.getConfig(guildId);
     const result = await query(
-      `INSERT INTO ticket_types (guild_id, name, label, description, category_id, log_channel_id, staff_role_id, ticket_limit, transcript_enabled, naming_format, questions, enabled)
-       VALUES ($1, 'Admin Support', 'Admin Support', 'General server support and administrative help.', $2, $3, $4, $5, $6, $7, $8, true)
+      `INSERT INTO ticket_types (guild_id, name, label, description, category_id, log_channel_id, staff_role_id, staff_team_id, escalated_role_id, escalated_team_id, ticket_limit, transcript_enabled, naming_format, questions, enabled)
+       VALUES ($1, 'Admin Support', 'Admin Support', 'General server support and administrative help.', $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, true)
        ON CONFLICT (guild_id, name)
        DO UPDATE SET
          category_id = COALESCE(ticket_types.category_id, EXCLUDED.category_id),
          log_channel_id = COALESCE(ticket_types.log_channel_id, EXCLUDED.log_channel_id),
          staff_role_id = COALESCE(ticket_types.staff_role_id, EXCLUDED.staff_role_id),
+         staff_team_id = COALESCE(ticket_types.staff_team_id, EXCLUDED.staff_team_id),
+         escalated_role_id = COALESCE(ticket_types.escalated_role_id, EXCLUDED.escalated_role_id),
+         escalated_team_id = COALESCE(ticket_types.escalated_team_id, EXCLUDED.escalated_team_id),
          updated_at = NOW()
        RETURNING *`,
-      [guildId, cfg.category_id || null, cfg.log_channel_id || null, cfg.staff_role_id || null, cfg.ticket_limit || 1, cfg.transcript_enabled !== false, cfg.naming_format || 'ticket-{username}-{number}', JSON.stringify([{ label: 'How can staff help?', required: true }])]
+      [guildId, cfg.category_id || null, cfg.log_channel_id || null, cfg.staff_role_id || null, cfg.staff_team_id || null, cfg.escalated_role_id || null, cfg.escalated_team_id || null, cfg.ticket_limit || 1, cfg.transcript_enabled !== false, cfg.naming_format || 'ticket-{username}-{number}', JSON.stringify([{ label: 'How can staff help?', required: true }])]
     );
     return result.rows[0];
   }
@@ -253,8 +283,7 @@ class TicketService {
       overwrites.push({ id: botMember.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ManageChannels, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.AttachFiles] });
     }
 
-    const teamRoleIds = await getTeamRoleIds(selectedType.staff_team_id);
-    const reviewerRoleIds = Array.isArray(reviewerRoleIdsOverride) ? [...new Set(reviewerRoleIdsOverride)] : [...new Set([selectedType.staff_role_id || config.staff_role_id, ...teamRoleIds].filter(Boolean))];
+    const reviewerRoleIds = Array.isArray(reviewerRoleIdsOverride) ? [...new Set(reviewerRoleIdsOverride)] : await resolveReviewerRoleIds(selectedType, config);
     for (const roleId of reviewerRoleIds) {
       overwrites.push({ id: roleId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.ManageMessages] });
     }
@@ -325,11 +354,19 @@ class TicketService {
     const ticket = await this.findOpenTicketByChannel(interaction.guildId, interaction.channelId);
     if (!ticket) return { ok: false, reason: 'This channel is not an open SlickBot ticket.' };
 
+    const config = await this.getConfig(interaction.guildId);
     const type = ticket.ticket_type_id ? await this.getTypeById(interaction.guildId, ticket.ticket_type_id) : null;
-    const escalatedRoles = [...new Set([type?.escalated_role_id, ...(await getTeamRoleIds(type?.escalated_team_id))].filter(Boolean))];
+    const escalatedRoles = await resolveEscalationRoleIds(type, config);
     if (!escalatedRoles.length) return { ok: false, reason: 'This ticket type does not have an escalation role or team configured.' };
 
-    if (ticket.reviewer_role_id) await interaction.channel.permissionOverwrites.delete(ticket.reviewer_role_id).catch(() => {});
+    const reviewerRoles = await resolveReviewerRoleIds(type, config);
+    const escalatedRoleSet = new Set(escalatedRoles);
+    for (const roleId of reviewerRoles) {
+      if (!escalatedRoleSet.has(roleId)) {
+        await interaction.channel.permissionOverwrites.edit(roleId, { ViewChannel: false, SendMessages: false, ReadMessageHistory: false, ManageMessages: false }).catch(() => {});
+      }
+    }
+
     for (const roleId of escalatedRoles) {
       await interaction.channel.permissionOverwrites.edit(roleId, { ViewChannel: true, SendMessages: true, ReadMessageHistory: true, ManageMessages: true }).catch(() => {});
     }
@@ -341,6 +378,30 @@ class TicketService {
 
     await logger.log({ guildId: interaction.guildId, eventKey: 'ticket-escalate', title: 'Ticket Escalated', body: `Ticket #${ticket.ticket_number} escalated by ${interaction.user.tag}.\nReason: ${reason}`, actorUserId: interaction.user.id, metadata: { ticketId: ticket.id, escalatedRoles } }).catch(() => {});
     return { ok: true, ticket: result.rows[0], roleIds: escalatedRoles };
+  }
+
+  async addUserToTicket({ interaction, logger, user, reason = 'No reason provided.' }) {
+    const ticket = await this.findOpenTicketByChannel(interaction.guildId, interaction.channelId);
+    if (!ticket) return { ok: false, reason: 'This channel is not an open SlickBot ticket.' };
+    if (!user) return { ok: false, reason: 'No user was provided.' };
+
+    await interaction.channel.permissionOverwrites.edit(user.id, {
+      ViewChannel: true,
+      SendMessages: true,
+      ReadMessageHistory: true,
+      AttachFiles: true
+    }).catch(() => {});
+
+    await logger.log({
+      guildId: interaction.guildId,
+      eventKey: 'ticket-update',
+      title: 'User Added to Ticket',
+      body: `Ticket #${ticket.ticket_number}: <@${user.id}> was added by ${interaction.user.tag}.\nReason: ${reason}`,
+      actorUserId: interaction.user.id,
+      metadata: { ticketId: ticket.id, addedUserId: user.id }
+    }).catch(() => {});
+
+    return { ok: true, ticket, user };
   }
 
   async closeTicket({ interaction, client, logger, reason = 'No reason provided.' }) {
@@ -424,8 +485,8 @@ class ReportService {
   async updateConfig(guildId, input) {
     const pingTeamId = input.pingTeamName ? await resolveTeamId(guildId, input.pingTeamName) : null;
     const result = await query(
-      `INSERT INTO report_configs (guild_id, review_channel_id, ping_role_id, ping_team_id, panel_title, panel_description, panel_color, panel_display_mode)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `INSERT INTO report_configs (guild_id, review_channel_id, ping_role_id, ping_team_id, panel_title, panel_description, panel_color, panel_header_image_url, panel_display_mode)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        ON CONFLICT (guild_id)
        DO UPDATE SET
          review_channel_id = COALESCE(EXCLUDED.review_channel_id, report_configs.review_channel_id),
@@ -434,10 +495,11 @@ class ReportService {
          panel_title = COALESCE(EXCLUDED.panel_title, report_configs.panel_title),
          panel_description = COALESCE(EXCLUDED.panel_description, report_configs.panel_description),
          panel_color = COALESCE(EXCLUDED.panel_color, report_configs.panel_color),
+         panel_header_image_url = COALESCE(EXCLUDED.panel_header_image_url, report_configs.panel_header_image_url),
          panel_display_mode = COALESCE(EXCLUDED.panel_display_mode, report_configs.panel_display_mode),
          updated_at = NOW()
        RETURNING *`,
-      [guildId, input.reviewChannelId || null, input.pingRoleId || null, pingTeamId, input.panelTitle || null, input.panelDescription || null, input.panelColor || null, input.panelDisplayMode || null]
+      [guildId, input.reviewChannelId || null, input.pingRoleId || null, pingTeamId, input.panelTitle || null, input.panelDescription || null, input.panelColor || null, input.panelHeaderImageUrl || null, input.panelDisplayMode || null]
     );
     return result.rows[0];
   }
@@ -577,8 +639,8 @@ class ApplicationService {
 
   async setupType(guildId, input) {
     const result = await query(
-      `INSERT INTO application_types (guild_id, name, description, review_channel_id, pending_role_id, approved_role_id, auto_assign_approved_role, submission_confirmation_message, panel_title, panel_description, panel_color, panel_display_mode, enabled)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, true)
+      `INSERT INTO application_types (guild_id, name, description, review_channel_id, pending_role_id, approved_role_id, auto_assign_approved_role, submission_confirmation_message, panel_title, panel_description, panel_color, panel_header_image_url, panel_display_mode, enabled)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, true)
        ON CONFLICT (guild_id, name) DO UPDATE SET
          description = COALESCE(EXCLUDED.description, application_types.description),
          review_channel_id = COALESCE(EXCLUDED.review_channel_id, application_types.review_channel_id),
@@ -589,10 +651,11 @@ class ApplicationService {
          panel_title = COALESCE(EXCLUDED.panel_title, application_types.panel_title),
          panel_description = COALESCE(EXCLUDED.panel_description, application_types.panel_description),
          panel_color = COALESCE(EXCLUDED.panel_color, application_types.panel_color),
+         panel_header_image_url = COALESCE(EXCLUDED.panel_header_image_url, application_types.panel_header_image_url),
          panel_display_mode = COALESCE(EXCLUDED.panel_display_mode, application_types.panel_display_mode),
          enabled = true,
          updated_at = NOW() RETURNING *`,
-      [guildId, input.name, input.description || null, input.reviewChannelId || null, input.pendingRoleId || null, input.approvedRoleId || null, Boolean(input.autoAssignApprovedRole), input.submissionConfirmationMessage || null, input.panelTitle || null, input.panelDescription || null, input.panelColor || null, input.panelDisplayMode || null]
+      [guildId, input.name, input.description || null, input.reviewChannelId || null, input.pendingRoleId || null, input.approvedRoleId || null, Boolean(input.autoAssignApprovedRole), input.submissionConfirmationMessage || null, input.panelTitle || null, input.panelDescription || null, input.panelColor || null, input.panelHeaderImageUrl || null, input.panelDisplayMode || null]
     );
     await this.ensureDefaultQuestions(result.rows[0].id);
     return result.rows[0];
@@ -764,8 +827,8 @@ function buildApplicationReviewPayload(submission, applicationType) {
 class AppealService {
   async updateConfig(guildId, input) {
     const result = await query(
-      `INSERT INTO appeal_configs (guild_id, review_channel_id, dm_decision_enabled, dm_include_submission, panel_title, panel_description, panel_color, panel_display_mode)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `INSERT INTO appeal_configs (guild_id, review_channel_id, dm_decision_enabled, dm_include_submission, panel_title, panel_description, panel_color, panel_header_image_url, panel_display_mode)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        ON CONFLICT (guild_id) DO UPDATE SET
          review_channel_id = COALESCE(EXCLUDED.review_channel_id, appeal_configs.review_channel_id),
          dm_decision_enabled = EXCLUDED.dm_decision_enabled,
@@ -773,9 +836,10 @@ class AppealService {
          panel_title = COALESCE(EXCLUDED.panel_title, appeal_configs.panel_title),
          panel_description = COALESCE(EXCLUDED.panel_description, appeal_configs.panel_description),
          panel_color = COALESCE(EXCLUDED.panel_color, appeal_configs.panel_color),
+         panel_header_image_url = COALESCE(EXCLUDED.panel_header_image_url, appeal_configs.panel_header_image_url),
          panel_display_mode = COALESCE(EXCLUDED.panel_display_mode, appeal_configs.panel_display_mode),
          updated_at = NOW() RETURNING *`,
-      [guildId, input.reviewChannelId || null, Boolean(input.dmDecisionEnabled), Boolean(input.dmIncludeSubmission), input.panelTitle || null, input.panelDescription || null, input.panelColor || null, input.panelDisplayMode || null]
+      [guildId, input.reviewChannelId || null, Boolean(input.dmDecisionEnabled), Boolean(input.dmIncludeSubmission), input.panelTitle || null, input.panelDescription || null, input.panelColor || null, input.panelHeaderImageUrl || null, input.panelDisplayMode || null]
     );
     return result.rows[0];
   }

@@ -25,6 +25,7 @@ module.exports = {
         .addStringOption((option) => option.setName('panel_title').setDescription('Public appeal panel title.').setRequired(false).setMaxLength(100))
         .addStringOption((option) => option.setName('panel_description').setDescription('Public appeal panel description.').setRequired(false).setMaxLength(800))
         .addStringOption((option) => option.setName('panel_color').setDescription('Panel accent color, example: #5aa7ff.').setRequired(false).setMaxLength(7))
+        .addStringOption((option) => option.setName('panel_header_image').setDescription('Optional image/media URL posted above the appeal panel embed.').setRequired(false).setMaxLength(1800))
         .addStringOption((option) => option.setName('display_mode').setDescription('Public panel component style.').setRequired(false).addChoices({ name: 'Buttons', value: 'BUTTONS' }, { name: 'Dropdown menu', value: 'DROPDOWN' }))
     )
     .addSubcommand((subcommand) =>
@@ -62,10 +63,10 @@ module.exports = {
 
     if (subcommand === 'setup') {
       const channel = interaction.options.getChannel('review_channel', true);
-      const config = await appeals.updateConfig(interaction.guildId, { reviewChannelId: channel.id, dmDecisionEnabled: interaction.options.getBoolean('dm_decision') || false, dmIncludeSubmission: interaction.options.getBoolean('dm_include_submission') || false, panelTitle: interaction.options.getString('panel_title') || null, panelDescription: interaction.options.getString('panel_description') || null, panelColor: interaction.options.getString('panel_color') || null, panelDisplayMode: interaction.options.getString('display_mode') || null });
+      const config = await appeals.updateConfig(interaction.guildId, { reviewChannelId: channel.id, dmDecisionEnabled: interaction.options.getBoolean('dm_decision') || false, dmIncludeSubmission: interaction.options.getBoolean('dm_include_submission') || false, panelTitle: interaction.options.getString('panel_title') || null, panelDescription: interaction.options.getString('panel_description') || null, panelColor: interaction.options.getString('panel_color') || null, panelHeaderImageUrl: interaction.options.getString('panel_header_image') || null, panelDisplayMode: interaction.options.getString('display_mode') || null });
       await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'setup', title: 'Appeal Settings Updated', body: `Appeal review channel set to <#${channel.id}> by ${interaction.user.tag}.`, actorUserId: interaction.user.id }).catch(() => {});
       const refresh = await refreshPublishedPanel(ctx.client, interaction.guildId, 'appeal', '*').catch(() => null);
-      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Appeal System Configured', [`Review Channel: <#${channel.id}>`, `DM Decisions: **${config.dm_decision_enabled ? 'Enabled' : 'Disabled'}**`, `Include Submission in DM: **${config.dm_include_submission ? 'Enabled' : 'Disabled'}**`, formatRefreshSummary(refresh)].filter(Boolean).join('\n'))] });
+      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Appeal System Configured', [`Review Channel: <#${channel.id}>`, `DM Decisions: **${config.dm_decision_enabled ? 'Enabled' : 'Disabled'}**`, `Include Submission in DM: **${config.dm_include_submission ? 'Enabled' : 'Disabled'}**`, `Panel Header Image: ${config.panel_header_image_url ? 'Configured' : 'Not set'}`, formatRefreshSummary(refresh)].filter(Boolean).join('\n'))] });
     }
 
     if (subcommand === 'panel') {

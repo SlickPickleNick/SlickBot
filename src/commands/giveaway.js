@@ -20,6 +20,7 @@ module.exports = {
         .addRoleOption((option) => option.setName('ping_role').setDescription('Optional role to ping when giveaways start.').setRequired(false))
         .addRoleOption((option) => option.setName('host_role').setDescription('Optional host role for your records.').setRequired(false))
         .addStringOption((option) => option.setName('panel_color').setDescription('Giveaway embed accent color, such as #7869ff.').setRequired(false).setMaxLength(7))
+        .addStringOption((option) => option.setName('panel_header_image').setDescription('Optional image/media URL posted above giveaway embeds.').setRequired(false).setMaxLength(1800))
     )
     .addSubcommand((subcommand) =>
       subcommand
@@ -67,10 +68,11 @@ module.exports = {
         defaultChannelId: interaction.options.getChannel('default_channel')?.id || null,
         pingRoleId: interaction.options.getRole('ping_role')?.id || null,
         hostRoleId: interaction.options.getRole('host_role')?.id || null,
-        panelColor: interaction.options.getString('panel_color') || null
+        panelColor: interaction.options.getString('panel_color') || null,
+        panelHeaderImageUrl: interaction.options.getString('panel_header_image') || null
       });
       await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'giveaway-config', title: 'Giveaway Settings Updated', body: `Giveaway settings updated by <@${interaction.user.id}>.`, actorUserId: interaction.user.id }).catch(() => {});
-      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Giveaway Settings Saved', [`Default Channel: ${config.default_channel_id ? `<#${config.default_channel_id}>` : 'Not set'}`, `Ping Role: ${config.ping_role_id ? `<@&${config.ping_role_id}>` : 'Not set'}`].join('\n'))] });
+      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Giveaway Settings Saved', [`Default Channel: ${config.default_channel_id ? `<#${config.default_channel_id}>` : 'Not set'}`, `Ping Role: ${config.ping_role_id ? `<@&${config.ping_role_id}>` : 'Not set'}`, `Panel Header Image: ${config.panel_header_image_url ? 'Configured' : 'Not set'}`].join('\n'))] });
     }
 
     if (sub === 'start') {

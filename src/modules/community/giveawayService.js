@@ -1,6 +1,6 @@
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { query } = require('../../services/db');
-const { createBaseEmbed, createSuccessEmbed, createWarningEmbed, SlickBotColors } = require('../ui/uiService');
+const { createBaseEmbed, createSuccessEmbed, createWarningEmbed, SlickBotColors, withPanelHeaderImage } = require('../ui/uiService');
 
 function parseHexColor(color, fallback = SlickBotColors.PRIMARY) {
   const value = String(color || '').trim();
@@ -52,7 +52,7 @@ function buildGiveawayPayload(giveaway, entryCount = 0, config = null) {
       .setDisabled(giveaway.status !== 'OPEN')
   );
 
-  return { embeds: [embed], components: [row] };
+  return withPanelHeaderImage({ embeds: [embed], components: [row] }, config?.panel_header_image_url);
 }
 
 class GiveawayService {
@@ -63,16 +63,17 @@ class GiveawayService {
 
   async updateConfig(guildId, input = {}) {
     const result = await query(
-      `INSERT INTO giveaway_configs (guild_id, default_channel_id, host_role_id, ping_role_id, panel_color)
-       VALUES ($1, $2, $3, $4, COALESCE($5, '#7869ff'))
+      `INSERT INTO giveaway_configs (guild_id, default_channel_id, host_role_id, ping_role_id, panel_color, panel_header_image_url)
+       VALUES ($1, $2, $3, $4, COALESCE($5, '#7869ff'), $6)
        ON CONFLICT (guild_id) DO UPDATE SET
          default_channel_id = COALESCE(EXCLUDED.default_channel_id, giveaway_configs.default_channel_id),
          host_role_id = COALESCE(EXCLUDED.host_role_id, giveaway_configs.host_role_id),
          ping_role_id = COALESCE(EXCLUDED.ping_role_id, giveaway_configs.ping_role_id),
          panel_color = COALESCE(EXCLUDED.panel_color, giveaway_configs.panel_color),
+         panel_header_image_url = COALESCE(EXCLUDED.panel_header_image_url, giveaway_configs.panel_header_image_url),
          updated_at = NOW()
        RETURNING *`,
-      [guildId, input.defaultChannelId || null, input.hostRoleId || null, input.pingRoleId || null, input.panelColor || null]
+      [guildId, input.defaultChannelId || null, input.hostRoleId || null, input.pingRoleId || null, input.panelColor || null, input.panelHeaderImageUrl || null]
     );
     return result.rows[0];
   }
@@ -101,7 +102,9 @@ class GiveawayService {
     const giveaway = result.rows[0];
     const payload = buildGiveawayPayload(giveaway, 0, config);
     const content = config?.ping_role_id ? `<@&${config.ping_role_id}>` : undefined;
-    const message = await targetChannel.send({ content, ...payload, allowedMentions: { roles: config?.ping_role_id ? [config.ping_role_id] : [] } });
+    const messagePayload = { ...payload, allowedMentions: { roles: config?.ping_role_id ? [config.ping_role_id] : [] } };
+    if (content) messagePayload.content = [payload.content, content].filter(Boolean).join('\n');
+    const message = await targetChannel.send(messagePayload);
     const updated = await query(`UPDATE giveaways SET message_id = $1, updated_at = NOW() WHERE id = $2 RETURNING *`, [message.id, giveaway.id]);
 
     await logger?.log({ guildId: interaction.guildId, eventKey: 'giveaway-created', title: 'Giveaway Created', body: `Prize: **${prize}**\nChannel: <#${targetChannel.id}>\nEnds: ${formatDiscordTimestamp(endsAt, 'f')}`, actorUserId: interaction.user.id }).catch(() => {});

@@ -21,7 +21,10 @@ module.exports = {
         .setDescription('Configure default ticket settings.')
         .addChannelOption((option) => option.setName('category').setDescription('Default category where ticket channels should be created.').addChannelTypes(ChannelType.GuildCategory).setRequired(false))
         .addChannelOption((option) => option.setName('log_channel').setDescription('Default channel where ticket transcripts should be sent.').addChannelTypes(ChannelType.GuildText).setRequired(false))
-        .addRoleOption((option) => option.setName('staff_role').setDescription('Default staff role that can view ticket channels.').setRequired(false))
+        .addRoleOption((option) => option.setName('staff_role').setDescription('Default non-escalated support role that can view new tickets.').setRequired(false))
+        .addStringOption((option) => option.setName('staff_team').setDescription('Default non-escalated Permission Team for new tickets.').setRequired(false).setMaxLength(80))
+        .addRoleOption((option) => option.setName('escalated_role').setDescription('Default role that receives escalated tickets.').setRequired(false))
+        .addStringOption((option) => option.setName('escalated_team').setDescription('Default Permission Team that receives escalated tickets.').setRequired(false).setMaxLength(80))
         .addIntegerOption((option) => option.setName('ticket_limit').setDescription('Default open ticket limit per user.').setMinValue(1).setMaxValue(10).setRequired(false))
         .addBooleanOption((option) => option.setName('transcripts').setDescription('Generate transcripts when tickets close.').setRequired(false))
         .addStringOption((option) => option.setName('naming_format').setDescription('Example: ticket-{username}-{number}').setRequired(false).setMaxLength(80))
@@ -29,6 +32,7 @@ module.exports = {
         .addStringOption((option) => option.setName('panel_title').setDescription('Public ticket panel title.').setRequired(false).setMaxLength(100))
         .addStringOption((option) => option.setName('panel_description').setDescription('Public ticket panel description.').setRequired(false).setMaxLength(800))
         .addStringOption((option) => option.setName('panel_color').setDescription('Panel accent color, example: #7869ff.').setRequired(false).setMaxLength(7))
+        .addStringOption((option) => option.setName('panel_header_image').setDescription('Optional image/media URL posted above the ticket panel embed.').setRequired(false).setMaxLength(1800))
         .addStringOption((option) => option.setName('display_mode').setDescription('Public panel component style.').setRequired(false).addChoices({ name: 'Buttons', value: 'BUTTONS' }, { name: 'Dropdown menu', value: 'DROPDOWN' }))
     )
     .addSubcommand((subcommand) =>
@@ -97,6 +101,13 @@ module.exports = {
     )
     .addSubcommand((subcommand) =>
       subcommand
+        .setName('add-user')
+        .setDescription('Add a user to the current ticket channel.')
+        .addUserOption((option) => option.setName('user').setDescription('User to add to this ticket.').setRequired(true))
+        .addStringOption((option) => option.setName('reason').setDescription('Optional reason for adding the user.').setRequired(false).setMaxLength(500))
+    )
+    .addSubcommand((subcommand) =>
+      subcommand
         .setName('close')
         .setDescription('Close the current ticket.')
         .addStringOption((option) => option.setName('reason').setDescription('Close reason.').setRequired(false).setMaxLength(1000))
@@ -111,7 +122,7 @@ module.exports = {
     if (subcommand === 'open') return ActionKeys.TicketsOpen;
     if (subcommand === 'claim') return ActionKeys.TicketsClaim;
     if (subcommand === 'close') return ActionKeys.TicketsClose;
-    if (['priority', 'escalate'].includes(subcommand)) return ActionKeys.TicketsManage;
+    if (['priority', 'escalate', 'add-user'].includes(subcommand)) return ActionKeys.TicketsManage;
     return ActionKeys.TicketsManager;
   },
   isPublic(interaction) {
@@ -128,6 +139,9 @@ module.exports = {
         categoryId: interaction.options.getChannel('category')?.id || null,
         logChannelId: interaction.options.getChannel('log_channel')?.id || null,
         staffRoleId: interaction.options.getRole('staff_role')?.id || null,
+        staffTeamName: interaction.options.getString('staff_team') || null,
+        escalatedRoleId: interaction.options.getRole('escalated_role')?.id || null,
+        escalatedTeamName: interaction.options.getString('escalated_team') || null,
         ticketLimit: interaction.options.getInteger('ticket_limit') || null,
         transcriptEnabled: interaction.options.getBoolean('transcripts'),
         namingFormat: interaction.options.getString('naming_format') || null,
@@ -135,11 +149,12 @@ module.exports = {
         panelTitle: interaction.options.getString('panel_title') || null,
         panelDescription: interaction.options.getString('panel_description') || null,
         panelColor: interaction.options.getString('panel_color') || null,
+        panelHeaderImageUrl: interaction.options.getString('panel_header_image') || null,
         panelDisplayMode: interaction.options.getString('display_mode') || null
       });
       await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'setup', title: 'Ticket Settings Updated', body: `Ticket settings updated by ${interaction.user.tag}.`, actorUserId: interaction.user.id }).catch(() => {});
       const refresh = await refreshPublishedPanel(ctx.client, interaction.guildId, 'ticket', '*').catch(() => null);
-      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Ticket Defaults Configured', [`Category: ${config.category_id ? `<#${config.category_id}>` : 'Not set'}`, `Log Channel: ${config.log_channel_id ? `<#${config.log_channel_id}>` : 'Not set'}`, `Staff Role: ${config.staff_role_id ? `<@&${config.staff_role_id}>` : 'Not set'}`, `Naming: \`${config.naming_format}\``, formatRefreshSummary(refresh)].filter(Boolean).join('\n'))] });
+      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Ticket Defaults Configured', [`Category: ${config.category_id ? `<#${config.category_id}>` : 'Not set'}`, `Log Channel: ${config.log_channel_id ? `<#${config.log_channel_id}>` : 'Not set'}`, `Support Role: ${config.staff_role_id ? `<@&${config.staff_role_id}>` : 'Not set'}`, `Support Team: ${config.staff_team_id ? 'Configured' : 'Not set'}`, `Escalated Role: ${config.escalated_role_id ? `<@&${config.escalated_role_id}>` : 'Not set'}`, `Escalated Team: ${config.escalated_team_id ? 'Configured' : 'Not set'}`, `Panel Header Image: ${config.panel_header_image_url ? 'Configured' : 'Not set'}`, `Naming: \`${config.naming_format}\``, formatRefreshSummary(refresh)].filter(Boolean).join('\n'))] });
     }
 
     if (subcommand === 'type-setup') {
@@ -220,6 +235,14 @@ module.exports = {
       if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Ticket Not Escalated', result.reason)] });
       await interaction.channel.send({ content: result.roleIds.map((roleId) => `<@&${roleId}>`).join(' '), embeds: [createBaseEmbed({ title: 'Ticket Escalated', description: `This ticket has been escalated by <@${interaction.user.id}>.`, color: SlickBotColors.WARNING })] }).catch(() => {});
       return replyPrivate(interaction, { embeds: [createSuccessEmbed('Ticket Escalated', `Ticket #${result.ticket.ticket_number} was escalated.`)] });
+    }
+
+    if (subcommand === 'add-user') {
+      const user = interaction.options.getUser('user', true);
+      const result = await tickets.addUserToTicket({ interaction, logger: ctx.logger, user, reason: interaction.options.getString('reason') || 'No reason provided.' });
+      if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('User Not Added', result.reason)] });
+      await interaction.channel.send({ embeds: [createBaseEmbed({ title: 'User Added to Ticket', description: `${user} was added to this ticket by <@${interaction.user.id}>.`, color: SlickBotColors.INFO })] }).catch(() => {});
+      return replyPrivate(interaction, { embeds: [createSuccessEmbed('User Added', `${user} can now view and reply in ticket #${result.ticket.ticket_number}.`)] });
     }
 
     if (subcommand === 'close') {

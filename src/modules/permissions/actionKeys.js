@@ -258,7 +258,7 @@ const defaultPublicActions = Object.freeze([
 
 const defaultTeamPermissions = Object.freeze(Object.values(ActionKeys));
 
-const PERMISSION_DEFAULTS_VERSION = '0.6.1';
+const PERMISSION_DEFAULTS_VERSION = '0.6.2';
 
 module.exports = {
   ActionKeys,

@@ -1,6 +1,6 @@
 # SlickBot Project Plan
 
-## Current Version: 0.6.1
+## Current Version: 0.6.2
 
 SlickBot is being built as a modular all-in-one Discord server management bot for the SlickPickleNick community.
 
@@ -29,13 +29,23 @@ SlickBot is being built as a modular all-in-one Discord server management bot fo
 - Server stats
 - Leveling / XP
 
+## v0.6.2 Scope
+
+- Fixed ticket creation so new tickets grant access only to the opener and configured non-escalated support role/team.
+- Fixed ticket escalation so configured non-escalated reviewer roles/teams are removed before escalated roles/teams are granted.
+- Added `/ticket add-user` to grant a selected user access to the current ticket channel.
+- Expanded `/ticket setup` with default non-escalated support team and escalated role/team settings.
+- Moved the public leveling information panel from `/levels info` to `/level info`.
+- Refreshed the leveling info panel for member-facing readability and sorted multiplier roles from smallest to largest multiplier.
+- Added optional header image/media URL support for public panel systems.
+
 ## v0.6.1 Scope
 
 - Fixed role bundles so they no longer overwrite a standalone option that uses the bundle’s first role.
 - Added XP multiplier roles with configurable multiplier values.
 - Added configurable level-up announcement behavior for all levels or reward levels only.
 - Added XP curve analysis with CSV export for every selected level.
-- Added the public `/levels info` panel explaining the server leveling system.
+- Added the public `/level info` panel explaining the server leveling system.
 
 ## Future Modules
 

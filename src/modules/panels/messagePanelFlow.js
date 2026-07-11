@@ -81,8 +81,14 @@ async function startPanelMessageFlow(interaction, { target, name = null, logger 
   });
   if (color.cancelled) return interaction.channel.send({ embeds: [createWarningEmbed('Panel Builder Stopped', color.reason)] });
 
+  const headerImage = await waitForUserMessage(interaction, {
+    title: 'Step 4 — Header Image',
+    description: 'Send an optional image/media URL to post above the panel embed. Type `skip` to keep the current/default header image.'
+  });
+  if (headerImage.cancelled) return interaction.channel.send({ embeds: [createWarningEmbed('Panel Builder Stopped', headerImage.reason)] });
+
   const displayMode = await waitForUserMessage(interaction, {
-    title: 'Step 4 — Panel Display Mode',
+    title: 'Step 5 — Panel Display Mode',
     description: 'Send `buttons`, `dropdown`, or `reactions`. Type `skip` to keep the current/default mode. Buttons are the default.'
   });
   if (displayMode.cancelled) return interaction.channel.send({ embeds: [createWarningEmbed('Panel Builder Stopped', displayMode.reason)] });
@@ -94,6 +100,7 @@ async function startPanelMessageFlow(interaction, { target, name = null, logger 
     title: normalizeOptionalText(title.value),
     description: normalizeOptionalText(description.value),
     color: normalizeOptionalText(color.value),
+    headerImageUrl: normalizeOptionalText(headerImage.value),
     displayMode: normalizeOptionalText(displayMode.value),
     createIfMissing: true
   });
@@ -122,11 +129,12 @@ async function startPanelFieldEditFlow(interaction, { target, name = null, field
     title: 'Send the new panel title. Type `skip` to leave it unchanged.',
     description: 'Send the new panel description. Multiline spacing is supported. Type `skip` to leave it unchanged.',
     color: 'Send a hex color such as `#7869ff`. Type `skip` to leave it unchanged.',
+    header_image: 'Send an image/media URL to post above the embed. Type `skip` to leave it unchanged.',
     display_mode: 'Send `buttons` or `dropdown`. Type `skip` to leave it unchanged.'
   };
 
   if (!prompts[fieldLabel]) {
-    return interaction.reply({ embeds: [createWarningEmbed('Unknown Field', 'Choose title, description, color, or display_mode.')], ephemeral: true });
+    return interaction.reply({ embeds: [createWarningEmbed('Unknown Field', 'Choose title, description, color, header_image, or display_mode.')], ephemeral: true });
   }
 
   await interaction.reply({ embeds: [createBaseEmbed({
@@ -154,6 +162,7 @@ async function startPanelFieldEditFlow(interaction, { target, name = null, field
   if (fieldLabel === 'title') payload.title = value;
   if (fieldLabel === 'description') payload.description = value;
   if (fieldLabel === 'color') payload.color = value;
+  if (fieldLabel === 'header_image') payload.headerImageUrl = value;
   if (fieldLabel === 'display_mode') payload.displayMode = value;
 
   const result = await updatePanelDesign(payload);
@@ -229,8 +238,14 @@ async function startRolePanelCreationFlow(interaction, { logger = null, initialN
   });
   if (color.cancelled) return interaction.channel.send({ embeds: [createWarningEmbed('Role Panel Builder Stopped', color.reason)] });
 
+  const headerImage = await waitForUserMessage(interaction, {
+    title: 'Step 6 — Header Image',
+    description: existingPanel ? `Send an optional image/media URL to post above this panel. Type \`skip\` to keep the current header image.` : 'Send an optional image/media URL to post above this panel. Type `skip` for no header image.'
+  });
+  if (headerImage.cancelled) return interaction.channel.send({ embeds: [createWarningEmbed('Role Panel Builder Stopped', headerImage.reason)] });
+
   const displayMode = await waitForUserMessage(interaction, {
-    title: 'Step 6 — Panel Display Mode',
+    title: 'Step 7 — Panel Display Mode',
     description: existingPanel ? `Send \`buttons\`, \`dropdown\`, or \`reactions\`. Current: **${existingPanel.panel_display_mode || 'BUTTONS'}**. Type \`skip\` to keep it.` : 'Send `buttons`, `dropdown`, or `reactions`. Type `skip` for buttons.'
   });
   if (displayMode.cancelled) return interaction.channel.send({ embeds: [createWarningEmbed('Role Panel Builder Stopped', displayMode.reason)] });
@@ -250,6 +265,7 @@ async function startRolePanelCreationFlow(interaction, { logger = null, initialN
     description: normalizeOptionalText(description.value) ?? existingPanel?.description ?? undefined,
     mode: modeValue,
     color: normalizeOptionalText(color.value) || existingPanel?.accent_color || undefined,
+    headerImageUrl: normalizeOptionalText(headerImage.value) || existingPanel?.panel_header_image_url || undefined,
     displayMode: displayModeValue
   });
 

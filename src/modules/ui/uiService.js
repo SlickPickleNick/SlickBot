@@ -75,6 +75,25 @@ function createSelectRow(customId, placeholder, options, minValues = 1, maxValue
   );
 }
 
+
+function normalizePanelHeaderImageUrl(value) {
+  const text = String(value || '').trim();
+  if (!text) return null;
+  if (!/^https?:\/\//i.test(text)) return null;
+  if (text.length > 1800) return null;
+  return text;
+}
+
+function withPanelHeaderImage(payload, headerImageUrl) {
+  const normalized = normalizePanelHeaderImageUrl(headerImageUrl);
+  if (!normalized) return payload;
+  const existingContent = payload?.content ? String(payload.content) : '';
+  return {
+    ...payload,
+    content: existingContent ? `${normalized}\n${existingContent}` : normalized
+  };
+}
+
 function formatEnabled(enabled) {
   return enabled ? 'Enabled' : 'Disabled';
 }
@@ -99,6 +118,8 @@ module.exports = {
   createPanelButton,
   createLinkButton,
   createSelectRow,
+  normalizePanelHeaderImageUrl,
+  withPanelHeaderImage,
   formatEnabled,
   formatStatusBadge,
   ButtonStyle

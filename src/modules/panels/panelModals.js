@@ -17,7 +17,8 @@ function buildPanelDesignModal(target, name = '') {
     .addComponents(
       new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('title').setLabel('Panel title').setStyle(TextInputStyle.Short).setRequired(false).setMaxLength(256)),
       new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('description').setLabel('Panel description').setStyle(TextInputStyle.Paragraph).setRequired(false).setMaxLength(3500)),
-      new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('color').setLabel('Accent color, example #7869ff').setStyle(TextInputStyle.Short).setRequired(false).setMaxLength(7))
+      new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('color').setLabel('Accent color, example #7869ff').setStyle(TextInputStyle.Short).setRequired(false).setMaxLength(7)),
+      new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('header_image').setLabel('Header image/media URL').setStyle(TextInputStyle.Short).setRequired(false).setMaxLength(1800))
     );
 }
 

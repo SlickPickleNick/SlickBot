@@ -373,8 +373,9 @@ class LevelingService {
       });
     }
 
-    const multiplierLines = multipliers.length
-      ? multipliers.map((item) => `<@&${item.role_id}> — **${formatMultiplier(item.multiplier)} XP**`).join('\n')
+    const sortedMultipliers = [...multipliers].sort((a, b) => Number(a.multiplier) - Number(b.multiplier) || new Date(a.created_at || 0) - new Date(b.created_at || 0));
+    const multiplierLines = sortedMultipliers.length
+      ? sortedMultipliers.map((item) => `<@&${item.role_id}> — **${formatMultiplier(item.multiplier)} XP**`).join('\n')
       : 'No multiplier roles are configured.';
     const rewardLines = rewards.length
       ? rewards.slice(0, 15).map((item) => `Level **${item.level}** — <@&${item.role_id}>`).join('\n')
@@ -401,7 +402,7 @@ class LevelingService {
         '**Commands**',
         '`/level rank` — View your XP and level progress',
         '`/level leaderboard` — View the top XP users',
-        '`/levels info` — Show this information panel'
+        '`/level info` — Show this information panel'
       ].filter(Boolean).join('\n'),
       color: SlickBotColors.PRIMARY,
       footer: `SlickBot Leveling · ${guild.name}`

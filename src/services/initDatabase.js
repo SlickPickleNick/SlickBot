@@ -188,11 +188,15 @@ async function initDatabase() {
       category_id TEXT,
       log_channel_id TEXT,
       staff_role_id TEXT,
+      staff_team_id TEXT REFERENCES permission_teams(id) ON DELETE SET NULL,
+      escalated_role_id TEXT,
+      escalated_team_id TEXT REFERENCES permission_teams(id) ON DELETE SET NULL,
       ticket_limit INTEGER NOT NULL DEFAULT 1,
       transcript_enabled BOOLEAN NOT NULL DEFAULT true,
       panel_title TEXT,
       panel_description TEXT,
       panel_color TEXT,
+      panel_header_image_url TEXT,
       close_delete_seconds INTEGER NOT NULL DEFAULT 10,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -231,6 +235,7 @@ async function initDatabase() {
       panel_title TEXT,
       panel_description TEXT,
       panel_color TEXT,
+      panel_header_image_url TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
@@ -267,6 +272,7 @@ async function initDatabase() {
       pending_role_id TEXT,
       approved_role_id TEXT,
       auto_assign_approved_role BOOLEAN NOT NULL DEFAULT false,
+      panel_header_image_url TEXT,
       enabled BOOLEAN NOT NULL DEFAULT true,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -325,6 +331,10 @@ async function initDatabase() {
 
 
   await query(`ALTER TABLE ticket_configs ADD COLUMN IF NOT EXISTS naming_format TEXT NOT NULL DEFAULT 'ticket-{username}-{number}';`).catch(() => {});
+  await query(`ALTER TABLE ticket_configs ADD COLUMN IF NOT EXISTS staff_team_id TEXT REFERENCES permission_teams(id) ON DELETE SET NULL;`).catch(() => {});
+  await query(`ALTER TABLE ticket_configs ADD COLUMN IF NOT EXISTS escalated_role_id TEXT;`).catch(() => {});
+  await query(`ALTER TABLE ticket_configs ADD COLUMN IF NOT EXISTS escalated_team_id TEXT REFERENCES permission_teams(id) ON DELETE SET NULL;`).catch(() => {});
+  await query(`ALTER TABLE ticket_configs ADD COLUMN IF NOT EXISTS panel_header_image_url TEXT;`).catch(() => {});
 
   await query(`
     CREATE TABLE IF NOT EXISTS ticket_types (
@@ -406,17 +416,20 @@ async function initDatabase() {
   await query(`ALTER TABLE report_configs ADD COLUMN IF NOT EXISTS panel_description TEXT;`).catch(() => {});
   await query(`ALTER TABLE report_configs ADD COLUMN IF NOT EXISTS panel_color TEXT;`).catch(() => {});
   await query(`ALTER TABLE report_configs ADD COLUMN IF NOT EXISTS panel_display_mode TEXT NOT NULL DEFAULT 'BUTTONS';`).catch(() => {});
+  await query(`ALTER TABLE report_configs ADD COLUMN IF NOT EXISTS panel_header_image_url TEXT;`).catch(() => {});
 
   await query(`ALTER TABLE application_types ADD COLUMN IF NOT EXISTS submission_confirmation_message TEXT;`).catch(() => {});
   await query(`ALTER TABLE application_types ADD COLUMN IF NOT EXISTS panel_title TEXT;`).catch(() => {});
   await query(`ALTER TABLE application_types ADD COLUMN IF NOT EXISTS panel_description TEXT;`).catch(() => {});
   await query(`ALTER TABLE application_types ADD COLUMN IF NOT EXISTS panel_color TEXT;`).catch(() => {});
   await query(`ALTER TABLE application_types ADD COLUMN IF NOT EXISTS panel_display_mode TEXT NOT NULL DEFAULT 'BUTTONS';`).catch(() => {});
+  await query(`ALTER TABLE application_types ADD COLUMN IF NOT EXISTS panel_header_image_url TEXT;`).catch(() => {});
 
   await query(`ALTER TABLE appeal_configs ADD COLUMN IF NOT EXISTS panel_title TEXT;`).catch(() => {});
   await query(`ALTER TABLE appeal_configs ADD COLUMN IF NOT EXISTS panel_description TEXT;`).catch(() => {});
   await query(`ALTER TABLE appeal_configs ADD COLUMN IF NOT EXISTS panel_color TEXT;`).catch(() => {});
   await query(`ALTER TABLE appeal_configs ADD COLUMN IF NOT EXISTS panel_display_mode TEXT NOT NULL DEFAULT 'BUTTONS';`).catch(() => {});
+  await query(`ALTER TABLE appeal_configs ADD COLUMN IF NOT EXISTS panel_header_image_url TEXT;`).catch(() => {});
   await query(`ALTER TABLE appeal_configs ADD COLUMN IF NOT EXISTS dm_include_submission BOOLEAN NOT NULL DEFAULT false;`).catch(() => {});
 
 
@@ -461,6 +474,7 @@ async function initDatabase() {
       accent_color TEXT NOT NULL DEFAULT '#7869ff',
       mode TEXT NOT NULL DEFAULT 'MULTI',
       panel_display_mode TEXT NOT NULL DEFAULT 'BUTTONS',
+      panel_header_image_url TEXT,
       active BOOLEAN NOT NULL DEFAULT true,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -488,6 +502,7 @@ async function initDatabase() {
 
 
   await query(`ALTER TABLE role_panels ADD COLUMN IF NOT EXISTS panel_display_mode TEXT NOT NULL DEFAULT 'BUTTONS';`).catch(() => {});
+  await query(`ALTER TABLE role_panels ADD COLUMN IF NOT EXISTS panel_header_image_url TEXT;`).catch(() => {});
   await query(`ALTER TABLE role_panel_options ALTER COLUMN label DROP NOT NULL;`).catch(() => {});
   await query(`ALTER TABLE role_panel_options ADD COLUMN IF NOT EXISTS role_ids JSONB;`).catch(() => {});
   await query(`UPDATE role_panel_options SET role_ids = jsonb_build_array(role_id) WHERE role_ids IS NULL;`).catch(() => {});
@@ -539,6 +554,7 @@ async function initDatabase() {
       host_role_id TEXT,
       ping_role_id TEXT,
       panel_color TEXT NOT NULL DEFAULT '#7869ff',
+      panel_header_image_url TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
@@ -578,6 +594,7 @@ async function initDatabase() {
 
   await query(`CREATE INDEX IF NOT EXISTS idx_giveaways_due ON giveaways(status, ends_at);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_giveaway_entries_lookup ON giveaway_entries(giveaway_id);`);
+  await query(`ALTER TABLE giveaway_configs ADD COLUMN IF NOT EXISTS panel_header_image_url TEXT;`).catch(() => {});
 
 
   await query(`
@@ -591,6 +608,7 @@ async function initDatabase() {
       panel_title TEXT,
       panel_description TEXT,
       panel_color TEXT,
+      panel_header_image_url TEXT,
       enabled BOOLEAN NOT NULL DEFAULT true,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -631,6 +649,7 @@ async function initDatabase() {
   await query(`ALTER TABLE birthday_configs ADD COLUMN IF NOT EXISTS panel_title TEXT;`).catch(() => {});
   await query(`ALTER TABLE birthday_configs ADD COLUMN IF NOT EXISTS panel_description TEXT;`).catch(() => {});
   await query(`ALTER TABLE birthday_configs ADD COLUMN IF NOT EXISTS panel_color TEXT;`).catch(() => {});
+  await query(`ALTER TABLE birthday_configs ADD COLUMN IF NOT EXISTS panel_header_image_url TEXT;`).catch(() => {});
 
 
 
