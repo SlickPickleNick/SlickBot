@@ -1,4 +1,19 @@
 {
+  "0.6.7": {
+    "title": "SlickBot v0.6.7",
+    "summary": "Refines server stats so voice counters update from voice events while the interval refresh remains a backup.",
+    "notes": [
+      "Updated voice-state handling so joining, leaving, or moving voice channels queues a near-immediate voice counter refresh.",
+      "Added a separate follow-up verification pass after voice changes so configured counters can be checked without delaying the voice counter.",
+      "Changed the periodic server stats fallback refresh from 5 minutes back to 15 minutes.",
+      "Improved voice counting by comparing voice-state cache and voice-channel member cache for a more reliable in-voice total."
+    ],
+    "commands": [
+      "/stats manager",
+      "/stats setup",
+      "/stats refresh"
+    ]
+  },
   "0.6.6": {
     "title": "SlickBot v0.6.6",
     "summary": "Adds the Bot Updates module and improves server stats reliability for member and voice counters.",

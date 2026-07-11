@@ -85,9 +85,9 @@ client.once(Events.ClientReady, async (readyClient) => {
 
   setInterval(() => {
     for (const guild of readyClient.guilds.cache.values()) {
-      serverStats.updateStats(guild, logger, 'interval', { forceMemberFetch: true }).catch((error) => console.error(`Failed interval server stats update for ${guild.name}:`, error));
+      serverStats.updateStats(guild, logger, '15-minute fallback interval', { forceMemberFetch: true }).catch((error) => console.error(`Failed interval server stats update for ${guild.name}:`, error));
     }
-  }, 5 * 60 * 1000);
+  }, 15 * 60 * 1000);
 
   for (const guild of readyClient.guilds.cache.values()) {
     serverStats.scheduleUpdate(guild, logger, 'startup', 10 * 1000, { forceMemberFetch: true });
@@ -256,7 +256,7 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
     }
   }).catch((error) => console.error('Failed to log voice state:', error));
   const guild = newState.guild || oldState.guild;
-  serverStats.scheduleUpdate(guild, logger, 'voice state', 5 * 1000, { skipMemberFetch: true });
+  serverStats.scheduleVoiceStateUpdate(guild, logger, 'voice state');
 });
 
 

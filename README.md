@@ -4,7 +4,17 @@ SlickBot is an all-in-one Discord server management bot built for the SlickPickl
 
 ## Version
 
-Current package: **v0.6.6**
+Current package: **v0.6.7**
+
+## v0.6.7 Updates
+
+### Server Stats Voice Counter Flow
+
+- Voice-state events now use a dedicated server-stats path instead of sharing the same general debounce queue as full stat refreshes.
+- When a member joins, leaves, or moves voice channels, SlickBot queues a near-immediate refresh of only the configured `In Voice` counter.
+- After the voice counter refresh, SlickBot also queues a short verification pass for the configured server-stat channels so the wider stats set can be checked without delaying the voice counter update.
+- The periodic server-stats fallback refresh now runs every 15 minutes instead of every 5 minutes.
+- Voice totals are calculated using both Discord voice-state cache and voice-channel member cache, using the stronger available count.
 
 ## v0.6.6 Updates
 
@@ -36,7 +46,7 @@ New commands:
 
 - Server stats now uses debounced event updates for member joins/leaves and voice-state changes instead of renaming counters immediately on every event.
 - Voice-state refreshes avoid unnecessary full member fetches, improving consistency for the `In Voice` counter.
-- Periodic server stat refreshes now run every 5 minutes instead of every 15 minutes.
+- Periodic server stat refreshes were temporarily changed to 5 minutes in v0.6.6, then restored to a 15-minute fallback cadence in v0.6.7.
 - `/stats refresh` now reports channel rename failures instead of silently hiding them.
 - Server stats stores the latest refresh error in `server_stats_configs.last_error` and shows it in the manager panel.
 

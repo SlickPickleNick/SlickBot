@@ -14,6 +14,10 @@ function channelSupportsStatsName(channel) {
   return channel && typeof channel.setName === 'function';
 }
 
+function updateKey(guildId, queueKey = 'stats') {
+  return `${guildId}:${queueKey || 'stats'}`;
+}
+
 class ServerStatsService {
   constructor() {
     this.pendingUpdates = new Map();
@@ -83,24 +87,46 @@ class ServerStatsService {
     const cachedBots = guild.members.cache.filter((member) => member.user.bot).size;
     const humans = cachedHumans || Math.max(members - cachedBots, 0);
     const bots = cachedBots;
-    const voice = guild.channels.cache
+    const voiceFromStates = guild.voiceStates?.cache
+      ?.filter((state) => state.guild?.id === guild.id && state.channelId && !state.member?.user?.bot)
+      ?.size || 0;
+    const voiceFromChannels = guild.channels.cache
       .filter((channel) => channel.type === ChannelType.GuildVoice || channel.type === ChannelType.GuildStageVoice)
       .reduce((total, channel) => total + (channel.members?.filter((member) => !member.user.bot).size || 0), 0);
+    const voice = Math.max(voiceFromStates, voiceFromChannels);
     return { members, humans, bots, voice };
   }
 
   scheduleUpdate(guild, logger = null, reason = 'event', delayMs = 5000, options = {}) {
     if (!guild?.id) return false;
-    const existing = this.pendingUpdates.get(guild.id);
+    const key = updateKey(guild.id, options.queueKey || 'stats');
+    const existing = this.pendingUpdates.get(key);
     if (existing) clearTimeout(existing.timeout);
 
     const timeout = setTimeout(() => {
-      this.pendingUpdates.delete(guild.id);
-      this.updateStats(guild, logger, reason, { ...options, skipMemberFetch: options.skipMemberFetch ?? true })
+      this.pendingUpdates.delete(key);
+      const updateOptions = { ...options, skipMemberFetch: options.skipMemberFetch ?? true };
+      delete updateOptions.queueKey;
+      this.updateStats(guild, logger, reason, updateOptions)
         .catch((error) => console.error(`Failed scheduled server stats update for ${guild.id}:`, error));
     }, Math.max(1000, delayMs));
 
-    this.pendingUpdates.set(guild.id, { timeout, reason, options });
+    this.pendingUpdates.set(key, { timeout, reason, options });
+    return true;
+  }
+
+  scheduleVoiceStateUpdate(guild, logger = null, reason = 'voice state') {
+    if (!guild?.id) return false;
+    this.scheduleUpdate(guild, logger, `${reason} voice count`, 1500, {
+      queueKey: 'voice',
+      skipMemberFetch: true,
+      statKeys: ['voice'],
+      logSuccess: false
+    });
+    this.scheduleUpdate(guild, logger, `${reason} verification`, 15000, {
+      queueKey: 'verify',
+      skipMemberFetch: true
+    });
     return true;
   }
 
@@ -121,12 +147,13 @@ class ServerStatsService {
     const config = await this.getConfig(guild.id);
     if (!config.enabled) return { ok: false, reason: 'Server stats are disabled.' };
     const counts = await this.counts(guild, { ...options, config });
+    const requestedKeys = Array.isArray(options.statKeys) && options.statKeys.length ? new Set(options.statKeys) : null;
     const updates = [
       { id: config.member_channel_id, name: renderTemplate(config.member_template || 'Members: {members}', counts), key: 'members' },
       { id: config.human_channel_id, name: renderTemplate(config.human_template || 'Humans: {humans}', counts), key: 'humans' },
       { id: config.bot_channel_id, name: renderTemplate(config.bot_template || 'Bots: {bots}', counts), key: 'bots' },
       { id: config.voice_channel_id, name: renderTemplate(config.voice_template || 'In Voice: {voice}', counts), key: 'voice' }
-    ].filter((item) => item.id);
+    ].filter((item) => item.id && (!requestedKeys || requestedKeys.has(item.key)));
 
     if (!updates.length) {
       return { ok: true, updated: 0, attempted: 0, skipped: 0, failed: 0, failures: [], counts, config, reason: 'No server stat channels are configured yet.' };
@@ -173,9 +200,10 @@ class ServerStatsService {
       [guild.id, failures.length ? failures.map((failure) => `${failure.key}: ${failure.reason}`).join(' | ').slice(0, 1000) : null]
     ).catch(() => {});
 
-    await logger?.log({
-      guildId: guild.id,
-      eventKey: failures.length ? 'server-stats-error' : 'server-stats-update',
+    if (logger && (failures.length || options.logSuccess !== false)) {
+      await logger.log({
+        guildId: guild.id,
+        eventKey: failures.length ? 'server-stats-error' : 'server-stats-update',
       title: failures.length ? 'Server Stats Update Had Errors' : 'Server Stats Updated',
       body: [
         `Updated Channels: **${updated}**`,
@@ -188,7 +216,8 @@ class ServerStatsService {
         failures.length ? `Failures: ${failures.map((failure) => `${failure.key} (${failure.channelId}): ${failure.reason}`).join('; ')}` : null
       ].filter(Boolean).join('\n'),
       metadata: { counts, updated, attempted, skipped, failures, reason }
-    }).catch(() => {});
+      }).catch(() => {});
+    }
 
     return { ok: failures.length === 0, updated, attempted, skipped, failed: failures.length, failures, counts, config };
   }

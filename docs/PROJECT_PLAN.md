@@ -1,6 +1,6 @@
 # SlickBot Project Plan
 
-## Current Version: 0.6.6
+## Current Version: 0.6.7
 
 SlickBot is being built as a modular all-in-one Discord server management bot for the SlickPickleNick community.
 
@@ -30,6 +30,16 @@ SlickBot is being built as a modular all-in-one Discord server management bot fo
 - Bot update announcements
 - Leveling / XP
 
+## v0.6.7 Scope
+
+### Server Stats Voice Counter Flow
+
+- Split voice-state server stat updates from the general full-refresh debounce queue.
+- Voice joins, leaves, and moves now queue a near-immediate voice-counter-only refresh.
+- A separate short verification pass follows voice changes to check the wider configured server-stat counters without delaying the voice count.
+- Restored the periodic server stats fallback interval to 15 minutes.
+- Improved voice count calculation by comparing the guild voice-state cache and voice-channel member cache.
+
 ## v0.6.6 Scope
 
 ### Bot Updates
@@ -45,7 +55,7 @@ SlickBot is being built as a modular all-in-one Discord server management bot fo
 - Reworked server stats updates to support debounced event-triggered refreshes.
 - Reduced unnecessary member fetches during voice-state updates so voice counts use the voice channel cache instead of waiting on full guild member refreshes.
 - Added explicit server stats failure reporting and stored last refresh error text.
-- Increased periodic refresh cadence from 15 minutes to 5 minutes.
+- Temporarily increased periodic refresh cadence from 15 minutes to 5 minutes in v0.6.6; v0.6.7 restored the interval to 15 minutes and made voice events responsible for prompt voice-counter updates.
 
 ## v0.6.5 Scope
 
