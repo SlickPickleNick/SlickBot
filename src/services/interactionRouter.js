@@ -291,22 +291,30 @@ async function handleButton(interaction, ctx) {
 
   if (id === CustomIds.TicketClaim) {
     if (!(await requireAction(interaction, ctx, ActionKeys.TicketsClaim, ModuleKeys.TICKETS))) return true;
+    const access = await tickets.canManageTicket({ interaction });
+    if (!access.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Ticket Control Restricted', access.reason)] });
     const result = await tickets.claimTicket({ interaction, logger: ctx.logger });
     if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Ticket Not Found', result.reason)] });
-    await interaction.reply({ embeds: [createSuccessEmbed('Ticket Claimed', `Ticket #${result.ticket.ticket_number} is now assigned to <@${interaction.user.id}>.`)] });
+    await replyPrivate(interaction, { embeds: [createSuccessEmbed('Ticket Claimed', `Ticket #${result.ticket.ticket_number} is now assigned to <@${interaction.user.id}>.`)], deleteAfterSeconds: 10 });
     return true;
   }
 
   if (id === CustomIds.TicketEscalate) {
     if (!(await requireAction(interaction, ctx, ActionKeys.TicketsManage, ModuleKeys.TICKETS))) return true;
+    const access = await tickets.canManageTicket({ interaction });
+    if (!access.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Ticket Control Restricted', access.reason)] });
     const result = await tickets.escalateTicket({ interaction, logger: ctx.logger, reason: 'Escalated from ticket control button.' });
     if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Ticket Not Escalated', result.reason)] });
-    await interaction.reply({ content: result.roleIds.map((roleId) => `<@&${roleId}>`).join(' '), embeds: [createSuccessEmbed('Ticket Escalated', `Ticket #${result.ticket.ticket_number} has been escalated.`)] });
+    const mentions = result.roleIds.map((roleId) => `<@&${roleId}>`).join(' ');
+    await interaction.channel.send({ content: `${mentions} Ticket #${result.ticket.ticket_number} has been escalated.`.trim() }).catch(() => {});
+    await replyPrivate(interaction, { embeds: [createSuccessEmbed('Ticket Escalated', `Ticket #${result.ticket.ticket_number} has been escalated.`)], deleteAfterSeconds: 10 });
     return true;
   }
 
   if (id === CustomIds.TicketCloseReason || id === CustomIds.TicketClose) {
     if (!(await requireAction(interaction, ctx, ActionKeys.TicketsClose, ModuleKeys.TICKETS))) return true;
+    const access = await tickets.canManageTicket({ interaction });
+    if (!access.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Ticket Control Restricted', access.reason)] });
     await interaction.showModal(buildTicketCloseReasonModal());
     return true;
   }
@@ -588,6 +596,8 @@ async function handleModal(interaction, ctx) {
 
   if (id === CustomIds.TicketCloseReasonModal) {
     if (!(await requireAction(interaction, ctx, ActionKeys.TicketsClose, ModuleKeys.TICKETS))) return true;
+    const access = await tickets.canManageTicket({ interaction });
+    if (!access.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Ticket Control Restricted', access.reason)] });
     const reason = interaction.fields.getTextInputValue('reason') || 'No reason provided.';
     const result = await tickets.closeTicket({ interaction, client: ctx.client, logger: ctx.logger, reason });
     if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Ticket Not Found', result.reason)] });

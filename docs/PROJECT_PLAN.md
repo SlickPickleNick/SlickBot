@@ -1,6 +1,6 @@
 # SlickBot Project Plan
 
-## Current Version: 0.6.2
+## Current Version: 0.6.3
 
 SlickBot is being built as a modular all-in-one Discord server management bot for the SlickPickleNick community.
 
@@ -28,6 +28,18 @@ SlickBot is being built as a modular all-in-one Discord server management bot fo
 - Scheduled messages
 - Server stats
 - Leveling / XP
+
+## v0.6.3 Scope
+
+- Fixed server stats commands by deferring private responses before slower count/rename operations.
+- Added `/ticket remove-user` to remove users who were added to a ticket with `/ticket add-user`.
+- Added ticket participant tracking for users added/removed from tickets.
+- Stored the ticket control message ID so the original ticket embed can update in place.
+- Updated ticket control embeds when tickets are claimed, escalated, prioritized, or when users are added/removed.
+- Simplified the ticket control embed by removing escalation configuration status and generic staff instruction text.
+- Restricted ticket control buttons and related ticket management commands to assigned ticket staff/escalation roles, with administrator/server-owner bypass.
+- Added `/bot version` for deployment/version verification.
+- Added `/bot test` for safe module and configuration diagnostics.
 
 ## v0.6.2 Scope
 

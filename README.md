@@ -4,7 +4,39 @@ SlickBot is an all-in-one Discord server management bot built for the SlickPickl
 
 ## Version
 
-Current package: **v0.6.2**
+Current package: **v0.6.3**
+
+## v0.6.3 Updates
+
+### Server Stats Response Fix
+
+- `/stats manager`, `/stats setup`, and `/stats refresh` now defer their private response before running slower member/channel checks.
+- This prevents Discord from showing `The application did not respond` while server stats counts or channel rename operations are running.
+
+### Ticket Workflow Updates
+
+- Added `/ticket remove-user` for removing users who were granted ticket access through `/ticket add-user`.
+- Ticket control messages now update in place when a ticket is claimed, escalated, prioritized, or when users are added/removed.
+- The ticket control embed was simplified by removing unnecessary escalation configuration text and generic staff instructions.
+- Ticket controls now verify that the interacting user is part of the assigned ticket staff role/team or escalation role/team before allowing claim, escalation, or close actions.
+
+New ticket command:
+
+```text
+/ticket remove-user user:@member reason:Optional context
+```
+
+### Bot Diagnostics
+
+Added a new `/bot` command group:
+
+```text
+/bot version
+/bot test
+```
+
+- `/bot version` reports the currently running SlickBot package version and permission defaults version.
+- `/bot test` runs a safe diagnostic check for database connectivity, guild configuration, module config rows, permission default coverage, implemented module states, and Discord client readiness.
 
 ## v0.6.2 Updates
 

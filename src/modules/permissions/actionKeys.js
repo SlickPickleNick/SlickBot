@@ -2,6 +2,8 @@ const { ModuleKeys } = require('../moduleRegistry');
 
 const ActionKeys = Object.freeze({
   BotPing: 'bot.ping',
+  BotVersion: 'bot.version',
+  BotTest: 'bot.test',
   Setup: 'setup.run',
   TeamsManage: 'permissions.teams.manage',
   PermissionsPanel: 'permissions.panel',
@@ -120,6 +122,8 @@ const permissionLevelRank = Object.freeze({
 
 const defaultActionLevels = Object.freeze({
   [ActionKeys.BotPing]: PermissionLevels.EVERYONE,
+  [ActionKeys.BotVersion]: PermissionLevels.EVERYONE,
+  [ActionKeys.BotTest]: PermissionLevels.MODERATOR,
 
   [ActionKeys.Setup]: PermissionLevels.SENIOR_MODERATOR,
   [ActionKeys.TeamsManage]: PermissionLevels.OWNER,
@@ -246,6 +250,7 @@ const defaultModuleLevels = Object.freeze({
 
 const defaultPublicActions = Object.freeze([
   ActionKeys.BotPing,
+  ActionKeys.BotVersion,
   ActionKeys.TicketsOpen,
   ActionKeys.ReportsSubmit,
   ActionKeys.ApplicationsApply,
@@ -258,7 +263,7 @@ const defaultPublicActions = Object.freeze([
 
 const defaultTeamPermissions = Object.freeze(Object.values(ActionKeys));
 
-const PERMISSION_DEFAULTS_VERSION = '0.6.2';
+const PERMISSION_DEFAULTS_VERSION = '0.6.3';
 
 module.exports = {
   ActionKeys,

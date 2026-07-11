@@ -98,6 +98,25 @@ function buildQuestionLines(answers) {
   return entries.map(([question, answer]) => `**${question}**\n${truncate(String(answer || 'No answer provided.'), 700)}`).join('\n\n');
 }
 
+
+function hasAnyRole(member, roleIds = []) {
+  if (!member?.roles?.cache) return false;
+  return roleIds.some((roleId) => member.roles.cache.has(roleId));
+}
+
+function hasAdministratorBypass(interaction, member) {
+  if (interaction?.guild?.ownerId && interaction.guild.ownerId === interaction.user.id) return true;
+  return Boolean(member?.permissions?.has?.(PermissionFlagsBits.Administrator));
+}
+
+function buildTicketControlRow() {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(CustomIds.TicketClaim).setLabel('Claim').setStyle(ButtonStyle.Primary).setEmoji('🙋'),
+    new ButtonBuilder().setCustomId(CustomIds.TicketEscalate).setLabel('Escalate').setStyle(ButtonStyle.Secondary).setEmoji('⬆️'),
+    new ButtonBuilder().setCustomId(CustomIds.TicketCloseReason).setLabel('Close With Reason').setStyle(ButtonStyle.Danger).setEmoji('🔒')
+  );
+}
+
 class TicketService {
   async getConfig(guildId) {
     const result = await query(`SELECT * FROM ticket_configs WHERE guild_id = $1 LIMIT 1`, [guildId]);
@@ -307,14 +326,12 @@ class TicketService {
     const ticket = insert.rows[0];
 
     const embed = buildTicketControlEmbed(ticket, selectedType);
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId(CustomIds.TicketClaim).setLabel('Claim').setStyle(ButtonStyle.Primary).setEmoji('🙋'),
-      new ButtonBuilder().setCustomId(CustomIds.TicketEscalate).setLabel('Escalate').setStyle(ButtonStyle.Secondary).setEmoji('⬆️'),
-      new ButtonBuilder().setCustomId(CustomIds.TicketCloseReason).setLabel('Close With Reason').setStyle(ButtonStyle.Danger).setEmoji('🔒')
-    );
+    const row = buildTicketControlRow();
 
     const reviewerMentions = reviewerRoleIds.map((roleId) => `<@&${roleId}>`).join(' ');
-    await channel.send({ content: `<@${opener.id}>${reviewerMentions ? ` ${reviewerMentions}` : ''}`, embeds: [embed], components: [row] });
+    const controlMessage = await channel.send({ content: `<@${opener.id}>${reviewerMentions ? ` ${reviewerMentions}` : ''}`, embeds: [embed], components: [row] });
+    await query(`UPDATE tickets SET control_message_id = $1, updated_at = NOW() WHERE id = $2`, [controlMessage.id, ticket.id]).catch(() => {});
+    ticket.control_message_id = controlMessage.id;
 
     await logger.log({
       guildId,
@@ -333,21 +350,82 @@ class TicketService {
     return result.rows[0] || null;
   }
 
+  async listActiveAddedUsers(ticketId) {
+    const result = await query(
+      `SELECT user_id, user_tag, added_by_user_id, added_at
+       FROM ticket_added_users
+       WHERE ticket_id = $1 AND removed_at IS NULL
+       ORDER BY added_at ASC`,
+      [ticketId]
+    ).catch(() => ({ rows: [] }));
+    return result.rows;
+  }
+
+  async canManageTicket({ interaction }) {
+    const ticket = await this.findOpenTicketByChannel(interaction.guildId, interaction.channelId);
+    if (!ticket) return { ok: false, reason: 'This channel is not an open SlickBot ticket.' };
+
+    const member = interaction.member?.roles?.cache
+      ? interaction.member
+      : await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
+
+    if (hasAdministratorBypass(interaction, member)) return { ok: true, ticket };
+
+    const config = await this.getConfig(interaction.guildId);
+    const type = ticket.ticket_type_id ? await this.getTypeById(interaction.guildId, ticket.ticket_type_id) : null;
+    const reviewerRoles = await resolveReviewerRoleIds(type, config);
+    const escalatedRoles = await resolveEscalationRoleIds(type, config);
+    const allowedRoleIds = [...new Set([...reviewerRoles, ...escalatedRoles].filter(Boolean))];
+
+    if (!allowedRoleIds.length) {
+      return { ok: false, reason: 'This ticket does not have a configured staff role or escalation role.' };
+    }
+
+    if (!hasAnyRole(member, allowedRoleIds)) {
+      return { ok: false, reason: 'Only the assigned ticket staff or escalation team can use this ticket control.' };
+    }
+
+    return { ok: true, ticket };
+  }
+
+  async refreshTicketControlMessage({ interaction, client = null, ticket = null }) {
+    const currentTicket = ticket || await this.findOpenTicketByChannel(interaction.guildId, interaction.channelId);
+    if (!currentTicket?.control_message_id) return false;
+
+    const channel = interaction.channel || await client?.channels?.fetch?.(currentTicket.channel_id).catch(() => null);
+    if (!channel?.messages?.fetch) return false;
+
+    const message = await channel.messages.fetch(currentTicket.control_message_id).catch(() => null);
+    if (!message) return false;
+
+    const type = currentTicket.ticket_type_id ? await this.getTypeById(currentTicket.guild_id || interaction.guildId, currentTicket.ticket_type_id) : null;
+    const addedUsers = await this.listActiveAddedUsers(currentTicket.id);
+    await message.edit({
+      embeds: [buildTicketControlEmbed(currentTicket, type, addedUsers)],
+      components: [buildTicketControlRow()]
+    }).catch(() => {});
+    return true;
+  }
+
   async claimTicket({ interaction, logger }) {
     const ticket = await this.findOpenTicketByChannel(interaction.guildId, interaction.channelId);
     if (!ticket) return { ok: false, reason: 'This channel is not an open SlickBot ticket.' };
 
     const result = await query(`UPDATE tickets SET claimed_by_user_id = $1, updated_at = NOW() WHERE id = $2 RETURNING *`, [interaction.user.id, ticket.id]);
+    const updatedTicket = result.rows[0];
+    await this.refreshTicketControlMessage({ interaction, ticket: updatedTicket }).catch(() => {});
     await logger.log({ guildId: interaction.guildId, eventKey: 'ticket-claim', title: 'Ticket Claimed', body: `Ticket #${ticket.ticket_number} claimed by ${interaction.user.tag}.`, actorUserId: interaction.user.id, metadata: { ticketId: ticket.id } }).catch(() => {});
-    return { ok: true, ticket: result.rows[0] };
+    return { ok: true, ticket: updatedTicket };
   }
 
   async setPriority({ interaction, logger, priority }) {
     const ticket = await this.findOpenTicketByChannel(interaction.guildId, interaction.channelId);
     if (!ticket) return { ok: false, reason: 'This channel is not an open SlickBot ticket.' };
     const result = await query(`UPDATE tickets SET priority = $1, updated_at = NOW() WHERE id = $2 RETURNING *`, [priority, ticket.id]);
+    const updatedTicket = result.rows[0];
+    await this.refreshTicketControlMessage({ interaction, ticket: updatedTicket }).catch(() => {});
     await logger.log({ guildId: interaction.guildId, eventKey: 'ticket-priority', title: 'Ticket Priority Updated', body: `Ticket #${ticket.ticket_number} priority changed to **${priority}** by ${interaction.user.tag}.`, actorUserId: interaction.user.id, metadata: { ticketId: ticket.id, priority } }).catch(() => {});
-    return { ok: true, ticket: result.rows[0] };
+    return { ok: true, ticket: updatedTicket };
   }
 
   async escalateTicket({ interaction, logger, reason = 'No escalation reason provided.' }) {
@@ -376,21 +454,45 @@ class TicketService {
       [escalatedRoles[0], interaction.user.id, ticket.id]
     );
 
+    const updatedTicket = result.rows[0];
+    await this.refreshTicketControlMessage({ interaction, ticket: updatedTicket }).catch(() => {});
     await logger.log({ guildId: interaction.guildId, eventKey: 'ticket-escalate', title: 'Ticket Escalated', body: `Ticket #${ticket.ticket_number} escalated by ${interaction.user.tag}.\nReason: ${reason}`, actorUserId: interaction.user.id, metadata: { ticketId: ticket.id, escalatedRoles } }).catch(() => {});
-    return { ok: true, ticket: result.rows[0], roleIds: escalatedRoles };
+    return { ok: true, ticket: updatedTicket, roleIds: escalatedRoles };
   }
 
   async addUserToTicket({ interaction, logger, user, reason = 'No reason provided.' }) {
     const ticket = await this.findOpenTicketByChannel(interaction.guildId, interaction.channelId);
     if (!ticket) return { ok: false, reason: 'This channel is not an open SlickBot ticket.' };
     if (!user) return { ok: false, reason: 'No user was provided.' };
+    if (user.id === ticket.opener_user_id) return { ok: false, reason: 'The ticket opener already has access to this ticket.' };
 
-    await interaction.channel.permissionOverwrites.edit(user.id, {
+    const permissionUpdated = await interaction.channel.permissionOverwrites.edit(user.id, {
       ViewChannel: true,
       SendMessages: true,
       ReadMessageHistory: true,
       AttachFiles: true
-    }).catch(() => {});
+    }).then(() => true).catch(() => false);
+
+    if (!permissionUpdated) {
+      return { ok: false, reason: "I could not update this ticket channel's permission overwrites. Check that SlickBot can manage this channel." };
+    }
+
+    await query(
+      `INSERT INTO ticket_added_users (guild_id, ticket_id, user_id, user_tag, added_by_user_id, add_reason, added_at, removed_by_user_id, remove_reason, removed_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, NOW(), NULL, NULL, NULL, NOW())
+       ON CONFLICT (ticket_id, user_id) DO UPDATE SET
+         user_tag = EXCLUDED.user_tag,
+         added_by_user_id = EXCLUDED.added_by_user_id,
+         add_reason = EXCLUDED.add_reason,
+         added_at = NOW(),
+         removed_by_user_id = NULL,
+         remove_reason = NULL,
+         removed_at = NULL,
+         updated_at = NOW()`,
+      [interaction.guildId, ticket.id, user.id, user.tag || null, interaction.user.id, reason]
+    );
+
+    await this.refreshTicketControlMessage({ interaction, ticket }).catch(() => {});
 
     await logger.log({
       guildId: interaction.guildId,
@@ -399,6 +501,52 @@ class TicketService {
       body: `Ticket #${ticket.ticket_number}: <@${user.id}> was added by ${interaction.user.tag}.\nReason: ${reason}`,
       actorUserId: interaction.user.id,
       metadata: { ticketId: ticket.id, addedUserId: user.id }
+    }).catch(() => {});
+
+    return { ok: true, ticket, user };
+  }
+
+  async removeUserFromTicket({ interaction, logger, user, reason = 'No reason provided.' }) {
+    const ticket = await this.findOpenTicketByChannel(interaction.guildId, interaction.channelId);
+    if (!ticket) return { ok: false, reason: 'This channel is not an open SlickBot ticket.' };
+    if (!user) return { ok: false, reason: 'No user was provided.' };
+    if (user.id === ticket.opener_user_id) return { ok: false, reason: 'The ticket opener cannot be removed with this command.' };
+
+    const existing = await query(
+      `SELECT * FROM ticket_added_users WHERE ticket_id = $1 AND user_id = $2 AND removed_at IS NULL LIMIT 1`,
+      [ticket.id, user.id]
+    ).catch(() => ({ rows: [] }));
+
+    if (!existing.rows[0]) {
+      return { ok: false, reason: 'That user was not added to this ticket through `/ticket add-user`, or they have already been removed.' };
+    }
+
+    const permissionRemoved = await interaction.channel.permissionOverwrites.delete(user.id, `SlickBot ticket user removed by ${interaction.user.tag}: ${reason}`)
+      .then(() => true)
+      .catch(async () => interaction.channel.permissionOverwrites.edit(user.id, { ViewChannel: false, SendMessages: false, ReadMessageHistory: false, AttachFiles: false })
+        .then(() => true)
+        .catch(() => false));
+
+    if (!permissionRemoved) {
+      return { ok: false, reason: "I could not remove this ticket channel's user permission overwrite. Check that SlickBot can manage this channel." };
+    }
+
+    await query(
+      `UPDATE ticket_added_users
+       SET removed_by_user_id = $1, remove_reason = $2, removed_at = NOW(), updated_at = NOW()
+       WHERE ticket_id = $3 AND user_id = $4`,
+      [interaction.user.id, reason, ticket.id, user.id]
+    );
+
+    await this.refreshTicketControlMessage({ interaction, ticket }).catch(() => {});
+
+    await logger.log({
+      guildId: interaction.guildId,
+      eventKey: 'ticket-update',
+      title: 'User Removed from Ticket',
+      body: `Ticket #${ticket.ticket_number}: <@${user.id}> was removed by ${interaction.user.tag}.\nReason: ${reason}`,
+      actorUserId: interaction.user.id,
+      metadata: { ticketId: ticket.id, removedUserId: user.id }
     }).catch(() => {});
 
     return { ok: true, ticket, user };
@@ -462,21 +610,23 @@ class TicketService {
   }
 }
 
-function buildTicketControlEmbed(ticket, ticketType) {
+function buildTicketControlEmbed(ticket, ticketType, addedUsers = []) {
+  const lines = [
+    `Opened By: <@${ticket.opener_user_id}>`,
+    `Type: **${ticket.type || ticketType?.name || 'Ticket'}**`,
+    `Priority: **${ticket.priority || 'NORMAL'}**`
+  ];
+
+  if (ticket.claimed_by_user_id) lines.push(`Claimed By: <@${ticket.claimed_by_user_id}>`);
+  if (ticket.escalated_by_user_id) lines.push(`Escalated By: <@${ticket.escalated_by_user_id}>`);
+  if (addedUsers.length) lines.push(`Added Users: ${addedUsers.map((entry) => `<@${entry.user_id}>`).join(', ')}`);
+
+  lines.push('', '**Details**', truncate(ticket.details || 'No details provided.', 2400));
+
   return createBaseEmbed({
     title: `Ticket #${ticket.ticket_number}: ${ticket.subject}`,
-    description: [
-      `Opened By: <@${ticket.opener_user_id}>`,
-      `Type: **${ticket.type}**`,
-      `Priority: **${ticket.priority}**`,
-      ticketType?.escalated_role_id || ticketType?.escalated_team_id ? 'Escalation: **Configured**' : 'Escalation: Not configured',
-      '',
-      '**Details**',
-      truncate(ticket.details || 'No details provided.', 2200),
-      '',
-      'Staff can claim, escalate, or close this ticket using the controls below.'
-    ].join('\n'),
-    color: SlickBotColors.PRIMARY,
+    description: lines.join('\n'),
+    color: ticket.priority === 'ESCALATED' ? SlickBotColors.WARNING : SlickBotColors.PRIMARY,
     footer: 'SlickBot Tickets'
   });
 }

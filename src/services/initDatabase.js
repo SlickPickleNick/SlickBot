@@ -223,6 +223,7 @@ async function initDatabase() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       closed_at TIMESTAMPTZ,
+      control_message_id TEXT,
       UNIQUE(guild_id, ticket_number)
     );
   `);
@@ -365,6 +366,25 @@ async function initDatabase() {
   await query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS escalated_to_role_id TEXT;`).catch(() => {});
   await query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS escalated_by_user_id TEXT;`).catch(() => {});
   await query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS escalated_at TIMESTAMPTZ;`).catch(() => {});
+  await query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS control_message_id TEXT;`).catch(() => {});
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS ticket_added_users (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      ticket_id TEXT NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL,
+      user_tag TEXT,
+      added_by_user_id TEXT,
+      add_reason TEXT,
+      added_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      removed_by_user_id TEXT,
+      remove_reason TEXT,
+      removed_at TIMESTAMPTZ,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(ticket_id, user_id)
+    );
+  `);
 
   await query(`ALTER TABLE report_configs ADD COLUMN IF NOT EXISTS ping_role_id TEXT;`).catch(() => {});
   await query(`ALTER TABLE report_configs ADD COLUMN IF NOT EXISTS ping_team_id TEXT REFERENCES permission_teams(id) ON DELETE SET NULL;`).catch(() => {});

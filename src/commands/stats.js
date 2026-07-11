@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, ChannelType } = require('discord.js');
+const { SlashCommandBuilder, ChannelType, MessageFlags } = require('discord.js');
 const { ModuleKeys } = require('../modules/moduleRegistry');
 const { ActionKeys } = require('../modules/permissions/actionKeys');
 const { replyPrivate } = require('../utils/reply');
@@ -36,6 +36,9 @@ module.exports = {
   },
   async execute(interaction, ctx) {
     const sub = interaction.options.getSubcommand();
+    if (!interaction.deferred && !interaction.replied) {
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    }
     if (sub === 'manager') {
       return replyPrivate(interaction, await stats.buildManagerPanel(interaction.guild));
     }

@@ -4,11 +4,20 @@ const { ActionKeys } = require('../modules/permissions/actionKeys');
 const { replyPrivate } = require('../utils/reply');
 const { TicketService, buildTicketModal } = require('../modules/support/supportService');
 const { buildTicketsPanel, buildPublicTicketPanel } = require('../modules/support/supportUi');
-const { createBaseEmbed, createSuccessEmbed, createWarningEmbed, SlickBotColors } = require('../modules/ui/uiService');
+const { createSuccessEmbed, createWarningEmbed } = require('../modules/ui/uiService');
 const { recordPublishedPanel } = require('../modules/panels/publishedPanelService');
 const { refreshPublishedPanel, formatRefreshSummary } = require('../modules/panels/panelUpdateService');
 
 const tickets = new TicketService();
+
+async function requireTicketStaff(interaction) {
+  const result = await tickets.canManageTicket({ interaction });
+  if (!result.ok) {
+    await replyPrivate(interaction, { embeds: [createWarningEmbed('Ticket Control Restricted', result.reason)] });
+    return false;
+  }
+  return true;
+}
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -108,6 +117,13 @@ module.exports = {
     )
     .addSubcommand((subcommand) =>
       subcommand
+        .setName('remove-user')
+        .setDescription('Remove a user who was added to the current ticket.')
+        .addUserOption((option) => option.setName('user').setDescription('User to remove from this ticket.').setRequired(true))
+        .addStringOption((option) => option.setName('reason').setDescription('Optional reason for removing the user.').setRequired(false).setMaxLength(500))
+    )
+    .addSubcommand((subcommand) =>
+      subcommand
         .setName('close')
         .setDescription('Close the current ticket.')
         .addStringOption((option) => option.setName('reason').setDescription('Close reason.').setRequired(false).setMaxLength(1000))
@@ -122,7 +138,7 @@ module.exports = {
     if (subcommand === 'open') return ActionKeys.TicketsOpen;
     if (subcommand === 'claim') return ActionKeys.TicketsClaim;
     if (subcommand === 'close') return ActionKeys.TicketsClose;
-    if (['priority', 'escalate', 'add-user'].includes(subcommand)) return ActionKeys.TicketsManage;
+    if (['priority', 'escalate', 'add-user', 'remove-user'].includes(subcommand)) return ActionKeys.TicketsManage;
     return ActionKeys.TicketsManager;
   },
   isPublic(interaction) {
@@ -217,35 +233,47 @@ module.exports = {
     }
 
     if (subcommand === 'claim') {
+      if (!(await requireTicketStaff(interaction))) return;
       const result = await tickets.claimTicket({ interaction, logger: ctx.logger });
       if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Ticket Not Found', result.reason)] });
       await replyPrivate(interaction, { embeds: [createSuccessEmbed('Ticket Claimed', `Ticket #${result.ticket.ticket_number} is now assigned to you.`)] });
-      await interaction.channel.send({ embeds: [createBaseEmbed({ title: 'Ticket Claimed', description: `This ticket was claimed by <@${interaction.user.id}>.`, color: SlickBotColors.INFO })] }).catch(() => {});
       return;
     }
 
     if (subcommand === 'priority') {
+      if (!(await requireTicketStaff(interaction))) return;
       const result = await tickets.setPriority({ interaction, logger: ctx.logger, priority: interaction.options.getString('level', true) });
       if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Ticket Not Found', result.reason)] });
       return replyPrivate(interaction, { embeds: [createSuccessEmbed('Priority Updated', `Ticket #${result.ticket.ticket_number} priority set to **${result.ticket.priority}**.`)] });
     }
 
     if (subcommand === 'escalate') {
+      if (!(await requireTicketStaff(interaction))) return;
       const result = await tickets.escalateTicket({ interaction, logger: ctx.logger, reason: interaction.options.getString('reason') || 'No reason provided.' });
       if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Ticket Not Escalated', result.reason)] });
-      await interaction.channel.send({ content: result.roleIds.map((roleId) => `<@&${roleId}>`).join(' '), embeds: [createBaseEmbed({ title: 'Ticket Escalated', description: `This ticket has been escalated by <@${interaction.user.id}>.`, color: SlickBotColors.WARNING })] }).catch(() => {});
+      const mentions = result.roleIds.map((roleId) => `<@&${roleId}>`).join(' ');
+      await interaction.channel.send({ content: `${mentions} Ticket #${result.ticket.ticket_number} has been escalated.`.trim() }).catch(() => {});
       return replyPrivate(interaction, { embeds: [createSuccessEmbed('Ticket Escalated', `Ticket #${result.ticket.ticket_number} was escalated.`)] });
     }
 
     if (subcommand === 'add-user') {
+      if (!(await requireTicketStaff(interaction))) return;
       const user = interaction.options.getUser('user', true);
       const result = await tickets.addUserToTicket({ interaction, logger: ctx.logger, user, reason: interaction.options.getString('reason') || 'No reason provided.' });
       if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('User Not Added', result.reason)] });
-      await interaction.channel.send({ embeds: [createBaseEmbed({ title: 'User Added to Ticket', description: `${user} was added to this ticket by <@${interaction.user.id}>.`, color: SlickBotColors.INFO })] }).catch(() => {});
       return replyPrivate(interaction, { embeds: [createSuccessEmbed('User Added', `${user} can now view and reply in ticket #${result.ticket.ticket_number}.`)] });
     }
 
+    if (subcommand === 'remove-user') {
+      if (!(await requireTicketStaff(interaction))) return;
+      const user = interaction.options.getUser('user', true);
+      const result = await tickets.removeUserFromTicket({ interaction, logger: ctx.logger, user, reason: interaction.options.getString('reason') || 'No reason provided.' });
+      if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('User Not Removed', result.reason)] });
+      return replyPrivate(interaction, { embeds: [createSuccessEmbed('User Removed', `${user} was removed from ticket #${result.ticket.ticket_number}.`)] });
+    }
+
     if (subcommand === 'close') {
+      if (!(await requireTicketStaff(interaction))) return;
       const result = await tickets.closeTicket({ interaction, client: ctx.client, logger: ctx.logger, reason: interaction.options.getString('reason') || 'No reason provided.' });
       if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Ticket Not Found', result.reason)] });
       await replyPrivate(interaction, { embeds: [createSuccessEmbed('Ticket Closed', `Ticket #${result.ticket.ticket_number} closed. Transcript sent: **${result.transcriptSent ? 'Yes' : 'No'}**.`)] });
