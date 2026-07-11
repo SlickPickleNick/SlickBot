@@ -30,6 +30,19 @@ module.exports = {
     )
     .addSubcommand((subcommand) =>
       subcommand
+        .setName('edit')
+        .setDescription('Edit one or more appeal settings without redoing full setup.')
+        .addChannelOption((option) => option.setName('review_channel').setDescription('Private staff appeal review channel.').addChannelTypes(ChannelType.GuildText).setRequired(false))
+        .addBooleanOption((option) => option.setName('dm_decision').setDescription('DM users when their appeal is approved or denied.').setRequired(false))
+        .addBooleanOption((option) => option.setName('dm_include_submission').setDescription('Include original appeal submission in the decision DM.').setRequired(false))
+        .addStringOption((option) => option.setName('panel_title').setDescription('Public appeal panel title.').setRequired(false).setMaxLength(100))
+        .addStringOption((option) => option.setName('panel_description').setDescription('Public appeal panel description.').setRequired(false).setMaxLength(800))
+        .addStringOption((option) => option.setName('panel_color').setDescription('Panel accent color, example: #5aa7ff.').setRequired(false).setMaxLength(7))
+        .addStringOption((option) => option.setName('panel_header_image').setDescription('Optional image/media URL posted above the appeal panel embed.').setRequired(false).setMaxLength(1800))
+        .addStringOption((option) => option.setName('display_mode').setDescription('Public panel component style.').setRequired(false).addChoices({ name: 'Buttons', value: 'BUTTONS' }, { name: 'Dropdown menu', value: 'DROPDOWN' }))
+    )
+    .addSubcommand((subcommand) =>
+      subcommand
         .setName('panel')
         .setDescription('Post a public appeal launcher panel.')
         .addChannelOption((option) => option.setName('channel').setDescription('Channel to post the panel in. Defaults to current channel.').addChannelTypes(ChannelType.GuildText).setRequired(false))
@@ -46,7 +59,7 @@ module.exports = {
   moduleKey: ModuleKeys.APPEALS,
   getActionKey(interaction) {
     const subcommand = interaction.options.getSubcommand();
-    if (subcommand === 'setup') return ActionKeys.AppealsConfigure;
+    if (subcommand === 'setup' || subcommand === 'edit') return ActionKeys.AppealsConfigure;
     if (subcommand === 'manager') return ActionKeys.AppealsManager;
     if (subcommand === 'panel') return ActionKeys.AppealsPostPanel;
     if (subcommand === 'submit') return ActionKeys.AppealsSubmit;
@@ -67,6 +80,33 @@ module.exports = {
       await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'setup', title: 'Appeal Settings Updated', body: `Appeal review channel set to <#${channel.id}> by ${interaction.user.tag}.`, actorUserId: interaction.user.id }).catch(() => {});
       const refresh = await refreshPublishedPanel(ctx.client, interaction.guildId, 'appeal', '*').catch(() => null);
       return replyPrivate(interaction, { embeds: [createSuccessEmbed('Appeal System Configured', [`Review Channel: <#${channel.id}>`, `DM Decisions: **${config.dm_decision_enabled ? 'Enabled' : 'Disabled'}**`, `Include Submission in DM: **${config.dm_include_submission ? 'Enabled' : 'Disabled'}**`, `Panel Header Image: ${config.panel_header_image_url ? 'Configured' : 'Not set'}`, formatRefreshSummary(refresh)].filter(Boolean).join('\n'))] });
+    }
+
+    if (subcommand === 'edit') {
+      const channel = interaction.options.getChannel('review_channel');
+      const dmDecision = interaction.options.getBoolean('dm_decision');
+      const dmIncludeSubmission = interaction.options.getBoolean('dm_include_submission');
+      const panelTitle = interaction.options.getString('panel_title');
+      const panelDescription = interaction.options.getString('panel_description');
+      const panelColor = interaction.options.getString('panel_color');
+      const panelHeaderImageUrl = interaction.options.getString('panel_header_image');
+      const panelDisplayMode = interaction.options.getString('display_mode');
+      const hasAnyUpdate = Boolean(channel || dmDecision !== null || dmIncludeSubmission !== null || panelTitle || panelDescription || panelColor || panelHeaderImageUrl || panelDisplayMode);
+      if (!hasAnyUpdate) return replyPrivate(interaction, { embeds: [createSuccessEmbed('No Appeal Settings Changed', 'No appeal setting options were provided.')] });
+      const input = {
+        reviewChannelId: channel?.id || null,
+        panelTitle: panelTitle || null,
+        panelDescription: panelDescription || null,
+        panelColor: panelColor || null,
+        panelHeaderImageUrl: panelHeaderImageUrl || null,
+        panelDisplayMode: panelDisplayMode || null
+      };
+      if (dmDecision !== null) input.dmDecisionEnabled = dmDecision;
+      if (dmIncludeSubmission !== null) input.dmIncludeSubmission = dmIncludeSubmission;
+      const config = await appeals.updateConfig(interaction.guildId, input);
+      await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'setup', title: 'Appeal Settings Edited', body: `Appeal settings edited by ${interaction.user.tag}.`, actorUserId: interaction.user.id }).catch(() => {});
+      const refresh = await refreshPublishedPanel(ctx.client, interaction.guildId, 'appeal', '*').catch(() => null);
+      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Appeal Settings Updated', [`Review Channel: ${config.review_channel_id ? `<#${config.review_channel_id}>` : 'Not set'}`, `DM Decisions: **${config.dm_decision_enabled ? 'Enabled' : 'Disabled'}**`, `Include Submission in DM: **${config.dm_include_submission ? 'Enabled' : 'Disabled'}**`, `Panel Header Image: ${config.panel_header_image_url ? 'Configured' : 'Not set'}`, formatRefreshSummary(refresh)].filter(Boolean).join('\n'))] });
     }
 
     if (subcommand === 'panel') {

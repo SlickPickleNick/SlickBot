@@ -1,6 +1,6 @@
 # SlickBot Project Plan
 
-## Current Version: 0.6.3
+## Current Version: 0.6.4
 
 SlickBot is being built as a modular all-in-one Discord server management bot for the SlickPickleNick community.
 
@@ -28,6 +28,18 @@ SlickBot is being built as a modular all-in-one Discord server management bot fo
 - Scheduled messages
 - Server stats
 - Leveling / XP
+
+## v0.6.4 Scope
+
+- Expanded `/bot test` so it checks all implemented modules for database/table readiness and reports module-specific errors.
+- Fixed DM-based applications by adding the missing follow-up question and submit/cancel confirmation payloads.
+- Removed automatic application starter questions and removed the built-in default Moderator application behavior.
+- Added migration cleanup for the legacy auto-created Moderator application template when it still has the original default description.
+- Updated applications so user-created application types require staff-created questions before users can apply.
+- Added `/appeal edit` for changing appeal settings without rerunning the full setup command.
+- Updated appeal review messages to change color, show reviewer/decision details, remove buttons after review, and refresh in the review channel.
+- Fixed appeal decision DMs so `dm_include_submission` includes the original appeal submission.
+- Updated report review messages so resolved/dismissed reports preserve prior details, change color, remove buttons, and show follow-up ticket metadata when a ticket is opened.
 
 ## v0.6.3 Scope
 

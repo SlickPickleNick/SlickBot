@@ -90,7 +90,6 @@ module.exports = {
   async execute(interaction, ctx) {
     const subcommand = interaction.options.getSubcommand();
     await ctx.permissions.ensureGuildConfig(interaction.guildId, interaction.guild ? interaction.guild.name : null);
-    await applications.ensureDefaultType(interaction.guildId);
 
     if (subcommand === 'manager') return replyPrivate(interaction, await buildApplicationsPanel(interaction.guildId));
 

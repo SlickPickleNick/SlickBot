@@ -111,14 +111,6 @@ async function updatePanelDesign({ guildId, target, name = null, title = null, d
          RETURNING id, panel_title, panel_description, panel_color, panel_header_image_url, panel_display_mode, name`,
         [guildId, name, panelTitle, panelDescription, panelColor, normalizedHeaderImageUrl, panelDisplayMode]
       );
-      const app = result.rows[0];
-      const count = await query(`SELECT COUNT(*)::int AS count FROM application_questions WHERE application_type_id = $1`, [app.id]).catch(() => ({ rows: [{ count: 0 }] }));
-      if ((count.rows[0]?.count || 0) === 0) {
-        const defaults = ['Why are you applying?', 'What relevant experience do you have?', 'What is your availability?'];
-        for (let i = 0; i < defaults.length; i++) {
-          await query(`INSERT INTO application_questions (application_type_id, question_text, required, display_order) VALUES ($1, $2, $3, $4)`, [app.id, defaults[i], i < 2, i + 1]).catch(() => {});
-        }
-      }
     } else {
       result = await query(
         `UPDATE application_types SET

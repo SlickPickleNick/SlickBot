@@ -393,6 +393,8 @@ async function initDatabase() {
   await query(`ALTER TABLE reports ADD COLUMN IF NOT EXISTS linked_ticket_id TEXT;`).catch(() => {});
   await query(`ALTER TABLE reports ADD COLUMN IF NOT EXISTS review_channel_id TEXT;`).catch(() => {});
   await query(`ALTER TABLE reports ADD COLUMN IF NOT EXISTS review_message_id TEXT;`).catch(() => {});
+  await query(`ALTER TABLE reports ADD COLUMN IF NOT EXISTS linked_ticket_opened_by_user_id TEXT;`).catch(() => {});
+  await query(`ALTER TABLE reports ADD COLUMN IF NOT EXISTS linked_ticket_opened_at TIMESTAMPTZ;`).catch(() => {});
 
   await query(`
     CREATE TABLE IF NOT EXISTS application_questions (
@@ -424,6 +426,8 @@ async function initDatabase() {
 
   await query(`ALTER TABLE appeal_configs ADD COLUMN IF NOT EXISTS dm_decision_enabled BOOLEAN NOT NULL DEFAULT false;`).catch(() => {});
   await query(`ALTER TABLE appeals ADD COLUMN IF NOT EXISTS decision_reason TEXT;`).catch(() => {});
+  await query(`ALTER TABLE appeals ADD COLUMN IF NOT EXISTS review_channel_id TEXT;`).catch(() => {});
+  await query(`ALTER TABLE appeals ADD COLUMN IF NOT EXISTS review_message_id TEXT;`).catch(() => {});
 
 
   await query(`ALTER TABLE ticket_configs ADD COLUMN IF NOT EXISTS panel_title TEXT;`).catch(() => {});
@@ -444,6 +448,7 @@ async function initDatabase() {
   await query(`ALTER TABLE application_types ADD COLUMN IF NOT EXISTS panel_color TEXT;`).catch(() => {});
   await query(`ALTER TABLE application_types ADD COLUMN IF NOT EXISTS panel_display_mode TEXT NOT NULL DEFAULT 'BUTTONS';`).catch(() => {});
   await query(`ALTER TABLE application_types ADD COLUMN IF NOT EXISTS panel_header_image_url TEXT;`).catch(() => {});
+  await query(`DELETE FROM application_types WHERE name = 'Moderator' AND description = 'Apply to help moderate the SlickPickleNick community.'`).catch(() => {});
 
   await query(`ALTER TABLE appeal_configs ADD COLUMN IF NOT EXISTS panel_title TEXT;`).catch(() => {});
   await query(`ALTER TABLE appeal_configs ADD COLUMN IF NOT EXISTS panel_description TEXT;`).catch(() => {});

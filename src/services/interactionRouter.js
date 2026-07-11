@@ -204,7 +204,6 @@ async function handleButton(interaction, ctx) {
 
   if (id === CustomIds.ApplicationsRefresh) {
     if (!(await requireAction(interaction, ctx, ActionKeys.ApplicationsManager, ModuleKeys.APPLICATIONS))) return true;
-    await applications.ensureDefaultType(interaction.guildId);
     await updatePanel(interaction, await buildApplicationsPanel(interaction.guildId));
     return true;
   }
@@ -341,7 +340,7 @@ async function handleButton(interaction, ctx) {
     const reportId = id.replace(CustomIds.ReportResolvePrefix, '').replace(CustomIds.ReportDismissPrefix, '');
     const report = await reports.reviewReport({ guildId: interaction.guildId, reportId, reviewer: interaction.user, status, logger: ctx.logger });
     if (!report) return replyPrivate(interaction, { embeds: [createWarningEmbed('Report Not Found', 'The report could not be found.')] });
-    await updatePanel(interaction, { embeds: [createSuccessEmbed('Report Updated', `Report #${report.report_number} marked **${report.status}**.`)], components: [] });
+    await updatePanel(interaction, buildReportReviewPayload(report));
     return true;
   }
 
@@ -361,7 +360,11 @@ async function handleButton(interaction, ctx) {
     const reviewerRoleIds = await reports.getReviewerRoleIds(interaction.guildId);
     const result = await tickets.createTicket({ interaction, client: ctx.client, logger: ctx.logger, openerUser, actorUser: interaction.user, type: 'Report Follow-Up', subject: `Report #${report.report_number} Follow-Up`, details: report.details, reviewerRoleIdsOverride: reviewerRoleIds, skipTicketLimit: true });
     if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Ticket Not Created', result.reason)] });
-    await reports.linkTicket({ guildId: interaction.guildId, reportId, ticketId: result.ticket.id });
+    const updatedReport = await reports.linkTicket({ guildId: interaction.guildId, reportId, ticketId: result.ticket.id, reviewer: interaction.user });
+    if (updatedReport) {
+      await reports.refreshReviewMessage({ client: ctx.client, report: updatedReport }).catch(() => {});
+      await interaction.message?.edit?.(buildReportReviewPayload(updatedReport)).catch(() => {});
+    }
     await interaction.reply({ embeds: [createSuccessEmbed('Follow-Up Ticket Opened', `Created <#${result.channel.id}> for report #${report.report_number}.`)] });
     return true;
   }
@@ -399,6 +402,10 @@ async function handleButton(interaction, ctx) {
     const action = isApprove ? ActionKeys.AppealsApprove : ActionKeys.AppealsDeny;
     if (!(await requireAction(interaction, ctx, action, ModuleKeys.APPEALS))) return true;
     const appealId = id.slice(isApprove ? CustomIds.AppealApproveReasonPrefix.length : CustomIds.AppealDenyReasonPrefix.length);
+    await query(
+      `UPDATE appeals SET review_channel_id = COALESCE(review_channel_id, $1), review_message_id = COALESCE(review_message_id, $2), updated_at = NOW() WHERE guild_id = $3 AND id = $4`,
+      [interaction.channelId, interaction.message?.id || null, interaction.guildId, appealId]
+    ).catch(() => {});
     await interaction.showModal(buildAppealReasonModal(appealId, isApprove ? 'APPROVED' : 'DENIED'));
     return true;
   }
@@ -408,9 +415,13 @@ async function handleButton(interaction, ctx) {
     const action = isApprove ? ActionKeys.AppealsApprove : ActionKeys.AppealsDeny;
     if (!(await requireAction(interaction, ctx, action, ModuleKeys.APPEALS))) return true;
     const appealId = id.slice(isApprove ? CustomIds.AppealApprovePrefix.length : CustomIds.AppealDenyPrefix.length);
+    await query(
+      `UPDATE appeals SET review_channel_id = COALESCE(review_channel_id, $1), review_message_id = COALESCE(review_message_id, $2), updated_at = NOW() WHERE guild_id = $3 AND id = $4`,
+      [interaction.channelId, interaction.message?.id || null, interaction.guildId, appealId]
+    ).catch(() => {});
     const appeal = await appeals.reviewAppeal({ interaction, client: ctx.client, logger: ctx.logger, appealId, status: isApprove ? 'APPROVED' : 'DENIED' });
     if (!appeal) return replyPrivate(interaction, { embeds: [createWarningEmbed('Appeal Not Found', 'The appeal could not be found.')] });
-    await updatePanel(interaction, { embeds: [createSuccessEmbed('Appeal Reviewed', `Appeal #${appeal.appeal_number} marked **${appeal.status}**.`)], components: [] });
+    await updatePanel(interaction, require('../modules/support/supportService').buildAppealReviewPayload(appeal));
     return true;
   }
 

@@ -32,6 +32,13 @@ function normalizeStatus(status) {
   return String(status || '').toUpperCase();
 }
 
+function formatTimestamp(value) {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return `<t:${Math.floor(date.getTime() / 1000)}:f>`;
+}
+
 function normalizeChannelName(value) {
   return String(value || '')
     .toLowerCase()
@@ -734,58 +741,110 @@ class ReportService {
     return true;
   }
 
-  async linkTicket({ guildId, reportId, ticketId }) {
-    await query(`UPDATE reports SET linked_ticket_id = $1, updated_at = NOW() WHERE guild_id = $2 AND id = $3`, [ticketId, guildId, reportId]).catch(() => {});
+  async linkTicket({ guildId, reportId, ticketId, reviewer = null }) {
+    const result = await query(
+      `UPDATE reports
+       SET linked_ticket_id = $1, linked_ticket_opened_by_user_id = $2, linked_ticket_opened_at = NOW(), updated_at = NOW()
+       WHERE guild_id = $3 AND id = $4
+       RETURNING *`,
+      [ticketId, reviewer?.id || null, guildId, reportId]
+    ).catch(() => ({ rows: [] }));
+    return result.rows[0] || null;
   }
 }
 
 function buildReportReviewPayload(report) {
+  const status = normalizeStatus(report.status || 'OPEN');
+  const isResolved = status === 'RESOLVED';
+  const isDismissed = status === 'DISMISSED';
+  const isClosed = isResolved || isDismissed;
+  const reviewedAt = formatTimestamp(report.reviewed_at);
+  const ticketOpenedAt = formatTimestamp(report.linked_ticket_opened_at);
+  const color = isResolved
+    ? SlickBotColors.SUCCESS
+    : isDismissed
+      ? 0x747f8d
+      : status === 'CLAIMED'
+        ? SlickBotColors.PRIMARY
+        : SlickBotColors.WARNING;
+
+  const lines = [
+    `Status: **${status}**`,
+    `Reporter: <@${report.reporter_user_id}>`,
+    report.claimed_by_user_id ? `Claimed By: <@${report.claimed_by_user_id}>` : 'Claimed By: Not claimed',
+    report.reviewed_by_user_id ? `Reviewed By: <@${report.reviewed_by_user_id}>${reviewedAt ? ` on ${reviewedAt}` : ''}` : null,
+    report.target_user_id ? `Target: <@${report.target_user_id}>` : null,
+    report.message_link ? `Message: ${report.message_link}` : null,
+    `Type: **${report.report_type}**`,
+    report.linked_ticket_id ? `Follow-Up Ticket: Created${report.linked_ticket_opened_by_user_id ? ` by <@${report.linked_ticket_opened_by_user_id}>` : ''}${ticketOpenedAt ? ` on ${ticketOpenedAt}` : ''}` : null,
+    '',
+    '**Details**',
+    truncate(report.details || 'No details provided.', 1500),
+    report.review_notes ? `\n**Review Notes**\n${truncate(report.review_notes, 800)}` : null
+  ].filter(Boolean);
+
   const embed = createBaseEmbed({
     title: `Report #${report.report_number}`,
-    description: [
-      `Status: **${report.status || 'OPEN'}**`,
-      `Reporter: <@${report.reporter_user_id}>`,
-      report.claimed_by_user_id ? `Claimed By: <@${report.claimed_by_user_id}>` : 'Claimed By: Not claimed',
-      report.target_user_id ? `Target: <@${report.target_user_id}>` : null,
-      report.message_link ? `Message: ${report.message_link}` : null,
-      `Type: **${report.report_type}**`,
-      '',
-      '**Details**',
-      truncate(report.details || 'No details provided.', 1500),
-      report.review_notes ? `\n**Review Notes**\n${truncate(report.review_notes, 800)}` : null
-    ].filter(Boolean).join('\n'),
-    color: SlickBotColors.WARNING,
+    description: lines.join('\n'),
+    color,
     footer: 'SlickBot Reports'
   });
+
+  if (isClosed) return { embeds: [embed], components: [] };
+
   const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId(`${CustomIds.ReportClaimPrefix}${report.id}`).setLabel('Claim').setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId(`${CustomIds.ReportClaimPrefix}${report.id}`).setLabel(status === 'CLAIMED' ? 'Claimed' : 'Claim').setStyle(ButtonStyle.Primary).setDisabled(status === 'CLAIMED'),
     new ButtonBuilder().setCustomId(`${CustomIds.ReportResolvePrefix}${report.id}`).setLabel('Resolve').setStyle(ButtonStyle.Success),
     new ButtonBuilder().setCustomId(`${CustomIds.ReportDismissPrefix}${report.id}`).setLabel('Dismiss').setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId(`${CustomIds.ReportOpenTicketPrefix}${report.id}`).setLabel('Open Ticket').setStyle(ButtonStyle.Danger)
+    new ButtonBuilder().setCustomId(`${CustomIds.ReportOpenTicketPrefix}${report.id}`).setLabel(report.linked_ticket_id ? 'Ticket Opened' : 'Open Ticket').setStyle(ButtonStyle.Danger).setDisabled(Boolean(report.linked_ticket_id))
   );
   return { embeds: [embed], components: [row] };
 }
 
-class ApplicationService {
-  async ensureDefaultType(guildId) {
-    const result = await query(
-      `INSERT INTO application_types (guild_id, name, description, enabled)
-       VALUES ($1, 'Moderator', 'Apply to help moderate the SlickPickleNick community.', true)
-       ON CONFLICT (guild_id, name) DO UPDATE SET updated_at = NOW() RETURNING *`,
-      [guildId]
-    );
-    await this.ensureDefaultQuestions(result.rows[0].id);
-    return result.rows[0];
-  }
 
-  async ensureDefaultQuestions(applicationTypeId) {
-    const count = await query(`SELECT COUNT(*)::int AS count FROM application_questions WHERE application_type_id = $1`, [applicationTypeId]);
-    if ((count.rows[0]?.count || 0) > 0) return;
-    const defaults = ['Why are you applying?', 'What relevant experience do you have?', 'What is your availability?'];
-    for (let i = 0; i < defaults.length; i++) {
-      await query(`INSERT INTO application_questions (application_type_id, question_text, required, display_order) VALUES ($1, $2, $3, $4)`, [applicationTypeId, defaults[i], i < 2, i + 1]);
-    }
-  }
+function buildApplicationQuestionPayload(session, applicationName, question, questionIndex, questionCount) {
+  return {
+    embeds: [createBaseEmbed({
+      title: `${applicationName} Application`,
+      description: [
+        `Question **${questionIndex + 1}** of **${questionCount}**`,
+        '',
+        `**${question.question_text}**`,
+        '',
+        question.required === false ? 'This question is optional. Reply with `skip` if you do not want to answer it.' : 'Reply to this DM with your answer.'
+      ].join('\n'),
+      color: SlickBotColors.PRIMARY,
+      footer: 'SlickBot Applications'
+    })]
+  };
+}
+
+function buildApplicationConfirmPayload(session, applicationName, answers) {
+  const answerLines = Object.entries(answers || {}).map(([question, answer], index) => {
+    return `**${index + 1}. ${question}**\n${truncate(String(answer || 'No answer provided.'), 500)}`;
+  }).join('\n\n');
+
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(`${CustomIds.ApplicationSubmitPrefix}${session.id}`).setLabel('Submit Application').setStyle(ButtonStyle.Success),
+    new ButtonBuilder().setCustomId(`${CustomIds.ApplicationCancelPrefix}${session.id}`).setLabel('Cancel').setStyle(ButtonStyle.Secondary)
+  );
+
+  return {
+    embeds: [createBaseEmbed({
+      title: `${applicationName} Application Ready to Submit`,
+      description: [
+        'Review your answers below, then choose whether to submit or cancel this application.',
+        '',
+        answerLines || 'No answers recorded.'
+      ].join('\n'),
+      color: SlickBotColors.INFO,
+      footer: 'SlickBot Applications'
+    })],
+    components: [row]
+  };
+}
+
+class ApplicationService {
 
   async setupType(guildId, input) {
     const result = await query(
@@ -807,7 +866,6 @@ class ApplicationService {
          updated_at = NOW() RETURNING *`,
       [guildId, input.name, input.description || null, input.reviewChannelId || null, input.pendingRoleId || null, input.approvedRoleId || null, Boolean(input.autoAssignApprovedRole), input.submissionConfirmationMessage || null, input.panelTitle || null, input.panelDescription || null, input.panelColor || null, input.panelHeaderImageUrl || null, input.panelDisplayMode || null]
     );
-    await this.ensureDefaultQuestions(result.rows[0].id);
     return result.rows[0];
   }
 
@@ -854,9 +912,10 @@ class ApplicationService {
     if (duplicate.rowCount > 0) return { ok: false, reason: 'You already have a pending application for this type.' };
 
     await query(`UPDATE application_sessions SET status = 'CANCELLED', updated_at = NOW() WHERE applicant_user_id = $1 AND status = 'ACTIVE'`, [interaction.user.id]).catch(() => {});
-    const questions = await this.getQuestions(applicationType.id);
-    if (!questions.length) await this.ensureDefaultQuestions(applicationType.id);
     const refreshedQuestions = await this.getQuestions(applicationType.id);
+    if (!refreshedQuestions.length) {
+      return { ok: false, reason: 'This application type does not have any questions configured yet. Staff must add questions with `/application question-add` before users can apply.' };
+    }
 
     const dm = await interaction.user.createDM().catch(() => null);
     if (!dm) {
@@ -884,7 +943,8 @@ class ApplicationService {
     if (!current) return false;
 
     const answers = parseJson(session.answers, {});
-    answers[current.question_text] = message.content || '[No text response]';
+    const rawAnswer = String(message.content || '').trim();
+    answers[current.question_text] = current.required === false && rawAnswer.toLowerCase() === 'skip' ? '[Skipped]' : (rawAnswer || '[No text response]');
     const nextIndex = session.current_index + 1;
 
     if (nextIndex < questions.length) {
@@ -976,20 +1036,31 @@ function buildApplicationReviewPayload(submission, applicationType) {
 
 class AppealService {
   async updateConfig(guildId, input) {
+    const has = (key) => Object.prototype.hasOwnProperty.call(input, key);
     const result = await query(
       `INSERT INTO appeal_configs (guild_id, review_channel_id, dm_decision_enabled, dm_include_submission, panel_title, panel_description, panel_color, panel_header_image_url, panel_display_mode)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        ON CONFLICT (guild_id) DO UPDATE SET
          review_channel_id = COALESCE(EXCLUDED.review_channel_id, appeal_configs.review_channel_id),
-         dm_decision_enabled = EXCLUDED.dm_decision_enabled,
-         dm_include_submission = EXCLUDED.dm_include_submission,
+         dm_decision_enabled = COALESCE(EXCLUDED.dm_decision_enabled, appeal_configs.dm_decision_enabled),
+         dm_include_submission = COALESCE(EXCLUDED.dm_include_submission, appeal_configs.dm_include_submission),
          panel_title = COALESCE(EXCLUDED.panel_title, appeal_configs.panel_title),
          panel_description = COALESCE(EXCLUDED.panel_description, appeal_configs.panel_description),
          panel_color = COALESCE(EXCLUDED.panel_color, appeal_configs.panel_color),
          panel_header_image_url = COALESCE(EXCLUDED.panel_header_image_url, appeal_configs.panel_header_image_url),
          panel_display_mode = COALESCE(EXCLUDED.panel_display_mode, appeal_configs.panel_display_mode),
          updated_at = NOW() RETURNING *`,
-      [guildId, input.reviewChannelId || null, Boolean(input.dmDecisionEnabled), Boolean(input.dmIncludeSubmission), input.panelTitle || null, input.panelDescription || null, input.panelColor || null, input.panelHeaderImageUrl || null, input.panelDisplayMode || null]
+      [
+        guildId,
+        input.reviewChannelId || null,
+        has('dmDecisionEnabled') ? Boolean(input.dmDecisionEnabled) : null,
+        has('dmIncludeSubmission') ? Boolean(input.dmIncludeSubmission) : null,
+        input.panelTitle || null,
+        input.panelDescription || null,
+        input.panelColor || null,
+        input.panelHeaderImageUrl || null,
+        input.panelDisplayMode || null
+      ]
     );
     return result.rows[0];
   }
@@ -1002,42 +1073,116 @@ class AppealService {
   async submitAppeal({ interaction, client, logger, caseNumber, reason, details }) {
     const next = await query(nextNumberQuery('appeals', 'appeal_number'), [interaction.guildId]);
     const appealNumber = Number(next.rows[0].next_number);
-    const inserted = await query(`INSERT INTO appeals (guild_id, appeal_number, appellant_user_id, appellant_user_tag, case_number, reason, details, status) VALUES ($1, $2, $3, $4, $5, $6, $7, 'PENDING') RETURNING *`, [interaction.guildId, appealNumber, interaction.user.id, interaction.user.tag, caseNumber || null, reason, details || null]);
+    const inserted = await query(
+      `INSERT INTO appeals (guild_id, appeal_number, appellant_user_id, appellant_user_tag, case_number, reason, details, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 'PENDING') RETURNING *`,
+      [interaction.guildId, appealNumber, interaction.user.id, interaction.user.tag, caseNumber || null, reason, details || null]
+    );
     const appeal = inserted.rows[0];
     const config = await this.getConfig(interaction.guildId);
     const reviewChannel = await fetchSendableChannel(client, config?.review_channel_id);
-    if (reviewChannel) await reviewChannel.send(buildAppealReviewPayload(appeal));
+    if (reviewChannel) {
+      const sent = await reviewChannel.send(buildAppealReviewPayload(appeal));
+      await query(`UPDATE appeals SET review_channel_id = $1, review_message_id = $2 WHERE id = $3`, [reviewChannel.id, sent.id, appeal.id]).catch(() => {});
+      appeal.review_channel_id = reviewChannel.id;
+      appeal.review_message_id = sent.id;
+    }
     await logger.log({ guildId: interaction.guildId, eventKey: 'appeal-submit', title: 'Appeal Submitted', body: `Appeal #${appeal.appeal_number} submitted by ${interaction.user.tag}${caseNumber ? ` for case #${caseNumber}` : ''}.`, actorUserId: interaction.user.id, metadata: { appealId: appeal.id, caseNumber } }).catch(() => {});
     return appeal;
   }
 
   async reviewAppeal({ interaction, client, logger, appealId, status, reason = null }) {
     const nextStatus = normalizeStatus(status);
-    const result = await query(`UPDATE appeals SET status = $1, reviewed_by_user_id = $2, reviewed_at = NOW(), decision_reason = $3, updated_at = NOW() WHERE guild_id = $4 AND id = $5 RETURNING *`, [nextStatus, interaction.user.id, reason || null, interaction.guildId, appealId]);
+    const result = await query(
+      `UPDATE appeals SET status = $1, reviewed_by_user_id = $2, reviewed_at = NOW(), decision_reason = $3, updated_at = NOW()
+       WHERE guild_id = $4 AND id = $5 RETURNING *`,
+      [nextStatus, interaction.user.id, reason || null, interaction.guildId, appealId]
+    );
     const appeal = result.rows[0] || null;
     if (!appeal) return null;
     const config = await this.getConfig(interaction.guildId);
     if (config?.dm_decision_enabled) {
       const user = await client.users.fetch(appeal.appellant_user_id).catch(() => null);
-      await user?.send({ embeds: [createBaseEmbed({ title: `Appeal #${appeal.appeal_number} Decision`, description: [`Status: **${nextStatus}**`, reason ? `Reason: ${reason}` : null].filter(Boolean).join('\n'), color: nextStatus === 'APPROVED' ? SlickBotColors.SUCCESS : SlickBotColors.WARNING, footer: 'SlickBot Appeals' })] }).catch(() => {});
+      await user?.send(buildAppealDecisionDmPayload(appeal, config)).catch(() => {});
     }
+    await this.refreshReviewMessage({ client, appeal }).catch(() => {});
     await logger.log({ guildId: interaction.guildId, eventKey: 'appeal-review', title: 'Appeal Reviewed', body: `Appeal #${appeal.appeal_number} marked **${nextStatus}** by ${interaction.user.tag}.${reason ? ` Reason: ${reason}` : ''}`, actorUserId: interaction.user.id, metadata: { appealId: appeal.id, status: nextStatus } }).catch(() => {});
     return appeal;
   }
-}
 
+  async refreshReviewMessage({ client, appeal }) {
+    if (!appeal?.review_channel_id || !appeal?.review_message_id) return false;
+    const channel = await fetchSendableChannel(client, appeal.review_channel_id);
+    if (!channel || !channel.messages?.fetch) return false;
+    const message = await channel.messages.fetch(appeal.review_message_id).catch(() => null);
+    if (!message) return false;
+    await message.edit(buildAppealReviewPayload(appeal));
+    return true;
+  }
+}
 function buildAppealReviewPayload(appeal) {
+  const status = normalizeStatus(appeal.status || 'PENDING');
+  const isClosed = status === 'APPROVED' || status === 'DENIED';
+  const reviewedAt = formatTimestamp(appeal.reviewed_at);
+  const color = status === 'APPROVED' ? SlickBotColors.SUCCESS : status === 'DENIED' ? SlickBotColors.WARNING : SlickBotColors.INFO;
+
   const embed = createBaseEmbed({
     title: `Appeal #${appeal.appeal_number}`,
-    description: [`Appellant: <@${appeal.appellant_user_id}>`, appeal.case_number ? `Case: **#${appeal.case_number}**` : 'Case: Not provided', '', '**Reason**', truncate(appeal.reason || 'No reason provided.', 1200), '', '**Details**', truncate(appeal.details || 'No extra details provided.', 1200)].join('\n'),
-    color: SlickBotColors.INFO,
+    description: [
+      `Status: **${status}**`,
+      `Appellant: <@${appeal.appellant_user_id}>`,
+      appeal.case_number ? `Case: **#${appeal.case_number}**` : 'Case: Not provided',
+      appeal.reviewed_by_user_id ? `Reviewed By: <@${appeal.reviewed_by_user_id}>${reviewedAt ? ` on ${reviewedAt}` : ''}` : null,
+      appeal.decision_reason ? `Decision Reason: ${truncate(appeal.decision_reason, 700)}` : null,
+      '',
+      '**Reason**',
+      truncate(appeal.reason || 'No reason provided.', 1200),
+      '',
+      '**Details**',
+      truncate(appeal.details || 'No extra details provided.', 1200)
+    ].filter(Boolean).join('\n'),
+    color,
     footer: 'SlickBot Appeals'
   });
+
+  if (isClosed) return { embeds: [embed], components: [] };
+
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId(`${CustomIds.AppealApproveReasonPrefix}${appeal.id}`).setLabel('Approve').setStyle(ButtonStyle.Success),
     new ButtonBuilder().setCustomId(`${CustomIds.AppealDenyReasonPrefix}${appeal.id}`).setLabel('Deny').setStyle(ButtonStyle.Danger)
   );
   return { embeds: [embed], components: [row] };
+}
+
+function buildAppealDecisionDmPayload(appeal, config) {
+  const status = normalizeStatus(appeal.status || 'REVIEWED');
+  const lines = [
+    `Your appeal #${appeal.appeal_number} has been marked **${status}**.`,
+    appeal.decision_reason ? `Reason: ${appeal.decision_reason}` : null
+  ];
+
+  if (config?.dm_include_submission) {
+    lines.push(
+      '',
+      '**Original Submission**',
+      appeal.case_number ? `Case: **#${appeal.case_number}**` : 'Case: Not provided',
+      '',
+      '**Reason**',
+      truncate(appeal.reason || 'No reason provided.', 1000),
+      '',
+      '**Details**',
+      truncate(appeal.details || 'No extra details provided.', 1000)
+    );
+  }
+
+  return {
+    embeds: [createBaseEmbed({
+      title: `Appeal #${appeal.appeal_number} Decision`,
+      description: lines.filter(Boolean).join('\n'),
+      color: status === 'APPROVED' ? SlickBotColors.SUCCESS : SlickBotColors.WARNING,
+      footer: 'SlickBot Appeals'
+    })]
+  };
 }
 
 function buildTicketModal(ticketType = null) {
@@ -1087,17 +1232,6 @@ function buildAppealReasonModal(appealId, status) {
     .addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('reason').setLabel('Decision reason').setStyle(TextInputStyle.Paragraph).setRequired(false).setMaxLength(1000)));
 }
 
-function buildApplicationModal(applicationTypeId, title = 'Application') {
-  return new ModalBuilder()
-    .setCustomId(`${CustomIds.ApplicationModalPrefix}${applicationTypeId}`)
-    .setTitle(title.slice(0, 45))
-    .addComponents(
-      new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('why').setLabel('Why are you applying?').setStyle(TextInputStyle.Paragraph).setRequired(true).setMaxLength(1000)),
-      new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('experience').setLabel('Relevant experience').setStyle(TextInputStyle.Paragraph).setRequired(true).setMaxLength(1000)),
-      new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('availability').setLabel('Availability / extra notes').setStyle(TextInputStyle.Paragraph).setRequired(false).setMaxLength(1000))
-    );
-}
-
 module.exports = {
   TicketService,
   ReportService,
@@ -1106,7 +1240,6 @@ module.exports = {
   buildTicketModal,
   buildReportModal,
   buildReportDetailsModal,
-  buildApplicationModal,
   buildAppealModal,
   buildAppealReasonModal,
   buildReportReviewPayload,

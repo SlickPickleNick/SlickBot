@@ -4,7 +4,35 @@ SlickBot is an all-in-one Discord server management bot built for the SlickPickl
 
 ## Version
 
-Current package: **v0.6.3**
+Current package: **v0.6.4**
+
+## v0.6.4 Updates
+
+### Expanded Bot Diagnostics
+
+- `/bot test` now runs deeper module health checks for all implemented modules.
+- Enabled modules are checked for database/table readiness and configuration records where applicable.
+- Disabled modules are shown as paused, while query or migration issues are reported as errors.
+
+### Application System Fixes
+
+- Fixed the DM application flow so answers now advance to the next configured question and then show a submit/cancel confirmation panel.
+- Removed automatic starter questions from newly created application types.
+- Removed the built-in default Moderator application type behavior. Existing auto-created Moderator templates from the old default behavior are cleaned up by migration when their original default description matches.
+- Application types now require staff-created questions through `/application question-add` before users can apply.
+
+### Appeal Review Updates
+
+- Appeal review messages now update in place after approval or denial.
+- Reviewed appeal embeds change color by decision, show the reviewer and decision reason, and remove decision buttons after review.
+- `dm_include_submission` now includes the original appeal submission in the decision DM.
+- Added `/appeal edit` so appeal settings can be changed without redoing full setup.
+
+### Report Review Updates
+
+- Resolved and dismissed reports now preserve the full report embed instead of replacing it with a generic success message.
+- Report review embeds now change color by final status and remove action buttons after resolution/dismissal.
+- Report follow-up tickets now update the report embed to show who opened the ticket and when.
 
 ## v0.6.3 Updates
 

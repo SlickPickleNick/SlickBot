@@ -148,7 +148,7 @@ async function buildApplicationsPanel(guildId) {
       const questions = await query(`SELECT COUNT(*)::int AS count FROM application_questions WHERE application_type_id = $1`, [type.id]).catch(() => ({ rows: [{ count: 0 }] }));
       return `• **${type.name}** — ${type.enabled ? 'Enabled' : 'Disabled'} · Questions: **${questions.rows[0]?.count || 0}** · Review: ${type.review_channel_id ? `<#${type.review_channel_id}>` : 'Not set'}`;
     })).then((lines) => lines.join('\n'))
-    : 'No application types configured yet. Use `/application setup`. A default Moderator type is created during setup.';
+    : 'No application types configured yet. Use `/application setup`, then add questions with `/application question-add`.';
 
   const embed = createBaseEmbed({
     title: 'Application Manager',
@@ -184,6 +184,7 @@ async function buildAppealsPanel(guildId) {
       '',
       `Review Channel: ${cfg?.review_channel_id ? `<#${cfg.review_channel_id}>` : 'Not set'}`,
       `DM Decisions: **${cfg?.dm_decision_enabled ? 'Enabled' : 'Disabled'}**`,
+      `Include Submission in DM: **${cfg?.dm_include_submission ? 'Enabled' : 'Disabled'}**`,
       '',
       'Appeal reviewers can approve/deny immediately or open a decision reason modal.'
     ].join('\n'),

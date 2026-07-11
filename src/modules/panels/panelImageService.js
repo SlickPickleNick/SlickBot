@@ -1,5 +1,0 @@
-const {EmbedBuilder}=require('discord.js');
-function normalizeHeaderImageUrl(value){const raw=String(value||'').trim();if(!raw)return null;try{const u=new URL(raw);return ['http:','https:'].includes(u.protocol)?u.toString():null}catch{return null}}
-async function resolveHeaderImageUrl(client,value){const raw=String(value||'').trim();if(!raw)return null;if(['clear','remove','none'].includes(raw.toLowerCase()))return '';const m=raw.match(/https?:\/\/(?:www\.)?(?:discord\.com|discordapp\.com)\/channels\/(\d+)\/(\d+)\/(\d+)/i);if(m&&client){const c=await client.channels.fetch(m[2]).catch(()=>null),msg=await c?.messages?.fetch(m[3]).catch(()=>null),a=msg?.attachments?.first?.(),e=msg?.embeds?.find(x=>x.image?.url||x.thumbnail?.url);return normalizeHeaderImageUrl(a?.url||e?.image?.url||e?.thumbnail?.url)}return normalizeHeaderImageUrl(raw)}
-function embedsWithHeader(url,embed){const u=normalizeHeaderImageUrl(url);return u?[new EmbedBuilder().setImage(u),embed]:[embed]}
-module.exports={normalizeHeaderImageUrl,resolveHeaderImageUrl,embedsWithHeader};
