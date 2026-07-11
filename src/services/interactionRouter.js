@@ -29,6 +29,7 @@ const {
   buildReportDetailsModal,
   buildAppealModal,
   buildAppealReasonModal,
+  buildApplicationReviewReasonModal,
   buildReportReviewPayload
 } = require('../modules/support/supportService');
 
@@ -385,9 +386,20 @@ async function handleButton(interaction, ctx) {
     const action = isApprove ? ActionKeys.ApplicationsApprove : ActionKeys.ApplicationsDeny;
     if (!(await requireAction(interaction, ctx, action, ModuleKeys.APPLICATIONS))) return true;
     const submissionId = id.slice(isApprove ? CustomIds.ApplicationApprovePrefix.length : CustomIds.ApplicationDenyPrefix.length);
-    const submission = await applications.reviewApplication({ interaction, client: ctx.client, logger: ctx.logger, submissionId, status: isApprove ? 'APPROVED' : 'DENIED' });
-    if (!submission) return replyPrivate(interaction, { embeds: [createWarningEmbed('Application Not Found', 'The application could not be found.')] });
-    await updatePanel(interaction, { embeds: [createSuccessEmbed('Application Reviewed', `Application #${submission.submission_number} marked **${submission.status}**.`)], components: [] });
+    await query(
+      `UPDATE application_submissions SET review_channel_id = COALESCE(review_channel_id, $1), review_message_id = COALESCE(review_message_id, $2), updated_at = NOW() WHERE guild_id = $3 AND id = $4`,
+      [interaction.channelId, interaction.message?.id || null, interaction.guildId, submissionId]
+    ).catch(() => {});
+    await interaction.showModal(buildApplicationReviewReasonModal(submissionId, isApprove ? 'APPROVED' : 'DENIED'));
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.ApplicationReviewThreadPrefix)) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.ApplicationsReview, ModuleKeys.APPLICATIONS))) return true;
+    const submissionId = id.slice(CustomIds.ApplicationReviewThreadPrefix.length);
+    const result = await applications.openReviewThread({ interaction, client: ctx.client, logger: ctx.logger, submissionId });
+    if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Review Thread Not Opened', result.reason)] });
+    await replyPrivate(interaction, { embeds: [createSuccessEmbed(result.existing ? 'Review Thread Opened' : 'Review Thread Created', `Application #${result.submission.submission_number} review thread: <#${result.thread.id}>.`)] });
     return true;
   }
 
@@ -654,6 +666,18 @@ async function handleModal(interaction, ctx) {
     const appeal = await appeals.reviewAppeal({ interaction, client: ctx.client, logger: ctx.logger, appealId, status, reason });
     if (!appeal) return replyPrivate(interaction, { embeds: [createWarningEmbed('Appeal Not Found', 'The appeal could not be found.')] });
     await replyPrivate(interaction, { embeds: [createSuccessEmbed('Appeal Reviewed', `Appeal #${appeal.appeal_number} marked **${appeal.status}**.`)] });
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.ApplicationReviewReasonModalPrefix)) {
+    const rest = id.slice(CustomIds.ApplicationReviewReasonModalPrefix.length);
+    const [status, submissionId] = rest.split(':');
+    const action = status === 'APPROVED' ? ActionKeys.ApplicationsApprove : ActionKeys.ApplicationsDeny;
+    if (!(await requireAction(interaction, ctx, action, ModuleKeys.APPLICATIONS))) return true;
+    const reason = interaction.fields.getTextInputValue('reason') || null;
+    const submission = await applications.reviewApplication({ interaction, client: ctx.client, logger: ctx.logger, submissionId, status, reason });
+    if (!submission) return replyPrivate(interaction, { embeds: [createWarningEmbed('Application Not Found', 'The application could not be found.')] });
+    await replyPrivate(interaction, { embeds: [createSuccessEmbed('Application Reviewed', `Application #${submission.submission_number} marked **${submission.status}**. The review message was updated and a transcript was attached.`)] });
     return true;
   }
 

@@ -1,6 +1,6 @@
 {
   "name": "slickbot",
-  "version": "0.6.4",
+  "version": "0.6.5",
   "private": true,
   "description": "SlickBot all-in-one Discord server management bot with ticket workflow updates, server stats fixes, bot diagnostics, role panels, leveling, and support systems.",
   "main": "src/index.js",

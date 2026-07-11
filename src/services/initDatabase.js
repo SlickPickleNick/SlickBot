@@ -294,6 +294,10 @@ async function initDatabase() {
       status TEXT NOT NULL DEFAULT 'PENDING',
       reviewed_by_user_id TEXT,
       reviewed_at TIMESTAMPTZ,
+      review_reason TEXT,
+      review_channel_id TEXT,
+      review_message_id TEXT,
+      review_thread_id TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       UNIQUE(guild_id, submission_number)
@@ -448,6 +452,10 @@ async function initDatabase() {
   await query(`ALTER TABLE application_types ADD COLUMN IF NOT EXISTS panel_color TEXT;`).catch(() => {});
   await query(`ALTER TABLE application_types ADD COLUMN IF NOT EXISTS panel_display_mode TEXT NOT NULL DEFAULT 'BUTTONS';`).catch(() => {});
   await query(`ALTER TABLE application_types ADD COLUMN IF NOT EXISTS panel_header_image_url TEXT;`).catch(() => {});
+  await query(`ALTER TABLE application_submissions ADD COLUMN IF NOT EXISTS review_reason TEXT;`).catch(() => {});
+  await query(`ALTER TABLE application_submissions ADD COLUMN IF NOT EXISTS review_channel_id TEXT;`).catch(() => {});
+  await query(`ALTER TABLE application_submissions ADD COLUMN IF NOT EXISTS review_message_id TEXT;`).catch(() => {});
+  await query(`ALTER TABLE application_submissions ADD COLUMN IF NOT EXISTS review_thread_id TEXT;`).catch(() => {});
   await query(`DELETE FROM application_types WHERE name = 'Moderator' AND description = 'Apply to help moderate the SlickPickleNick community.'`).catch(() => {});
 
   await query(`ALTER TABLE appeal_configs ADD COLUMN IF NOT EXISTS panel_title TEXT;`).catch(() => {});

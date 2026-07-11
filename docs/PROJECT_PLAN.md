@@ -29,6 +29,16 @@ SlickBot is being built as a modular all-in-one Discord server management bot fo
 - Server stats
 - Leveling / XP
 
+## v0.6.5 Scope
+
+- Updated application review messages so approval/denial preserves the original application details instead of replacing them with a generic reviewed message.
+- Application review embeds now use status colors: pending review is orange, approved is green, and denied is red.
+- Application approval and denial now open a required decision-reason modal before the status is applied.
+- Added an application review-thread button that opens a per-application staff thread named from the applicant and application name.
+- Application review threads automatically lock and archive after approval or denial is submitted.
+- Application approval/denial now generates a TXT transcript and attaches it to the updated review message.
+- Application review embeds now show the approval/denial reason and remove review buttons after a final decision.
+
 ## v0.6.4 Scope
 
 - Expanded `/bot test` so it checks all implemented modules for database/table readiness and reports module-specific errors.

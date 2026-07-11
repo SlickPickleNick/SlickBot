@@ -105,6 +105,67 @@ function buildQuestionLines(answers) {
   return entries.map(([question, answer]) => `**${question}**\n${truncate(String(answer || 'No answer provided.'), 700)}`).join('\n\n');
 }
 
+function sanitizeThreadName(value) {
+  return String(value || 'applicant')
+    .toLowerCase()
+    .replace(/#[0-9]{4,}$/g, '')
+    .replace(/[^a-z0-9-_]+/g, '-')
+    .replace(/-{2,}/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 80) || 'applicant';
+}
+
+function buildApplicationThreadName(submission) {
+  const applicant = sanitizeThreadName(submission.applicant_user_tag || submission.applicant_user_id || 'applicant');
+  const application = sanitizeThreadName(submission.application_name || 'application');
+  return `${applicant}-${application}`.slice(0, 100) || 'application-review';
+}
+
+function buildApplicationTranscriptAttachment(submission) {
+  const answers = parseJson(submission.answers, {});
+  const lines = [
+    `SlickBot Application Transcript`,
+    `Application Number: #${submission.submission_number}`,
+    `Application Type: ${submission.application_name || 'Application'}`,
+    `Status: ${normalizeStatus(submission.status || 'PENDING')}`,
+    `Applicant: ${submission.applicant_user_tag || 'Unknown'} (${submission.applicant_user_id})`,
+    `Submitted At: ${submission.created_at ? new Date(submission.created_at).toISOString() : 'Unknown'}`,
+    submission.reviewed_by_user_id ? `Reviewed By User ID: ${submission.reviewed_by_user_id}` : null,
+    submission.reviewed_at ? `Reviewed At: ${new Date(submission.reviewed_at).toISOString()}` : null,
+    submission.review_reason ? `Review Reason: ${submission.review_reason}` : null,
+    '',
+    'Answers',
+    '======='
+  ].filter((line) => line !== null);
+
+  Object.entries(answers).forEach(([question, answer], index) => {
+    lines.push('', `${index + 1}. ${question}`, String(answer || 'No answer provided.'));
+  });
+
+  const safeStatus = normalizeStatus(submission.status || 'reviewed').toLowerCase();
+  const fileName = `application-${submission.submission_number}-${safeStatus}.txt`;
+  return new AttachmentBuilder(Buffer.from(lines.join('\n'), 'utf8'), { name: fileName });
+}
+
+function buildApplicationReviewThreadPayload(submission) {
+  return {
+    embeds: [createBaseEmbed({
+      title: `Review Thread · ${submission.application_name} #${submission.submission_number}`,
+      description: [
+        `Applicant: <@${submission.applicant_user_id}>`,
+        `Status: **${normalizeStatus(submission.status || 'PENDING')}**`,
+        '',
+        'Use this thread for staff discussion. When the application is approved or denied, SlickBot will close this thread automatically.',
+        '',
+        '**Answers**',
+        buildQuestionLines(submission.answers)
+      ].join('\n'),
+      color: SlickBotColors.INFO,
+      footer: 'SlickBot Applications'
+    })]
+  };
+}
+
 
 function hasAnyRole(member, roleIds = []) {
   if (!member?.roles?.cache) return false;
@@ -996,7 +1057,20 @@ class ApplicationService {
       await member?.roles.add(applicationType.pending_role_id, `SlickBot application #${submission.submission_number} pending`).catch(() => {});
     }
     const reviewChannel = await fetchSendableChannel(client, applicationType.review_channel_id);
-    if (reviewChannel) await reviewChannel.send(buildApplicationReviewPayload(submission, applicationType));
+    if (reviewChannel) {
+      const reviewSubmission = {
+        ...submission,
+        pending_role_id: applicationType.pending_role_id,
+        approved_role_id: applicationType.approved_role_id,
+        auto_assign_approved_role: applicationType.auto_assign_approved_role
+      };
+      const sent = await reviewChannel.send(buildApplicationReviewPayload(reviewSubmission)).catch(() => null);
+      if (sent) {
+        await query(`UPDATE application_submissions SET review_channel_id = $1, review_message_id = $2, updated_at = NOW() WHERE id = $3`, [reviewChannel.id, sent.id, submission.id]).catch(() => {});
+        submission.review_channel_id = reviewChannel.id;
+        submission.review_message_id = sent.id;
+      }
+    }
     await logger.log({ guildId, eventKey: 'application-submit', title: 'Application Submitted', body: `${user.tag} submitted ${applicationType.name} application #${submission.submission_number}.`, actorUserId: user.id, metadata: { submissionId: submission.id, applicationTypeId: applicationType.id } }).catch(() => {});
     return { ok: true, submission };
   }
@@ -1005,31 +1079,114 @@ class ApplicationService {
     return this.submitApplicationDirect({ guildId: interaction.guildId, guild: interaction.guild, user: interaction.user, client, logger, applicationType, answers });
   }
 
-  async reviewApplication({ interaction, client, logger, submissionId, status }) {
+  async openReviewThread({ interaction, client, logger, submissionId }) {
+    const fetchResult = await query(`SELECT s.*, t.pending_role_id, t.approved_role_id, t.auto_assign_approved_role FROM application_submissions s INNER JOIN application_types t ON t.id = s.application_type_id WHERE s.guild_id = $1 AND s.id = $2 LIMIT 1`, [interaction.guildId, submissionId]);
+    const submission = fetchResult.rows[0];
+    if (!submission) return { ok: false, reason: 'The application could not be found.' };
+
+    if (submission.review_thread_id) {
+      const existingThread = await client.channels.fetch(submission.review_thread_id).catch(() => null);
+      if (existingThread) {
+        if (existingThread.archived && typeof existingThread.setArchived === 'function') await existingThread.setArchived(false, 'SlickBot application review reopened.').catch(() => {});
+        await logger.log({ guildId: interaction.guildId, eventKey: 'application-review', title: 'Application Review Thread Opened', body: `${interaction.user.tag} opened the review thread for ${submission.application_name} application #${submission.submission_number}.`, actorUserId: interaction.user.id, metadata: { submissionId: submission.id, threadId: existingThread.id } }).catch(() => {});
+        return { ok: true, submission, thread: existingThread, existing: true };
+      }
+    }
+
+    if (!interaction.message || typeof interaction.message.startThread !== 'function') return { ok: false, reason: 'This review message cannot create a thread.' };
+    const thread = await interaction.message.startThread({
+      name: buildApplicationThreadName(submission),
+      autoArchiveDuration: 1440,
+      reason: `SlickBot application #${submission.submission_number} review thread opened by ${interaction.user.tag}`
+    }).catch(() => null);
+    if (!thread) return { ok: false, reason: 'I could not create a review thread. Check my thread permissions in this channel.' };
+
+    await query(
+      `UPDATE application_submissions SET review_channel_id = COALESCE(review_channel_id, $1), review_message_id = COALESCE(review_message_id, $2), review_thread_id = $3, updated_at = NOW() WHERE guild_id = $4 AND id = $5`,
+      [interaction.channelId, interaction.message.id, thread.id, interaction.guildId, submission.id]
+    ).catch(() => {});
+    submission.review_channel_id = submission.review_channel_id || interaction.channelId;
+    submission.review_message_id = submission.review_message_id || interaction.message.id;
+    submission.review_thread_id = thread.id;
+
+    await thread.send(buildApplicationReviewThreadPayload(submission)).catch(() => {});
+    await logger.log({ guildId: interaction.guildId, eventKey: 'application-review', title: 'Application Review Thread Created', body: `${interaction.user.tag} created a review thread for ${submission.application_name} application #${submission.submission_number}.`, actorUserId: interaction.user.id, metadata: { submissionId: submission.id, threadId: thread.id } }).catch(() => {});
+    return { ok: true, submission, thread, existing: false };
+  }
+
+  async reviewApplication({ interaction, client, logger, submissionId, status, reason = null }) {
     const fetchResult = await query(`SELECT s.*, t.pending_role_id, t.approved_role_id, t.auto_assign_approved_role FROM application_submissions s INNER JOIN application_types t ON t.id = s.application_type_id WHERE s.guild_id = $1 AND s.id = $2 LIMIT 1`, [interaction.guildId, submissionId]);
     const submission = fetchResult.rows[0];
     if (!submission) return null;
     const nextStatus = normalizeStatus(status);
-    const result = await query(`UPDATE application_submissions SET status = $1, reviewed_by_user_id = $2, reviewed_at = NOW(), updated_at = NOW() WHERE id = $3 RETURNING *`, [nextStatus, interaction.user.id, submission.id]);
+    const result = await query(`UPDATE application_submissions SET status = $1, reviewed_by_user_id = $2, reviewed_at = NOW(), review_reason = $3, updated_at = NOW() WHERE id = $4 RETURNING *`, [nextStatus, interaction.user.id, reason || null, submission.id]);
     const updated = result.rows[0];
     const member = await interaction.guild.members.fetch(submission.applicant_user_id).catch(() => null);
     if (member && submission.pending_role_id) await member.roles.remove(submission.pending_role_id).catch(() => {});
     if (member && nextStatus === 'APPROVED' && submission.auto_assign_approved_role && submission.approved_role_id) await member.roles.add(submission.approved_role_id, `SlickBot application #${submission.submission_number} approved`).catch(() => {});
-    await logger.log({ guildId: interaction.guildId, eventKey: 'application-review', title: 'Application Reviewed', body: `${submission.application_name} application #${submission.submission_number} marked **${nextStatus}** by ${interaction.user.tag}.`, actorUserId: interaction.user.id, metadata: { submissionId: submission.id, status: nextStatus } }).catch(() => {});
+    await this.refreshReviewMessage({ client, submission: { ...submission, ...updated } }).catch(() => {});
+    await this.closeReviewThread({ client, submission: { ...submission, ...updated } }).catch(() => {});
+    await logger.log({ guildId: interaction.guildId, eventKey: 'application-review', title: 'Application Reviewed', body: `${submission.application_name} application #${submission.submission_number} marked **${nextStatus}** by ${interaction.user.tag}.${reason ? ` Reason: ${reason}` : ''}`, actorUserId: interaction.user.id, metadata: { submissionId: submission.id, status: nextStatus } }).catch(() => {});
     return updated;
+  }
+
+  async refreshReviewMessage({ client, submission }) {
+    if (!submission?.review_channel_id || !submission?.review_message_id) return false;
+    const channel = await fetchSendableChannel(client, submission.review_channel_id);
+    if (!channel || !channel.messages?.fetch) return false;
+    const message = await channel.messages.fetch(submission.review_message_id).catch(() => null);
+    if (!message) return false;
+    const payload = buildApplicationReviewPayload(submission);
+    if (['APPROVED', 'DENIED'].includes(normalizeStatus(submission.status))) payload.files = [buildApplicationTranscriptAttachment(submission)];
+    await message.edit(payload).catch(() => {});
+    return true;
+  }
+
+  async closeReviewThread({ client, submission }) {
+    if (!submission?.review_thread_id) return false;
+    const thread = await client.channels.fetch(submission.review_thread_id).catch(() => null);
+    if (!thread) return false;
+    if (typeof thread.send === 'function') {
+      await thread.send({ embeds: [createBaseEmbed({ title: 'Application Review Closed', description: `Application #${submission.submission_number} was marked **${normalizeStatus(submission.status)}**. This review thread will now close.`, color: normalizeStatus(submission.status) === 'APPROVED' ? SlickBotColors.SUCCESS : SlickBotColors.ERROR, footer: 'SlickBot Applications' })] }).catch(() => {});
+    }
+    if (typeof thread.setLocked === 'function') await thread.setLocked(true, 'SlickBot application review completed.').catch(() => {});
+    if (typeof thread.setArchived === 'function') await thread.setArchived(true, 'SlickBot application review completed.').catch(() => {});
+    return true;
   }
 }
 
-function buildApplicationReviewPayload(submission, applicationType) {
+function buildApplicationReviewPayload(submission) {
+  const status = normalizeStatus(submission.status || 'PENDING');
+  const isClosed = status === 'APPROVED' || status === 'DENIED';
+  const reviewedAt = formatTimestamp(submission.reviewed_at);
+  const submittedAt = formatTimestamp(submission.created_at);
+  const color = status === 'APPROVED' ? SlickBotColors.SUCCESS : status === 'DENIED' ? SlickBotColors.ERROR : SlickBotColors.WARNING;
+
   const embed = createBaseEmbed({
     title: `${submission.application_name} Application #${submission.submission_number}`,
-    description: [`Applicant: <@${submission.applicant_user_id}>`, `Pending Role: ${applicationType.pending_role_id ? `<@&${applicationType.pending_role_id}>` : 'None'}`, `Approved Role: ${applicationType.approved_role_id ? `<@&${applicationType.approved_role_id}>` : 'None'}`, '', '**Answers**', buildQuestionLines(submission.answers)].join('\n'),
-    color: SlickBotColors.PRIMARY,
+    description: [
+      `Status: **${status}**`,
+      `Applicant: <@${submission.applicant_user_id}>`,
+      submittedAt ? `Submitted: ${submittedAt}` : null,
+      submission.reviewed_by_user_id ? `Reviewed By: <@${submission.reviewed_by_user_id}>${reviewedAt ? ` on ${reviewedAt}` : ''}` : null,
+      submission.review_reason ? `Review Reason: ${truncate(submission.review_reason, 700)}` : null,
+      submission.pending_role_id ? `Pending Role: <@&${submission.pending_role_id}>` : null,
+      submission.approved_role_id ? `Approved Role: <@&${submission.approved_role_id}>` : null,
+      submission.review_thread_id ? `Review Thread: <#${submission.review_thread_id}>` : null,
+      '',
+      '**Answers**',
+      buildQuestionLines(submission.answers)
+    ].filter(Boolean).join('\n'),
+    color,
     footer: 'SlickBot Applications'
   });
+
+  if (isClosed) return { embeds: [embed], components: [] };
+
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId(`${CustomIds.ApplicationApprovePrefix}${submission.id}`).setLabel('Approve').setStyle(ButtonStyle.Success),
-    new ButtonBuilder().setCustomId(`${CustomIds.ApplicationDenyPrefix}${submission.id}`).setLabel('Deny').setStyle(ButtonStyle.Danger)
+    new ButtonBuilder().setCustomId(`${CustomIds.ApplicationDenyPrefix}${submission.id}`).setLabel('Deny').setStyle(ButtonStyle.Danger),
+    new ButtonBuilder().setCustomId(`${CustomIds.ApplicationReviewThreadPrefix}${submission.id}`).setLabel('Open Review Thread').setStyle(ButtonStyle.Secondary)
   );
   return { embeds: [embed], components: [row] };
 }
@@ -1232,6 +1389,13 @@ function buildAppealReasonModal(appealId, status) {
     .addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('reason').setLabel('Decision reason').setStyle(TextInputStyle.Paragraph).setRequired(false).setMaxLength(1000)));
 }
 
+function buildApplicationReviewReasonModal(submissionId, status) {
+  return new ModalBuilder()
+    .setCustomId(`${CustomIds.ApplicationReviewReasonModalPrefix}${status}:${submissionId}`)
+    .setTitle(`${status === 'APPROVED' ? 'Approve' : 'Deny'} Application`)
+    .addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('reason').setLabel('Decision reason').setStyle(TextInputStyle.Paragraph).setRequired(true).setMaxLength(1000)));
+}
+
 module.exports = {
   TicketService,
   ReportService,
@@ -1242,6 +1406,7 @@ module.exports = {
   buildReportDetailsModal,
   buildAppealModal,
   buildAppealReasonModal,
+  buildApplicationReviewReasonModal,
   buildReportReviewPayload,
   buildApplicationReviewPayload,
   buildAppealReviewPayload

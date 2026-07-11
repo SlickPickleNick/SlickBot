@@ -4,7 +4,20 @@ SlickBot is an all-in-one Discord server management bot built for the SlickPickl
 
 ## Version
 
-Current package: **v0.6.4**
+Current package: **v0.6.5**
+
+## v0.6.5 Updates
+
+### Application Review Workflow
+
+- Application review embeds now preserve the original application details when approved or denied instead of replacing the message with a generic status embed.
+- Application review status colors now match the final state: pending is orange, approved is green, and denied is red.
+- Approve and Deny now open a required reason modal before the decision is submitted.
+- Application review embeds include the approval or denial reason after review.
+- Application review messages remove action buttons after a final decision.
+- Added an Open Review Thread button for staff discussion. Threads are named from the applicant and application name.
+- Review threads are automatically locked and archived after approval or denial.
+- Application approval or denial generates a TXT transcript and attaches it to the updated application review message.
 
 ## v0.6.4 Updates
 
