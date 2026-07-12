@@ -167,56 +167,56 @@ async function handleButton(interaction, ctx) {
 
   if (id === CustomIds.WelcomeRefresh) {
     if (!(await requireAction(interaction, ctx, ActionKeys.WelcomeView, ModuleKeys.WELCOME))) return true;
-    await updatePanel(interaction, await buildWelcomePanel(interaction.guildId));
+    await updatePanel(interaction, withSetupSubheader(await buildWelcomePanel(interaction.guildId), 'SlickBot Community Center', 'Welcome / Auto Roles'));
     return true;
   }
 
   if (id === CustomIds.RolePanelsRefresh) {
     if (!(await requireAction(interaction, ctx, ActionKeys.RolePanelsView, ModuleKeys.REACTION_ROLES))) return true;
-    await updatePanel(interaction, await buildRoleManagerPanel(interaction.guildId));
+    await updatePanel(interaction, withSetupSubheader(await buildRoleManagerPanel(interaction.guildId), 'SlickBot Community Center', 'Role Panels'));
     return true;
   }
 
   if (id === CustomIds.GiveawaysRefresh) {
     if (!(await requireAction(interaction, ctx, ActionKeys.GiveawaysView, ModuleKeys.GIVEAWAYS))) return true;
-    await updatePanel(interaction, await giveaways.buildManagerPanel(interaction.guildId));
+    await updatePanel(interaction, withSetupSubheader(await giveaways.buildManagerPanel(interaction.guildId), 'SlickBot Community Center', 'Giveaways'));
     return true;
   }
 
   if (id === CustomIds.BirthdaysRefresh) {
     if (!(await requireAction(interaction, ctx, ActionKeys.BirthdaysView, ModuleKeys.BIRTHDAYS))) return true;
-    await updatePanel(interaction, await birthdays.buildManagerPanel(interaction.guildId));
+    await updatePanel(interaction, withSetupSubheader(await birthdays.buildManagerPanel(interaction.guildId), 'SlickBot Community Center', 'Birthdays'));
     return true;
   }
 
   if (id === CustomIds.ScheduledMessagesRefresh) {
     if (!(await requireAction(interaction, ctx, ActionKeys.ScheduledMessagesView, ModuleKeys.SCHEDULED_MESSAGES))) return true;
-    await updatePanel(interaction, await scheduledMessages.buildManagerPanel(interaction.guildId));
+    await updatePanel(interaction, withSetupSubheader(await scheduledMessages.buildManagerPanel(interaction.guildId), 'SlickBot Automation Center', 'Scheduled Messages'));
     return true;
   }
 
 
   if (id === CustomIds.LevelingRefresh) {
     if (!(await requireAction(interaction, ctx, ActionKeys.LevelingView, ModuleKeys.LEVELING))) return true;
-    await updatePanel(interaction, await leveling.buildManagerPanel(interaction.guildId));
+    await updatePanel(interaction, withSetupSubheader(await leveling.buildManagerPanel(interaction.guildId), 'SlickBot Community Center', 'Leveling / XP'));
     return true;
   }
 
   if (id === CustomIds.ServerStatsRefresh) {
     if (!(await requireAction(interaction, ctx, ActionKeys.ServerStatsView, ModuleKeys.SERVER_STATS))) return true;
-    await updatePanel(interaction, await serverStats.buildManagerPanel(interaction.guild));
+    await updatePanel(interaction, withSetupSubheader(await serverStats.buildManagerPanel(interaction.guild), 'SlickBot Community Center', 'Server Stats'));
     return true;
   }
 
   if (id === CustomIds.CustomCommandsRefresh) {
     if (!(await requireAction(interaction, ctx, ActionKeys.CustomCommandsView, ModuleKeys.CUSTOM_COMMANDS))) return true;
-    await updatePanel(interaction, await customCommands.buildManagerPanel(interaction.guildId));
+    await updatePanel(interaction, withSetupSubheader(await customCommands.buildManagerPanel(interaction.guildId), 'SlickBot Community Center', 'Custom Commands'));
     return true;
   }
 
   if (id === CustomIds.JoinCreateRefresh) {
     if (!(await requireAction(interaction, ctx, ActionKeys.JoinCreateView, ModuleKeys.JOIN_TO_CREATE))) return true;
-    await updatePanel(interaction, await joinCreate.buildManagerPanel(interaction.guild));
+    await updatePanel(interaction, withSetupSubheader(await joinCreate.buildManagerPanel(interaction.guild), 'SlickBot Community Center', 'Join-to-Create Voice'));
     return true;
   }
 
@@ -472,13 +472,6 @@ async function handleButton(interaction, ctx) {
     return true;
   }
 
-  if (id === CustomIds.LoggingFlush) {
-    if (!(await requireAction(interaction, ctx, ActionKeys.LoggingConfigure, ModuleKeys.LOGGING))) return true;
-    await ctx.logger.flushGuildBatches(interaction.guildId);
-    await updatePanel(interaction, await buildLoggingPanel(interaction.guildId));
-    return true;
-  }
-
   if (id === CustomIds.LoggingTest) {
     if (!(await requireAction(interaction, ctx, ActionKeys.LoggingConfigure, ModuleKeys.LOGGING))) return true;
     await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'system', title: 'SlickBot Test Log', body: `Test log created by ${interaction.user.tag}.`, actorUserId: interaction.user.id });
@@ -486,19 +479,67 @@ async function handleButton(interaction, ctx) {
     return true;
   }
 
-  if ([CustomIds.StatusQuickOnline, CustomIds.StatusQuickIdle, CustomIds.StatusQuickDnd, CustomIds.StatusClear].includes(id)) {
+  if ([
+    CustomIds.StatusQuickOnline,
+    CustomIds.StatusQuickIdle,
+    CustomIds.StatusQuickDnd,
+    CustomIds.StatusClear,
+    CustomIds.StatusActivityPlaying,
+    CustomIds.StatusActivityWatching,
+    CustomIds.StatusActivityListening,
+    CustomIds.StatusActivityCompeting,
+    CustomIds.StatusActivityStreaming,
+    CustomIds.StatusActivityNone
+  ].includes(id)) {
     if (!(await requireAction(interaction, ctx, ActionKeys.StatusManage, ModuleKeys.STATUS))) return true;
     if (id === CustomIds.StatusClear) {
       await ctx.status.clearPresence(interaction.guildId, true);
       await updatePanel(interaction, await buildStatusPanel(interaction.guildId, ctx, 'Status cleared.'));
       return true;
     }
-    const status = id === CustomIds.StatusQuickOnline ? PresenceStatus.ONLINE : id === CustomIds.StatusQuickIdle ? PresenceStatus.IDLE : PresenceStatus.DND;
+
     const saved = await ctx.status.getSavedPresence(interaction.guildId);
-    const next = saved || { activityType: ActivityTypeNames.WATCHING, activityText: 'the server', activityUrl: null };
-    await ctx.status.applyPresence({ ...next, status });
-    await ctx.status.savePresence(interaction.guildId, { ...next, status });
-    await updatePanel(interaction, await buildStatusPanel(interaction.guildId, ctx, `Status set to ${status}.`));
+    const current = saved || { status: PresenceStatus.ONLINE, activityType: ActivityTypeNames.WATCHING, activityText: 'the server', activityUrl: null, streamUrl: null };
+
+    if ([CustomIds.StatusQuickOnline, CustomIds.StatusQuickIdle, CustomIds.StatusQuickDnd].includes(id)) {
+      const status = id === CustomIds.StatusQuickOnline ? PresenceStatus.ONLINE : id === CustomIds.StatusQuickIdle ? PresenceStatus.IDLE : PresenceStatus.DND;
+      const next = { ...current, status };
+      await ctx.status.applyPresence(next);
+      await ctx.status.savePresence(interaction.guildId, next);
+      await updatePanel(interaction, await buildStatusPanel(interaction.guildId, ctx, `Status set to ${status}.`));
+      return true;
+    }
+
+    const activityMap = {
+      [CustomIds.StatusActivityPlaying]: ActivityTypeNames.PLAYING,
+      [CustomIds.StatusActivityWatching]: ActivityTypeNames.WATCHING,
+      [CustomIds.StatusActivityListening]: ActivityTypeNames.LISTENING,
+      [CustomIds.StatusActivityCompeting]: ActivityTypeNames.COMPETING,
+      [CustomIds.StatusActivityStreaming]: ActivityTypeNames.STREAMING,
+      [CustomIds.StatusActivityNone]: ActivityTypeNames.NONE
+    };
+    const activityType = activityMap[id] || ActivityTypeNames.NONE;
+    if (activityType === ActivityTypeNames.STREAMING && !current.streamUrl && !current.activityUrl) {
+      await replyPrivate(interaction, {
+        embeds: [createWarningEmbed(
+          'Streaming Activity Not Set',
+          'Failed to set activity to Streaming because no stream URL is saved for SlickBot. Set a stream URL with `/status stream-url url:<stream-url>`.'
+        )],
+        deleteAfterSeconds: 15
+      });
+      return true;
+    }
+
+    const next = {
+      ...current,
+      activityType,
+      activityText: activityType === ActivityTypeNames.NONE ? null : (current.activityText || 'the server'),
+      activityUrl: activityType === ActivityTypeNames.STREAMING ? (current.streamUrl || current.activityUrl) : null,
+      streamUrl: current.streamUrl || current.activityUrl || null
+    };
+    await ctx.status.applyPresence(next);
+    await ctx.status.savePresence(interaction.guildId, next);
+    await updatePanel(interaction, await buildStatusPanel(interaction.guildId, ctx, activityType === ActivityTypeNames.NONE ? 'Activity cleared.' : `Activity type set to ${activityType}.`));
     return true;
   }
 
@@ -613,6 +654,12 @@ async function handleSelect(interaction, ctx) {
     await ctx.logger.writeAudit({ guildId: interaction.guildId, actorUserId: interaction.user.id, actionKey: ActionKeys.ModulesManage, targetType: 'ModuleConfig', targetId: moduleKey, summary: `${moduleKey} module ${nextEnabled ? 'enabled' : 'disabled'} from interactive panel.` });
     await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'module-config', title: `Module ${nextEnabled ? 'Enabled' : 'Disabled'}`, body: [`Module: **${moduleKey}**`, `Updated By: <@${interaction.user.id}>`, 'Source: Interactive panel'].join('\n'), metadata: { moduleKey, enabled: nextEnabled, actorUserId: interaction.user.id } });
     await updatePanel(interaction, await buildModulesPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id === CustomIds.PermissionsTeamSelect) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.PermissionsPanel, ModuleKeys.PERMISSIONS))) return true;
+    await updatePanel(interaction, await buildPermissionsPanel(interaction.guildId, interaction.values[0]));
     return true;
   }
 
@@ -994,6 +1041,22 @@ async function requireAction(interaction, ctx, actionKey, moduleKey) {
   if (result.allowed) return true;
   await replyPrivate(interaction, { embeds: [createBaseEmbed({ title: 'Permission Required', description: result.reason || 'You do not have permission to use this control.', color: SlickBotColors.ERROR })] });
   return false;
+}
+
+function withSetupSubheader(payload, masterTitle, subcategory) {
+  const embed = payload?.embeds?.[0];
+  if (!embed || typeof embed.setTitle !== 'function' || typeof embed.setDescription !== 'function') return payload;
+
+  const originalTitle = embed.data?.title || subcategory;
+  const originalDescription = embed.data?.description || '';
+  const alreadyViewing = String(originalDescription).startsWith('**Viewing:**');
+  const description = alreadyViewing
+    ? originalDescription
+    : [`**Viewing:** ${subcategory || originalTitle}`, '', originalDescription].filter(Boolean).join('\n');
+
+  embed.setTitle(masterTitle);
+  embed.setDescription(description.length > 4000 ? `${description.slice(0, 3997)}...` : description);
+  return payload;
 }
 
 async function updatePanel(interaction, payload) {

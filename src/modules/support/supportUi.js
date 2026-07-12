@@ -38,6 +38,8 @@ async function buildSupportPanel(guildId) {
   const embed = createBaseEmbed({
     title: 'SlickBot Support Center',
     description: [
+      '**Viewing:** Support Overview',
+      '',
       '**Support Workflow Snapshot**',
       `Open Tickets: **${tickets.rows[0]?.count || 0}**`,
       `Active Reports: **${reports.rows[0]?.count || 0}**`,
@@ -54,7 +56,7 @@ async function buildSupportPanel(guildId) {
     createPanelButton(CustomIds.ReportsRefresh, 'Reports', ButtonStyle.Secondary, '🚩'),
     createPanelButton(CustomIds.ApplicationsRefresh, 'Applications', ButtonStyle.Secondary, '📝'),
     createPanelButton(CustomIds.AppealsRefresh, 'Appeals', ButtonStyle.Secondary, '⚖️'),
-    createPanelButton(CustomIds.SetupRefresh, 'Back', ButtonStyle.Secondary, '↩️')
+    createPanelButton(CustomIds.SetupRefresh, 'Back to Setup', ButtonStyle.Secondary, '↩️')
   ]);
 
   return { embeds: [embed], components: [row] };
@@ -75,8 +77,10 @@ async function buildTicketsPanel(guildId) {
     : 'No ticket types configured yet. Use `/ticket type-setup`.';
 
   const embed = createBaseEmbed({
-    title: 'Ticket Manager',
+    title: 'SlickBot Support Center',
     description: [
+      '**Viewing:** Ticket Manager',
+      '',
       `Open Tickets: **${byStatus.OPEN || 0}**`,
       `Closed Tickets: **${byStatus.CLOSED || 0}**`,
       '',
@@ -101,7 +105,7 @@ async function buildTicketsPanel(guildId) {
   const row = createButtonRow([
     createPanelButton(CustomIds.TicketOpen, 'Open Default', ButtonStyle.Primary, '🎟️'),
     createPanelButton(CustomIds.TicketsRefresh, 'Refresh', ButtonStyle.Secondary, '🔄'),
-    createPanelButton(CustomIds.SupportRefresh, 'Back', ButtonStyle.Secondary, '↩️')
+    createPanelButton(CustomIds.SupportRefresh, 'Back to Support', ButtonStyle.Secondary, '↩️')
   ]);
 
   return { embeds: [embed], components: [row] };
@@ -114,8 +118,10 @@ async function buildReportsPanel(guildId) {
   const cfg = config.rows[0];
 
   const embed = createBaseEmbed({
-    title: 'Report Manager',
+    title: 'SlickBot Support Center',
     description: [
+      '**Viewing:** Report Manager',
+      '',
       `Open Reports: **${byStatus.OPEN || 0}**`,
       `Claimed Reports: **${byStatus.CLAIMED || 0}**`,
       `Resolved Reports: **${byStatus.RESOLVED || 0}**`,
@@ -133,7 +139,7 @@ async function buildReportsPanel(guildId) {
   const row = createButtonRow([
     createPanelButton(CustomIds.ReportOpen, 'Submit Report', ButtonStyle.Danger, '🚩'),
     createPanelButton(CustomIds.ReportsRefresh, 'Refresh', ButtonStyle.Secondary, '🔄'),
-    createPanelButton(CustomIds.SupportRefresh, 'Back', ButtonStyle.Secondary, '↩️')
+    createPanelButton(CustomIds.SupportRefresh, 'Back to Support', ButtonStyle.Secondary, '↩️')
   ]);
 
   return { embeds: [embed], components: [row] };
@@ -151,8 +157,10 @@ async function buildApplicationsPanel(guildId) {
     : 'No application types configured yet. Use `/application setup`, then add questions with `/application question-add`.';
 
   const embed = createBaseEmbed({
-    title: 'Application Manager',
+    title: 'SlickBot Support Center',
     description: [
+      '**Viewing:** Application Manager',
+      '',
       `Pending Applications: **${pending.rows[0]?.count || 0}**`,
       '',
       '**Application Types**',
@@ -165,7 +173,7 @@ async function buildApplicationsPanel(guildId) {
 
   const buttons = [createPanelButton(CustomIds.ApplicationsRefresh, 'Refresh', ButtonStyle.Secondary, '🔄')];
   if (types.rows[0]) buttons.unshift(createPanelButton(`${CustomIds.ApplicationApplyPrefix}${types.rows[0].id}`, `Apply: ${types.rows[0].name}`.slice(0, 80), ButtonStyle.Primary, '📝'));
-  buttons.push(createPanelButton(CustomIds.SupportRefresh, 'Back', ButtonStyle.Secondary, '↩️'));
+  buttons.push(createPanelButton(CustomIds.SupportRefresh, 'Back to Support', ButtonStyle.Secondary, '↩️'));
   return { embeds: [embed], components: [createButtonRow(buttons.slice(0, 5))] };
 }
 
@@ -176,8 +184,10 @@ async function buildAppealsPanel(guildId) {
   const cfg = config.rows[0];
 
   const embed = createBaseEmbed({
-    title: 'Appeal Manager',
+    title: 'SlickBot Support Center',
     description: [
+      '**Viewing:** Appeal Manager',
+      '',
       `Pending Appeals: **${byStatus.PENDING || 0}**`,
       `Approved Appeals: **${byStatus.APPROVED || 0}**`,
       `Denied Appeals: **${byStatus.DENIED || 0}**`,
@@ -194,7 +204,7 @@ async function buildAppealsPanel(guildId) {
   const row = createButtonRow([
     createPanelButton(CustomIds.AppealOpen, 'Submit Appeal', ButtonStyle.Primary, '⚖️'),
     createPanelButton(CustomIds.AppealsRefresh, 'Refresh', ButtonStyle.Secondary, '🔄'),
-    createPanelButton(CustomIds.SupportRefresh, 'Back', ButtonStyle.Secondary, '↩️')
+    createPanelButton(CustomIds.SupportRefresh, 'Back to Support', ButtonStyle.Secondary, '↩️')
   ]);
 
   return { embeds: [embed], components: [row] };

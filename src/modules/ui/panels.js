@@ -41,7 +41,7 @@ const STATUS_META = Object.freeze({
 });
 
 const MODULE_CATEGORIES = Object.freeze([
-  { key: 'CORE', label: 'Core Setup', modules: [ModuleKeys.PERMISSIONS, ModuleKeys.LOGGING, ModuleKeys.STATUS] },
+  { key: 'CORE', label: 'Core Setup', modules: [ModuleKeys.PERMISSIONS, ModuleKeys.LOGGING, ModuleKeys.STATUS, ModuleKeys.MODERATION] },
   { key: 'SUPPORT', label: 'Support Systems', modules: [ModuleKeys.TICKETS, ModuleKeys.REPORTS, ModuleKeys.APPLICATIONS, ModuleKeys.APPEALS] },
   { key: 'COMMUNITY', label: 'Community Systems', modules: [ModuleKeys.WELCOME, ModuleKeys.REACTION_ROLES, ModuleKeys.GIVEAWAYS, ModuleKeys.BIRTHDAYS, ModuleKeys.LEVELING, ModuleKeys.SERVER_STATS, ModuleKeys.CUSTOM_COMMANDS, ModuleKeys.JOIN_TO_CREATE] },
   { key: 'AUTOMATION', label: 'Automation Systems', modules: [ModuleKeys.SCHEDULED_MESSAGES, ModuleKeys.BOT_UPDATES] },
@@ -59,13 +59,13 @@ const MODULE_SETUP_CATALOG = Object.freeze({
     name: 'Logging', category: 'Core Setup', description: 'Routes SlickBot event logs to configured channels by log module or individual event override.',
     managerCommand: '/logging panel', setupCommand: '/logging set-channel',
     nextSteps: ['Set at least one log group with `/logging set-channel`.', 'Use `/logging test` to verify delivery.', 'Use event overrides only when a specific event needs special routing.'],
-    usefulCommands: ['/logging panel', '/logging set-channel', '/logging test', '/logging flush']
+    usefulCommands: ['/logging panel', '/logging set-channel', '/logging test']
   },
   [ModuleKeys.STATUS]: {
     name: 'Bot Status', category: 'Core Setup', description: 'Controls SlickBot presence, activity text, diagnostics, version checks, and bot-level tools.',
-    managerCommand: '/status panel', setupCommand: '/status set',
-    nextSteps: ['Use `/bot version` after Railway deploys.', 'Use `/bot test` after major setup changes.', 'Use `/status set` only if you want a custom presence.'],
-    usefulCommands: ['/status panel', '/status set', '/status clear', '/bot version', '/bot test']
+    managerCommand: '/status view', setupCommand: '/status set',
+    nextSteps: ['Use `/bot version` after Railway deploys.', 'Use `/bot test` after major setup changes.', 'Use `/status stream-url` to save a URL for the Streaming quick button.'],
+    usefulCommands: ['/status view', '/status set', '/status stream-url', '/status clear', '/bot version', '/bot test']
   },
   [ModuleKeys.MODERATION]: {
     name: 'Moderation', category: 'Core Setup', description: 'Provides moderation actions, cases, and user notes.',
@@ -273,6 +273,8 @@ async function buildSetupPanel(guildId, guildName = null) {
   const embed = createBaseEmbed({
     title: 'SlickBot Setup Center',
     description: [
+      '**Viewing:** Main Setup Dashboard',
+      '',
       `Server: **${guildName || 'Current Server'}**`,
       '',
       '**System Snapshot**',
@@ -330,6 +332,8 @@ async function buildModulesPanel(guildId) {
   const embed = createBaseEmbed({
     title: 'SlickBot Module Manager',
     description: [
+      '**Viewing:** Module Overview',
+      '',
       '**Status Legend**',
       '✅ Ready · 🟠 Partially Configured · 🟣 Needs Setup · ⏸️ Disabled · ⚠️ Warning · ⛔ Error · 🕒 Coming Soon',
       '',
@@ -399,8 +403,10 @@ async function buildModuleDetailPanel(guildId, moduleKey) {
     : ['• No module-specific commands available.'];
 
   const embed = createBaseEmbed({
-    title: `${status.emoji} ${catalog.name}`,
+    title: 'SlickBot Module Manager',
     description: [
+      `**Viewing:** ${status.emoji} ${catalog.name}`,
+      '',
       `Module Key: \`${moduleKey}\``,
       `Category: **${catalog.category || 'Other'}**`,
       `Status: ${status.emoji} **${status.label}**${status.note ? ` — ${status.note}` : ''}`,
@@ -451,6 +457,19 @@ async function getModuleStatus(guildId, row) {
   }
 
   if (isCoreModule(row.module_key)) return { moduleKey: row.module_key, core: true, state: 'READY', emoji: '✅', label: 'Ready', note: 'Core' };
+
+  if (row.module_key === 'MODERATION') {
+    const [logCfg, cases, notes] = await Promise.all([
+      query(`SELECT channel_id, enabled, delivery_mode FROM log_module_settings WHERE guild_id = $1 AND module_key = 'moderation' LIMIT 1`, [guildId]).catch(() => ({ rows: [] })),
+      query(`SELECT COUNT(*)::int AS total, COUNT(*) FILTER (WHERE status = 'OPEN')::int AS open_count FROM moderation_cases WHERE guild_id = $1`, [guildId]).catch(() => ({ rows: [{ total: 0, open_count: 0 }] })),
+      query(`SELECT COUNT(*)::int AS total FROM user_notes WHERE guild_id = $1 AND is_active = true`, [guildId]).catch(() => ({ rows: [{ total: 0 }] }))
+    ]);
+    const logReady = Boolean(logCfg.rows[0]?.channel_id && logCfg.rows[0]?.enabled !== false && logCfg.rows[0]?.delivery_mode !== 'DISABLED');
+    const caseTotal = cases.rows[0]?.total || 0;
+    const noteTotal = notes.rows[0]?.total || 0;
+    if (logReady) return { moduleKey: row.module_key, core: false, state: 'READY', emoji: '✅', label: 'Ready', note: `${caseTotal} case(s), ${noteTotal} note(s)` };
+    return { moduleKey: row.module_key, core: false, state: 'PARTIAL', emoji: '🟠', label: 'Partially Configured', note: 'Actions ready; moderation log channel missing' };
+  }
 
   if (row.module_key === 'TICKETS') {
     const cfg = await query(`SELECT category_id, staff_role_id FROM ticket_configs WHERE guild_id = $1 LIMIT 1`, [guildId]).catch(() => ({ rows: [] }));
@@ -595,34 +614,29 @@ async function getModuleStatus(guildId, row) {
 
 async function buildLoggingPanel(guildId) {
   const moduleSettings = await query(
-    `SELECT module_key, delivery_mode, channel_id, enabled, batch_interval_seconds
+    `SELECT module_key, delivery_mode, channel_id, enabled
      FROM log_module_settings
      WHERE guild_id = $1
      ORDER BY module_key ASC`,
     [guildId]
   );
   const eventSettings = await query(
-    `SELECT event_key, delivery_mode, channel_id, enabled, batch_interval_seconds
+    `SELECT event_key, delivery_mode, channel_id, enabled
      FROM log_settings
      WHERE guild_id = $1
      ORDER BY event_key ASC`,
     [guildId]
   );
-  const queued = await query(
-    `SELECT COUNT(*)::int AS count FROM log_queue_items WHERE guild_id = $1 AND flushed_at IS NULL`,
-    [guildId]
-  );
 
   const moduleSettingsByKey = new Map(moduleSettings.rows.map((row) => [row.module_key, row]));
-  const eventSettingsByKey = new Map(eventSettings.rows.map((row) => [row.event_key, row]));
 
   const moduleLines = LogModuleCatalog.map((logModule) => {
     const row = moduleSettingsByKey.get(logModule.key);
     const eventCount = getEventsForModule(logModule.key).length;
-    if (!row || !row.channel_id || row.enabled === false) {
+    if (!row || !row.channel_id || row.enabled === false || row.delivery_mode === 'DISABLED') {
       return `• **${logModule.label}** ` + '`' + logModule.key + '`' + ` — Not configured · ${eventCount} event(s)`;
     }
-    return `• **${logModule.label}** ` + '`' + logModule.key + '`' + ` — ${row.delivery_mode || 'IMMEDIATE'} → <#${row.channel_id}> · ${eventCount} event(s)`;
+    return `• **${logModule.label}** ` + '`' + logModule.key + '`' + ` — Instant → <#${row.channel_id}> · ${eventCount} event(s)`;
   }).join('\n');
 
   const overrides = eventSettings.rows.filter((row) => row.channel_id || row.delivery_mode || row.enabled === false);
@@ -630,17 +644,20 @@ async function buildLoggingPanel(guildId) {
     ? overrides.slice(0, 10).map((row) => {
       const event = LogEventCatalog.find((item) => item.key === row.event_key);
       const parts = [];
-      if (row.enabled === false) parts.push('Disabled');
-      if (row.delivery_mode) parts.push(row.delivery_mode);
+      if (row.enabled === false || row.delivery_mode === 'DISABLED') parts.push('Disabled');
+      else parts.push('Instant');
       if (row.channel_id) parts.push(`→ <#${row.channel_id}>`);
       return `• **${event?.label || row.event_key}** ` + '`' + row.event_key + '`' + ` — ${parts.join(' ') || 'Override saved'}`;
     }).join('\n')
     : 'No event overrides configured. Events currently follow their module settings.';
 
   const embed = createBaseEmbed({
-    title: 'SlickBot Logging Center',
+    title: 'SlickBot Core Setup',
     description: [
-      `Queued Batched Logs: **${queued.rows[0]?.count || 0}**`,
+      '**Viewing:** Logging Center',
+      '',
+      '**Delivery Mode**',
+      'All configured logs are sent instantly. SlickBot no longer exposes batched/queued log controls in the setup UI.',
       '',
       '**Log Modules**',
       moduleLines,
@@ -648,14 +665,13 @@ async function buildLoggingPanel(guildId) {
       '**Event Overrides**',
       overrideLines,
       '',
-      'Configure the main groups with `/logging set-channel`. Use `/logging event-mode` or `/logging event-channel` only when one event needs different behavior.'
+      'Configure the main groups with `/logging set-channel`. Use `/logging event-channel` only when one event needs a different channel.'
     ].join('\n'),
     color: SlickBotColors.INFO
   });
 
   const row = createButtonRow([
     createPanelButton(CustomIds.LoggingTest, 'Send Test', ButtonStyle.Primary, '🧪'),
-    createPanelButton(CustomIds.LoggingFlush, 'Flush Queue', ButtonStyle.Success, '📤'),
     createPanelButton(CustomIds.LoggingRefresh, 'Refresh', ButtonStyle.Secondary, '🔄'),
     createPanelButton(CustomIds.SetupRefresh, 'Back to Setup', ButtonStyle.Secondary, '↩️')
   ]);
@@ -665,33 +681,51 @@ async function buildLoggingPanel(guildId) {
 
 async function buildTeamsPanel(guildId) {
   const teams = await query(
-    `SELECT pt.id, pt.name, pt.description,
-            COALESCE(COUNT(DISTINCT ptr.role_id), 0)::int AS role_count,
-            COALESCE(COUNT(DISTINCT ptu.user_id), 0)::int AS user_count
+    `SELECT pt.id, pt.name, pt.description, pt.is_system_team,
+            COALESCE(array_remove(array_agg(DISTINCT ptr.role_id), NULL), ARRAY[]::text[]) AS role_ids,
+            COALESCE(array_remove(array_agg(DISTINCT ptu.user_id), NULL), ARRAY[]::text[]) AS user_ids,
+            tpl.permission_level
      FROM permission_teams pt
      LEFT JOIN permission_team_roles ptr ON ptr.team_id = pt.id
      LEFT JOIN permission_team_users ptu ON ptu.team_id = pt.id
+     LEFT JOIN team_permission_levels tpl ON tpl.team_id = pt.id AND tpl.guild_id = pt.guild_id
      WHERE pt.guild_id = $1
-     GROUP BY pt.id, pt.name, pt.description
-     ORDER BY pt.name ASC`,
+     GROUP BY pt.id, pt.name, pt.description, pt.is_system_team, tpl.permission_level
+     ORDER BY pt.is_system_team DESC, pt.name ASC`,
     [guildId]
   );
 
   const lines = teams.rowCount
-    ? teams.rows.map((team) => `• **${team.name}** — ${team.role_count} role(s), ${team.user_count} user(s)${team.description ? `\n  ${team.description}` : ''}`).join('\n')
-    : 'No teams found. Run `/setup` first.';
+    ? teams.rows.slice(0, 10).map((team) => {
+      const roleIds = Array.isArray(team.role_ids) ? team.role_ids : [];
+      const userIds = Array.isArray(team.user_ids) ? team.user_ids : [];
+      const roles = roleIds.length ? roleIds.slice(0, 8).map((roleId) => `<@&${roleId}>`).join(', ') : 'None';
+      const users = userIds.length ? userIds.slice(0, 6).map((userId) => `<@${userId}>`).join(', ') : 'None';
+      const suffix = [team.is_system_team ? 'System' : null, team.permission_level ? `Level: ${team.permission_level}` : null].filter(Boolean).join(' · ');
+      return [
+        `• **${team.name}**${suffix ? ` — ${suffix}` : ''}`,
+        team.description ? `  ${team.description}` : null,
+        `  Roles: ${roles}${roleIds.length > 8 ? `, +${roleIds.length - 8} more` : ''}`,
+        `  Direct Users: ${users}${userIds.length > 6 ? `, +${userIds.length - 6} more` : ''}`
+      ].filter(Boolean).join('\n');
+    }).join('\n\n')
+    : 'No teams found. Run `/setup` first to initialize SlickBot, then create teams with `/team create`.';
 
   const embed = createBaseEmbed({
-    title: 'SlickBot Permission Teams',
+    title: 'SlickBot Core Setup',
     description: [
+      '**Viewing:** Permission Teams',
+      '',
       lines,
       '',
-      'Use `/team create`, `/team add-role`, `/team remove-role`, and `/team allow` to edit teams.'
+      '**Edit Commands**',
+      'Use `/team create`, `/team add-role`, `/team remove-role`, `/permissions team-level`, and `/permissions command-allow-team` to manage teams and access.'
     ].join('\n'),
     color: SlickBotColors.INFO
   });
 
   const row = createButtonRow([
+    createPanelButton(CustomIds.SetupPermissions, 'Permission Center', ButtonStyle.Secondary, '🔐'),
     createPanelButton(CustomIds.SetupRefresh, 'Back to Setup', ButtonStyle.Primary, '↩️')
   ]);
 
@@ -699,30 +733,90 @@ async function buildTeamsPanel(guildId) {
 }
 
 
-async function buildPermissionsPanel(guildId) {
-  const [teams, moduleTargets, publicActions, roleActions, ignored] = await Promise.all([
-    query(`SELECT COUNT(*)::int AS count FROM permission_teams WHERE guild_id = $1`, [guildId]).catch(() => ({ rows: [{ count: 0 }] })),
-    query(`SELECT module_key, COUNT(*)::int AS count FROM module_permission_targets WHERE guild_id = $1 AND allow = true GROUP BY module_key ORDER BY module_key ASC`, [guildId]).catch(() => ({ rows: [] })),
+async function buildPermissionsPanel(guildId, selectedTeamId = null) {
+  const [teams, moduleTargets, publicActions, roleActions, ignored, commandLevels, moduleLevels] = await Promise.all([
+    query(
+      `SELECT pt.id, pt.name, pt.description, pt.is_system_team,
+              COALESCE(array_remove(array_agg(DISTINCT ptr.role_id), NULL), ARRAY[]::text[]) AS role_ids,
+              COALESCE(array_remove(array_agg(DISTINCT ptu.user_id), NULL), ARRAY[]::text[]) AS user_ids,
+              tpl.permission_level
+       FROM permission_teams pt
+       LEFT JOIN permission_team_roles ptr ON ptr.team_id = pt.id
+       LEFT JOIN permission_team_users ptu ON ptu.team_id = pt.id
+       LEFT JOIN team_permission_levels tpl ON tpl.team_id = pt.id AND tpl.guild_id = pt.guild_id
+       WHERE pt.guild_id = $1
+       GROUP BY pt.id, pt.name, pt.description, pt.is_system_team, tpl.permission_level
+       ORDER BY pt.is_system_team DESC, pt.name ASC`,
+      [guildId]
+    ).catch(() => ({ rows: [] })),
+    query(`SELECT module_key, target_type, target_id FROM module_permission_targets WHERE guild_id = $1 AND allow = true ORDER BY module_key ASC LIMIT 20`, [guildId]).catch(() => ({ rows: [] })),
     query(`SELECT action_key FROM public_action_permissions WHERE guild_id = $1 AND enabled = true ORDER BY action_key ASC LIMIT 12`, [guildId]).catch(() => ({ rows: [] })),
     query(`SELECT COUNT(*)::int AS count FROM role_action_permissions WHERE guild_id = $1 AND allow = true`, [guildId]).catch(() => ({ rows: [{ count: 0 }] })),
-    query(`SELECT COUNT(*)::int AS count FROM permission_ignored_users WHERE guild_id = $1 AND active = true`, [guildId]).catch(() => ({ rows: [{ count: 0 }] }))
+    query(`SELECT COUNT(*)::int AS count FROM permission_ignored_users WHERE guild_id = $1 AND active = true`, [guildId]).catch(() => ({ rows: [{ count: 0 }] })),
+    query(`SELECT COUNT(*)::int AS count FROM command_permission_levels WHERE guild_id = $1`, [guildId]).catch(() => ({ rows: [{ count: 0 }] })),
+    query(`SELECT COUNT(*)::int AS count FROM module_permission_levels WHERE guild_id = $1`, [guildId]).catch(() => ({ rows: [{ count: 0 }] }))
   ]);
 
+  const selectedTeam = teams.rows.find((team) => team.id === selectedTeamId) || teams.rows[0] || null;
+  const [teamCommandGrants, teamModuleGrants] = selectedTeam ? await Promise.all([
+    query(`SELECT action_key FROM command_permissions WHERE guild_id = $1 AND team_id = $2 AND allow = true ORDER BY action_key ASC LIMIT 30`, [guildId, selectedTeam.id]).catch(() => ({ rows: [] })),
+    query(`SELECT module_key FROM module_permission_targets WHERE guild_id = $1 AND target_type = 'TEAM' AND target_id = $2 AND allow = true ORDER BY module_key ASC LIMIT 20`, [guildId, selectedTeam.id]).catch(() => ({ rows: [] }))
+  ]) : [{ rows: [] }, { rows: [] }];
+
   const moduleLines = moduleTargets.rows.length
-    ? moduleTargets.rows.map((row) => `• **${row.module_key}** — ${row.count} target(s)`).join('\n')
-    : 'No module-level locks configured. Commands currently use action-level permissions and public command settings.';
+    ? moduleTargets.rows.slice(0, 12).map((row) => {
+      const target = row.target_type === 'ROLE'
+        ? `<@&${row.target_id}>`
+        : row.target_type === 'TEAM'
+          ? teams.rows.find((team) => team.id === row.target_id)?.name || 'Team'
+          : row.target_type === 'USER'
+            ? `<@${row.target_id}>`
+            : 'Everyone';
+      return `• **${row.module_key}** — ${row.target_type}: ${target}`;
+    }).join('\n')
+    : 'No module-level locks configured. Commands currently use required permission levels, explicit grants, and public action settings.';
 
   const publicLines = publicActions.rows.length
     ? publicActions.rows.map((row) => `• \`${row.action_key}\``).join('\n')
     : 'No command/action keys are explicitly public.';
 
+  let selectedTeamBlock = 'No permission teams found yet.';
+  if (selectedTeam) {
+    const roleIds = Array.isArray(selectedTeam.role_ids) ? selectedTeam.role_ids : [];
+    const userIds = Array.isArray(selectedTeam.user_ids) ? selectedTeam.user_ids : [];
+    const roles = roleIds.length ? roleIds.slice(0, 8).map((roleId) => `<@&${roleId}>`).join(', ') : 'None';
+    const users = userIds.length ? userIds.slice(0, 6).map((userId) => `<@${userId}>`).join(', ') : 'None';
+    const grants = teamCommandGrants.rows.length
+      ? teamCommandGrants.rows.slice(0, 18).map((row) => `\`${row.action_key}\``).join(', ')
+      : 'No explicit command grants. This team may still inherit access from its permission level.';
+    const moduleGrants = teamModuleGrants.rows.length
+      ? teamModuleGrants.rows.map((row) => `\`${row.module_key}\``).join(', ')
+      : 'No explicit module grants.';
+    selectedTeamBlock = [
+      `Team: **${selectedTeam.name}**${selectedTeam.is_system_team ? ' · System Team' : ''}`,
+      selectedTeam.description ? `Description: ${selectedTeam.description}` : null,
+      `Permission Level: **${selectedTeam.permission_level || 'Not mapped'}**`,
+      `Roles: ${roles}${roleIds.length > 8 ? `, +${roleIds.length - 8} more` : ''}`,
+      `Direct Users: ${users}${userIds.length > 6 ? `, +${userIds.length - 6} more` : ''}`,
+      `Module Grants: ${moduleGrants}`,
+      `Command Grants: ${grants}`
+    ].filter(Boolean).join('\n');
+  }
+
   const embed = createBaseEmbed({
-    title: 'SlickBot Permission Center',
+    title: 'SlickBot Core Setup',
     description: [
+      '**Viewing:** Permission Center',
+      '',
       '**Permission Snapshot**',
-      `Teams: **${teams.rows[0]?.count || 0}**`,
+      `Teams: **${teams.rows.length || 0}**`,
       `Role Command Grants: **${roleActions.rows[0]?.count || 0}**`,
+      `Command Level Rules: **${commandLevels.rows[0]?.count || 0}**`,
+      `Module Level Rules: **${moduleLevels.rows[0]?.count || 0}**`,
       `Ignored Users: **${ignored.rows[0]?.count || 0}**`,
+      '',
+      '**Selected Permission Team**',
+      selectedTeamBlock,
       '',
       '**Module Access Rules**',
       moduleLines,
@@ -730,18 +824,29 @@ async function buildPermissionsPanel(guildId) {
       '**Public Commands**',
       publicLines,
       '',
-      'Use `/permissions module-allow-team`, `/permissions module-allow-role`, `/permissions command-allow-team`, `/permissions command-allow-role`, and `/permissions command-public` to configure access. Ignored users cannot interact with SlickBot.'
+      '**How Access Works**',
+      'SlickBot checks ignored users first, then module locks, then permission level requirements, public actions, and explicit role/team grants.'
     ].join('\n'),
     color: SlickBotColors.INFO
   });
 
-  const row = createButtonRow([
+  const components = [];
+  if (teams.rows.length) {
+    components.push(createSelectRow(CustomIds.PermissionsTeamSelect, 'View a permission team...', teams.rows.slice(0, 25).map((team) => ({
+      label: team.name.slice(0, 100),
+      value: team.id,
+      description: compactLine(`${team.permission_level || 'No level'} · ${(team.role_ids || []).length} role(s) · ${(team.user_ids || []).length} user(s)`, 100),
+      emoji: team.is_system_team ? '👑' : '👥'
+    }))));
+  }
+
+  components.push(createButtonRow([
     createPanelButton(CustomIds.PermissionsRefresh, 'Refresh', ButtonStyle.Secondary, '🔄'),
     createPanelButton(CustomIds.SetupTeams, 'Teams', ButtonStyle.Secondary, '👥'),
     createPanelButton(CustomIds.SetupRefresh, 'Back to Setup', ButtonStyle.Primary, '↩️')
-  ]);
+  ]));
 
-  return { embeds: [embed], components: [row] };
+  return { embeds: [embed], components };
 }
 
 
@@ -762,6 +867,8 @@ async function buildCommunityPanel(guildId) {
   const embed = createBaseEmbed({
     title: 'SlickBot Community Center',
     description: [
+      '**Viewing:** Community Overview',
+      '',
       '**Welcome / Auto Roles**',
       compactCommunityText(welcomePayload, 'No welcome status available.'),
       '',
@@ -801,7 +908,7 @@ async function buildCommunityPanel(guildId) {
     createPanelButton(CustomIds.ServerStatsRefresh, 'Stats', ButtonStyle.Secondary, '📊'),
     createPanelButton(CustomIds.CustomCommandsRefresh, 'Custom Commands', ButtonStyle.Secondary, '💬'),
     createPanelButton(CustomIds.JoinCreateRefresh, 'Join Voice', ButtonStyle.Secondary, '🔊'),
-    createPanelButton(CustomIds.SetupRefresh, 'Back', ButtonStyle.Primary, '↩️')
+    createPanelButton(CustomIds.SetupRefresh, 'Back to Setup', ButtonStyle.Primary, '↩️')
   ]);
   return { embeds: [embed], components: [rowOne, rowTwo] };
 }

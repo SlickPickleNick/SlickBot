@@ -4,7 +4,33 @@ SlickBot is an all-in-one Discord server management bot built for the SlickPickl
 
 ## Version
 
-Current package: **v0.8.5**
+Current package: **v0.8.6**
+
+## v0.8.6 Updates
+
+### Setup Panel Polish and Permission Visibility
+
+- Removed queued/batched logging controls from the logging command and setup panel. Configured SlickBot logs now use instant delivery in the active UI and runtime path.
+- Added activity-type quick buttons to the Status Control panel for Playing, Watching, Listening, Competing, and Streaming.
+- Added `/status stream-url` so the Streaming button can use a saved stream URL.
+- If the Streaming button is pressed without a saved stream URL, SlickBot now shows a private setup error instead of failing silently.
+- Added a Back to Setup button to the Status Control panel.
+- Expanded Permission Teams to show attached Discord roles, direct users, system-team state, and mapped permission level.
+- Expanded the Permission Center with a permission-team selector, selected-team role/user membership, explicit command grants, module grants, public actions, and access model guidance.
+- Standardized setup-accessed panel headers with a master category title and a clear Viewing label for the current subgroup.
+- Improved the Moderation module status and Moderation Center so it shows configured systems, missing moderation logging setup, case counts, active notes, and setup recommendations.
+
+Updated commands:
+
+```text
+/setup
+/logging panel
+/status view
+/status stream-url
+/permissions panel
+/team list
+/mod panel
+```
 
 ## v0.8.5 Updates
 
@@ -524,7 +550,6 @@ DATABASE_URL=
 AUTO_DEPLOY_COMMANDS=true
 BOT_OWNER_IDS=
 DEFAULT_TIMEZONE=America/New_York
-LOG_BATCH_FLUSH_SECONDS=300
 NODE_ENV=production
 ```
 

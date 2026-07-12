@@ -67,11 +67,6 @@ client.once(Events.ClientReady, async (readyClient) => {
     await permissions.ensureGuildConfig(guild.id, guild.name).catch((error) => console.error(`Failed to ensure guild config for ${guild.name}:`, error));
   }
 
-  const flushMs = env.LOG_BATCH_FLUSH_SECONDS * 1000;
-  setInterval(() => {
-    logger.flushDueBatches().catch((error) => console.error('Failed to flush log batches:', error));
-  }, flushMs);
-
   setInterval(() => {
     giveaways.processDueGiveaways(readyClient, logger).catch((error) => console.error('Failed to process due giveaways:', error));
   }, 60 * 1000);

@@ -11,6 +11,7 @@ const CustomIds = Object.freeze({
   PermissionsRefresh: 'slickbot:permissions:refresh',
   PermissionsModuleSelect: 'slickbot:permissions:module-select',
   PermissionsCommandSelect: 'slickbot:permissions:command-select',
+  PermissionsTeamSelect: 'slickbot:permissions:team-select',
 
 
   HelpRefresh: 'slickbot:help:refresh',
@@ -39,10 +40,15 @@ const CustomIds = Object.freeze({
   ModulesRefresh: 'slickbot:modules:refresh',
 
   LoggingRefresh: 'slickbot:logging:refresh',
-  LoggingFlush: 'slickbot:logging:flush',
   LoggingTest: 'slickbot:logging:test',
 
   StatusRefresh: 'slickbot:status:refresh',
+  StatusActivityPlaying: 'slickbot:status:activity-playing',
+  StatusActivityWatching: 'slickbot:status:activity-watching',
+  StatusActivityListening: 'slickbot:status:activity-listening',
+  StatusActivityCompeting: 'slickbot:status:activity-competing',
+  StatusActivityStreaming: 'slickbot:status:activity-streaming',
+  StatusActivityNone: 'slickbot:status:activity-none',
   StatusQuickOnline: 'slickbot:status:quick-online',
   StatusQuickIdle: 'slickbot:status:quick-idle',
   StatusQuickDnd: 'slickbot:status:quick-dnd',

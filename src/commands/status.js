@@ -74,6 +74,17 @@ module.exports = {
     )
     .addSubcommand((subcommand) =>
       subcommand
+        .setName('stream-url')
+        .setDescription('Save the stream URL used by the Streaming activity button.')
+        .addStringOption((option) =>
+          option
+            .setName('url')
+            .setDescription('Twitch, YouTube, or other stream URL to use for Streaming activity.')
+            .setRequired(true)
+        )
+    )
+    .addSubcommand((subcommand) =>
+      subcommand
         .setName('clear')
         .setDescription('Clear SlickBot activity and return status to online.')
         .addBooleanOption((option) =>
@@ -150,6 +161,43 @@ module.exports = {
       return;
     }
 
+    if (subcommand === 'stream-url') {
+      const streamUrl = interaction.options.getString('url', true).trim();
+      if (!/^https?:\/\//i.test(streamUrl)) {
+        await replyPrivate(interaction, {
+          embeds: [createBaseEmbed({
+            title: 'Invalid Stream URL',
+            description: 'The stream URL must start with `http://` or `https://`.',
+            color: SlickBotColors.WARNING
+          })]
+        });
+        return;
+      }
+
+      await ctx.status.saveStreamUrl(interaction.guildId, streamUrl);
+
+      await ctx.logger.writeAudit({
+        guildId: interaction.guildId,
+        actorUserId: interaction.user.id,
+        actionKey: ActionKeys.StatusManage,
+        targetType: 'BotPresence',
+        targetId: interaction.client.user.id,
+        summary: 'Bot stream URL updated.',
+        metadata: { streamUrl }
+      });
+
+      await ctx.logger.log({
+        guildId: interaction.guildId,
+        eventKey: 'status',
+        title: 'Bot Stream URL Updated',
+        body: `Updated By: <@${interaction.user.id}>`,
+        metadata: { streamUrl, actorUserId: interaction.user.id }
+      });
+
+      await replyPrivate(interaction, await buildStatusPanel(interaction.guildId, ctx, 'Stream URL saved. The Streaming button can now use it.'));
+      return;
+    }
+
     if (subcommand === 'clear') {
       const save = interaction.options.getBoolean('save') ?? true;
       await ctx.status.clearPresence(interaction.guildId, save);
@@ -182,6 +230,8 @@ async function buildStatusPanel(guildId, ctx, notice = null) {
   const saved = presence.saved;
 
   const description = [
+    '**Viewing:** Status Control',
+    '',
     notice ? `**${notice}**` : null,
     '**Current Runtime Presence**',
     `Status: **${formatStatusBadge(presence.currentStatus || 'unknown')}**`,
@@ -190,16 +240,19 @@ async function buildStatusPanel(guildId, ctx, notice = null) {
     '**Saved Presence**',
     saved
       ? `Status: **${formatStatusBadge(saved.status)}**\nActivity Type: **${saved.activityType || 'NONE'}**\nActivity Text: **${saved.activityText || 'None'}**`
-      : 'No saved presence yet. SlickBot is using environment defaults.'
+      : 'No saved presence yet. SlickBot is using environment defaults.',
+    '',
+    '**Quick Controls**',
+    'Use the first row for status. Use the second row to switch the saved activity type while keeping the current activity text. The Streaming button uses the saved stream URL from `/status stream-url`.'
   ].filter(Boolean).join('\n');
 
   const embed = createBaseEmbed({
-    title: 'SlickBot Status Control',
+    title: 'SlickBot Core Setup',
     description,
     color: SlickBotColors.PRIMARY
   });
 
-  const controls = createButtonRow([
+  const statusControls = createButtonRow([
     createPanelButton(CustomIds.StatusQuickOnline, 'Online', ButtonStyle.Success, '🟢'),
     createPanelButton(CustomIds.StatusQuickIdle, 'Idle', ButtonStyle.Secondary, '🌙'),
     createPanelButton(CustomIds.StatusQuickDnd, 'DND', ButtonStyle.Danger, '⛔'),
@@ -207,7 +260,19 @@ async function buildStatusPanel(guildId, ctx, notice = null) {
     createPanelButton(CustomIds.StatusRefresh, 'Refresh', ButtonStyle.Primary, '🔄')
   ]);
 
-  return { embeds: [embed], components: [controls] };
+  const activityControls = createButtonRow([
+    createPanelButton(CustomIds.StatusActivityPlaying, 'Playing', ButtonStyle.Secondary, '🎮'),
+    createPanelButton(CustomIds.StatusActivityWatching, 'Watching', ButtonStyle.Secondary, '👀'),
+    createPanelButton(CustomIds.StatusActivityListening, 'Listening', ButtonStyle.Secondary, '🎧'),
+    createPanelButton(CustomIds.StatusActivityCompeting, 'Competing', ButtonStyle.Secondary, '🏆'),
+    createPanelButton(CustomIds.StatusActivityStreaming, 'Streaming', ButtonStyle.Secondary, '📡')
+  ]);
+
+  const navigation = createButtonRow([
+    createPanelButton(CustomIds.SetupRefresh, 'Back to Setup', ButtonStyle.Primary, '↩️')
+  ]);
+
+  return { embeds: [embed], components: [statusControls, activityControls, navigation] };
 }
 
 module.exports.buildStatusPanel = buildStatusPanel;

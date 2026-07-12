@@ -50,11 +50,11 @@ const HELP_CATALOG = Object.freeze([
 
   { moduleKey: ModuleKeys.LOGGING, actionKey: ActionKeys.LoggingView, command: '/logging panel', description: 'Open the logging center.' },
   { moduleKey: ModuleKeys.LOGGING, actionKey: ActionKeys.LoggingConfigure, command: '/logging set-channel|clear-channel', description: 'Configure log module channels.' },
-  { moduleKey: ModuleKeys.LOGGING, actionKey: ActionKeys.LoggingConfigure, command: '/logging module-mode|event-mode|event-channel', description: 'Configure delivery behavior for logs.' },
-  { moduleKey: ModuleKeys.LOGGING, actionKey: ActionKeys.LoggingConfigure, command: '/logging test|flush', description: 'Test logs or flush queued batched logs.' },
+  { moduleKey: ModuleKeys.LOGGING, actionKey: ActionKeys.LoggingConfigure, command: '/logging module-mode|event-mode|event-channel', description: 'Configure instant log delivery or event channel overrides.' },
+  { moduleKey: ModuleKeys.LOGGING, actionKey: ActionKeys.LoggingConfigure, command: '/logging test', description: 'Send a test log to verify the configured route.' },
 
   { moduleKey: ModuleKeys.STATUS, actionKey: ActionKeys.StatusView, command: '/status view', description: 'View the current bot presence.' },
-  { moduleKey: ModuleKeys.STATUS, actionKey: ActionKeys.StatusManage, command: '/status set|save|clear', description: 'Configure bot presence text/status.' },
+  { moduleKey: ModuleKeys.STATUS, actionKey: ActionKeys.StatusManage, command: '/status set|stream-url|clear', description: 'Configure bot presence text/status.' },
 
   { moduleKey: ModuleKeys.MODERATION, actionKey: ActionKeys.ModerationPanel, command: '/mod panel', description: 'Open the moderation panel.' },
   { moduleKey: ModuleKeys.MODERATION, actionKey: ActionKeys.ModerationWarn, command: '/mod warn', description: 'Warn a member and create a case.' },

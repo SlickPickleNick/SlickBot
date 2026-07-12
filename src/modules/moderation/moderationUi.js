@@ -33,14 +33,38 @@ async function buildModerationPanel(guildId) {
     [guildId]
   );
 
+  const logConfig = await query(
+    `SELECT channel_id, enabled, delivery_mode
+     FROM log_module_settings
+     WHERE guild_id = $1 AND module_key = 'moderation'
+     LIMIT 1`,
+    [guildId]
+  ).catch(() => ({ rows: [] }));
+
   const stats = cases.rows[0] || { total: 0, open_count: 0, last_day: 0 };
   const recentLines = recent.rowCount
     ? recent.rows.map(formatCaseLine).join('\n\n')
     : 'No moderation cases have been created yet.';
 
+  const moderationLog = logConfig.rows[0];
+  const logReady = Boolean(moderationLog?.channel_id && moderationLog.enabled !== false && moderationLog.delivery_mode !== 'DISABLED');
+
   const embed = createBaseEmbed({
-    title: 'SlickBot Moderation Center',
+    title: 'SlickBot Core Setup',
     description: [
+      '**Viewing:** Moderation Center',
+      '',
+      '**Configured Items**',
+      '✅ Moderation commands are available through `/mod`.',
+      '✅ Case tracking is active. Every moderation action creates or updates a case.',
+      '✅ User notes are active through `/note`.',
+      `${logReady ? '✅' : '🟠'} Moderation Logs: ${logReady ? `<#${moderationLog.channel_id}>` : 'Not configured'}`,
+      '',
+      '**Setup Checklist**',
+      logReady ? '• Logging is configured for moderation events.' : '• Set moderation logs with `/logging set-channel module:moderation channel:#logs`.',
+      '• Review staff command access in `/permissions panel`.',
+      '• Use `/case panel` to review recent cases and `/note add` for private staff notes.',
+      '',
       '**Case Snapshot**',
       `Total Cases: **${stats.total || 0}**`,
       `Open Cases: **${stats.open_count || 0}**`,
@@ -48,17 +72,17 @@ async function buildModerationPanel(guildId) {
       `Active User Notes: **${notes.rows[0]?.total || 0}**`,
       '',
       '**Recent Cases**',
-      truncate(recentLines, 2200),
+      truncate(recentLines, 1800),
       '',
-      'Use `/mod`, `/case`, and `/note` for moderation actions and lookups. Reverse actions are available through `/mod untimeout` and `/mod unban`.'
+      'Reverse actions are available through `/mod untimeout` and `/mod unban`.'
     ].join('\n'),
-    color: SlickBotColors.PRIMARY
+    color: logReady ? SlickBotColors.PRIMARY : SlickBotColors.WARNING
   });
 
   const row = createButtonRow([
     createPanelButton(CustomIds.ModerationRefresh, 'Refresh', ButtonStyle.Primary, '🔄'),
     createPanelButton(CustomIds.CasesRefresh, 'Recent Cases', ButtonStyle.Secondary, '🗂️'),
-    createPanelButton(CustomIds.SetupRefresh, 'Setup', ButtonStyle.Secondary, '↩️')
+    createPanelButton(CustomIds.SetupRefresh, 'Back to Setup', ButtonStyle.Secondary, '↩️')
   ]);
 
   return { embeds: [embed], components: [row] };
@@ -74,10 +98,14 @@ async function buildRecentCasesPanel(guildId) {
   );
 
   const embed = createBaseEmbed({
-    title: 'Recent Moderation Cases',
-    description: recent.rowCount
-      ? truncate(recent.rows.map(formatCaseLine).join('\n\n'), 3500)
-      : 'No cases found.',
+    title: 'SlickBot Core Setup',
+    description: [
+      '**Viewing:** Recent Moderation Cases',
+      '',
+      recent.rowCount
+        ? truncate(recent.rows.map(formatCaseLine).join('\n\n'), 3400)
+        : 'No cases found.'
+    ].join('\n'),
     color: SlickBotColors.INFO
   });
 

@@ -84,6 +84,7 @@ async function initDatabase() {
       activity_type TEXT NOT NULL DEFAULT 'NONE',
       activity_text TEXT,
       activity_url TEXT,
+      stream_url TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
@@ -1118,7 +1119,10 @@ async function initDatabase() {
   await query(`CREATE INDEX IF NOT EXISTS idx_custom_commands_guild_enabled ON custom_commands(guild_id, enabled);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_custom_command_usage_guild_created ON custom_command_usage_logs(guild_id, created_at DESC);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_audit_logs_guild_created ON audit_logs(guild_id, created_at);`);
-  await query(`CREATE INDEX IF NOT EXISTS idx_bot_presence_guild ON bot_presence_settings(guild_id);`);
+  
+  await query(`ALTER TABLE bot_presence_settings ADD COLUMN IF NOT EXISTS stream_url TEXT;`);
+
+await query(`CREATE INDEX IF NOT EXISTS idx_bot_presence_guild ON bot_presence_settings(guild_id);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_moderation_cases_guild_target ON moderation_cases(guild_id, target_user_id, created_at DESC);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_moderation_cases_guild_number ON moderation_cases(guild_id, case_number);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_user_notes_guild_target ON user_notes(guild_id, target_user_id, created_at DESC);`);

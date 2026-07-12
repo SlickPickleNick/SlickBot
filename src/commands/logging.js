@@ -18,7 +18,6 @@ const eventChoices = getLogEventChoices();
 
 const deliveryChoices = [
   { name: 'Immediate', value: LogDeliveryMode.IMMEDIATE },
-  { name: 'Batched', value: LogDeliveryMode.BATCHED },
   { name: 'Disabled', value: LogDeliveryMode.DISABLED }
 ];
 
@@ -76,13 +75,6 @@ module.exports = {
             .setRequired(true)
             .addChoices(...deliveryChoices)
         )
-        .addIntegerOption((option) =>
-          option
-            .setName('interval_seconds')
-            .setDescription('Batch interval in seconds. Only used for batched modules.')
-            .setMinValue(60)
-            .setRequired(false)
-        )
     )
     .addSubcommand((subcommand) =>
       subcommand
@@ -101,13 +93,6 @@ module.exports = {
             .setDescription('How this event should be delivered.')
             .setRequired(true)
             .addChoices(...deliveryChoices)
-        )
-        .addIntegerOption((option) =>
-          option
-            .setName('interval_seconds')
-            .setDescription('Batch interval in seconds. Only used if this event is batched.')
-            .setMinValue(60)
-            .setRequired(false)
         )
     )
     .addSubcommand((subcommand) =>
@@ -152,8 +137,7 @@ module.exports = {
             .setRequired(false)
             .addChoices(...eventChoices)
         )
-    )
-    .addSubcommand((subcommand) => subcommand.setName('flush').setDescription('Flush queued batched logs now.')),
+    ),
   actionKey: ActionKeys.LoggingConfigure,
   moduleKey: ModuleKeys.LOGGING,
   async execute(interaction, ctx) {
@@ -226,18 +210,16 @@ module.exports = {
     if (subcommand === 'module-mode') {
       const moduleKey = interaction.options.getString('module', true);
       const delivery = interaction.options.getString('delivery', true);
-      const intervalSeconds = interaction.options.getInteger('interval_seconds', false) || 300;
 
       await query(
-        `INSERT INTO log_module_settings (guild_id, module_key, delivery_mode, batch_interval_seconds, enabled)
-         VALUES ($1, $2, $3, $4, $5)
+        `INSERT INTO log_module_settings (guild_id, module_key, delivery_mode, enabled)
+         VALUES ($1, $2, $3, $4)
          ON CONFLICT (guild_id, module_key)
          DO UPDATE SET
            delivery_mode = EXCLUDED.delivery_mode,
-           batch_interval_seconds = EXCLUDED.batch_interval_seconds,
            enabled = EXCLUDED.enabled,
            updated_at = NOW()`,
-        [interaction.guildId, moduleKey, delivery, intervalSeconds, delivery !== LogDeliveryMode.DISABLED]
+        [interaction.guildId, moduleKey, delivery, delivery !== LogDeliveryMode.DISABLED]
       );
 
       await replyPrivate(interaction, await buildLoggingPanel(interaction.guildId));
@@ -247,18 +229,16 @@ module.exports = {
     if (subcommand === 'event-mode') {
       const eventKey = interaction.options.getString('event', true);
       const delivery = interaction.options.getString('delivery', true);
-      const intervalSeconds = interaction.options.getInteger('interval_seconds', false) || 300;
 
       await query(
-        `INSERT INTO log_settings (guild_id, event_key, delivery_mode, batch_interval_seconds, enabled)
-         VALUES ($1, $2, $3, $4, $5)
+        `INSERT INTO log_settings (guild_id, event_key, delivery_mode, enabled)
+         VALUES ($1, $2, $3, $4)
          ON CONFLICT (guild_id, event_key)
          DO UPDATE SET
            delivery_mode = EXCLUDED.delivery_mode,
-           batch_interval_seconds = EXCLUDED.batch_interval_seconds,
            enabled = EXCLUDED.enabled,
            updated_at = NOW()`,
-        [interaction.guildId, eventKey, delivery, intervalSeconds, delivery !== LogDeliveryMode.DISABLED]
+        [interaction.guildId, eventKey, delivery, delivery !== LogDeliveryMode.DISABLED]
       );
 
       await replyPrivate(interaction, await buildLoggingPanel(interaction.guildId));
@@ -321,13 +301,5 @@ module.exports = {
       return;
     }
 
-    if (subcommand === 'flush') {
-      const flushed = await ctx.logger.flushGuildBatches(interaction.guildId);
-      const panel = await buildLoggingPanel(interaction.guildId);
-      if (panel.embeds?.[0]) {
-        panel.embeds[0].setDescription(`${panel.embeds[0].data.description}\n\nFlushed **${flushed}** queued log item(s).`);
-      }
-      await replyPrivate(interaction, panel);
-    }
   }
 };

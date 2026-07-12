@@ -53,6 +53,7 @@ const ActivityTypeMap = Object.freeze({
  * Discord command examples:
  * /status set status:online activity_type:WATCHING text:"the server"
  * /status set status:idle activity_type:PLAYING text:"with commands"
+ * /status stream-url url:https://twitch.tv/yourchannel
  * /status clear
  *
  * Environment fallback examples:
@@ -109,25 +110,30 @@ class StatusService {
   }
 
   async savePresence(guildId, input = {}) {
+    const existing = guildId ? await this.getSavedPresence(guildId) : null;
     const status = this.normalizeStatus(input.status);
     const activityType = this.normalizeActivityType(input.activityType);
     const activityText = input.activityText ? String(input.activityText).trim() : null;
     const activityUrl = input.activityUrl ? String(input.activityUrl).trim() : null;
+    const streamUrl = input.streamUrl !== undefined
+      ? (input.streamUrl ? String(input.streamUrl).trim() : null)
+      : (existing?.streamUrl || activityUrl || null);
 
     await query(
-      `INSERT INTO bot_presence_settings (guild_id, status, activity_type, activity_text, activity_url)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO bot_presence_settings (guild_id, status, activity_type, activity_text, activity_url, stream_url)
+       VALUES ($1, $2, $3, $4, $5, $6)
        ON CONFLICT (guild_id)
        DO UPDATE SET
          status = EXCLUDED.status,
          activity_type = EXCLUDED.activity_type,
          activity_text = EXCLUDED.activity_text,
          activity_url = EXCLUDED.activity_url,
+         stream_url = EXCLUDED.stream_url,
          updated_at = NOW()`,
-      [guildId, status, activityType, activityText, activityUrl]
+      [guildId, status, activityType, activityText, activityUrl, streamUrl]
     );
 
-    return { status, activityType, activityText, activityUrl };
+    return { status, activityType, activityText, activityUrl, streamUrl };
   }
 
   async clearPresence(guildId, save = true) {
@@ -135,7 +141,8 @@ class StatusService {
       status: PresenceStatus.ONLINE,
       activityType: ActivityTypeNames.NONE,
       activityText: null,
-      activityUrl: null
+      activityUrl: null,
+      streamUrl: undefined
     };
 
     await this.applyPresence(input);
@@ -145,6 +152,34 @@ class StatusService {
     }
 
     return input;
+  }
+
+
+  async saveStreamUrl(guildId, streamUrl) {
+    const normalizedUrl = streamUrl ? String(streamUrl).trim() : null;
+    if (!normalizedUrl) throw new Error('Stream URL is required.');
+
+    const existing = await this.getSavedPresence(guildId);
+    const status = existing?.status || PresenceStatus.ONLINE;
+    const activityType = existing?.activityType || ActivityTypeNames.NONE;
+    const activityText = existing?.activityText || null;
+    const activityUrl = activityType === ActivityTypeNames.STREAMING ? normalizedUrl : (existing?.activityUrl || null);
+
+    await query(
+      `INSERT INTO bot_presence_settings (guild_id, status, activity_type, activity_text, activity_url, stream_url)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT (guild_id)
+       DO UPDATE SET
+         stream_url = EXCLUDED.stream_url,
+         activity_url = CASE
+           WHEN bot_presence_settings.activity_type = 'STREAMING' THEN EXCLUDED.stream_url
+           ELSE bot_presence_settings.activity_url
+         END,
+         updated_at = NOW()`,
+      [guildId, status, activityType, activityText, activityUrl, normalizedUrl]
+    );
+
+    return this.getSavedPresence(guildId);
   }
 
   async getSavedPresence(guildId) {
@@ -161,6 +196,7 @@ class StatusService {
       activityType: row.activity_type,
       activityText: row.activity_text,
       activityUrl: row.activity_url,
+      streamUrl: row.stream_url || row.activity_url,
       updatedAt: row.updated_at
     };
   }
@@ -171,7 +207,8 @@ class StatusService {
       status: env.DEFAULT_BOT_STATUS,
       activityType: env.DEFAULT_BOT_ACTIVITY_TYPE,
       activityText: env.DEFAULT_BOT_ACTIVITY_TEXT,
-      activityUrl: env.DEFAULT_BOT_ACTIVITY_URL
+      activityUrl: env.DEFAULT_BOT_ACTIVITY_URL,
+      streamUrl: env.DEFAULT_BOT_ACTIVITY_URL
     };
 
     return this.applyPresence(fallback);

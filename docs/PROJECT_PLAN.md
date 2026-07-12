@@ -1,6 +1,6 @@
 # SlickBot Project Plan
 
-## Current Version: 0.8.5
+## Current Version: 0.8.6
 
 SlickBot is being built as a modular all-in-one Discord server management bot for the SlickPickleNick community.
 
@@ -31,6 +31,18 @@ SlickBot is being built as a modular all-in-one Discord server management bot fo
 - Custom commands
 - Join-to-create voice channels
 - Leveling / XP
+
+## v0.8.6 Scope
+
+### Setup Panel Polish and Permission Visibility
+
+- Removed batched/queued logging controls from the logging UI and slash command surface so configured logs are treated as instant delivery.
+- Added status activity-type buttons and setup navigation to the bot status panel.
+- Added a saved stream URL setting through `/status stream-url` so Streaming can be selected from the status panel button and fail gracefully if no URL is configured.
+- Expanded Permission Teams and Permission Center views with role membership, direct users, team levels, selected-team inspection, explicit module grants, and explicit command grants.
+- Standardized setup-accessed panel headers so group panels show a master category title and the current subgroup being viewed.
+- Improved Moderation setup visibility so the module no longer appears as a generic shell. It now reports configured moderation commands, case tracking, user notes, moderation log setup, and recommended next commands.
+- Deferred full setup wizard creation until the setup/status panels are tested and stable.
 
 ## v0.8.5 Scope
 

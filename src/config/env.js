@@ -48,7 +48,6 @@ const env = {
   DEFAULT_BOT_ACTIVITY_TYPE: readVariable('DEFAULT_BOT_ACTIVITY_TYPE', [], 'WATCHING'),
   DEFAULT_BOT_ACTIVITY_TEXT: readVariable('DEFAULT_BOT_ACTIVITY_TEXT', [], 'the server'),
   DEFAULT_BOT_ACTIVITY_URL: readOptionalVariable('DEFAULT_BOT_ACTIVITY_URL'),
-  LOG_BATCH_FLUSH_SECONDS: readNumber('LOG_BATCH_FLUSH_SECONDS', 300),
   NODE_ENV: readVariable('NODE_ENV', [], 'development'),
   WEB_HOST: readVariable('WEB_HOST', [], '0.0.0.0'),
   PORT: readNumber('PORT', 3000)
