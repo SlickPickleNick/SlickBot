@@ -113,7 +113,10 @@ const CustomIds = Object.freeze({
   JoinCreateLimitModalPrefix: 'slickbot:modal:join-create-limit:',
   JoinCreatePermitModalPrefix: 'slickbot:modal:join-create-permit:',
   JoinCreateRemoveModalPrefix: 'slickbot:modal:join-create-remove:',
-  JoinCreateTransferModalPrefix: 'slickbot:modal:join-create-transfer:'
+  JoinCreateTransferModalPrefix: 'slickbot:modal:join-create-transfer:',
+  JoinCreatePermitUserSelectPrefix: 'slickbot:select:join-create-permit:',
+  JoinCreateRemoveUserSelectPrefix: 'slickbot:select:join-create-remove:',
+  JoinCreateTransferUserSelectPrefix: 'slickbot:select:join-create-transfer:'
 });
 
 module.exports = { CustomIds };

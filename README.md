@@ -4,9 +4,19 @@ SlickBot is an all-in-one Discord server management bot built for the SlickPickl
 
 ## Version
 
-Current package: **v0.8.2**
+Current package: **v0.8.3**
 
 
+
+
+## v0.8.3 Updates
+
+### Join-to-Create User Picker Controls
+
+- Replaced typed-user modals for Permit User, Remove User, and Transfer Ownership with Discord user select menus.
+- Members can now search/select users through Discord's native picker instead of typing full usernames, mentions, or IDs.
+- Kept typed modals for Rename, Set Limit, and Delete Channel confirmation where typed input is still appropriate.
+- Control panels continue to refresh after selected-user actions so ownership and access changes remain visible.
 
 ## v0.8.2 Updates
 

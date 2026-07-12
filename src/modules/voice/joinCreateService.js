@@ -1,4 +1,4 @@
-const { ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, ModalBuilder, PermissionsBitField, TextInputBuilder, TextInputStyle } = require('discord.js');
+const { ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, ModalBuilder, PermissionsBitField, TextInputBuilder, TextInputStyle, UserSelectMenuBuilder } = require('discord.js');
 const { query } = require('../../services/db');
 const { createBaseEmbed, SlickBotColors } = require('../ui/uiService');
 const { CustomIds } = require('../ui/customIds');
@@ -784,6 +784,44 @@ class JoinCreateService {
       placeholder: 'DELETE',
       maxLength: 10
     });
+  }
+
+  buildUserSelectPayload(channelId, action) {
+    const actions = {
+      permit: {
+        customId: `${CustomIds.JoinCreatePermitUserSelectPrefix}${channelId}`,
+        title: 'Permit User',
+        description: 'Search for and select the member who should be allowed to join this temporary voice channel.',
+        placeholder: 'Select a user to permit'
+      },
+      remove: {
+        customId: `${CustomIds.JoinCreateRemoveUserSelectPrefix}${channelId}`,
+        title: 'Remove User',
+        description: 'Search for and select the member who should be removed or blocked from this temporary voice channel.',
+        placeholder: 'Select a user to remove'
+      },
+      transfer: {
+        customId: `${CustomIds.JoinCreateTransferUserSelectPrefix}${channelId}`,
+        title: 'Transfer Ownership',
+        description: 'Search for and select the member who should become the new temporary voice channel owner.',
+        placeholder: 'Select the new owner'
+      }
+    };
+    const config = actions[action];
+    if (!config) throw new Error('Unknown temporary voice user control.');
+    const menu = new UserSelectMenuBuilder()
+      .setCustomId(config.customId)
+      .setPlaceholder(config.placeholder)
+      .setMinValues(1)
+      .setMaxValues(1);
+    return {
+      embeds: [createBaseEmbed({
+        title: config.title,
+        description: `${config.description}\n\nUse Discord's user picker below instead of typing a username or user ID.`,
+        color: SlickBotColors.INFO
+      })],
+      components: [new ActionRowBuilder().addComponents(menu)]
+    };
   }
 
   async postControlPanel(guild, temp, logger = null) {

@@ -1,4 +1,19 @@
 {
+  "0.8.3": {
+    "title": "SlickBot v0.8.3",
+    "summary": "Improves Join-to-Create user controls with native Discord user select menus.",
+    "notes": [
+      "Replaced typed-user modals for Permit User, Remove User, and Transfer Ownership with Discord user select menus.",
+      "Members can now search and select users through Discord's native picker instead of typing full usernames, mentions, or IDs.",
+      "Rename, Set Limit, and Delete Channel confirmation continue using modals because those controls need typed values.",
+      "Temporary voice control panels still refresh after selected-user actions so access and ownership changes stay current."
+    ],
+    "commands": [
+      "/join-create permit",
+      "/join-create remove",
+      "/join-create transfer"
+    ]
+  },
   "0.8.2": {
     "title": "SlickBot v0.8.2",
     "summary": "Polishes Join-to-Create voice control panels with lock status emojis and modal-based owner controls.",

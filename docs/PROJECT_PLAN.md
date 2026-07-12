@@ -1,6 +1,6 @@
 # SlickBot Project Plan
 
-## Current Version: 0.8.2
+## Current Version: 0.8.3
 
 SlickBot is being built as a modular all-in-one Discord server management bot for the SlickPickleNick community.
 
@@ -33,6 +33,16 @@ SlickBot is being built as a modular all-in-one Discord server management bot fo
 - Leveling / XP
 
 
+
+
+## v0.8.3 Scope
+
+### Join-to-Create User Picker Controls
+
+- Replaced the Permit User, Remove User, and Transfer Ownership control-panel typed-user modals with Discord user select menus.
+- Members can now use Discord's native user picker/autocomplete behavior for user-based temporary voice controls.
+- Preserved typed modals for rename, user limit, and delete confirmation.
+- Kept slash-command owner controls available for users who prefer commands or staff who need direct command workflows.
 
 ## v0.8.2 Scope
 

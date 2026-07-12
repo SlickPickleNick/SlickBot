@@ -67,7 +67,7 @@ async function handleComponentInteraction(interaction, ctx) {
   }
 
   if (interaction.isButton()) return handleButton(interaction, ctx);
-  if (interaction.isStringSelectMenu()) return handleSelect(interaction, ctx);
+  if (interaction.isStringSelectMenu() || interaction.isUserSelectMenu()) return handleSelect(interaction, ctx);
   if (interaction.isModalSubmit()) return handleModal(interaction, ctx);
   return false;
 }
@@ -530,17 +530,17 @@ async function handleButton(interaction, ctx) {
       }
       if (id.startsWith(CustomIds.JoinCreatePermitPrefix)) {
         const channelId = id.slice(CustomIds.JoinCreatePermitPrefix.length);
-        await interaction.showModal(joinCreate.buildPermitModal(channelId));
+        await replyPrivate(interaction, joinCreate.buildUserSelectPayload(channelId, 'permit'));
         return true;
       }
       if (id.startsWith(CustomIds.JoinCreateRemovePrefix)) {
         const channelId = id.slice(CustomIds.JoinCreateRemovePrefix.length);
-        await interaction.showModal(joinCreate.buildRemoveModal(channelId));
+        await replyPrivate(interaction, joinCreate.buildUserSelectPayload(channelId, 'remove'));
         return true;
       }
       if (id.startsWith(CustomIds.JoinCreateTransferPrefix)) {
         const channelId = id.slice(CustomIds.JoinCreateTransferPrefix.length);
-        await interaction.showModal(joinCreate.buildTransferModal(channelId));
+        await replyPrivate(interaction, joinCreate.buildUserSelectPayload(channelId, 'transfer'));
         return true;
       }
     } catch (error) {
@@ -639,6 +639,45 @@ async function handleSelect(interaction, ctx) {
     if (!(await requireAction(interaction, ctx, ActionKeys.BirthdaysView, ModuleKeys.BIRTHDAYS))) return true;
     await updatePanel(interaction, await birthdays.buildListPanel(interaction.guildId, interaction.values[0] || 'ALL'));
     return true;
+  }
+
+  if ([
+    CustomIds.JoinCreatePermitUserSelectPrefix,
+    CustomIds.JoinCreateRemoveUserSelectPrefix,
+    CustomIds.JoinCreateTransferUserSelectPrefix
+  ].some((prefix) => id.startsWith(prefix))) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.TempVoiceManage, ModuleKeys.JOIN_TO_CREATE))) return true;
+    const member = await interaction.guild.members.fetch(interaction.user.id).catch(() => interaction.member);
+    const targetId = interaction.values?.[0];
+    const target = targetId ? await interaction.guild.members.fetch(targetId).catch(() => null) : null;
+    if (!target) return replyPrivate(interaction, { embeds: [createWarningEmbed('User Not Found', 'That user could not be found in this server.')], deleteAfterSeconds: 10 });
+
+    try {
+      if (id.startsWith(CustomIds.JoinCreatePermitUserSelectPrefix)) {
+        const channelId = id.slice(CustomIds.JoinCreatePermitUserSelectPrefix.length);
+        const result = await joinCreate.permitUserFromControl(member, channelId, target);
+        await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'join-create-control', title: 'Temporary Voice User Permitted From Control Panel', body: `Channel: <#${result.channel.id}>\nUser: <@${target.id}>`, actorUserId: interaction.user.id, metadata: { channelId: result.channel.id, targetUserId: target.id, inputType: 'user_select' } }).catch(() => {});
+        await updatePanel(interaction, { embeds: [createSuccessEmbed('User Permitted', `<@${target.id}> can now join <#${result.channel.id}>.`)], components: [] });
+        return true;
+      }
+      if (id.startsWith(CustomIds.JoinCreateRemoveUserSelectPrefix)) {
+        const channelId = id.slice(CustomIds.JoinCreateRemoveUserSelectPrefix.length);
+        const result = await joinCreate.removeUserFromControl(member, channelId, target);
+        await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'join-create-control', title: 'Temporary Voice User Removed From Control Panel', body: `Channel: <#${result.channel.id}>\nUser: <@${target.id}>`, actorUserId: interaction.user.id, metadata: { channelId: result.channel.id, targetUserId: target.id, inputType: 'user_select' } }).catch(() => {});
+        await updatePanel(interaction, { embeds: [createSuccessEmbed('User Removed', `<@${target.id}> was removed or blocked from <#${result.channel.id}>.`)], components: [] });
+        return true;
+      }
+      if (id.startsWith(CustomIds.JoinCreateTransferUserSelectPrefix)) {
+        const channelId = id.slice(CustomIds.JoinCreateTransferUserSelectPrefix.length);
+        const result = await joinCreate.transferFromControl(member, channelId, target);
+        await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'join-create-control', title: 'Temporary Voice Ownership Transferred From Control Panel', body: `Channel: <#${result.channel.id}>\nNew Owner: <@${target.id}>`, actorUserId: interaction.user.id, metadata: { channelId: result.channel.id, targetUserId: target.id, inputType: 'user_select' } }).catch(() => {});
+        await updatePanel(interaction, { embeds: [createSuccessEmbed('Ownership Transferred', `<#${result.channel.id}> is now owned by <@${target.id}>.`)], components: [] });
+        return true;
+      }
+    } catch (error) {
+      await updatePanel(interaction, { embeds: [createWarningEmbed('Temporary Voice Control Blocked', error instanceof Error ? error.message : String(error))], components: [] });
+      return true;
+    }
   }
 
   if (id.startsWith(CustomIds.RolePanelSelectPrefix)) {
