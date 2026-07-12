@@ -1,6 +1,6 @@
 # SlickBot Project Plan
 
-## Current Version: 0.8.6
+## Current Version: 0.8.7
 
 SlickBot is being built as a modular all-in-one Discord server management bot for the SlickPickleNick community.
 
@@ -31,6 +31,25 @@ SlickBot is being built as a modular all-in-one Discord server management bot fo
 - Custom commands
 - Join-to-create voice channels
 - Leveling / XP
+
+## v0.8.7 Scope
+
+### Permission and Interaction Audit
+
+- Audited the primary component, modal, select-menu, message-trigger, and native reaction paths for permission consistency.
+- Public panel actions now use their matching public action permission checks instead of only checking module enabled state.
+- Custom command chat triggers now honor public action permissions and module target restrictions before responding.
+- Native reaction-role panels now check the same public action/module access rules as button and dropdown role panels.
+- Temporary voice owner controls continue to validate channel ownership/staff control, but now also honor the public temp-voice control action if admins restrict it.
+- Standardized component access denial responses around `⛔ Access Restricted`.
+- Removed duplicate permission-default entries discovered during the audit.
+- No command groups were renamed.
+
+Deferred larger work:
+
+- Full support workflow consistency pass for tickets, reports, applications, and appeals.
+- Full setup wizard framework.
+- Broader command alias/rename discussion.
 
 ## v0.8.6 Scope
 

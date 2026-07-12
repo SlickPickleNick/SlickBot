@@ -22,6 +22,8 @@ const { JoinCreateService } = require('./modules/voice/joinCreateService');
 const { LevelingService } = require('./modules/community/levelingService');
 const { handleReactionRole, syncAllPublishedReactionPanels } = require('./modules/community/rolePanelService');
 const { handleComponentInteraction } = require('./services/interactionRouter');
+const { ActionKeys } = require('./modules/permissions/actionKeys');
+const { ModuleKeys } = require('./modules/moduleRegistry');
 
 const client = new Client({
   intents: [
@@ -269,18 +271,21 @@ client.on(Events.MessageCreate, async (message) => {
 
   if (message.guild) {
     if (await permissions.isIgnored(message.guild.id, message.author.id).catch(() => false)) return;
-    const customCommandsEnabled = await permissions.isModuleEnabled(message.guild.id, 'CUSTOM_COMMANDS').catch(() => false);
+    const customCommandsEnabled = await permissions.isModuleEnabled(message.guild.id, ModuleKeys.CUSTOM_COMMANDS).catch(() => false);
     if (customCommandsEnabled) {
-      await customCommands.handleMessage(message, logger).catch(async (error) => {
-        console.error('Failed to process custom command:', error);
-        await logger.log({
-          guildId: message.guild.id,
-          eventKey: 'custom-command-error',
-          title: 'Custom Command Error',
-          body: error instanceof Error ? error.message : String(error),
-          metadata: { channelId: message.channelId, authorId: message.author.id }
-        }).catch(() => {});
-      });
+      const customCommandAccess = await permissions.checkPublicInteraction(messageToPermissionInteraction(message), ActionKeys.CustomCommandsUse, ModuleKeys.CUSTOM_COMMANDS).catch(() => ({ allowed: false }));
+      if (customCommandAccess.allowed) {
+        await customCommands.handleMessage(message, logger).catch(async (error) => {
+          console.error('Failed to process custom command:', error);
+          await logger.log({
+            guildId: message.guild.id,
+            eventKey: 'custom-command-error',
+            title: 'Custom Command Error',
+            body: error instanceof Error ? error.message : String(error),
+            metadata: { channelId: message.channelId, authorId: message.author.id }
+          }).catch(() => {});
+        });
+      }
     }
 
     const levelingEnabled = await permissions.isModuleEnabled(message.guild.id, 'LEVELING').catch(() => false);
@@ -304,8 +309,13 @@ client.on(Events.MessageReactionAdd, async (reaction, user) => {
     await reaction.users.remove(user.id).catch(() => {});
     return;
   }
-  const enabled = await permissions.isModuleEnabled(guildId, 'REACTION_ROLES').catch(() => false);
+  const enabled = await permissions.isModuleEnabled(guildId, ModuleKeys.REACTION_ROLES).catch(() => false);
   if (!enabled) return;
+  const reactionAccess = await buildReactionPermissionInteraction(reaction, user).then((permissionInteraction) => permissions.checkPublicInteraction(permissionInteraction, ActionKeys.RolePanelsUse, ModuleKeys.REACTION_ROLES)).catch(() => ({ allowed: false }));
+  if (!reactionAccess.allowed) {
+    await reaction.users.remove(user.id).catch(() => {});
+    return;
+  }
   await handleReactionRole({ reaction, user, action: 'add', logger }).catch((error) => console.error('Failed to handle reaction role add:', error));
 });
 
@@ -314,8 +324,10 @@ client.on(Events.MessageReactionRemove, async (reaction, user) => {
   const guildId = reaction.message?.guildId;
   if (!guildId) return;
   if (await permissions.isIgnored(guildId, user.id).catch(() => false)) return;
-  const enabled = await permissions.isModuleEnabled(guildId, 'REACTION_ROLES').catch(() => false);
+  const enabled = await permissions.isModuleEnabled(guildId, ModuleKeys.REACTION_ROLES).catch(() => false);
   if (!enabled) return;
+  const reactionAccess = await buildReactionPermissionInteraction(reaction, user).then((permissionInteraction) => permissions.checkPublicInteraction(permissionInteraction, ActionKeys.RolePanelsUse, ModuleKeys.REACTION_ROLES)).catch(() => ({ allowed: false }));
+  if (!reactionAccess.allowed) return;
   await handleReactionRole({ reaction, user, action: 'remove', logger }).catch((error) => console.error('Failed to handle reaction role remove:', error));
 });
 
@@ -389,6 +401,31 @@ client.on(Events.InteractionCreate, async (interaction) => {
     await replyPrivate(interaction, 'Something went wrong while running that command. Check the bot logs for details.');
   }
 });
+
+
+function messageToPermissionInteraction(message) {
+  return {
+    guildId: message.guild?.id,
+    guild: message.guild,
+    channelId: message.channelId,
+    user: message.author,
+    member: message.member,
+    memberPermissions: message.member?.permissions
+  };
+}
+
+async function buildReactionPermissionInteraction(reaction, user) {
+  const guild = reaction.message?.guild;
+  const member = guild ? await guild.members.fetch(user.id).catch(() => null) : null;
+  return {
+    guildId: guild?.id,
+    guild,
+    channelId: reaction.message?.channelId,
+    user,
+    member,
+    memberPermissions: member?.permissions
+  };
+}
 
 async function main() {
   await initDatabase();

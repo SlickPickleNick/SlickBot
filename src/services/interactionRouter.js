@@ -246,7 +246,7 @@ async function handleButton(interaction, ctx) {
 
 
   if (id === CustomIds.BirthdaySetOpen) {
-    if (!(await requireModuleOnly(interaction, ctx, ModuleKeys.BIRTHDAYS))) return true;
+    if (!(await requirePublicAction(interaction, ctx, ActionKeys.BirthdaysUse, ModuleKeys.BIRTHDAYS))) return true;
     const config = await birthdays.getConfig(interaction.guildId).catch(() => ({ timezone: 'America/New_York' }));
     const session = birthdays.createSetupSession({ guildId: interaction.guildId, userId: interaction.user.id, defaultTimezone: config?.timezone || 'America/New_York' });
     await replyPrivate(interaction, birthdays.buildSetupSessionPayload(session));
@@ -292,7 +292,7 @@ async function handleButton(interaction, ctx) {
   }
 
   if (id.startsWith('slickbot:rolepanel:')) {
-    if (!(await requireAction(interaction, ctx, ActionKeys.RolePanelsUse, ModuleKeys.REACTION_ROLES))) return true;
+    if (!(await requirePublicAction(interaction, ctx, ActionKeys.RolePanelsUse, ModuleKeys.REACTION_ROLES))) return true;
     const [, , panelId, optionId] = id.split(':');
     const result = await toggleRole({ interaction, panelId, optionId, logger: ctx.logger });
     if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Role Not Updated', result.reason)], deleteAfterSeconds: 10 });
@@ -302,7 +302,7 @@ async function handleButton(interaction, ctx) {
 
 
   if (id.startsWith('slickbot:giveaway:enter:')) {
-    if (!(await requireAction(interaction, ctx, ActionKeys.GiveawaysEnter, ModuleKeys.GIVEAWAYS))) return true;
+    if (!(await requirePublicAction(interaction, ctx, ActionKeys.GiveawaysEnter, ModuleKeys.GIVEAWAYS))) return true;
     const giveawayId = id.slice('slickbot:giveaway:enter:'.length);
     const result = await giveaways.enterGiveaway({ interaction, giveawayId, logger: ctx.logger });
     if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Giveaway Entry Failed', result.reason)], deleteAfterSeconds: 10 });
@@ -311,7 +311,7 @@ async function handleButton(interaction, ctx) {
   }
 
   if (id === CustomIds.TicketOpen || id.startsWith(CustomIds.TicketOpenTypePrefix)) {
-    if (!(await requireModuleOnly(interaction, ctx, ModuleKeys.TICKETS))) return true;
+    if (!(await requirePublicAction(interaction, ctx, ActionKeys.TicketsOpen, ModuleKeys.TICKETS))) return true;
     const typeId = id.startsWith(CustomIds.TicketOpenTypePrefix) ? id.slice(CustomIds.TicketOpenTypePrefix.length) : null;
     const type = typeId ? await tickets.getTypeById(interaction.guildId, typeId) : await tickets.ensureDefaultType(interaction.guildId);
     await interaction.showModal(buildTicketModal(type));
@@ -349,7 +349,7 @@ async function handleButton(interaction, ctx) {
   }
 
   if (id === CustomIds.ReportOpen) {
-    if (!(await requireModuleOnly(interaction, ctx, ModuleKeys.REPORTS))) return true;
+    if (!(await requirePublicAction(interaction, ctx, ActionKeys.ReportsSubmit, ModuleKeys.REPORTS))) return true;
     await interaction.showModal(buildReportModal());
     return true;
   }
@@ -400,7 +400,7 @@ async function handleButton(interaction, ctx) {
   }
 
   if (id.startsWith(CustomIds.ApplicationApplyPrefix)) {
-    if (!(await requireModuleOnly(interaction, ctx, ModuleKeys.APPLICATIONS))) return true;
+    if (!(await requirePublicAction(interaction, ctx, ActionKeys.ApplicationsApply, ModuleKeys.APPLICATIONS))) return true;
     const typeId = id.slice(CustomIds.ApplicationApplyPrefix.length);
     const type = await applications.getTypeById(interaction.guildId, typeId);
     if (!type || !type.enabled) return replyPrivate(interaction, { embeds: [createWarningEmbed('Application Unavailable', 'This application type is not currently available.')] });
@@ -433,7 +433,7 @@ async function handleButton(interaction, ctx) {
   }
 
   if (id === CustomIds.AppealOpen) {
-    if (!(await requireModuleOnly(interaction, ctx, ModuleKeys.APPEALS))) return true;
+    if (!(await requirePublicAction(interaction, ctx, ActionKeys.AppealsSubmit, ModuleKeys.APPEALS))) return true;
     await interaction.showModal(buildAppealModal());
     return true;
   }
@@ -562,7 +562,7 @@ async function handleButton(interaction, ctx) {
     CustomIds.JoinCreateRemovePrefix,
     CustomIds.JoinCreateTransferPrefix
   ].some((prefix) => id.startsWith(prefix))) {
-    if (!(await requireAction(interaction, ctx, ActionKeys.TempVoiceManage, ModuleKeys.JOIN_TO_CREATE))) return true;
+    if (!(await requirePublicAction(interaction, ctx, ActionKeys.TempVoiceManage, ModuleKeys.JOIN_TO_CREATE))) return true;
     const member = await interaction.guild.members.fetch(interaction.user.id).catch(() => interaction.member);
     try {
       if (id.startsWith(CustomIds.JoinCreateLockPrefix)) {
@@ -671,7 +671,7 @@ async function handleSelect(interaction, ctx) {
   }
 
   if (id === CustomIds.TicketTypeSelect) {
-    if (!(await requireModuleOnly(interaction, ctx, ModuleKeys.TICKETS))) return true;
+    if (!(await requirePublicAction(interaction, ctx, ActionKeys.TicketsOpen, ModuleKeys.TICKETS))) return true;
     const typeId = interaction.values[0];
     const type = await tickets.getTypeById(interaction.guildId, typeId);
     if (!type || type.enabled === false) return replyPrivate(interaction, { embeds: [createWarningEmbed('Ticket Type Unavailable', 'This ticket type is not currently available.')] });
@@ -680,19 +680,19 @@ async function handleSelect(interaction, ctx) {
   }
 
   if (id === CustomIds.ReportSelect) {
-    if (!(await requireModuleOnly(interaction, ctx, ModuleKeys.REPORTS))) return true;
+    if (!(await requirePublicAction(interaction, ctx, ActionKeys.ReportsSubmit, ModuleKeys.REPORTS))) return true;
     await interaction.showModal(buildReportModal());
     return true;
   }
 
   if (id === CustomIds.AppealSelect) {
-    if (!(await requireModuleOnly(interaction, ctx, ModuleKeys.APPEALS))) return true;
+    if (!(await requirePublicAction(interaction, ctx, ActionKeys.AppealsSubmit, ModuleKeys.APPEALS))) return true;
     await interaction.showModal(buildAppealModal());
     return true;
   }
 
   if (id.startsWith(CustomIds.ApplicationSelectPrefix)) {
-    if (!(await requireModuleOnly(interaction, ctx, ModuleKeys.APPLICATIONS))) return true;
+    if (!(await requirePublicAction(interaction, ctx, ActionKeys.ApplicationsApply, ModuleKeys.APPLICATIONS))) return true;
     const typeId = interaction.values[0] || id.slice(CustomIds.ApplicationSelectPrefix.length);
     const type = await applications.getTypeById(interaction.guildId, typeId);
     if (!type || !type.enabled) return replyPrivate(interaction, { embeds: [createWarningEmbed('Application Unavailable', 'This application type is not currently available.')] });
@@ -742,7 +742,7 @@ async function handleSelect(interaction, ctx) {
     CustomIds.JoinCreateRemoveUserSelectPrefix,
     CustomIds.JoinCreateTransferUserSelectPrefix
   ].some((prefix) => id.startsWith(prefix))) {
-    if (!(await requireAction(interaction, ctx, ActionKeys.TempVoiceManage, ModuleKeys.JOIN_TO_CREATE))) return true;
+    if (!(await requirePublicAction(interaction, ctx, ActionKeys.TempVoiceManage, ModuleKeys.JOIN_TO_CREATE))) return true;
     const member = await interaction.guild.members.fetch(interaction.user.id).catch(() => interaction.member);
     const targetId = interaction.values?.[0];
     const target = targetId ? await interaction.guild.members.fetch(targetId).catch(() => null) : null;
@@ -777,7 +777,7 @@ async function handleSelect(interaction, ctx) {
   }
 
   if (id.startsWith(CustomIds.RolePanelSelectPrefix)) {
-    if (!(await requireAction(interaction, ctx, ActionKeys.RolePanelsUse, ModuleKeys.REACTION_ROLES))) return true;
+    if (!(await requirePublicAction(interaction, ctx, ActionKeys.RolePanelsUse, ModuleKeys.REACTION_ROLES))) return true;
     const panelId = id.slice(CustomIds.RolePanelSelectPrefix.length);
     const optionId = interaction.values[0];
     const result = await toggleRole({ interaction, panelId, optionId, logger: ctx.logger });
@@ -848,7 +848,7 @@ async function handleModal(interaction, ctx) {
   }
 
   if (id.startsWith(CustomIds.TicketModalPrefix) || id === CustomIds.TicketModal) {
-    if (!(await requireModuleOnly(interaction, ctx, ModuleKeys.TICKETS))) return true;
+    if (!(await requirePublicAction(interaction, ctx, ActionKeys.TicketsOpen, ModuleKeys.TICKETS))) return true;
     const typeId = id.startsWith(CustomIds.TicketModalPrefix) ? id.slice(CustomIds.TicketModalPrefix.length) : null;
     const ticketType = typeId && typeId !== 'default' ? await tickets.getTypeById(interaction.guildId, typeId) : await tickets.ensureDefaultType(interaction.guildId);
     const questions = parseQuestions(ticketType?.questions);
@@ -876,7 +876,7 @@ async function handleModal(interaction, ctx) {
   }
 
   if (id === CustomIds.ReportModal) {
-    if (!(await requireModuleOnly(interaction, ctx, ModuleKeys.REPORTS))) return true;
+    if (!(await requirePublicAction(interaction, ctx, ActionKeys.ReportsSubmit, ModuleKeys.REPORTS))) return true;
     const target = interaction.fields.getTextInputValue('target') || '';
     const details = interaction.fields.getTextInputValue('details');
     const report = await reports.createReport({ interaction, client: ctx.client, logger: ctx.logger, type: 'Panel Report', details: target ? `Target/Context: ${target}\n\n${details}` : details });
@@ -895,7 +895,7 @@ async function handleModal(interaction, ctx) {
   }
 
   if (id === CustomIds.AppealModal) {
-    if (!(await requireModuleOnly(interaction, ctx, ModuleKeys.APPEALS))) return true;
+    if (!(await requirePublicAction(interaction, ctx, ActionKeys.AppealsSubmit, ModuleKeys.APPEALS))) return true;
     const rawCase = interaction.fields.getTextInputValue('case_number') || '';
     const caseNumber = rawCase.trim() ? Number(rawCase.replace(/[^0-9]/g, '')) : null;
     const appeal = await appeals.submitAppeal({ interaction, client: ctx.client, logger: ctx.logger, caseNumber: Number.isFinite(caseNumber) ? caseNumber : null, reason: interaction.fields.getTextInputValue('reason'), details: interaction.fields.getTextInputValue('details') || null });
@@ -935,7 +935,7 @@ async function handleModal(interaction, ctx) {
     CustomIds.JoinCreateTransferModalPrefix,
     CustomIds.JoinCreateDeleteConfirmPrefix
   ].some((prefix) => id.startsWith(prefix))) {
-    if (!(await requireAction(interaction, ctx, ActionKeys.TempVoiceManage, ModuleKeys.JOIN_TO_CREATE))) return true;
+    if (!(await requirePublicAction(interaction, ctx, ActionKeys.TempVoiceManage, ModuleKeys.JOIN_TO_CREATE))) return true;
     const member = await interaction.guild.members.fetch(interaction.user.id).catch(() => interaction.member);
     try {
       if (id.startsWith(CustomIds.JoinCreateRenameModalPrefix)) {
@@ -1069,20 +1069,38 @@ async function requireAnyCommunityAction(interaction, ctx) {
 async function requireModuleOnly(interaction, ctx, moduleKey) {
   await ctx.permissions.ensureGuildConfig(interaction.guildId, interaction.guild ? interaction.guild.name : null);
   if (await ctx.permissions.isIgnored(interaction.guildId, interaction.user.id)) {
-    await replyPrivate(interaction, { embeds: [createWarningEmbed('Access Blocked', 'You are currently blocked from interacting with SlickBot.')] });
+    await sendAccessDenied(interaction, 'You are currently blocked from interacting with SlickBot.');
     return false;
   }
   const enabled = await ctx.permissions.isModuleEnabled(interaction.guildId, moduleKey);
   if (enabled) return true;
-  await replyPrivate(interaction, { embeds: [createWarningEmbed('Module Disabled', `The ${moduleKey} module is disabled.`)] });
+  await sendAccessDenied(interaction, `The ${moduleKey} module is disabled.`, 'Module Disabled');
+  return false;
+}
+
+async function requirePublicAction(interaction, ctx, actionKey, moduleKey) {
+  const result = await ctx.permissions.checkPublicInteraction(interaction, actionKey, moduleKey);
+  if (result.allowed) return true;
+  await sendAccessDenied(interaction, result.reason || 'This public action is not currently available to you.');
   return false;
 }
 
 async function requireAction(interaction, ctx, actionKey, moduleKey) {
   const result = await ctx.permissions.checkInteraction(interaction, actionKey, moduleKey);
   if (result.allowed) return true;
-  await replyPrivate(interaction, { embeds: [createBaseEmbed({ title: 'Permission Required', description: result.reason || 'You do not have permission to use this control.', color: SlickBotColors.ERROR })] });
+  await sendAccessDenied(interaction, result.reason || 'You do not have permission to use this control.');
   return false;
+}
+
+async function sendAccessDenied(interaction, description, title = 'Access Restricted') {
+  await replyPrivate(interaction, {
+    embeds: [createBaseEmbed({
+      title: `⛔ ${title}`,
+      description,
+      color: SlickBotColors.ERROR
+    })],
+    deleteAfterSeconds: 12
+  });
 }
 
 function withSetupSubheader(payload, masterTitle, subcategory) {

@@ -4,7 +4,30 @@ SlickBot is an all-in-one Discord server management bot built for the SlickPickl
 
 ## Version
 
-Current package: **v0.8.6**
+Current package: **v0.8.7**
+
+## v0.8.7 Updates
+
+### Permission and Interaction Audit
+
+- Tightened public-panel submission controls so ticket, report, application, appeal, birthday, giveaway, role-panel, and temp-voice interactions now honor their matching public action permission instead of only checking whether the module is enabled.
+- Custom command chat triggers now use SlickBot public action and module-target checks before responding, so disabling or restricting custom-command usage applies to chat triggers too.
+- Native reaction-role add/remove handling now checks public action and module-target access before applying roles. Unauthorized reaction adds are removed when possible.
+- Standardized private component denial embeds with a clear `⛔ Access Restricted` style.
+- Preserved public member actions by default while allowing admins to restrict them through existing permission/public-action controls.
+- Removed duplicated permission/default-level checks found during the audit.
+
+Updated systems:
+
+```text
+Ticket/report/application/appeal public panels
+Birthday setup panel
+Role panels and native reaction roles
+Giveaway entry buttons
+Custom command chat triggers
+Join-to-Create temp voice owner controls
+Permission defaults
+```
 
 ## v0.8.6 Updates
 

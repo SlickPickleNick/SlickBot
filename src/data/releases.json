@@ -1,4 +1,22 @@
 {
+  "0.8.7": {
+    "title": "SlickBot v0.8.7",
+    "summary": "Audits and tightens permissions for public panels, message triggers, native reactions, and interactive controls.",
+    "notes": [
+      "Updated public ticket, report, application, appeal, birthday, role-panel, giveaway, and temp-voice controls so they honor matching public action permissions and module target restrictions.",
+      "Custom command chat triggers now check SlickBot Custom Commands public action access before responding in text channels.",
+      "Native reaction-role add/remove events now check the same public role-panel access rules as button/dropdown role panels, and unauthorized reaction adds are removed when possible.",
+      "Temporary voice owner controls still validate room ownership or staff authority, and now also respect the public temp-voice control action if admins restrict it.",
+      "Standardized component access-denied messages with a clear no-entry style private warning.",
+      "Removed duplicated permission default entries discovered during the audit."
+    ],
+    "commands": [
+      "/help",
+      "/bot test",
+      "/permissions panel",
+      "/modules panel"
+    ]
+  },
   "0.8.6": {
     "title": "SlickBot v0.8.6",
     "summary": "Refines setup-accessed panels, logging/status controls, permission team visibility, and moderation setup guidance.",
@@ -82,7 +100,7 @@
     "summary": "Polishes Join-to-Create voice control panels with lock status emojis and modal-based owner controls.",
     "notes": [
       "Added lock and unlock emojis to the Join-to-Create control panel buttons.",
-      "Updated the temporary voice status field to show \ud83d\udd12 Locked or \ud83d\udd13 Unlocked.",
+      "Updated the temporary voice status field to show 🔒 Locked or 🔓 Unlocked.",
       "Added button-driven modals for Rename, Set Limit, Permit User, Remove User, and Transfer Ownership so members can adjust rooms without memorizing slash commands.",
       "Changed Delete Channel from an immediate action to a confirmation modal that requires typing DELETE.",
       "Control panels continue to refresh after owner actions so status, owner, and limit details stay current."
