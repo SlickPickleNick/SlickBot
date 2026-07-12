@@ -1,8 +1,8 @@
 {
   "name": "slickbot",
-  "version": "0.8.8",
+  "version": "0.8.9",
   "private": true,
-  "description": "SlickBot all-in-one Discord server management bot with custom commands, join-to-create voice rooms, bot update announcements, reliable server stats, diagnostics, role panels, leveling, and support systems.",
+  "description": "SlickBot all-in-one Discord server management bot with support workflows, moderation, permissions, community games, leveling, role panels, automation, and voice tools.",
   "main": "src/index.js",
   "engines": {
     "node": ">=22.12.0"

@@ -20,6 +20,7 @@ const { BirthdayService, buildBirthdayDayModal, buildBirthdayTimezoneModal, isVa
 const { ScheduledMessageService } = require('../modules/automation/scheduledMessageService');
 const { ServerStatsService } = require('../modules/community/serverStatsService');
 const { LevelingService } = require('../modules/community/levelingService');
+const { CommunityGameService, GAME_KEYS } = require('../modules/community/gameService');
 const { buildRoleManagerPanel, toggleRole } = require('../modules/community/rolePanelService');
 const { JoinCreateService } = require('../modules/voice/joinCreateService');
 const { CustomCommandService } = require('../modules/custom/customCommandService');
@@ -51,6 +52,7 @@ const serverStats = new ServerStatsService();
 const leveling = new LevelingService();
 const joinCreate = new JoinCreateService();
 const customCommands = new CustomCommandService();
+const communityGames = new CommunityGameService();
 
 async function handleComponentInteraction(interaction, ctx) {
   if (!interaction.guildId) {
@@ -81,6 +83,64 @@ async function handleComponentInteraction(interaction, ctx) {
 
 async function handleButton(interaction, ctx) {
   const id = interaction.customId;
+
+  if (id.startsWith(CustomIds.GameChallengeAcceptPrefix) || id.startsWith(CustomIds.GameChallengeDeclinePrefix)) {
+    if (!(await requirePublicAction(interaction, ctx, ActionKeys.GamesPlay, ModuleKeys.COMMUNITY_GAMES))) return true;
+    const accepting = id.startsWith(CustomIds.GameChallengeAcceptPrefix);
+    const prefix = accepting ? CustomIds.GameChallengeAcceptPrefix : CustomIds.GameChallengeDeclinePrefix;
+    const sessionId = id.slice(prefix.length);
+    try {
+      const result = await communityGames.handleChallengeDecision({ sessionId, userId: interaction.user.id, accept: accepting });
+      if (result.accepted) {
+        await updatePanel(interaction, communityGames.buildSessionPayload(result.session));
+        await ctx.logger.log({
+          guildId: interaction.guildId,
+          eventKey: 'community-game-started',
+          title: `${result.session.game_key === GAME_KEYS.TIC_TAC_TOE ? 'Tic-Tac-Toe' : 'Connect Four'} Started`,
+          body: `Players: <@${result.session.player_one_id}> vs. <@${result.session.player_two_id}>\nChannel: <#${interaction.channelId}>`,
+          actorUserId: interaction.user.id,
+          metadata: { game: result.session.game_key, sessionId }
+        }).catch(() => {});
+      } else {
+        await updatePanel(interaction, communityGames.buildClosedChallengePayload(result.session));
+      }
+    } catch (error) {
+      await replyPrivate(interaction, { embeds: [createWarningEmbed('Game Challenge Not Updated', error instanceof Error ? error.message : String(error))], deleteAfterSeconds: 10 });
+    }
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.GameTicTacToeMovePrefix)) {
+    if (!(await requirePublicAction(interaction, ctx, ActionKeys.GamesPlay, ModuleKeys.COMMUNITY_GAMES))) return true;
+    const rest = id.slice(CustomIds.GameTicTacToeMovePrefix.length);
+    const separator = rest.lastIndexOf(':');
+    const sessionId = rest.slice(0, separator);
+    const cell = Number(rest.slice(separator + 1));
+    try {
+      const result = await communityGames.makeTicTacToeMove({ sessionId, userId: interaction.user.id, cell });
+      await updatePanel(interaction, communityGames.buildSessionPayload(result.session));
+      if (result.won || result.draw) await logCompletedCommunityGame(ctx, interaction, result.session, result.draw);
+    } catch (error) {
+      await replyPrivate(interaction, { embeds: [createWarningEmbed('Tic-Tac-Toe Move Not Accepted', error instanceof Error ? error.message : String(error))], deleteAfterSeconds: 10 });
+    }
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.GameConnectFourMovePrefix)) {
+    if (!(await requirePublicAction(interaction, ctx, ActionKeys.GamesPlay, ModuleKeys.COMMUNITY_GAMES))) return true;
+    const rest = id.slice(CustomIds.GameConnectFourMovePrefix.length);
+    const separator = rest.lastIndexOf(':');
+    const sessionId = rest.slice(0, separator);
+    const column = Number(rest.slice(separator + 1));
+    try {
+      const result = await communityGames.makeConnectFourMove({ sessionId, userId: interaction.user.id, column });
+      await updatePanel(interaction, communityGames.buildSessionPayload(result.session));
+      if (result.won || result.draw) await logCompletedCommunityGame(ctx, interaction, result.session, result.draw);
+    } catch (error) {
+      await replyPrivate(interaction, { embeds: [createWarningEmbed('Connect Four Move Not Accepted', error instanceof Error ? error.message : String(error))], deleteAfterSeconds: 10 });
+    }
+    return true;
+  }
 
   if (id.startsWith(CustomIds.TicketReviewIndexFilterPrefix)) {
     if (!(await requireAction(interaction, ctx, ActionKeys.TicketsReview, ModuleKeys.TICKETS))) return true;
@@ -252,6 +312,30 @@ async function handleButton(interaction, ctx) {
   if (id === CustomIds.SetupCommunity) {
     if (!(await requireAnyCommunityAction(interaction, ctx))) return true;
     await updatePanel(interaction, await buildCommunityPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id === CustomIds.GamesRefresh) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.GamesView, ModuleKeys.COMMUNITY_GAMES))) return true;
+    await updatePanel(interaction, await communityGames.buildManagerPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id === CustomIds.GamesCounting) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.GamesView, ModuleKeys.COMMUNITY_GAMES))) return true;
+    await updatePanel(interaction, await communityGames.buildCountingPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id === CustomIds.GamesTicTacToe) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.GamesView, ModuleKeys.COMMUNITY_GAMES))) return true;
+    await updatePanel(interaction, await communityGames.buildBoardGamePanel(interaction.guildId, GAME_KEYS.TIC_TAC_TOE));
+    return true;
+  }
+
+  if (id === CustomIds.GamesConnectFour) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.GamesView, ModuleKeys.COMMUNITY_GAMES))) return true;
+    await updatePanel(interaction, await communityGames.buildBoardGamePanel(interaction.guildId, GAME_KEYS.CONNECT_FOUR));
     return true;
   }
 
@@ -1150,6 +1234,20 @@ async function handleModal(interaction, ctx) {
   return false;
 }
 
+async function logCompletedCommunityGame(ctx, interaction, session, draw) {
+  const label = session.game_key === GAME_KEYS.TIC_TAC_TOE ? 'Tic-Tac-Toe' : 'Connect Four';
+  await ctx.logger.log({
+    guildId: interaction.guildId,
+    eventKey: 'community-game-completed',
+    title: `${label} Completed`,
+    body: draw
+      ? `Players: <@${session.player_one_id}> vs. <@${session.player_two_id}>\nResult: **Draw**`
+      : `Players: <@${session.player_one_id}> vs. <@${session.player_two_id}>\nWinner: <@${session.winner_user_id}>`,
+    actorUserId: interaction.user.id,
+    metadata: { game: session.game_key, sessionId: session.id, draw: Boolean(draw), winnerUserId: session.winner_user_id || null }
+  }).catch(() => {});
+}
+
 function parseSupportResetId(customId, prefix) {
   const rest = String(customId || '').slice(prefix.length);
   const [moduleKey, requestedByUserId] = rest.split(':');
@@ -1199,7 +1297,7 @@ async function requireAnySupportAction(interaction, ctx) {
 
 
 async function requireAnyCommunityAction(interaction, ctx) {
-  const checks = [[ActionKeys.WelcomeView, ModuleKeys.WELCOME], [ActionKeys.RolePanelsView, ModuleKeys.REACTION_ROLES], [ActionKeys.GiveawaysView, ModuleKeys.GIVEAWAYS], [ActionKeys.BirthdaysView, ModuleKeys.BIRTHDAYS], [ActionKeys.LevelingView, ModuleKeys.LEVELING], [ActionKeys.ScheduledMessagesView, ModuleKeys.SCHEDULED_MESSAGES], [ActionKeys.ServerStatsView, ModuleKeys.SERVER_STATS], [ActionKeys.CustomCommandsView, ModuleKeys.CUSTOM_COMMANDS], [ActionKeys.JoinCreateView, ModuleKeys.JOIN_TO_CREATE]];
+  const checks = [[ActionKeys.WelcomeView, ModuleKeys.WELCOME], [ActionKeys.RolePanelsView, ModuleKeys.REACTION_ROLES], [ActionKeys.GiveawaysView, ModuleKeys.GIVEAWAYS], [ActionKeys.BirthdaysView, ModuleKeys.BIRTHDAYS], [ActionKeys.LevelingView, ModuleKeys.LEVELING], [ActionKeys.GamesView, ModuleKeys.COMMUNITY_GAMES], [ActionKeys.ScheduledMessagesView, ModuleKeys.SCHEDULED_MESSAGES], [ActionKeys.ServerStatsView, ModuleKeys.SERVER_STATS], [ActionKeys.CustomCommandsView, ModuleKeys.CUSTOM_COMMANDS], [ActionKeys.JoinCreateView, ModuleKeys.JOIN_TO_CREATE]];
   for (const [action, moduleKey] of checks) {
     const result = await ctx.permissions.checkInteraction(interaction, action, moduleKey);
     if (result.allowed) return true;

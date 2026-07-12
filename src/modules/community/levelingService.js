@@ -268,6 +268,41 @@ class LevelingService {
     return { awarded: true, baseGained, multiplier: multiplierData.multiplier, multiplierRoleId: multiplierData.roleId, gained, profile, leveledUp: newLevel > oldLevel };
   }
 
+  async awardBonusXp(message, amount, logger, reason = 'Bonus XP') {
+    if (!message?.guild || message.author?.bot) return { awarded: false };
+    const config = await this.getConfig(message.guild.id);
+    if (!config || config.enabled === false) return { awarded: false };
+
+    const gained = Math.max(1, Math.floor(Number(amount) || 0));
+    const existing = await this.getProfile(message.guild.id, message.author.id);
+    const oldLevel = Number(existing?.level || 0);
+    const newXp = Number(existing?.xp || 0) + gained;
+    const newLevel = levelFromXp(newXp);
+    const result = await query(
+      `INSERT INTO leveling_profiles (guild_id, user_id, user_tag, xp, level, message_count)
+       VALUES ($1,$2,$3,$4,$5,0)
+       ON CONFLICT (guild_id, user_id)
+       DO UPDATE SET user_tag = EXCLUDED.user_tag,
+                     xp = EXCLUDED.xp,
+                     level = EXCLUDED.level,
+                     updated_at = NOW()
+       RETURNING *`,
+      [message.guild.id, message.author.id, message.author.tag || null, newXp, newLevel]
+    );
+    const profile = result.rows[0];
+    const member = message.member || await message.guild.members.fetch(message.author.id).catch(() => null);
+    if (newLevel > oldLevel) await this.handleLevelUp(message, member, profile, oldLevel, config, logger);
+    await logger?.log?.({
+      guildId: message.guild.id,
+      eventKey: 'leveling-adjustment',
+      title: 'Bonus XP Awarded',
+      body: `User: <@${message.author.id}>\nXP: **${gained}**\nReason: **${reason}**`,
+      actorUserId: message.author.id,
+      metadata: { userId: message.author.id, xp: gained, reason }
+    }).catch(() => {});
+    return { awarded: true, gained, profile, leveledUp: newLevel > oldLevel };
+  }
+
   async handleLevelUp(message, member, profile, oldLevel, config, logger) {
     const rewards = await query(
       `SELECT * FROM leveling_role_rewards WHERE guild_id = $1 AND active = true AND level > $2 AND level <= $3 ORDER BY level ASC`,

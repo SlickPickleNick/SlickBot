@@ -1,6 +1,6 @@
 # SlickBot Project Plan
 
-## Current Version: 0.8.8
+## Current Version: 0.8.9
 
 SlickBot is being built as a modular all-in-one Discord server management bot for the SlickPickleNick community.
 
@@ -31,6 +31,24 @@ SlickBot is being built as a modular all-in-one Discord server management bot fo
 - Custom commands
 - Join-to-create voice channels
 - Leveling / XP
+- Community Games: Counting, Tic-Tac-Toe, and Connect Four
+
+
+## v0.8.9 Scope
+
+### Community Games
+
+- Implemented the `COMMUNITY_GAMES` module under the Community setup category.
+- Added a Games button to the Community Center. The Games overview shows all supported game configurations and provides focused buttons for Counting, Tic-Tac-Toe, and Connect Four, plus Community and Return to Setup navigation.
+- Added `/games manager` and game-specific setup, enable, and disable commands.
+- Added a persistent Counting system with a dedicated channel, configurable start/current number, highest record, reset behavior, consecutive-turn prevention, accepted-message edit/delete protection, safe integer expressions, invalid-message deletion, reset/milestone templates, ignored roles/users, staff reset/correction tools, and a contribution leaderboard.
+- Counting ignores non-number/text messages by default so unrelated chat does not reset the count.
+- Editing or deleting an accepted counting message resets the active sequence by default; each behavior can be disabled separately in Counting setup.
+- Added optional milestone XP and a separate setting for whether accepted counting messages receive normal Leveling XP.
+- Added button-based Tic-Tac-Toe challenges with player acceptance, turn controls, automatic win/draw detection, expiration, and statistics.
+- Added button-based Connect Four challenges with a persistent 7-column board, player acceptance, turn controls, automatic win/draw detection, expiration, and statistics.
+- Added PostgreSQL persistence for game configurations, counting state/statistics/ignore lists, multiplayer sessions, and player records.
+- Added Community Games permission defaults, public play controls, logging events, `/help`, `/setup`, `/modules`, and `/bot test` integration.
 
 ## v0.8.8 Scope
 

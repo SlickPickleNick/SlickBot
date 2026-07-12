@@ -90,6 +90,12 @@ const LogModuleCatalog = Object.freeze([
     defaultDelivery: 'IMMEDIATE'
   },
   {
+    key: 'community-games',
+    label: 'Community Games',
+    description: 'Counting resets/milestones and multiplayer game starts/completions.',
+    defaultDelivery: 'IMMEDIATE'
+  },
+  {
     key: 'server-stats',
     label: 'Server Stats',
     description: 'Member, human, bot, and voice counter channel updates.',
@@ -182,6 +188,13 @@ const LogEventCatalog = Object.freeze([
   { key: 'leveling-config', moduleKey: 'leveling', label: 'Leveling Config', description: 'Leveling settings and role rewards changed.', defaultDelivery: 'IMMEDIATE' },
   { key: 'leveling-level-up', moduleKey: 'leveling', label: 'Level Up', description: 'A member reached a new level.', defaultDelivery: 'IMMEDIATE' },
   { key: 'leveling-adjustment', moduleKey: 'leveling', label: 'XP Adjustment', description: 'Staff manually changed or reset XP.', defaultDelivery: 'IMMEDIATE' },
+
+  { key: 'community-game-config', moduleKey: 'community-games', label: 'Game Configuration', description: 'Community game settings or enabled states changed.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'community-game-started', moduleKey: 'community-games', label: 'Game Started', description: 'A Tic-Tac-Toe or Connect Four challenge was created or accepted.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'community-game-completed', moduleKey: 'community-games', label: 'Game Completed', description: 'A Tic-Tac-Toe or Connect Four game ended.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'community-game-reset', moduleKey: 'community-games', label: 'Counting Reset', description: 'An invalid counting entry reset the count.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'community-game-milestone', moduleKey: 'community-games', label: 'Counting Milestone', description: 'The counting channel reached a configured milestone.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'community-game-error', moduleKey: 'community-games', label: 'Game Error', description: 'A community game action failed during runtime processing.', defaultDelivery: 'IMMEDIATE' },
 
   { key: 'server-stats-config', moduleKey: 'server-stats', label: 'Server Stats Config', description: 'Server stats configuration changed.', defaultDelivery: 'IMMEDIATE' },
   { key: 'server-stats-update', moduleKey: 'server-stats', label: 'Server Stats Updated', description: 'Server stat counter channels were refreshed.', defaultDelivery: 'IMMEDIATE' },

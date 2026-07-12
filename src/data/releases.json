@@ -1,4 +1,43 @@
 {
+  "0.8.9": {
+    "title": "SlickBot v0.8.9",
+    "summary": "Adds the Community Games module with Counting, Tic-Tac-Toe, and Connect Four.",
+    "notes": [
+      "Added the COMMUNITY_GAMES module under the Community setup category with a Games overview, focused game configuration pages, and return-to-setup navigation.",
+      "Added separate enable and disable commands for Counting, Tic-Tac-Toe, and Connect Four.",
+      "Added a persistent counting channel system with configurable starting/current numbers, record tracking, incorrect-entry resets, consecutive-turn prevention, accepted-message edit/delete protection, optional safe math expressions, invalid-message deletion, reset messages, milestones, and contribution statistics.",
+      "Non-counting text messages are ignored by default in the counting channel so normal conversation does not reset the game.",
+      "Accepted counting messages are tracked for the active sequence; edits and deletions reset the count by default and can be disabled separately in Counting setup.",
+      "Added counting ignored-role and ignored-user lists, staff reset/correction commands, a public contribution leaderboard, optional milestone XP, and a setting controlling whether accepted counting messages earn normal message XP.",
+      "Added button-based Tic-Tac-Toe challenges with accept/decline controls, turn validation, win/draw detection, automatic expiration, and persistent player statistics.",
+      "Added button-based Connect Four challenges with a persistent board, column controls, turn validation, win/draw detection, automatic expiration, and persistent player statistics.",
+      "Added Community Games permission actions, public play defaults, logging, setup/module status, help entries, diagnostics, and backward-compatible PostgreSQL migrations."
+    ],
+    "commands": [
+      "/games manager",
+      "/games counting setup",
+      "/games counting enable",
+      "/games counting disable",
+      "/games counting status",
+      "/games counting reset",
+      "/games counting set-number",
+      "/games counting leaderboard",
+      "/games counting ignored-role-add",
+      "/games counting ignored-role-remove",
+      "/games counting ignored-user-add",
+      "/games counting ignored-user-remove",
+      "/games tic-tac-toe setup",
+      "/games tic-tac-toe enable",
+      "/games tic-tac-toe disable",
+      "/games tic-tac-toe challenge",
+      "/games tic-tac-toe stats",
+      "/games connect-four setup",
+      "/games connect-four enable",
+      "/games connect-four disable",
+      "/games connect-four challenge",
+      "/games connect-four stats"
+    ]
+  },
   "0.8.8": {
     "title": "SlickBot v0.8.8",
     "summary": "Standardizes support workflow review states for tickets, reports, applications, and appeals.",

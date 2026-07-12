@@ -22,6 +22,7 @@ const { ServerStatsService } = require('../community/serverStatsService');
 const { LevelingService } = require('../community/levelingService');
 const { CustomCommandService } = require('../custom/customCommandService');
 const { JoinCreateService } = require('../voice/joinCreateService');
+const { CommunityGameService } = require('../community/gameService');
 const giveaways = new GiveawayService();
 const birthdays = new BirthdayService();
 const scheduledMessages = new ScheduledMessageService();
@@ -29,6 +30,7 @@ const serverStats = new ServerStatsService();
 const leveling = new LevelingService();
 const customCommands = new CustomCommandService();
 const joinCreate = new JoinCreateService();
+const communityGames = new CommunityGameService();
 
 const STATUS_META = Object.freeze({
   READY: { emoji: '✅', label: 'Ready', color: SlickBotColors.SUCCESS },
@@ -43,7 +45,7 @@ const STATUS_META = Object.freeze({
 const MODULE_CATEGORIES = Object.freeze([
   { key: 'CORE', label: 'Core Setup', modules: [ModuleKeys.PERMISSIONS, ModuleKeys.LOGGING, ModuleKeys.STATUS, ModuleKeys.MODERATION] },
   { key: 'SUPPORT', label: 'Support Systems', modules: [ModuleKeys.TICKETS, ModuleKeys.REPORTS, ModuleKeys.APPLICATIONS, ModuleKeys.APPEALS] },
-  { key: 'COMMUNITY', label: 'Community Systems', modules: [ModuleKeys.WELCOME, ModuleKeys.REACTION_ROLES, ModuleKeys.GIVEAWAYS, ModuleKeys.BIRTHDAYS, ModuleKeys.LEVELING, ModuleKeys.SERVER_STATS, ModuleKeys.CUSTOM_COMMANDS, ModuleKeys.JOIN_TO_CREATE] },
+  { key: 'COMMUNITY', label: 'Community Systems', modules: [ModuleKeys.WELCOME, ModuleKeys.REACTION_ROLES, ModuleKeys.GIVEAWAYS, ModuleKeys.BIRTHDAYS, ModuleKeys.LEVELING, ModuleKeys.COMMUNITY_GAMES, ModuleKeys.SERVER_STATS, ModuleKeys.CUSTOM_COMMANDS, ModuleKeys.JOIN_TO_CREATE] },
   { key: 'AUTOMATION', label: 'Automation Systems', modules: [ModuleKeys.SCHEDULED_MESSAGES, ModuleKeys.BOT_UPDATES] },
   { key: 'BACKLOG', label: 'Coming Soon', modules: [ModuleKeys.UTILITY] }
 ]);
@@ -138,6 +140,12 @@ const MODULE_SETUP_CATALOG = Object.freeze({
     managerCommand: '/custom-command panel', setupCommand: '/custom-command create',
     nextSteps: ['Create a command with `/custom-command create`.', 'Use `/custom-command prefix` if you want a prefix other than `!`.', 'Test with `/custom-command test` before announcing.'],
     usefulCommands: ['/custom-command panel', '/custom-command create', '/custom-command edit', '/custom-command test', '/custom-command prefix']
+  },
+  [ModuleKeys.COMMUNITY_GAMES]: {
+    name: 'Community Games', category: 'Community Systems', description: 'Runs persistent Counting plus button-based Tic-Tac-Toe and Connect Four challenges.',
+    managerCommand: '/games manager', setupCommand: '/games counting setup',
+    nextSteps: ['Open `/games manager` to review all game configurations.', 'Configure a counting channel with `/games counting setup`.', 'Enable each game separately with its `/games ... enable` command.', 'Test Tic-Tac-Toe and Connect Four with a second member.'],
+    usefulCommands: ['/games manager', '/games counting setup', '/games counting enable', '/games tic-tac-toe enable', '/games connect-four enable']
   },
   [ModuleKeys.JOIN_TO_CREATE]: {
     name: 'Join-to-Create Voice', category: 'Community Systems', description: 'Creates temporary voice rooms when members join configured hub channels.',
@@ -558,6 +566,19 @@ async function getModuleStatus(guildId, row) {
     return { moduleKey: row.module_key, core: false, state: 'PARTIAL', emoji: '🟠', label: 'Partially Configured', note: 'XP active; no rewards/announcement' };
   }
 
+  if (row.module_key === 'COMMUNITY_GAMES') {
+    const [configs, counting, active] = await Promise.all([
+      query(`SELECT game_key, enabled, channel_id FROM community_game_configs WHERE guild_id = $1`, [guildId]).catch(() => ({ rows: [] })),
+      query(`SELECT channel_id FROM counting_game_configs WHERE guild_id = $1 LIMIT 1`, [guildId]).catch(() => ({ rows: [] })),
+      query(`SELECT COUNT(*)::int AS count FROM community_game_sessions WHERE guild_id = $1 AND status IN ('PENDING','ACTIVE') AND expires_at > NOW()`, [guildId]).catch(() => ({ rows: [{ count: 0 }] }))
+    ]);
+    const enabled = configs.rows.filter((config) => config.enabled === true);
+    if (!enabled.length) return { moduleKey: row.module_key, core: false, state: 'NEEDS_CONFIG', emoji: '🟣', label: 'Needs Setup', note: 'Enable a game with /games' };
+    const countingEnabled = enabled.some((config) => config.game_key === 'COUNTING');
+    if (countingEnabled && !counting.rows[0]?.channel_id) return { moduleKey: row.module_key, core: false, state: 'PARTIAL', emoji: '🟠', label: 'Partially Configured', note: 'Counting enabled without a channel' };
+    return { moduleKey: row.module_key, core: false, state: 'READY', emoji: '✅', label: 'Ready', note: `${enabled.length}/3 enabled · ${active.rows[0]?.count || 0} active` };
+  }
+
   if (row.module_key === 'SERVER_STATS') {
     const cfg = await query(`SELECT enabled, member_channel_id, human_channel_id, bot_channel_id, voice_channel_id FROM server_stats_configs WHERE guild_id = $1 LIMIT 1`, [guildId]).catch(() => ({ rows: [] }));
     const config = cfg.rows[0] || {};
@@ -860,6 +881,7 @@ async function buildCommunityPanel(guildId) {
   const rolePayload = await buildRoleManagerPanel(guildId);
   const giveawayPayload = await giveaways.buildManagerPanel(guildId);
   const birthdayPayload = await birthdays.buildManagerPanel(guildId);
+  const gamesPayload = await communityGames.buildManagerPanel(guildId).catch(() => ({ embeds: [{ data: { description: 'Community games not configured.' } }] }));
   const statsPayload = await serverStats.buildManagerPanel({ id: guildId, memberCount: 0, members: { fetch: async () => null, cache: { size: 0, filter: () => ({ size: 0 }) } }, channels: { cache: { filter: () => ({ reduce: () => 0 }) } } }).catch(() => ({ embeds: [{ data: { description: 'Server stats not configured.' } }] }));
   const levelingPayload = await leveling.buildManagerPanel(guildId).catch(() => ({ embeds: [{ data: { description: 'Leveling not configured.' } }] }));
   const customPayload = await customCommands.buildManagerPanel(guildId).catch(() => ({ embeds: [{ data: { description: 'Custom commands not configured.' } }] }));
@@ -883,6 +905,9 @@ async function buildCommunityPanel(guildId) {
       '',
       '**Leveling / XP**',
       compactCommunityText(levelingPayload, 'No leveling status available.'),
+      '',
+      '**Community Games**',
+      compactCommunityText(gamesPayload, 'No community game status available.'),
       '',
       '**Server Stats**',
       compactCommunityText(statsPayload, 'No server stats status available.'),
@@ -908,6 +933,7 @@ async function buildCommunityPanel(guildId) {
     createPanelButton(CustomIds.ServerStatsRefresh, 'Stats', ButtonStyle.Secondary, '📊'),
     createPanelButton(CustomIds.CustomCommandsRefresh, 'Custom Commands', ButtonStyle.Secondary, '💬'),
     createPanelButton(CustomIds.JoinCreateRefresh, 'Join Voice', ButtonStyle.Secondary, '🔊'),
+    createPanelButton(CustomIds.GamesRefresh, 'Games', ButtonStyle.Secondary),
     createPanelButton(CustomIds.SetupRefresh, 'Back to Setup', ButtonStyle.Primary, '↩️')
   ]);
   return { embeds: [embed], components: [rowOne, rowTwo] };

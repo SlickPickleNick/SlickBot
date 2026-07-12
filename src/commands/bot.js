@@ -100,6 +100,13 @@ const MODULE_CHECKS = {
     { name: 'Join-create hubs', sql: 'SELECT COUNT(*)::int AS count FROM join_create_hubs WHERE guild_id = $1' },
     { name: 'Active temp channels', sql: "SELECT COUNT(*)::int AS count FROM join_create_temp_channels WHERE guild_id = $1 AND status = 'ACTIVE'" },
     { name: 'All temp channels', sql: 'SELECT COUNT(*)::int AS count FROM join_create_temp_channels WHERE guild_id = $1' }
+  ],
+  [ModuleKeys.COMMUNITY_GAMES]: [
+    { name: 'Game configs', sql: 'SELECT COUNT(*)::int AS count FROM community_game_configs WHERE guild_id = $1' },
+    { name: 'Counting config', sql: 'SELECT COUNT(*)::int AS count FROM counting_game_configs WHERE guild_id = $1' },
+    { name: 'Active counting entries', sql: 'SELECT COUNT(*)::int AS count FROM counting_game_entries WHERE guild_id = $1' },
+    { name: 'Game sessions', sql: 'SELECT COUNT(*)::int AS count FROM community_game_sessions WHERE guild_id = $1' },
+    { name: 'Game statistics', sql: 'SELECT COUNT(*)::int AS count FROM community_game_stats WHERE guild_id = $1' }
   ]
 };
 
@@ -118,7 +125,8 @@ const MODULE_FIXES = Object.freeze({
   [ModuleKeys.SERVER_STATS]: 'Run `/stats setup`, confirm SlickBot can rename the configured stat channels, then run `/stats refresh`.',
   [ModuleKeys.BOT_UPDATES]: 'Run `/bot-updates setup` and configure an update channel.',
   [ModuleKeys.CUSTOM_COMMANDS]: 'Run `/custom-command create` to add your first command.',
-  [ModuleKeys.JOIN_TO_CREATE]: 'Run `/join-create create-hub` or `/join-create setup` to configure a hub channel.'
+  [ModuleKeys.JOIN_TO_CREATE]: 'Run `/join-create create-hub` or `/join-create setup` to configure a hub channel.',
+  [ModuleKeys.COMMUNITY_GAMES]: 'Run `/games manager`, configure Counting if desired, then enable each game separately.'
 });
 
 function statusIcon(status) {

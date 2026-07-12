@@ -125,6 +125,10 @@ const ActionKeys = Object.freeze({
   LevelingConfigure: 'leveling.configure',
   LevelingAdjust: 'leveling.adjust',
 
+  GamesPlay: 'community-games.play',
+  GamesView: 'community-games.view',
+  GamesConfigure: 'community-games.configure',
+
   PanelsConfigure: 'panels.configure',
 
   ServerReset: 'server.reset'
@@ -272,6 +276,10 @@ const defaultActionLevels = Object.freeze({
   [ActionKeys.LevelingConfigure]: PermissionLevels.SENIOR_MODERATOR,
   [ActionKeys.LevelingAdjust]: PermissionLevels.SENIOR_MODERATOR,
 
+  [ActionKeys.GamesPlay]: PermissionLevels.EVERYONE,
+  [ActionKeys.GamesView]: PermissionLevels.MODERATOR,
+  [ActionKeys.GamesConfigure]: PermissionLevels.SENIOR_MODERATOR,
+
   [ActionKeys.ServerReset]: PermissionLevels.OWNER
 });
 
@@ -294,6 +302,7 @@ const defaultModuleLevels = Object.freeze({
   [ModuleKeys.BOT_UPDATES]: PermissionLevels.MODERATOR,
   [ModuleKeys.CUSTOM_COMMANDS]: PermissionLevels.EVERYONE,
   [ModuleKeys.JOIN_TO_CREATE]: PermissionLevels.EVERYONE,
+  [ModuleKeys.COMMUNITY_GAMES]: PermissionLevels.EVERYONE,
   [ModuleKeys.UTILITY]: PermissionLevels.EVERYONE
 });
 
@@ -310,12 +319,13 @@ const defaultPublicActions = Object.freeze([
   ActionKeys.BirthdaysUse,
   ActionKeys.LevelingUse,
   ActionKeys.CustomCommandsUse,
-  ActionKeys.TempVoiceManage
+  ActionKeys.TempVoiceManage,
+  ActionKeys.GamesPlay
 ]);
 
 const defaultTeamPermissions = Object.freeze(Object.values(ActionKeys));
 
-const PERMISSION_DEFAULTS_VERSION = '0.8.8';
+const PERMISSION_DEFAULTS_VERSION = '0.8.9';
 
 module.exports = {
   ActionKeys,

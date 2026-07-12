@@ -4,7 +4,33 @@ SlickBot is an all-in-one Discord server management bot built for the SlickPickl
 
 ## Version
 
-Current package: **v0.8.8**
+Current package: **v0.8.9**
+
+
+## v0.8.9 Updates
+
+### Community Games
+
+- Added a new **Community Games** module with **Counting**, **Tic-Tac-Toe**, and **Connect Four**.
+- Added a **Games** button inside the Community setup center. The Games page shows all game configurations, provides a focused page for each game, and includes Community and Return to Setup navigation.
+- Added separate enable and disable commands for every game.
+- Counting supports a dedicated channel, starting/current number controls, record tracking, incorrect-entry resets, consecutive-turn prevention, accepted-message edit/delete protection, safe math expressions, invalid-message deletion, custom reset/milestone messages, milestone XP, ignored roles/users, staff correction/reset tools, and a contribution leaderboard.
+- Messages that are not numbers or enabled math expressions are ignored by default in the counting channel and do not reset the game.
+- Editing or deleting an accepted counting message resets the active sequence by default; each behavior can be disabled separately in Counting setup.
+- Accepted counting messages do not earn normal message XP by default; this can be enabled separately.
+- Tic-Tac-Toe and Connect Four use public challenge messages with accept/decline buttons, turn-restricted controls, win/draw detection, session expiration, and persistent statistics.
+- Added Community Games permission actions, public play defaults, logging, diagnostics, setup/module status, help entries, and PostgreSQL persistence.
+
+Updated commands:
+
+```text
+/games manager
+/games counting setup|enable|disable|status|reset|set-number|leaderboard
+/games counting ignored-role-add|ignored-role-remove
+/games counting ignored-user-add|ignored-user-remove
+/games tic-tac-toe setup|enable|disable|challenge|stats
+/games connect-four setup|enable|disable|challenge|stats
+```
 
 ## v0.8.8 Updates
 

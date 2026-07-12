@@ -17,6 +17,7 @@ const ModuleKeys = Object.freeze({
   BOT_UPDATES: 'BOT_UPDATES',
   JOIN_TO_CREATE: 'JOIN_TO_CREATE',
   CUSTOM_COMMANDS: 'CUSTOM_COMMANDS',
+  COMMUNITY_GAMES: 'COMMUNITY_GAMES',
   UTILITY: 'UTILITY'
 });
 
@@ -41,6 +42,7 @@ const defaultModules = [
   { key: ModuleKeys.BOT_UPDATES, enabled: true },
   { key: ModuleKeys.CUSTOM_COMMANDS, enabled: true },
   { key: ModuleKeys.JOIN_TO_CREATE, enabled: true },
+  { key: ModuleKeys.COMMUNITY_GAMES, enabled: true },
   { key: ModuleKeys.UTILITY, enabled: false }
 ];
 
@@ -67,7 +69,8 @@ const implementedModules = Object.freeze([
   ModuleKeys.SERVER_STATS,
   ModuleKeys.BOT_UPDATES,
   ModuleKeys.CUSTOM_COMMANDS,
-  ModuleKeys.JOIN_TO_CREATE
+  ModuleKeys.JOIN_TO_CREATE,
+  ModuleKeys.COMMUNITY_GAMES
 ]);
 
 function isImplementedModule(moduleKey) {

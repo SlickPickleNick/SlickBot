@@ -1039,6 +1039,135 @@ async function initDatabase() {
   await query(`CREATE INDEX IF NOT EXISTS idx_leveling_multipliers ON leveling_multiplier_roles(guild_id, active, multiplier DESC);`);
 
   await query(`
+    CREATE TABLE IF NOT EXISTS community_game_configs (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      game_key TEXT NOT NULL,
+      enabled BOOLEAN NOT NULL DEFAULT false,
+      channel_id TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(guild_id, game_key)
+    );
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS counting_game_configs (
+      guild_id TEXT PRIMARY KEY REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      channel_id TEXT,
+      starting_number BIGINT NOT NULL DEFAULT 1,
+      current_number BIGINT NOT NULL DEFAULT 0,
+      record_number BIGINT NOT NULL DEFAULT 0,
+      last_user_id TEXT,
+      reset_on_incorrect BOOLEAN NOT NULL DEFAULT true,
+      prevent_consecutive BOOLEAN NOT NULL DEFAULT true,
+      reset_on_edit BOOLEAN NOT NULL DEFAULT true,
+      reset_on_delete BOOLEAN NOT NULL DEFAULT true,
+      ignore_non_number_messages BOOLEAN NOT NULL DEFAULT true,
+      allow_expressions BOOLEAN NOT NULL DEFAULT false,
+      delete_invalid_messages BOOLEAN NOT NULL DEFAULT false,
+      reset_message TEXT NOT NULL DEFAULT '{user} reset the count. The next number is **{next}**.',
+      milestone_interval INTEGER NOT NULL DEFAULT 100,
+      milestone_message TEXT NOT NULL DEFAULT 'The server reached **{number}** in <#{channel}>. New counting record: **{record}**.',
+      milestone_xp INTEGER NOT NULL DEFAULT 0,
+      normal_message_xp BOOLEAN NOT NULL DEFAULT false,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+
+  await query(`ALTER TABLE counting_game_configs ADD COLUMN IF NOT EXISTS reset_on_edit BOOLEAN NOT NULL DEFAULT true;`);
+  await query(`ALTER TABLE counting_game_configs ADD COLUMN IF NOT EXISTS reset_on_delete BOOLEAN NOT NULL DEFAULT true;`);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS counting_game_entries (
+      message_id TEXT PRIMARY KEY,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      channel_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      number_value BIGINT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS counting_game_ignored_roles (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      role_id TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(guild_id, role_id)
+    );
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS counting_game_ignored_users (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(guild_id, user_id)
+    );
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS counting_game_stats (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL,
+      valid_counts BIGINT NOT NULL DEFAULT 0,
+      resets_caused BIGINT NOT NULL DEFAULT 0,
+      highest_number BIGINT NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(guild_id, user_id)
+    );
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS community_game_sessions (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      game_key TEXT NOT NULL,
+      channel_id TEXT NOT NULL,
+      message_id TEXT,
+      player_one_id TEXT NOT NULL,
+      player_two_id TEXT NOT NULL,
+      current_player_id TEXT,
+      winner_user_id TEXT,
+      board JSONB NOT NULL DEFAULT '[]'::jsonb,
+      status TEXT NOT NULL DEFAULT 'PENDING',
+      expires_at TIMESTAMPTZ NOT NULL DEFAULT (NOW() + INTERVAL '10 minutes'),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS community_game_stats (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL,
+      game_key TEXT NOT NULL,
+      games_played INTEGER NOT NULL DEFAULT 0,
+      wins INTEGER NOT NULL DEFAULT 0,
+      losses INTEGER NOT NULL DEFAULT 0,
+      draws INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(guild_id, user_id, game_key)
+    );
+  `);
+
+  await query(`CREATE INDEX IF NOT EXISTS idx_community_game_configs_guild ON community_game_configs(guild_id, game_key);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_counting_game_entries_guild ON counting_game_entries(guild_id, channel_id);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_counting_game_stats_rank ON counting_game_stats(guild_id, valid_counts DESC);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_community_game_sessions_active ON community_game_sessions(guild_id, game_key, status, expires_at);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_community_game_sessions_players ON community_game_sessions(guild_id, game_key, player_one_id, player_two_id);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_community_game_stats_user ON community_game_stats(guild_id, user_id, game_key);`);
+
+  await query(`
     CREATE TABLE IF NOT EXISTS role_permission_levels (
       id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
       guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,

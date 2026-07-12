@@ -20,6 +20,7 @@ const { BotUpdatesService } = require('./modules/status/botUpdatesService');
 const { CustomCommandService } = require('./modules/custom/customCommandService');
 const { JoinCreateService } = require('./modules/voice/joinCreateService');
 const { LevelingService } = require('./modules/community/levelingService');
+const { CommunityGameService } = require('./modules/community/gameService');
 const { handleReactionRole, syncAllPublishedReactionPanels } = require('./modules/community/rolePanelService');
 const { handleComponentInteraction } = require('./services/interactionRouter');
 const { ActionKeys } = require('./modules/permissions/actionKeys');
@@ -53,6 +54,7 @@ const botUpdates = new BotUpdatesService();
 const customCommands = new CustomCommandService();
 const joinCreate = new JoinCreateService();
 const leveling = new LevelingService();
+const communityGames = new CommunityGameService();
 const healthServer = startHealthServer(client);
 
 client.once(Events.ClientReady, async (readyClient) => {
@@ -88,6 +90,11 @@ client.once(Events.ClientReady, async (readyClient) => {
     applications.processExpiredSessions(readyClient, logger).catch((error) => console.error('Failed to process expired application sessions:', error));
   }, 30 * 1000);
   await applications.processExpiredSessions(readyClient, logger).catch((error) => console.error('Failed to process expired application sessions:', error));
+
+  setInterval(() => {
+    communityGames.expireStaleSessions(readyClient).catch((error) => console.error('Failed to expire stale community games:', error));
+  }, 5 * 60 * 1000);
+  await communityGames.expireStaleSessions(readyClient).catch((error) => console.error('Failed to expire stale community games:', error));
 
   setInterval(() => {
     for (const guild of readyClient.guilds.cache.values()) {
@@ -189,6 +196,7 @@ client.on(Events.GuildMemberUpdate, async (oldMember, newMember) => {
 });
 
 client.on(Events.MessageDelete, async (message) => {
+  await handleCountingMessageMutationEvent(message, 'DELETED');
   if (!message.guild || message.author?.bot) return;
   await logger.log({
     guildId: message.guild.id,
@@ -213,6 +221,7 @@ client.on(Events.MessageUpdate, async (oldMessage, newMessage) => {
   const newContent = newMessage.content || '[No new content available]';
   if (oldContent === newContent) return;
 
+  await handleCountingMessageMutationEvent(newMessage, 'EDITED');
   await logger.log({
     guildId: newMessage.guild.id,
     eventKey: 'message-edit',
@@ -276,6 +285,29 @@ client.on(Events.MessageCreate, async (message) => {
 
   if (message.guild) {
     if (await permissions.isIgnored(message.guild.id, message.author.id).catch(() => false)) return;
+
+    let countingResult = { handled: false, suppressNormalXp: false };
+    const activeCountingConfig = await communityGames.getActiveCountingConfigForChannel(message.guild.id, message.channelId).catch(() => null);
+    if (activeCountingConfig) {
+      const gamesEnabled = await permissions.isModuleEnabled(message.guild.id, ModuleKeys.COMMUNITY_GAMES).catch(() => false);
+      const gamesAccess = gamesEnabled
+        ? await permissions.checkPublicInteraction(messageToPermissionInteraction(message), ActionKeys.GamesPlay, ModuleKeys.COMMUNITY_GAMES).catch(() => ({ allowed: false }))
+        : { allowed: false };
+      if (gamesAccess.allowed) {
+        countingResult = await communityGames.handleCountingMessage(message, logger, activeCountingConfig).catch(async (error) => {
+          console.error('Failed to process counting game message:', error);
+          await logger.log({
+            guildId: message.guild.id,
+            eventKey: 'community-game-error',
+            title: 'Community Game Error',
+            body: error instanceof Error ? error.message : String(error),
+            metadata: { game: 'COUNTING', channelId: message.channelId, authorId: message.author.id }
+          }).catch(() => {});
+          return { handled: false, suppressNormalXp: false };
+        });
+      }
+    }
+
     const customCommandsEnabled = await permissions.isModuleEnabled(message.guild.id, ModuleKeys.CUSTOM_COMMANDS).catch(() => false);
     if (customCommandsEnabled) {
       const customCommandAccess = await permissions.checkPublicInteraction(messageToPermissionInteraction(message), ActionKeys.CustomCommandsUse, ModuleKeys.CUSTOM_COMMANDS).catch(() => ({ allowed: false }));
@@ -294,7 +326,7 @@ client.on(Events.MessageCreate, async (message) => {
     }
 
     const levelingEnabled = await permissions.isModuleEnabled(message.guild.id, 'LEVELING').catch(() => false);
-    if (levelingEnabled) {
+    if (levelingEnabled && !countingResult.suppressNormalXp) {
       await leveling.processMessage(message, logger).catch((error) => console.error('Failed to process message XP:', error));
     }
     return;
@@ -305,6 +337,22 @@ client.on(Events.MessageCreate, async (message) => {
   });
 });
 
+
+async function handleCountingMessageMutationEvent(message, mutationType) {
+  if (!message?.guildId) return;
+  const gamesEnabled = await permissions.isModuleEnabled(message.guildId, ModuleKeys.COMMUNITY_GAMES).catch(() => false);
+  if (!gamesEnabled) return;
+  await communityGames.handleCountingMessageMutation(message, mutationType, logger).catch(async (error) => {
+    console.error(`Failed to process ${mutationType.toLowerCase()} counting message:`, error);
+    await logger.log({
+      guildId: message.guildId,
+      eventKey: 'community-game-error',
+      title: 'Community Game Error',
+      body: error instanceof Error ? error.message : String(error),
+      metadata: { game: 'COUNTING', messageId: message.id, mutationType }
+    }).catch(() => {});
+  });
+}
 
 client.on(Events.MessageReactionAdd, async (reaction, user) => {
   if (user?.bot) return;

@@ -26,6 +26,7 @@ const MODULE_LABELS = Object.freeze({
   [ModuleKeys.GIVEAWAYS]: 'Giveaways',
   [ModuleKeys.BIRTHDAYS]: 'Birthdays',
   [ModuleKeys.LEVELING]: 'Leveling',
+  [ModuleKeys.COMMUNITY_GAMES]: 'Community Games',
   [ModuleKeys.SERVER_STATS]: 'Server Stats',
   [ModuleKeys.BOT_UPDATES]: 'Bot Updates',
   [ModuleKeys.CUSTOM_COMMANDS]: 'Custom Commands',
@@ -124,6 +125,14 @@ const HELP_CATALOG = Object.freeze([
   { moduleKey: ModuleKeys.LEVELING, actionKey: ActionKeys.LevelingView, command: '/level manager|multiplier-list|analyze', description: 'View leveling configuration and XP analysis.' },
   { moduleKey: ModuleKeys.LEVELING, actionKey: ActionKeys.LevelingConfigure, command: '/level setup|role-add|role-remove|multiplier-add|ignored-channel-add', description: 'Configure XP, rewards, multipliers, and ignored targets.' },
   { moduleKey: ModuleKeys.LEVELING, actionKey: ActionKeys.LevelingAdjust, command: '/level set-xp|reset', description: 'Adjust or reset user XP.' },
+
+  { moduleKey: ModuleKeys.COMMUNITY_GAMES, actionKey: ActionKeys.GamesPlay, command: '/games counting leaderboard', description: 'View the counting contribution leaderboard.' },
+  { moduleKey: ModuleKeys.COMMUNITY_GAMES, actionKey: ActionKeys.GamesPlay, command: '/games tic-tac-toe challenge|stats', description: 'Challenge a member to Tic-Tac-Toe or view player statistics.' },
+  { moduleKey: ModuleKeys.COMMUNITY_GAMES, actionKey: ActionKeys.GamesPlay, command: '/games connect-four challenge|stats', description: 'Challenge a member to Connect Four or view player statistics.' },
+  { moduleKey: ModuleKeys.COMMUNITY_GAMES, actionKey: ActionKeys.GamesView, command: '/games manager and /games counting status', description: 'Review all Community Games configuration and counting state.' },
+  { moduleKey: ModuleKeys.COMMUNITY_GAMES, actionKey: ActionKeys.GamesConfigure, command: '/games counting setup|enable|disable|reset|set-number', description: 'Configure and manage the Counting game.' },
+  { moduleKey: ModuleKeys.COMMUNITY_GAMES, actionKey: ActionKeys.GamesConfigure, command: '/games tic-tac-toe setup|enable|disable', description: 'Configure or toggle Tic-Tac-Toe.' },
+  { moduleKey: ModuleKeys.COMMUNITY_GAMES, actionKey: ActionKeys.GamesConfigure, command: '/games connect-four setup|enable|disable', description: 'Configure or toggle Connect Four.' },
 
   { moduleKey: ModuleKeys.SCHEDULED_MESSAGES, actionKey: ActionKeys.ScheduledMessagesView, command: '/schedule manager|list', description: 'View scheduled messages.' },
   { moduleKey: ModuleKeys.SCHEDULED_MESSAGES, actionKey: ActionKeys.ScheduledMessagesConfigure, command: '/schedule setup', description: 'Configure schedule defaults.' },
