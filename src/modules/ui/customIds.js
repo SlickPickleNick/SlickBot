@@ -31,8 +31,11 @@ const CustomIds = Object.freeze({
   ScheduledMessagesRefresh: 'slickbot:scheduled-messages:refresh',
   ServerStatsRefresh: 'slickbot:server-stats:refresh',
   LevelingRefresh: 'slickbot:leveling:refresh',
+  CustomCommandsRefresh: 'slickbot:custom-commands:refresh',
+  JoinCreateRefresh: 'slickbot:join-create:refresh',
 
   ModulesSelect: 'slickbot:modules:select',
+  ModulesDetailSelect: 'slickbot:modules:detail-select',
   ModulesRefresh: 'slickbot:modules:refresh',
 
   LoggingRefresh: 'slickbot:logging:refresh',

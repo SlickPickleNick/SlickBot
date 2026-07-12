@@ -1,4 +1,22 @@
 {
+  "0.8.5": {
+    "title": "SlickBot v0.8.5",
+    "summary": "Refines the setup center and module manager with consistent health states, detailed module setup guidance, and clearer next actions.",
+    "notes": [
+      "Updated /setup to show setup categories, shared module health counts, and prioritized next actions.",
+      "Updated /modules panel with the same Ready, Partially Configured, Needs Setup, Disabled, Warning, Error, and Coming Soon status language used by /bot test.",
+      "Added module detail pages from the module manager so admins can review each module's purpose, current status, recommended setup steps, and useful commands.",
+      "Kept existing command names and added no full setup wizard yet, preserving current workflows while preparing for a future wizard pass.",
+      "Server Stats now treats any configured counter as ready because not every server needs all available counters.",
+      "Expanded the Community Center summary to include Custom Commands and Join-to-Create Voice, with buttons to open their focused panels."
+    ],
+    "commands": [
+      "/setup",
+      "/modules panel",
+      "/bot test",
+      "/help"
+    ]
+  },
   "0.8.4": {
     "title": "SlickBot v0.8.4",
     "summary": "Adds an interactive /help menu and improves bot diagnostics with clearer module health, errors, and recommended fixes.",

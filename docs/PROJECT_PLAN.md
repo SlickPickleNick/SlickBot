@@ -1,6 +1,6 @@
 # SlickBot Project Plan
 
-## Current Version: 0.8.4
+## Current Version: 0.8.5
 
 SlickBot is being built as a modular all-in-one Discord server management bot for the SlickPickleNick community.
 
@@ -31,6 +31,19 @@ SlickBot is being built as a modular all-in-one Discord server management bot fo
 - Custom commands
 - Join-to-create voice channels
 - Leveling / XP
+
+## v0.8.5 Scope
+
+### Setup and Module Manager Refinement
+
+- Refined `/setup` to use the same module health model as `/bot test`.
+- Added setup categories for Core Setup, Support Systems, Community Systems, Automation Systems, and Coming Soon modules.
+- Added prioritized next actions to the setup dashboard so admins can quickly see what needs attention.
+- Refined `/modules panel` with consistent Ready, Partially Configured, Needs Setup, Disabled, Warning, Error, and Coming Soon language.
+- Added interactive module detail pages with each module's purpose, current setup status, recommended setup/review steps, focused panel command, primary setup command, and useful commands.
+- Preserved all existing module command names and deferred the full setup wizard until after the setup/status foundation is stable.
+- Treated Server Stats as ready when at least one counter is configured, because all counters are optional.
+- Expanded the Community Center with Custom Commands and Join-to-Create Voice summaries and focused-panel buttons.
 
 ## v0.8.4 Scope
 

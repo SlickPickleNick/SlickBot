@@ -3,7 +3,7 @@ const { ActionKeys } = require('../modules/permissions/actionKeys');
 const { ModuleKeys, isCoreModule } = require('../modules/moduleRegistry');
 const { query } = require('./db');
 const { replyPrivate, acknowledgeQuietly } = require('../utils/reply');
-const { buildSetupPanel, buildModulesPanel, buildLoggingPanel, buildTeamsPanel, buildPermissionsPanel, buildCommunityPanel } = require('../modules/ui/panels');
+const { buildSetupPanel, buildModulesPanel, buildModuleDetailPanel, buildLoggingPanel, buildTeamsPanel, buildPermissionsPanel, buildCommunityPanel } = require('../modules/ui/panels');
 const { buildHelpPayload } = require('../modules/help/helpService');
 const { buildModerationPanel, buildRecentCasesPanel } = require('../modules/moderation/moderationUi');
 const { buildStatusPanel } = require('../commands/status');
@@ -21,6 +21,7 @@ const { ServerStatsService } = require('../modules/community/serverStatsService'
 const { LevelingService } = require('../modules/community/levelingService');
 const { buildRoleManagerPanel, toggleRole } = require('../modules/community/rolePanelService');
 const { JoinCreateService } = require('../modules/voice/joinCreateService');
+const { CustomCommandService } = require('../modules/custom/customCommandService');
 const {
   TicketService,
   ReportService,
@@ -45,6 +46,7 @@ const scheduledMessages = new ScheduledMessageService();
 const serverStats = new ServerStatsService();
 const leveling = new LevelingService();
 const joinCreate = new JoinCreateService();
+const customCommands = new CustomCommandService();
 
 async function handleComponentInteraction(interaction, ctx) {
   if (!interaction.guildId) {
@@ -203,6 +205,18 @@ async function handleButton(interaction, ctx) {
   if (id === CustomIds.ServerStatsRefresh) {
     if (!(await requireAction(interaction, ctx, ActionKeys.ServerStatsView, ModuleKeys.SERVER_STATS))) return true;
     await updatePanel(interaction, await serverStats.buildManagerPanel(interaction.guild));
+    return true;
+  }
+
+  if (id === CustomIds.CustomCommandsRefresh) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.CustomCommandsView, ModuleKeys.CUSTOM_COMMANDS))) return true;
+    await updatePanel(interaction, await customCommands.buildManagerPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id === CustomIds.JoinCreateRefresh) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.JoinCreateView, ModuleKeys.JOIN_TO_CREATE))) return true;
+    await updatePanel(interaction, await joinCreate.buildManagerPanel(interaction.guild));
     return true;
   }
 
@@ -573,6 +587,12 @@ async function handleSelect(interaction, ctx) {
       mode: id === CustomIds.HelpDisabledSelect ? 'disabled' : 'enabled',
       moduleKey: interaction.values[0]
     }));
+    return true;
+  }
+
+  if (id === CustomIds.ModulesDetailSelect) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.ModulesManage, ModuleKeys.PERMISSIONS))) return true;
+    await updatePanel(interaction, await buildModuleDetailPanel(interaction.guildId, interaction.values[0]));
     return true;
   }
 
@@ -948,7 +968,7 @@ async function requireAnySupportAction(interaction, ctx) {
 
 
 async function requireAnyCommunityAction(interaction, ctx) {
-  const checks = [[ActionKeys.WelcomeView, ModuleKeys.WELCOME], [ActionKeys.RolePanelsView, ModuleKeys.REACTION_ROLES], [ActionKeys.GiveawaysView, ModuleKeys.GIVEAWAYS], [ActionKeys.BirthdaysView, ModuleKeys.BIRTHDAYS], [ActionKeys.LevelingView, ModuleKeys.LEVELING], [ActionKeys.ScheduledMessagesView, ModuleKeys.SCHEDULED_MESSAGES], [ActionKeys.ServerStatsView, ModuleKeys.SERVER_STATS]];
+  const checks = [[ActionKeys.WelcomeView, ModuleKeys.WELCOME], [ActionKeys.RolePanelsView, ModuleKeys.REACTION_ROLES], [ActionKeys.GiveawaysView, ModuleKeys.GIVEAWAYS], [ActionKeys.BirthdaysView, ModuleKeys.BIRTHDAYS], [ActionKeys.LevelingView, ModuleKeys.LEVELING], [ActionKeys.ScheduledMessagesView, ModuleKeys.SCHEDULED_MESSAGES], [ActionKeys.ServerStatsView, ModuleKeys.SERVER_STATS], [ActionKeys.CustomCommandsView, ModuleKeys.CUSTOM_COMMANDS], [ActionKeys.JoinCreateView, ModuleKeys.JOIN_TO_CREATE]];
   for (const [action, moduleKey] of checks) {
     const result = await ctx.permissions.checkInteraction(interaction, action, moduleKey);
     if (result.allowed) return true;

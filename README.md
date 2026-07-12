@@ -4,7 +4,25 @@ SlickBot is an all-in-one Discord server management bot built for the SlickPickl
 
 ## Version
 
-Current package: **v0.8.4**
+Current package: **v0.8.5**
+
+## v0.8.5 Updates
+
+### Setup and Module Manager Refinement
+
+- Refined `/setup` into a practical setup dashboard with shared module health counts, setup categories, and prioritized next actions.
+- Refined `/modules panel` with consistent status language matching `/bot test`: Ready, Partially Configured, Needs Setup, Disabled, Warning, Error, and Coming Soon.
+- Added module detail pages from the module manager so admins can review each module's purpose, current setup state, recommended setup steps, and useful commands.
+- Kept existing command names and did not add the full setup wizard yet, preserving current workflows while preparing for a future guided setup pass.
+- Server Stats now treats any configured counter as ready because servers can intentionally configure only one or two counters.
+- Expanded the Community Center to include Custom Commands and Join-to-Create Voice summaries and direct buttons.
+
+Updated commands:
+
+```text
+/setup
+/modules panel
+```
 
 ## v0.8.4 Updates
 
