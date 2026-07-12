@@ -10,7 +10,10 @@
       "Appeal denial DMs now use the same red denial styling as the review channel embed.",
       "Added a reports.decision_reason migration for clearer final report decision tracking.",
       "Added confirmed support-module reset commands for Tickets, Reports, Applications, and Appeals so admins can restart individual support module setup/testing data without using the full server reset.",
-      "Each support reset shows a private confirmation prompt with affected record counts before any data is cleared."
+      "Each support reset shows a private confirmation prompt with affected record counts before any data is cleared.",
+      "Application types now have a configurable per-question session timeout with a default of 3 minutes.",
+      "Application question DMs now show a live Discord timestamp indicating how long the applicant has left to answer.",
+      "Expired application sessions are automatically cancelled and the applicant receives a DM explaining that the application was cancelled because they did not respond in time."
     ],
     "commands": [
       "/ticket manager",

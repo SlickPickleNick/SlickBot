@@ -456,10 +456,13 @@ async function initDatabase() {
   await query(`ALTER TABLE application_types ADD COLUMN IF NOT EXISTS panel_color TEXT;`).catch(() => {});
   await query(`ALTER TABLE application_types ADD COLUMN IF NOT EXISTS panel_display_mode TEXT NOT NULL DEFAULT 'BUTTONS';`).catch(() => {});
   await query(`ALTER TABLE application_types ADD COLUMN IF NOT EXISTS panel_header_image_url TEXT;`).catch(() => {});
+  await query(`ALTER TABLE application_types ADD COLUMN IF NOT EXISTS question_timeout_seconds INTEGER NOT NULL DEFAULT 180;`).catch(() => {});
   await query(`ALTER TABLE application_submissions ADD COLUMN IF NOT EXISTS review_reason TEXT;`).catch(() => {});
   await query(`ALTER TABLE application_submissions ADD COLUMN IF NOT EXISTS review_channel_id TEXT;`).catch(() => {});
   await query(`ALTER TABLE application_submissions ADD COLUMN IF NOT EXISTS review_message_id TEXT;`).catch(() => {});
   await query(`ALTER TABLE application_submissions ADD COLUMN IF NOT EXISTS review_thread_id TEXT;`).catch(() => {});
+  await query(`ALTER TABLE application_sessions ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ;`).catch(() => {});
+  await query(`UPDATE application_sessions SET expires_at = updated_at + INTERVAL '180 seconds' WHERE status = 'ACTIVE' AND expires_at IS NULL;`).catch(() => {});
   await query(`DELETE FROM application_types WHERE name = 'Moderator' AND description = 'Apply to help moderate the SlickPickleNick community.'`).catch(() => {});
 
   await query(`ALTER TABLE appeal_configs ADD COLUMN IF NOT EXISTS panel_title TEXT;`).catch(() => {});
@@ -1134,6 +1137,7 @@ await query(`CREATE INDEX IF NOT EXISTS idx_bot_presence_guild ON bot_presence_s
   await query(`CREATE INDEX IF NOT EXISTS idx_ticket_types_guild ON ticket_types(guild_id, name);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_application_questions_type ON application_questions(application_type_id, display_order);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_application_sessions_active ON application_sessions(applicant_user_id, status, updated_at DESC);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_application_sessions_expires ON application_sessions(status, expires_at);`).catch(() => {});
 
   await query(`CREATE INDEX IF NOT EXISTS idx_tickets_guild_status ON tickets(guild_id, status, created_at DESC);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_tickets_channel ON tickets(guild_id, channel_id);`);

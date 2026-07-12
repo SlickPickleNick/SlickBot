@@ -20,6 +20,9 @@ Current package: **v0.8.8**
 - Added confirmed support-module reset commands for testing and rebuilding individual support workflows without using the full server reset.
 - New reset commands: `/ticket reset`, `/report reset`, `/application reset`, and `/appeal reset`.
 - Each support reset shows a private confirmation message with record counts before anything is cleared.
+- Application types now support a configurable per-question session timeout through `/application setup`; the default is **3 minutes**.
+- Application question DMs now show a live Discord timestamp for how long the user has left to answer.
+- If a user does not answer before the timeout, SlickBot cancels the active application session and DMs them that their application was cancelled because they did not respond in time.
 
 Updated systems:
 
@@ -30,6 +33,7 @@ Applications
 Appeals
 Support review controls
 Support module reset tools
+Application session timeouts
 ```
 
 ## v0.8.7 Updates

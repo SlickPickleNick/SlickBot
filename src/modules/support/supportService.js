@@ -39,6 +39,32 @@ function formatTimestamp(value) {
   return `<t:${Math.floor(date.getTime() / 1000)}:f>`;
 }
 
+function formatRelativeTimestamp(value) {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return `<t:${Math.floor(date.getTime() / 1000)}:R>`;
+}
+
+function clampApplicationTimeoutSeconds(value) {
+  const seconds = Number.parseInt(value, 10);
+  if (!Number.isFinite(seconds) || seconds <= 0) return 180;
+  return Math.min(Math.max(seconds, 60), 86400);
+}
+
+function formatDuration(seconds) {
+  const safe = clampApplicationTimeoutSeconds(seconds);
+  const minutes = Math.floor(safe / 60);
+  const remainder = safe % 60;
+  if (minutes && remainder) return `${minutes} minute${minutes === 1 ? '' : 's'} ${remainder} second${remainder === 1 ? '' : 's'}`;
+  if (minutes) return `${minutes} minute${minutes === 1 ? '' : 's'}`;
+  return `${safe} second${safe === 1 ? '' : 's'}`;
+}
+
+function getSessionDeadline(timeoutSeconds) {
+  return new Date(Date.now() + clampApplicationTimeoutSeconds(timeoutSeconds) * 1000);
+}
+
 const SUPPORT_STATUS_LABELS = Object.freeze({
   OPEN: '🟠 **Open**',
   CLAIMED: '🔵 **Claimed**',
@@ -907,6 +933,8 @@ function buildReportReviewPayload(report) {
 
 
 function buildApplicationQuestionPayload(session, applicationName, question, questionIndex, questionCount) {
+  const deadlineText = formatRelativeTimestamp(session.expires_at);
+  const timeoutText = formatDuration(session.question_timeout_seconds || 180);
   return {
     embeds: [createBaseEmbed({
       title: `${applicationName} Application`,
@@ -915,8 +943,11 @@ function buildApplicationQuestionPayload(session, applicationName, question, que
         '',
         `**${question.question_text}**`,
         '',
-        question.required === false ? 'This question is optional. Reply with `skip` if you do not want to answer it.' : 'Reply to this DM with your answer.'
-      ].join('\n'),
+        question.required === false ? 'This question is optional. Reply with `skip` if you do not want to answer it.' : 'Reply to this DM with your answer.',
+        '',
+        `**Answer within:** ${deadlineText || timeoutText}`,
+        deadlineText ? `Timeout length: **${timeoutText}**` : null
+      ].filter(Boolean).join('\n'),
       color: SlickBotColors.PRIMARY,
       footer: 'SlickBot Applications'
     })]
@@ -952,8 +983,8 @@ class ApplicationService {
 
   async setupType(guildId, input) {
     const result = await query(
-      `INSERT INTO application_types (guild_id, name, description, review_channel_id, pending_role_id, approved_role_id, auto_assign_approved_role, submission_confirmation_message, panel_title, panel_description, panel_color, panel_header_image_url, panel_display_mode, enabled)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, true)
+      `INSERT INTO application_types (guild_id, name, description, review_channel_id, pending_role_id, approved_role_id, auto_assign_approved_role, submission_confirmation_message, panel_title, panel_description, panel_color, panel_header_image_url, panel_display_mode, question_timeout_seconds, enabled)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, COALESCE($14, 180), true)
        ON CONFLICT (guild_id, name) DO UPDATE SET
          description = COALESCE(EXCLUDED.description, application_types.description),
          review_channel_id = COALESCE(EXCLUDED.review_channel_id, application_types.review_channel_id),
@@ -966,9 +997,10 @@ class ApplicationService {
          panel_color = COALESCE(EXCLUDED.panel_color, application_types.panel_color),
          panel_header_image_url = COALESCE(EXCLUDED.panel_header_image_url, application_types.panel_header_image_url),
          panel_display_mode = COALESCE(EXCLUDED.panel_display_mode, application_types.panel_display_mode),
+         question_timeout_seconds = CASE WHEN $14 IS NULL THEN application_types.question_timeout_seconds ELSE EXCLUDED.question_timeout_seconds END,
          enabled = true,
          updated_at = NOW() RETURNING *`,
-      [guildId, input.name, input.description || null, input.reviewChannelId || null, input.pendingRoleId || null, input.approvedRoleId || null, Boolean(input.autoAssignApprovedRole), input.submissionConfirmationMessage || null, input.panelTitle || null, input.panelDescription || null, input.panelColor || null, input.panelHeaderImageUrl || null, input.panelDisplayMode || null]
+      [guildId, input.name, input.description || null, input.reviewChannelId || null, input.pendingRoleId || null, input.approvedRoleId || null, Boolean(input.autoAssignApprovedRole), input.submissionConfirmationMessage || null, input.panelTitle || null, input.panelDescription || null, input.panelColor || null, input.panelHeaderImageUrl || null, input.panelDisplayMode || null, input.questionTimeoutSeconds == null ? null : clampApplicationTimeoutSeconds(input.questionTimeoutSeconds)]
     );
     return result.rows[0];
   }
@@ -1027,20 +1059,28 @@ class ApplicationService {
       return { ok: false, reason: 'I could not DM you. Please enable server DMs and try again.' };
     }
 
-    await query(
-      `INSERT INTO application_sessions (guild_id, application_type_id, applicant_user_id, applicant_user_tag, current_index, answers, status) VALUES ($1, $2, $3, $4, 0, '{}'::jsonb, 'ACTIVE')`,
-      [interaction.guildId, applicationType.id, interaction.user.id, interaction.user.tag]
+    const timeoutSeconds = clampApplicationTimeoutSeconds(applicationType.question_timeout_seconds || 180);
+    const expiresAt = getSessionDeadline(timeoutSeconds);
+    const insertedSession = await query(
+      `INSERT INTO application_sessions (guild_id, application_type_id, applicant_user_id, applicant_user_tag, current_index, answers, status, expires_at) VALUES ($1, $2, $3, $4, 0, '{}'::jsonb, 'ACTIVE', $5) RETURNING *`,
+      [interaction.guildId, applicationType.id, interaction.user.id, interaction.user.tag, expiresAt.toISOString()]
     );
-    await dm.send({ embeds: [createBaseEmbed({ title: `${applicationType.name} Application Started`, description: [`SlickBot will ask **${refreshedQuestions.length}** question(s), one at a time.`, 'Reply to each DM with your answer.', '', `**Question 1:** ${refreshedQuestions[0].question_text}`].join('\n'), color: SlickBotColors.PRIMARY, footer: 'SlickBot Applications' })] });
+    await dm.send({ embeds: [createBaseEmbed({ title: `${applicationType.name} Application Started`, description: [`SlickBot will ask **${refreshedQuestions.length}** question(s), one at a time.`, `You have **${formatDuration(timeoutSeconds)}** to answer each question.`, 'If you do not answer a question in time, your application will be cancelled.', '', 'The first question is below.'].join('\n'), color: SlickBotColors.PRIMARY, footer: 'SlickBot Applications' })] });
+    await dm.send(buildApplicationQuestionPayload({ ...insertedSession.rows[0], question_timeout_seconds: timeoutSeconds }, applicationType.name, refreshedQuestions[0], 0, refreshedQuestions.length));
     await logger.log({ guildId: interaction.guildId, eventKey: 'application-start', title: 'Application Started', body: `${interaction.user.tag} started a DM application for ${applicationType.name}.`, actorUserId: interaction.user.id }).catch(() => {});
     return { ok: true, questionCount: refreshedQuestions.length };
   }
 
   async handleDmResponse({ message, client, logger }) {
     if (message.author.bot || !message.channel || message.guild) return false;
-    const sessionResult = await query(`SELECT s.*, t.name AS application_name, t.review_channel_id, t.pending_role_id, t.approved_role_id, t.auto_assign_approved_role, t.submission_confirmation_message FROM application_sessions s INNER JOIN application_types t ON t.id = s.application_type_id WHERE s.applicant_user_id = $1 AND s.status = 'ACTIVE' ORDER BY s.updated_at DESC LIMIT 1`, [message.author.id]).catch(() => ({ rows: [] }));
+    const sessionResult = await query(`SELECT s.*, t.name AS application_name, t.review_channel_id, t.pending_role_id, t.approved_role_id, t.auto_assign_approved_role, t.submission_confirmation_message, t.question_timeout_seconds FROM application_sessions s INNER JOIN application_types t ON t.id = s.application_type_id WHERE s.applicant_user_id = $1 AND s.status = 'ACTIVE' ORDER BY s.updated_at DESC LIMIT 1`, [message.author.id]).catch(() => ({ rows: [] }));
     const session = sessionResult.rows[0];
     if (!session) return false;
+
+    if (session.expires_at && new Date(session.expires_at).getTime() <= Date.now()) {
+      await this.cancelExpiredSession({ session, client, logger, user: message.author, dmChannel: message.channel }).catch(() => null);
+      return true;
+    }
 
     const questions = await this.getQuestions(session.application_type_id);
     const current = questions[session.current_index];
@@ -1052,14 +1092,75 @@ class ApplicationService {
     const nextIndex = session.current_index + 1;
 
     if (nextIndex < questions.length) {
-      const updatedSession = await query(`UPDATE application_sessions SET current_index = $1, answers = $2, updated_at = NOW() WHERE id = $3 RETURNING *`, [nextIndex, safeJson(answers), session.id]);
-      await message.channel.send(buildApplicationQuestionPayload(updatedSession.rows[0], session.application_name, questions[nextIndex], nextIndex, questions.length));
+      const timeoutSeconds = clampApplicationTimeoutSeconds(session.question_timeout_seconds || 180);
+      const expiresAt = getSessionDeadline(timeoutSeconds);
+      const updatedSession = await query(`UPDATE application_sessions SET current_index = $1, answers = $2, expires_at = $3, updated_at = NOW() WHERE id = $4 RETURNING *`, [nextIndex, safeJson(answers), expiresAt.toISOString(), session.id]);
+      await message.channel.send(buildApplicationQuestionPayload({ ...updatedSession.rows[0], question_timeout_seconds: timeoutSeconds }, session.application_name, questions[nextIndex], nextIndex, questions.length));
       return true;
     }
 
-    const updatedSession = await query(`UPDATE application_sessions SET current_index = $1, answers = $2, status = 'AWAITING_CONFIRMATION', updated_at = NOW() WHERE id = $3 RETURNING *`, [nextIndex, safeJson(answers), session.id]);
+    const updatedSession = await query(`UPDATE application_sessions SET current_index = $1, answers = $2, status = 'AWAITING_CONFIRMATION', expires_at = NULL, updated_at = NOW() WHERE id = $3 RETURNING *`, [nextIndex, safeJson(answers), session.id]);
     await message.channel.send(buildApplicationConfirmPayload(updatedSession.rows[0], session.application_name, answers));
     return true;
+  }
+
+
+  async cancelExpiredSession({ session, client = null, logger = null, user = null, dmChannel = null }) {
+    const result = await query(
+      `UPDATE application_sessions
+       SET status = 'CANCELLED', expires_at = NULL, updated_at = NOW()
+       WHERE id = $1 AND status = 'ACTIVE'
+       RETURNING *`,
+      [session.id]
+    );
+    const cancelled = result.rows[0] || null;
+    if (!cancelled) return null;
+
+    const applicationName = session.application_name || 'application';
+    const cancellationMessage = {
+      embeds: [createBaseEmbed({
+        title: 'Application Cancelled',
+        description: `Your application for **${applicationName}** was cancelled because you did not respond in time.`,
+        color: SlickBotColors.WARNING,
+        footer: 'SlickBot Applications'
+      })]
+    };
+
+    if (dmChannel && typeof dmChannel.send === 'function') {
+      await dmChannel.send(cancellationMessage).catch(() => null);
+    } else {
+      const targetUser = user || (client ? await client.users.fetch(session.applicant_user_id).catch(() => null) : null);
+      await targetUser?.send(cancellationMessage).catch(() => null);
+    }
+
+    await logger?.log({
+      guildId: session.guild_id,
+      eventKey: 'application-cancel',
+      title: 'Application Timed Out',
+      body: `${session.applicant_user_tag || session.applicant_user_id} did not respond to ${applicationName} in time.`,
+      actorUserId: session.applicant_user_id,
+      metadata: { sessionId: session.id, applicationTypeId: session.application_type_id, reason: 'timeout' }
+    }).catch(() => {});
+    return cancelled;
+  }
+
+  async processExpiredSessions(client, logger = null, limit = 25) {
+    const result = await query(
+      `SELECT s.*, t.name AS application_name, t.question_timeout_seconds
+       FROM application_sessions s
+       INNER JOIN application_types t ON t.id = s.application_type_id
+       WHERE s.status = 'ACTIVE' AND s.expires_at IS NOT NULL AND s.expires_at <= NOW()
+       ORDER BY s.expires_at ASC
+       LIMIT $1`,
+      [limit]
+    ).catch(() => ({ rows: [] }));
+
+    let cancelled = 0;
+    for (const session of result.rows) {
+      const updated = await this.cancelExpiredSession({ session, client, logger }).catch(() => null);
+      if (updated) cancelled += 1;
+    }
+    return { checked: result.rows.length, cancelled };
   }
 
 

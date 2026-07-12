@@ -33,6 +33,7 @@ module.exports = {
         .addStringOption((option) => option.setName('panel_color').setDescription('Panel accent color, example: #7869ff.').setRequired(false).setMaxLength(7))
         .addStringOption((option) => option.setName('panel_header_image').setDescription('Optional image/media URL posted above the application panel embed.').setRequired(false).setMaxLength(1800))
         .addStringOption((option) => option.setName('display_mode').setDescription('Public panel component style.').setRequired(false).addChoices({ name: 'Buttons', value: 'BUTTONS' }, { name: 'Dropdown menu', value: 'DROPDOWN' }))
+        .addIntegerOption((option) => option.setName('timeout_minutes').setDescription('Minutes users have to answer each question. Default: 3.').setMinValue(1).setMaxValue(1440).setRequired(false))
     )
     .addSubcommand((subcommand) =>
       subcommand
@@ -111,11 +112,13 @@ module.exports = {
         panelDescription: interaction.options.getString('panel_description') || null,
         panelColor: interaction.options.getString('panel_color') || null,
         panelHeaderImageUrl: interaction.options.getString('panel_header_image') || null,
-        panelDisplayMode: interaction.options.getString('display_mode') || null
+        panelDisplayMode: interaction.options.getString('display_mode') || null,
+        questionTimeoutSeconds: interaction.options.getInteger('timeout_minutes') == null ? null : interaction.options.getInteger('timeout_minutes') * 60
       });
       await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'setup', title: 'Application Settings Updated', body: `${type.name} application settings updated by ${interaction.user.tag}.`, actorUserId: interaction.user.id }).catch(() => {});
       const refresh = await refreshPublishedPanel(ctx.client, interaction.guildId, 'application', type.id).catch(() => null);
-      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Application Type Configured', `Application type **${type.name}** is ready. Use \`/application question-add\` to customize the DM questions.${formatRefreshSummary(refresh)}`)] });
+      const timeoutMinutes = Math.max(1, Math.round((type.question_timeout_seconds || 180) / 60));
+      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Application Type Configured', `Application type **${type.name}** is ready. Users will have **${timeoutMinutes} minute(s)** to answer each question. Use \`/application question-add\` to customize the DM questions.${formatRefreshSummary(refresh)}`)] });
     }
 
 

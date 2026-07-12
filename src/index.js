@@ -85,6 +85,11 @@ client.once(Events.ClientReady, async (readyClient) => {
   await scheduledMessages.processDue(readyClient, logger).catch((error) => console.error('Failed to process scheduled messages:', error));
 
   setInterval(() => {
+    applications.processExpiredSessions(readyClient, logger).catch((error) => console.error('Failed to process expired application sessions:', error));
+  }, 30 * 1000);
+  await applications.processExpiredSessions(readyClient, logger).catch((error) => console.error('Failed to process expired application sessions:', error));
+
+  setInterval(() => {
     for (const guild of readyClient.guilds.cache.values()) {
       serverStats.updateStats(guild, logger, '15-minute fallback interval', { forceMemberFetch: true }).catch((error) => console.error(`Failed interval server stats update for ${guild.name}:`, error));
     }

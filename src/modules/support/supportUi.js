@@ -150,7 +150,7 @@ async function buildApplicationsPanel(guildId) {
   const typeLines = types.rowCount
     ? await Promise.all(types.rows.map(async (type) => {
       const questions = await query(`SELECT COUNT(*)::int AS count FROM application_questions WHERE application_type_id = $1`, [type.id]).catch(() => ({ rows: [{ count: 0 }] }));
-      return `• **${type.name}** — ${type.enabled ? 'Enabled' : 'Disabled'} · Questions: **${questions.rows[0]?.count || 0}** · Review: ${type.review_channel_id ? `<#${type.review_channel_id}>` : 'Not set'}`;
+      return `• **${type.name}** — ${type.enabled ? 'Enabled' : 'Disabled'} · Questions: **${questions.rows[0]?.count || 0}** · Timeout: **${Math.max(1, Math.round((type.question_timeout_seconds || 180) / 60))} min/question** · Review: ${type.review_channel_id ? `<#${type.review_channel_id}>` : 'Not set'}`;
     })).then((lines) => lines.join('\n'))
     : 'No application types configured yet. Use `/application setup`, then add questions with `/application question-add`.';
 
@@ -164,7 +164,7 @@ async function buildApplicationsPanel(guildId) {
       '**Application Types**',
       typeLines,
       '',
-      'Applications now run through DM. SlickBot asks custom questions one at a time, records each response, then submits the completed application to the review channel.'
+      'Applications now run through DM. SlickBot asks custom questions one at a time, gives users a configured time limit for each answer, records each response, then submits the completed application to the review channel.'
     ].join('\n'),
     color: SlickBotColors.INFO
   });

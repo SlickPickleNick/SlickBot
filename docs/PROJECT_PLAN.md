@@ -44,6 +44,9 @@ SlickBot is being built as a modular all-in-one Discord server management bot fo
 - Added a backward-compatible `reports.decision_reason` migration.
 - Added confirmed support-module reset commands for testing/rebuilding individual support modules: `/ticket reset`, `/report reset`, `/application reset`, and `/appeal reset`.
 - Reset commands show a private confirmation prompt with affected record counts before clearing module data.
+- Added configurable per-question application session timeouts through `/application setup`; the default is 3 minutes.
+- Application question DMs now show a live Discord timestamp for the answer deadline.
+- Expired active application sessions are cancelled automatically and the applicant is notified by DM.
 - No command groups were renamed.
 
 Deferred larger work:
