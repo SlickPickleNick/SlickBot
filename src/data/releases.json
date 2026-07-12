@@ -1,4 +1,25 @@
 {
+  "0.8.2": {
+    "title": "SlickBot v0.8.2",
+    "summary": "Polishes Join-to-Create voice control panels with lock status emojis and modal-based owner controls.",
+    "notes": [
+      "Added lock and unlock emojis to the Join-to-Create control panel buttons.",
+      "Updated the temporary voice status field to show \ud83d\udd12 Locked or \ud83d\udd13 Unlocked.",
+      "Added button-driven modals for Rename, Set Limit, Permit User, Remove User, and Transfer Ownership so members can adjust rooms without memorizing slash commands.",
+      "Changed Delete Channel from an immediate action to a confirmation modal that requires typing DELETE.",
+      "Control panels continue to refresh after owner actions so status, owner, and limit details stay current."
+    ],
+    "commands": [
+      "/join-create rename",
+      "/join-create limit",
+      "/join-create permit",
+      "/join-create remove",
+      "/join-create transfer",
+      "/join-create lock",
+      "/join-create unlock",
+      "/join-create claim"
+    ]
+  },
   "0.8.1": {
     "title": "SlickBot v0.8.1",
     "summary": "Adds automatic temporary voice control panels with owner pings and quick buttons for Join-to-Create rooms.",

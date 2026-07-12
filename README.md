@@ -4,8 +4,19 @@ SlickBot is an all-in-one Discord server management bot built for the SlickPickl
 
 ## Version
 
-Current package: **v0.8.1**
+Current package: **v0.8.2**
 
+
+
+## v0.8.2 Updates
+
+### Join-to-Create Control Panel Polish
+
+- Added lock and unlock emojis to the temporary voice control panel buttons.
+- Updated the status field in the temporary voice embed to show `🔒 Locked` or `🔓 Unlocked`.
+- Added button-driven modal controls for Rename, Set Limit, Permit User, Remove User, and Transfer Ownership.
+- Updated Delete Channel to open a confirmation modal requiring `DELETE` before the temporary room is removed.
+- The control panel continues to refresh after owner actions so room status, user limit, and ownership stay current.
 
 ## v0.8.1 Updates
 

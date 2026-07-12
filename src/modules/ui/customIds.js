@@ -102,7 +102,18 @@ const CustomIds = Object.freeze({
   JoinCreateLockPrefix: 'slickbot:join-create:lock:',
   JoinCreateUnlockPrefix: 'slickbot:join-create:unlock:',
   JoinCreateClaimPrefix: 'slickbot:join-create:claim:',
-  JoinCreateDeletePrefix: 'slickbot:join-create:delete:'
+  JoinCreateDeletePrefix: 'slickbot:join-create:delete:',
+  JoinCreateRenamePrefix: 'slickbot:join-create:rename:',
+  JoinCreateLimitPrefix: 'slickbot:join-create:limit:',
+  JoinCreatePermitPrefix: 'slickbot:join-create:permit:',
+  JoinCreateRemovePrefix: 'slickbot:join-create:remove:',
+  JoinCreateTransferPrefix: 'slickbot:join-create:transfer:',
+  JoinCreateDeleteConfirmPrefix: 'slickbot:modal:join-create-delete:',
+  JoinCreateRenameModalPrefix: 'slickbot:modal:join-create-rename:',
+  JoinCreateLimitModalPrefix: 'slickbot:modal:join-create-limit:',
+  JoinCreatePermitModalPrefix: 'slickbot:modal:join-create-permit:',
+  JoinCreateRemoveModalPrefix: 'slickbot:modal:join-create-remove:',
+  JoinCreateTransferModalPrefix: 'slickbot:modal:join-create-transfer:'
 });
 
 module.exports = { CustomIds };

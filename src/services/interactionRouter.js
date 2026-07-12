@@ -476,7 +476,17 @@ async function handleButton(interaction, ctx) {
   }
 
 
-  if (id.startsWith(CustomIds.JoinCreateLockPrefix) || id.startsWith(CustomIds.JoinCreateUnlockPrefix) || id.startsWith(CustomIds.JoinCreateClaimPrefix) || id.startsWith(CustomIds.JoinCreateDeletePrefix)) {
+  if ([
+    CustomIds.JoinCreateLockPrefix,
+    CustomIds.JoinCreateUnlockPrefix,
+    CustomIds.JoinCreateClaimPrefix,
+    CustomIds.JoinCreateDeletePrefix,
+    CustomIds.JoinCreateRenamePrefix,
+    CustomIds.JoinCreateLimitPrefix,
+    CustomIds.JoinCreatePermitPrefix,
+    CustomIds.JoinCreateRemovePrefix,
+    CustomIds.JoinCreateTransferPrefix
+  ].some((prefix) => id.startsWith(prefix))) {
     if (!(await requireAction(interaction, ctx, ActionKeys.TempVoiceManage, ModuleKeys.JOIN_TO_CREATE))) return true;
     const member = await interaction.guild.members.fetch(interaction.user.id).catch(() => interaction.member);
     try {
@@ -484,14 +494,14 @@ async function handleButton(interaction, ctx) {
         const channelId = id.slice(CustomIds.JoinCreateLockPrefix.length);
         const result = await joinCreate.setLockedFromControl(member, channelId, true);
         await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'join-create-control', title: 'Temporary Voice Locked', body: `Channel: <#${result.channel.id}>`, actorUserId: interaction.user.id, metadata: { channelId: result.channel.id, locked: true } }).catch(() => {});
-        await replyPrivate(interaction, { embeds: [createSuccessEmbed('Channel Locked', `<#${result.channel.id}> is now locked.`)], deleteAfterSeconds: 8 });
+        await replyPrivate(interaction, { embeds: [createSuccessEmbed('Channel Locked', `🔒 <#${result.channel.id}> is now locked.`)], deleteAfterSeconds: 8 });
         return true;
       }
       if (id.startsWith(CustomIds.JoinCreateUnlockPrefix)) {
         const channelId = id.slice(CustomIds.JoinCreateUnlockPrefix.length);
         const result = await joinCreate.setLockedFromControl(member, channelId, false);
         await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'join-create-control', title: 'Temporary Voice Unlocked', body: `Channel: <#${result.channel.id}>`, actorUserId: interaction.user.id, metadata: { channelId: result.channel.id, locked: false } }).catch(() => {});
-        await replyPrivate(interaction, { embeds: [createSuccessEmbed('Channel Unlocked', `<#${result.channel.id}> is now unlocked.`)], deleteAfterSeconds: 8 });
+        await replyPrivate(interaction, { embeds: [createSuccessEmbed('Channel Unlocked', `🔓 <#${result.channel.id}> is now unlocked.`)], deleteAfterSeconds: 8 });
         return true;
       }
       if (id.startsWith(CustomIds.JoinCreateClaimPrefix)) {
@@ -503,9 +513,34 @@ async function handleButton(interaction, ctx) {
       }
       if (id.startsWith(CustomIds.JoinCreateDeletePrefix)) {
         const channelId = id.slice(CustomIds.JoinCreateDeletePrefix.length);
-        const temp = await joinCreate.deleteTempFromControl(member, channelId, ctx.logger);
-        await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'join-create-control', title: 'Temporary Voice Deleted From Control Panel', body: `Channel ID: ${temp.channel_id}`, actorUserId: interaction.user.id, metadata: { channelId: temp.channel_id } }).catch(() => {});
-        await replyPrivate(interaction, { embeds: [createSuccessEmbed('Channel Deleted', 'Your temporary voice channel was deleted.')], deleteAfterSeconds: 8 });
+        await interaction.showModal(joinCreate.buildDeleteConfirmModal(channelId));
+        return true;
+      }
+      if (id.startsWith(CustomIds.JoinCreateRenamePrefix)) {
+        const channelId = id.slice(CustomIds.JoinCreateRenamePrefix.length);
+        const channel = await interaction.guild.channels.fetch(channelId).catch(() => null);
+        await interaction.showModal(joinCreate.buildRenameModal(channelId, channel?.name || null));
+        return true;
+      }
+      if (id.startsWith(CustomIds.JoinCreateLimitPrefix)) {
+        const channelId = id.slice(CustomIds.JoinCreateLimitPrefix.length);
+        const temp = await joinCreate.findActiveTempByChannel(interaction.guildId, channelId);
+        await interaction.showModal(joinCreate.buildLimitModal(channelId, temp?.user_limit || 0));
+        return true;
+      }
+      if (id.startsWith(CustomIds.JoinCreatePermitPrefix)) {
+        const channelId = id.slice(CustomIds.JoinCreatePermitPrefix.length);
+        await interaction.showModal(joinCreate.buildPermitModal(channelId));
+        return true;
+      }
+      if (id.startsWith(CustomIds.JoinCreateRemovePrefix)) {
+        const channelId = id.slice(CustomIds.JoinCreateRemovePrefix.length);
+        await interaction.showModal(joinCreate.buildRemoveModal(channelId));
+        return true;
+      }
+      if (id.startsWith(CustomIds.JoinCreateTransferPrefix)) {
+        const channelId = id.slice(CustomIds.JoinCreateTransferPrefix.length);
+        await interaction.showModal(joinCreate.buildTransferModal(channelId));
         return true;
       }
     } catch (error) {
@@ -722,6 +757,72 @@ async function handleModal(interaction, ctx) {
     return true;
   }
 
+  if ([
+    CustomIds.JoinCreateRenameModalPrefix,
+    CustomIds.JoinCreateLimitModalPrefix,
+    CustomIds.JoinCreatePermitModalPrefix,
+    CustomIds.JoinCreateRemoveModalPrefix,
+    CustomIds.JoinCreateTransferModalPrefix,
+    CustomIds.JoinCreateDeleteConfirmPrefix
+  ].some((prefix) => id.startsWith(prefix))) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.TempVoiceManage, ModuleKeys.JOIN_TO_CREATE))) return true;
+    const member = await interaction.guild.members.fetch(interaction.user.id).catch(() => interaction.member);
+    try {
+      if (id.startsWith(CustomIds.JoinCreateRenameModalPrefix)) {
+        const channelId = id.slice(CustomIds.JoinCreateRenameModalPrefix.length);
+        const result = await joinCreate.renameTempFromControl(member, channelId, interaction.fields.getTextInputValue('name'));
+        await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'join-create-control', title: 'Temporary Voice Renamed From Control Panel', body: `Channel: <#${result.channel.id}>\nName: **${result.channel.name}**`, actorUserId: interaction.user.id, metadata: { channelId: result.channel.id } }).catch(() => {});
+        await replyPrivate(interaction, { embeds: [createSuccessEmbed('Channel Renamed', `<#${result.channel.id}> is now **${result.channel.name}**.`)], deleteAfterSeconds: 8 });
+        return true;
+      }
+      if (id.startsWith(CustomIds.JoinCreateLimitModalPrefix)) {
+        const channelId = id.slice(CustomIds.JoinCreateLimitModalPrefix.length);
+        const limit = Number(interaction.fields.getTextInputValue('limit'));
+        if (!Number.isInteger(limit) || limit < 0 || limit > 99) throw new Error('User limit must be a whole number from 0 to 99. Use 0 for no limit.');
+        const result = await joinCreate.setLimitFromControl(member, channelId, limit);
+        await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'join-create-control', title: 'Temporary Voice Limit Updated From Control Panel', body: `Channel: <#${result.channel.id}>\nLimit: **${result.temp.user_limit || 0}**`, actorUserId: interaction.user.id, metadata: { channelId: result.channel.id, userLimit: result.temp.user_limit || 0 } }).catch(() => {});
+        await replyPrivate(interaction, { embeds: [createSuccessEmbed('User Limit Updated', `<#${result.channel.id}> now has a user limit of **${result.temp.user_limit || 0}**.`)], deleteAfterSeconds: 8 });
+        return true;
+      }
+      if (id.startsWith(CustomIds.JoinCreatePermitModalPrefix)) {
+        const channelId = id.slice(CustomIds.JoinCreatePermitModalPrefix.length);
+        const target = await resolveGuildMemberFromInput(interaction.guild, interaction.fields.getTextInputValue('user'));
+        const result = await joinCreate.permitUserFromControl(member, channelId, target);
+        await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'join-create-control', title: 'Temporary Voice User Permitted From Control Panel', body: `Channel: <#${result.channel.id}>\nUser: <@${target.id}>`, actorUserId: interaction.user.id, metadata: { channelId: result.channel.id, targetUserId: target.id } }).catch(() => {});
+        await replyPrivate(interaction, { embeds: [createSuccessEmbed('User Permitted', `<@${target.id}> can now join <#${result.channel.id}>.`)], deleteAfterSeconds: 8 });
+        return true;
+      }
+      if (id.startsWith(CustomIds.JoinCreateRemoveModalPrefix)) {
+        const channelId = id.slice(CustomIds.JoinCreateRemoveModalPrefix.length);
+        const target = await resolveGuildMemberFromInput(interaction.guild, interaction.fields.getTextInputValue('user'));
+        const result = await joinCreate.removeUserFromControl(member, channelId, target);
+        await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'join-create-control', title: 'Temporary Voice User Removed From Control Panel', body: `Channel: <#${result.channel.id}>\nUser: <@${target.id}>`, actorUserId: interaction.user.id, metadata: { channelId: result.channel.id, targetUserId: target.id } }).catch(() => {});
+        await replyPrivate(interaction, { embeds: [createSuccessEmbed('User Removed', `<@${target.id}> was removed or blocked from <#${result.channel.id}>.`)], deleteAfterSeconds: 8 });
+        return true;
+      }
+      if (id.startsWith(CustomIds.JoinCreateTransferModalPrefix)) {
+        const channelId = id.slice(CustomIds.JoinCreateTransferModalPrefix.length);
+        const target = await resolveGuildMemberFromInput(interaction.guild, interaction.fields.getTextInputValue('user'));
+        const result = await joinCreate.transferFromControl(member, channelId, target);
+        await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'join-create-control', title: 'Temporary Voice Ownership Transferred From Control Panel', body: `Channel: <#${result.channel.id}>\nNew Owner: <@${target.id}>`, actorUserId: interaction.user.id, metadata: { channelId: result.channel.id, targetUserId: target.id } }).catch(() => {});
+        await replyPrivate(interaction, { embeds: [createSuccessEmbed('Ownership Transferred', `<#${result.channel.id}> is now owned by <@${target.id}>.`)], deleteAfterSeconds: 8 });
+        return true;
+      }
+      if (id.startsWith(CustomIds.JoinCreateDeleteConfirmPrefix)) {
+        const channelId = id.slice(CustomIds.JoinCreateDeleteConfirmPrefix.length);
+        const confirm = String(interaction.fields.getTextInputValue('confirm') || '').trim().toUpperCase();
+        if (confirm !== 'DELETE') throw new Error('Deletion cancelled. Type DELETE exactly to delete the temporary channel.');
+        const temp = await joinCreate.deleteTempFromControl(member, channelId, ctx.logger);
+        await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'join-create-control', title: 'Temporary Voice Deleted From Control Panel', body: `Channel ID: ${temp.channel_id}`, actorUserId: interaction.user.id, metadata: { channelId: temp.channel_id } }).catch(() => {});
+        await replyPrivate(interaction, { embeds: [createSuccessEmbed('Channel Deleted', 'Your temporary voice channel was deleted.')], deleteAfterSeconds: 8 });
+        return true;
+      }
+    } catch (error) {
+      await replyPrivate(interaction, { embeds: [createWarningEmbed('Temporary Voice Control Blocked', error instanceof Error ? error.message : String(error))], deleteAfterSeconds: 10 });
+      return true;
+    }
+  }
+
   if (id.startsWith(CustomIds.PanelDesignModalPrefix)) {
     if (!(await requireAction(interaction, ctx, ActionKeys.PanelsConfigure, ModuleKeys.PERMISSIONS))) return true;
     const { target, name } = parsePanelDesignModalId(id);
@@ -748,6 +849,22 @@ function parseQuestions(value) {
   if (!value) return [];
   if (typeof value === 'object') return Array.isArray(value) ? value : [];
   try { return JSON.parse(value); } catch { return []; }
+}
+
+function extractUserId(value) {
+  const text = String(value || '').trim();
+  const mention = text.match(/^<@!?(\d{15,25})>$/);
+  if (mention) return mention[1];
+  const raw = text.match(/\d{15,25}/);
+  return raw ? raw[0] : null;
+}
+
+async function resolveGuildMemberFromInput(guild, value) {
+  const userId = extractUserId(value);
+  if (!userId) throw new Error('Provide a valid user mention or Discord user ID.');
+  const member = await guild.members.fetch(userId).catch(() => null);
+  if (!member) throw new Error('That user could not be found in this server.');
+  return member;
 }
 
 function buildTicketCloseReasonModal() {
