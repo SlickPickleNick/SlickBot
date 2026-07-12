@@ -8,6 +8,7 @@
       "SlickBot keeps individual FAQ posts staff-created and manages only the master index post.",
       "The master FAQ embed links to FAQ forum posts and groups them by assigned forum tags, listing multi-tag posts under each matching category.",
       "The master FAQ post refreshes automatically when forum posts are created, updated, deleted, or retagged, and can be manually refreshed with /faq refresh.",
+      "New FAQ forum posts automatically receive a navigation embed with a Return to Starting Menu button linking back to the master FAQ post and a Get Support button linking to the configured ticket channel when one is saved.",
       "Added /faq edit, /faq status, /faq panel, and /faq answer.",
       "Added autocomplete for /faq answer question: from the configured forum posts.",
       "Added the FAQ Reply message context command so staff can right-click a user message, enter FAQ search text in a modal, and have SlickBot reply directly to that message with the matching FAQ link.",

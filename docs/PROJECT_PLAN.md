@@ -45,6 +45,7 @@ SlickBot is being built as a modular all-in-one Discord server management bot fo
 - FAQ posts are created manually by staff as forum posts. SlickBot does not create individual FAQ items.
 - The master FAQ index embed links to forum FAQ posts and organizes them by the forum tags assigned to each post. Posts with multiple tags are listed under each matching category.
 - Added automatic master-index refresh handling for forum thread create, update, delete, and tag-change activity.
+- Added automatic FAQ-post navigation messages for newly created FAQ forum posts. Each new post receives a helper embed with a Return to Starting Menu button linking back to the master FAQ post and a Get Support button linking to the configured ticket channel when available.
 - Added `/faq edit` for updating master title/description and the optional ticket channel used in FAQ reply text.
 - Added `/faq refresh`, `/faq status`, and `/faq panel` for staff review and manual index repair.
 - Added `/faq answer question:` with autocomplete from current FAQ forum posts, plus optional target user and message-link support.

@@ -15,6 +15,7 @@ Current package: **v0.9.0**
 - Added a forum-backed FAQ setup where staff manually create FAQ posts in a Discord forum channel and SlickBot maintains the master FAQ index post.
 - The master FAQ post is created by SlickBot, stores a generated embed, links to FAQ posts, and groups posts by the forum tag(s) assigned to each post. Posts with multiple tags are listed under each matching category.
 - The master FAQ index refreshes when FAQ forum posts are created, updated, deleted, or retagged. Staff can also force a refresh with `/faq refresh`.
+- New FAQ forum posts automatically receive a SlickBot navigation embed with a **Return to Starting Menu** link back to the master FAQ post and a **Get Support** link to the configured ticket channel when one is saved.
 - Added `/faq setup`, `/faq edit`, `/faq refresh`, `/faq status`, `/faq panel`, and `/faq answer`.
 - Added autocomplete for `/faq answer question:` using the configured forum posts.
 - Added the **FAQ Reply** message context command for staff. This opens a short modal, finds the matching FAQ post, and replies directly to the selected user message with the FAQ link.

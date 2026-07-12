@@ -7,7 +7,7 @@ const {
   TextInputStyle
 } = require('discord.js');
 const { query } = require('../../services/db');
-const { createBaseEmbed, createButtonRow, createPanelButton, SlickBotColors } = require('../ui/uiService');
+const { createBaseEmbed, createButtonRow, createPanelButton, createLinkButton, SlickBotColors } = require('../ui/uiService');
 const { CustomIds } = require('../ui/customIds');
 
 const DEFAULT_MASTER_TITLE = 'Knowledge Base / FAQ';
@@ -126,6 +126,46 @@ function buildFaqAnswerPayload({ thread, guildId, targetUserId, ticketChannelId 
     embeds: [embed],
     allowedMentions: targetUserId ? { parse: [], users: [targetUserId] } : { parse: [] }
   };
+}
+
+function buildFaqPostNavigationPayload({ guildId, config, faqThread }) {
+  const masterUrl = config?.master_thread_id ? forumPostUrl(guildId, config.master_thread_id) : null;
+  const ticketUrl = config?.ticket_channel_id ? forumPostUrl(guildId, config.ticket_channel_id) : null;
+  const ticketLine = config?.ticket_channel_id
+    ? `If this FAQ does not answer your question, use **Get Support** to open a ticket in <#${config.ticket_channel_id}>.`
+    : 'If this FAQ does not answer your question, contact the staff team or use the server support process.';
+
+  const embed = createBaseEmbed({
+    title: 'FAQ Navigation',
+    description: [
+      `You are viewing **${truncate(faqThread?.name || 'this FAQ post', 180)}**.`,
+      '',
+      'Use **Return to Starting Menu** to go back to the main FAQ index and browse other FAQ posts.',
+      ticketLine
+    ].join('\n'),
+    color: SlickBotColors.INFO,
+    footer: 'SlickBot Knowledge Base'
+  });
+
+  const buttons = [];
+  if (masterUrl) buttons.push(createLinkButton(masterUrl, 'Return to Starting Menu'));
+  if (ticketUrl) buttons.push(createLinkButton(ticketUrl, 'Get Support'));
+
+  return { embeds: [embed], components: buttons.length ? [createButtonRow(buttons)] : [] };
+}
+
+async function hasExistingNavigationMessage(thread, botUserId) {
+  if (!thread?.messages?.fetch || !botUserId) return false;
+  const messages = await thread.messages.fetch({ limit: 10 }).catch(() => null);
+  if (!messages) return false;
+  return messages.some((message) => {
+    if (message.author?.id !== botUserId) return false;
+    return message.embeds?.some((embed) => {
+      const footer = embed.footer?.text || '';
+      const title = embed.title || '';
+      return footer === 'SlickBot Knowledge Base' && title === 'FAQ Navigation';
+    });
+  });
 }
 
 class FaqService {
@@ -325,11 +365,42 @@ class FaqService {
     return Boolean(config?.forum_channel_id === parentId && thread.id !== config.master_thread_id);
   }
 
-  async handleForumThreadChange(thread, client, logger) {
+  async postFaqThreadNavigation({ guild, thread, config, client = null, logger = null }) {
+    if (!guild || !thread || !config?.forum_channel_id) return { ok: false, reason: 'Missing FAQ forum post context.' };
+    if (thread.id === config.master_thread_id) return { ok: false, ignored: true, reason: 'Master post skipped.' };
+    if ((thread.parentId || thread.parent?.id) !== config.forum_channel_id) return { ok: false, ignored: true, reason: 'Not in configured FAQ forum.' };
+    const botUserId = client?.user?.id || guild.client?.user?.id || null;
+    if (await hasExistingNavigationMessage(thread, botUserId)) return { ok: true, skipped: true, reason: 'Navigation message already exists.' };
+
+    const payload = buildFaqPostNavigationPayload({ guildId: guild.id, config, faqThread: thread });
+    const message = await thread.send(payload);
+    await logger?.log?.({
+      guildId: guild.id,
+      eventKey: 'faq-index',
+      title: 'FAQ Post Navigation Added',
+      body: `FAQ Post: [${thread.name}](${forumPostUrl(guild.id, thread.id)})${config.ticket_channel_id ? `\nTicket Channel: <#${config.ticket_channel_id}>` : ''}`,
+      metadata: { forumChannelId: config.forum_channel_id, threadId: thread.id, messageId: message.id, ticketChannelId: config.ticket_channel_id || null }
+    }).catch(() => {});
+    return { ok: true, message };
+  }
+
+  async handleForumThreadChange(thread, client, logger, action = 'updated') {
     const guild = thread?.guild || (thread?.guildId ? client.guilds.cache.get(thread.guildId) : null);
     if (!guild) return { ok: false, reason: 'Missing guild.' };
     if (!(await this.shouldRefreshForThread(thread))) return { ok: false, ignored: true };
-    return this.refreshMasterPost({ guild, client, logger });
+    const refreshed = await this.refreshMasterPost({ guild, client, logger });
+    if (action === 'created' && refreshed?.ok && thread.id !== refreshed.config?.master_thread_id) {
+      await this.postFaqThreadNavigation({ guild, thread, config: refreshed.config, client, logger }).catch(async (error) => {
+        await logger?.log?.({
+          guildId: guild.id,
+          eventKey: 'faq-error',
+          title: 'FAQ Post Navigation Failed',
+          body: error instanceof Error ? error.message : String(error),
+          metadata: { threadId: thread.id, forumChannelId: refreshed.config?.forum_channel_id || null }
+        }).catch(() => {});
+      });
+    }
+    return refreshed;
   }
 
   async buildManagerPanel(guildId) {
@@ -345,7 +416,7 @@ class FaqService {
         `Ticket Channel: ${config?.ticket_channel_id ? `<#${config.ticket_channel_id}>` : 'Not set'}`,
         '',
         '**How It Works**',
-        'Create FAQ items manually as posts in the configured forum. SlickBot maintains the master index post and groups posts by forum tag.',
+        'Create FAQ items manually as posts in the configured forum. SlickBot maintains the master index, groups posts by forum tag, and adds navigation buttons to new FAQ posts.',
         '',
         '**Primary Commands**',
         '`/faq setup` · `/faq refresh` · `/faq answer` · `/faq status`'

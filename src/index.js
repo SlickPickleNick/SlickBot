@@ -362,7 +362,7 @@ async function handleFaqThreadChange(thread, action) {
   if (!guildId) return;
   const faqEnabled = await permissions.isModuleEnabled(guildId, ModuleKeys.FAQ).catch(() => false);
   if (!faqEnabled) return;
-  await faq.handleForumThreadChange(thread, client, logger).catch(async (error) => {
+  await faq.handleForumThreadChange(thread, client, logger, action).catch(async (error) => {
     console.error(`Failed to refresh FAQ index after thread ${action}:`, error);
     await logger.log({
       guildId,
