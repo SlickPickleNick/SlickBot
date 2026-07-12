@@ -9,7 +9,12 @@
       "Expanded Permission Teams and Permission Center panels with role/user membership details, team permission levels, explicit module grants, and explicit command grants.",
       "Added a permission-team selector to the Permission Center so admins can inspect individual teams without leaving the panel.",
       "Standardized setup-accessed panel headers with a master setup category and a clear Viewing label for the current subgroup.",
-      "Improved the Moderation module status and panel so it shows configured moderation items, missing logging setup, recent case totals, and recommended setup commands."
+      "Improved the Moderation module status and panel so it shows configured moderation items, missing logging setup, recent case totals, and recommended setup commands.",
+      "Removed member-facing submission/opening buttons from Support Center setup panels so ticket/report/application/appeal manager pages remain staff-control only.",
+      "Standardized the Tickets navigation button color inside the Support Center overview.",
+      "Status Control now displays the saved stream URL directly in the panel.",
+      "Added an Activity Text button and modal so admins can update the saved bot activity wording from the control panel.",
+      "Status and activity buttons now turn green when active and stay gray when inactive."
     ],
     "commands": [
       "/setup",

@@ -52,7 +52,7 @@ async function buildSupportPanel(guildId) {
   });
 
   const row = createButtonRow([
-    createPanelButton(CustomIds.TicketsRefresh, 'Tickets', ButtonStyle.Primary, '🎟️'),
+    createPanelButton(CustomIds.TicketsRefresh, 'Tickets', ButtonStyle.Secondary, '🎟️'),
     createPanelButton(CustomIds.ReportsRefresh, 'Reports', ButtonStyle.Secondary, '🚩'),
     createPanelButton(CustomIds.ApplicationsRefresh, 'Applications', ButtonStyle.Secondary, '📝'),
     createPanelButton(CustomIds.AppealsRefresh, 'Appeals', ButtonStyle.Secondary, '⚖️'),
@@ -103,7 +103,6 @@ async function buildTicketsPanel(guildId) {
   });
 
   const row = createButtonRow([
-    createPanelButton(CustomIds.TicketOpen, 'Open Default', ButtonStyle.Primary, '🎟️'),
     createPanelButton(CustomIds.TicketsRefresh, 'Refresh', ButtonStyle.Secondary, '🔄'),
     createPanelButton(CustomIds.SupportRefresh, 'Back to Support', ButtonStyle.Secondary, '↩️')
   ]);
@@ -137,7 +136,6 @@ async function buildReportsPanel(guildId) {
   });
 
   const row = createButtonRow([
-    createPanelButton(CustomIds.ReportOpen, 'Submit Report', ButtonStyle.Danger, '🚩'),
     createPanelButton(CustomIds.ReportsRefresh, 'Refresh', ButtonStyle.Secondary, '🔄'),
     createPanelButton(CustomIds.SupportRefresh, 'Back to Support', ButtonStyle.Secondary, '↩️')
   ]);
@@ -171,10 +169,11 @@ async function buildApplicationsPanel(guildId) {
     color: SlickBotColors.INFO
   });
 
-  const buttons = [createPanelButton(CustomIds.ApplicationsRefresh, 'Refresh', ButtonStyle.Secondary, '🔄')];
-  if (types.rows[0]) buttons.unshift(createPanelButton(`${CustomIds.ApplicationApplyPrefix}${types.rows[0].id}`, `Apply: ${types.rows[0].name}`.slice(0, 80), ButtonStyle.Primary, '📝'));
-  buttons.push(createPanelButton(CustomIds.SupportRefresh, 'Back to Support', ButtonStyle.Secondary, '↩️'));
-  return { embeds: [embed], components: [createButtonRow(buttons.slice(0, 5))] };
+  const buttons = [
+    createPanelButton(CustomIds.ApplicationsRefresh, 'Refresh', ButtonStyle.Secondary, '🔄'),
+    createPanelButton(CustomIds.SupportRefresh, 'Back to Support', ButtonStyle.Secondary, '↩️')
+  ];
+  return { embeds: [embed], components: [createButtonRow(buttons)] };
 }
 
 async function buildAppealsPanel(guildId) {
@@ -202,7 +201,6 @@ async function buildAppealsPanel(guildId) {
   });
 
   const row = createButtonRow([
-    createPanelButton(CustomIds.AppealOpen, 'Submit Appeal', ButtonStyle.Primary, '⚖️'),
     createPanelButton(CustomIds.AppealsRefresh, 'Refresh', ButtonStyle.Secondary, '🔄'),
     createPanelButton(CustomIds.SupportRefresh, 'Back to Support', ButtonStyle.Secondary, '↩️')
   ]);

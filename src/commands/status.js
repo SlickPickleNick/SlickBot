@@ -1,4 +1,4 @@
-const { SlashCommandBuilder } = require('discord.js');
+const { SlashCommandBuilder, ModalBuilder, ActionRowBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 const { ModuleKeys } = require('../modules/moduleRegistry');
 const { ActionKeys } = require('../modules/permissions/actionKeys');
 const { ActivityTypeNames, PresenceStatus } = require('../modules/status/statusService');
@@ -225,9 +225,26 @@ module.exports = {
   }
 };
 
+function normalizePanelActivityType(value) {
+  const normalized = String(value || ActivityTypeNames.NONE).toUpperCase();
+  return Object.values(ActivityTypeNames).includes(normalized) ? normalized : ActivityTypeNames.NONE;
+}
+
+function normalizePanelStatus(value) {
+  const normalized = String(value || PresenceStatus.ONLINE).toLowerCase();
+  return Object.values(PresenceStatus).includes(normalized) ? normalized : PresenceStatus.ONLINE;
+}
+
+function activeStyle(isActive) {
+  return isActive ? ButtonStyle.Success : ButtonStyle.Secondary;
+}
+
 async function buildStatusPanel(guildId, ctx, notice = null) {
   const presence = await ctx.status.describeCurrentPresence(guildId);
   const saved = presence.saved;
+  const savedStatus = normalizePanelStatus(saved?.status || presence.currentStatus || PresenceStatus.ONLINE);
+  const savedActivityType = normalizePanelActivityType(saved?.activityType || ActivityTypeNames.NONE);
+  const savedStreamUrl = saved?.streamUrl || saved?.activityUrl || null;
 
   const description = [
     '**Viewing:** Status Control',
@@ -239,11 +256,16 @@ async function buildStatusPanel(guildId, ctx, notice = null) {
     '',
     '**Saved Presence**',
     saved
-      ? `Status: **${formatStatusBadge(saved.status)}**\nActivity Type: **${saved.activityType || 'NONE'}**\nActivity Text: **${saved.activityText || 'None'}**`
+      ? [
+        `Status: **${formatStatusBadge(saved.status)}**`,
+        `Activity Type: **${saved.activityType || 'NONE'}**`,
+        `Activity Text: **${saved.activityText || 'None'}**`,
+        `Stream URL: ${savedStreamUrl ? `<${savedStreamUrl}>` : '**Not set**'}`
+      ].join('\n')
       : 'No saved presence yet. SlickBot is using environment defaults.',
     '',
     '**Quick Controls**',
-    'Use the first row for status. Use the second row to switch the saved activity type while keeping the current activity text. The Streaming button uses the saved stream URL from `/status stream-url`.'
+    'Green buttons show the saved active selection. Gray buttons are inactive options. Use **Activity Text** to update the saved activity wording.'
   ].filter(Boolean).join('\n');
 
   const embed = createBaseEmbed({
@@ -253,26 +275,46 @@ async function buildStatusPanel(guildId, ctx, notice = null) {
   });
 
   const statusControls = createButtonRow([
-    createPanelButton(CustomIds.StatusQuickOnline, 'Online', ButtonStyle.Success, '🟢'),
-    createPanelButton(CustomIds.StatusQuickIdle, 'Idle', ButtonStyle.Secondary, '🌙'),
-    createPanelButton(CustomIds.StatusQuickDnd, 'DND', ButtonStyle.Danger, '⛔'),
-    createPanelButton(CustomIds.StatusClear, 'Clear Activity', ButtonStyle.Secondary, '🧹'),
-    createPanelButton(CustomIds.StatusRefresh, 'Refresh', ButtonStyle.Primary, '🔄')
+    createPanelButton(CustomIds.StatusQuickOnline, 'Online', activeStyle(savedStatus === PresenceStatus.ONLINE), '🟢'),
+    createPanelButton(CustomIds.StatusQuickIdle, 'Idle', activeStyle(savedStatus === PresenceStatus.IDLE), '🌙'),
+    createPanelButton(CustomIds.StatusQuickDnd, 'DND', activeStyle(savedStatus === PresenceStatus.DND), '⛔'),
+    createPanelButton(CustomIds.StatusRefresh, 'Refresh', ButtonStyle.Secondary, '🔄'),
+    createPanelButton(CustomIds.SetupRefresh, 'Back to Setup', ButtonStyle.Secondary, '↩️')
   ]);
 
   const activityControls = createButtonRow([
-    createPanelButton(CustomIds.StatusActivityPlaying, 'Playing', ButtonStyle.Secondary, '🎮'),
-    createPanelButton(CustomIds.StatusActivityWatching, 'Watching', ButtonStyle.Secondary, '👀'),
-    createPanelButton(CustomIds.StatusActivityListening, 'Listening', ButtonStyle.Secondary, '🎧'),
-    createPanelButton(CustomIds.StatusActivityCompeting, 'Competing', ButtonStyle.Secondary, '🏆'),
-    createPanelButton(CustomIds.StatusActivityStreaming, 'Streaming', ButtonStyle.Secondary, '📡')
+    createPanelButton(CustomIds.StatusActivityPlaying, 'Playing', activeStyle(savedActivityType === ActivityTypeNames.PLAYING), '🎮'),
+    createPanelButton(CustomIds.StatusActivityWatching, 'Watching', activeStyle(savedActivityType === ActivityTypeNames.WATCHING), '👀'),
+    createPanelButton(CustomIds.StatusActivityListening, 'Listening', activeStyle(savedActivityType === ActivityTypeNames.LISTENING), '🎧'),
+    createPanelButton(CustomIds.StatusActivityCompeting, 'Competing', activeStyle(savedActivityType === ActivityTypeNames.COMPETING), '🏆'),
+    createPanelButton(CustomIds.StatusActivityStreaming, 'Streaming', activeStyle(savedActivityType === ActivityTypeNames.STREAMING), '📡')
   ]);
 
-  const navigation = createButtonRow([
-    createPanelButton(CustomIds.SetupRefresh, 'Back to Setup', ButtonStyle.Primary, '↩️')
+  const utilityControls = createButtonRow([
+    createPanelButton(CustomIds.StatusActivityText, 'Activity Text', ButtonStyle.Secondary, '✏️'),
+    createPanelButton(CustomIds.StatusClear, 'Clear Activity', activeStyle(savedActivityType === ActivityTypeNames.NONE), '🧹')
   ]);
 
-  return { embeds: [embed], components: [statusControls, activityControls, navigation] };
+  return { embeds: [embed], components: [statusControls, activityControls, utilityControls] };
+}
+
+function buildStatusActivityTextModal(currentText = null) {
+  const input = new TextInputBuilder()
+    .setCustomId('activity_text')
+    .setLabel('Activity text')
+    .setStyle(TextInputStyle.Short)
+    .setPlaceholder('Example: the server')
+    .setRequired(true)
+    .setMaxLength(128);
+
+  const value = String(currentText || '').trim();
+  if (value) input.setValue(value.slice(0, 128));
+
+  return new ModalBuilder()
+    .setCustomId(CustomIds.StatusActivityTextModal)
+    .setTitle('Set Activity Text')
+    .addComponents(new ActionRowBuilder().addComponents(input));
 }
 
 module.exports.buildStatusPanel = buildStatusPanel;
+module.exports.buildStatusActivityTextModal = buildStatusActivityTextModal;

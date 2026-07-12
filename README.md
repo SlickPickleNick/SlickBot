@@ -14,11 +14,14 @@ Current package: **v0.8.6**
 - Added activity-type quick buttons to the Status Control panel for Playing, Watching, Listening, Competing, and Streaming.
 - Added `/status stream-url` so the Streaming button can use a saved stream URL.
 - If the Streaming button is pressed without a saved stream URL, SlickBot now shows a private setup error instead of failing silently.
+- Status Control now displays the saved stream URL, includes an Activity Text modal button, and highlights the active status/activity selection in green while inactive options stay gray.
 - Added a Back to Setup button to the Status Control panel.
 - Expanded Permission Teams to show attached Discord roles, direct users, system-team state, and mapped permission level.
 - Expanded the Permission Center with a permission-team selector, selected-team role/user membership, explicit command grants, module grants, public actions, and access model guidance.
 - Standardized setup-accessed panel headers with a master category title and a clear Viewing label for the current subgroup.
 - Improved the Moderation module status and Moderation Center so it shows configured systems, missing moderation logging setup, case counts, active notes, and setup recommendations.
+- Removed ticket/report/application/appeal submission buttons from Support Center setup panels so those pages remain staff-control only.
+- Standardized the Support Center Tickets navigation button color with the other support navigation buttons.
 
 Updated commands:
 

@@ -6,7 +6,7 @@ const { replyPrivate, acknowledgeQuietly } = require('../utils/reply');
 const { buildSetupPanel, buildModulesPanel, buildModuleDetailPanel, buildLoggingPanel, buildTeamsPanel, buildPermissionsPanel, buildCommunityPanel } = require('../modules/ui/panels');
 const { buildHelpPayload } = require('../modules/help/helpService');
 const { buildModerationPanel, buildRecentCasesPanel } = require('../modules/moderation/moderationUi');
-const { buildStatusPanel } = require('../commands/status');
+const { buildStatusPanel, buildStatusActivityTextModal } = require('../commands/status');
 const { createBaseEmbed, createSuccessEmbed, createWarningEmbed, SlickBotColors } = require('../modules/ui/uiService');
 const { updatePanelDesign } = require('../modules/panels/panelDesignService');
 const { refreshPublishedPanel, refreshPublishedPanelFromResult, formatRefreshSummary } = require('../modules/panels/panelUpdateService');
@@ -479,6 +479,13 @@ async function handleButton(interaction, ctx) {
     return true;
   }
 
+  if (id === CustomIds.StatusActivityText) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.StatusManage, ModuleKeys.STATUS))) return true;
+    const saved = await ctx.status.getSavedPresence(interaction.guildId);
+    await interaction.showModal(buildStatusActivityTextModal(saved?.activityText || null));
+    return true;
+  }
+
   if ([
     CustomIds.StatusQuickOnline,
     CustomIds.StatusQuickIdle,
@@ -784,6 +791,41 @@ async function handleSelect(interaction, ctx) {
 
 async function handleModal(interaction, ctx) {
   const id = interaction.customId;
+
+  if (id === CustomIds.StatusActivityTextModal) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.StatusManage, ModuleKeys.STATUS))) return true;
+    const activityText = String(interaction.fields.getTextInputValue('activity_text') || '').trim();
+    if (!activityText) {
+      await replyPrivate(interaction, { embeds: [createWarningEmbed('Activity Text Required', 'Enter the activity text SlickBot should display, or use Clear Activity to remove the activity.')], deleteAfterSeconds: 10 });
+      return true;
+    }
+
+    const saved = await ctx.status.getSavedPresence(interaction.guildId);
+    const current = saved || { status: PresenceStatus.ONLINE, activityType: ActivityTypeNames.WATCHING, activityText: null, activityUrl: null, streamUrl: null };
+    const activityType = current.activityType && current.activityType !== ActivityTypeNames.NONE ? current.activityType : ActivityTypeNames.WATCHING;
+
+    if (activityType === ActivityTypeNames.STREAMING && !current.streamUrl && !current.activityUrl) {
+      await replyPrivate(interaction, {
+        embeds: [createWarningEmbed('Streaming Activity Not Set', 'Failed to save activity text for Streaming because no stream URL is saved for SlickBot. Set a stream URL with `/status stream-url url:<stream-url>`.')],
+        deleteAfterSeconds: 15
+      });
+      return true;
+    }
+
+    const next = {
+      ...current,
+      activityType,
+      activityText,
+      activityUrl: activityType === ActivityTypeNames.STREAMING ? (current.streamUrl || current.activityUrl) : current.activityUrl,
+      streamUrl: current.streamUrl || current.activityUrl || null
+    };
+
+    await ctx.status.applyPresence(next);
+    await ctx.status.savePresence(interaction.guildId, next);
+    await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'status', title: 'Bot Activity Text Updated', body: [`Updated By: <@${interaction.user.id}>`, `Activity: **${activityType}**`, `Text: ${activityText}`].join('\n'), metadata: { activityType, activityText, actorUserId: interaction.user.id } }).catch(() => {});
+    await updatePanel(interaction, await buildStatusPanel(interaction.guildId, ctx, 'Activity text updated.'));
+    return true;
+  }
 
   if (id.startsWith(CustomIds.BirthdayDayModalPrefix)) {
     const sessionId = id.slice(CustomIds.BirthdayDayModalPrefix.length);

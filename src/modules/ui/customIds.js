@@ -49,6 +49,8 @@ const CustomIds = Object.freeze({
   StatusActivityCompeting: 'slickbot:status:activity-competing',
   StatusActivityStreaming: 'slickbot:status:activity-streaming',
   StatusActivityNone: 'slickbot:status:activity-none',
+  StatusActivityText: 'slickbot:status:activity-text',
+  StatusActivityTextModal: 'slickbot:modal:status-activity-text',
   StatusQuickOnline: 'slickbot:status:quick-online',
   StatusQuickIdle: 'slickbot:status:quick-idle',
   StatusQuickDnd: 'slickbot:status:quick-dnd',
