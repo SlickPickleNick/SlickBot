@@ -258,6 +258,7 @@ async function initDatabase() {
       status TEXT NOT NULL DEFAULT 'OPEN',
       reviewed_by_user_id TEXT,
       reviewed_at TIMESTAMPTZ,
+      decision_reason TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       UNIQUE(guild_id, report_number)
@@ -328,6 +329,7 @@ async function initDatabase() {
       status TEXT NOT NULL DEFAULT 'PENDING',
       reviewed_by_user_id TEXT,
       reviewed_at TIMESTAMPTZ,
+      decision_reason TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       UNIQUE(guild_id, appeal_number)
@@ -400,6 +402,7 @@ async function initDatabase() {
   await query(`ALTER TABLE reports ADD COLUMN IF NOT EXISTS review_message_id TEXT;`).catch(() => {});
   await query(`ALTER TABLE reports ADD COLUMN IF NOT EXISTS linked_ticket_opened_by_user_id TEXT;`).catch(() => {});
   await query(`ALTER TABLE reports ADD COLUMN IF NOT EXISTS linked_ticket_opened_at TIMESTAMPTZ;`).catch(() => {});
+  await query(`ALTER TABLE reports ADD COLUMN IF NOT EXISTS decision_reason TEXT;`).catch(() => {});
 
   await query(`
     CREATE TABLE IF NOT EXISTS application_questions (

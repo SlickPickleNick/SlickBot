@@ -1,6 +1,6 @@
 # SlickBot Project Plan
 
-## Current Version: 0.8.7
+## Current Version: 0.8.8
 
 SlickBot is being built as a modular all-in-one Discord server management bot for the SlickPickleNick community.
 
@@ -31,6 +31,24 @@ SlickBot is being built as a modular all-in-one Discord server management bot fo
 - Custom commands
 - Join-to-create voice channels
 - Leveling / XP
+
+## v0.8.8 Scope
+
+### Support Workflow Consistency Pass
+
+- Reviewed the main ticket, report, application, and appeal review flows for consistency.
+- Added required decision-reason modals for report resolve/dismiss controls, matching the reason-first review behavior used by applications and appeals.
+- Updated report review embeds so they preserve original content, display decision reasons, keep review notes, and expose Add Details while the report is still open.
+- Updated ticket control embeds so closed tickets show closed status, close reason, closed-by metadata, and transcript status if the channel remains visible.
+- Standardized support status labels/colors across review embeds: open/pending items use orange, approved/resolved items use green, denied items use red, and dismissed/closed items use muted styling.
+- Added a backward-compatible `reports.decision_reason` migration.
+- No command groups were renamed.
+
+Deferred larger work:
+
+- Full setup wizard framework.
+- Deeper support transcript parity for reports and appeals if desired later.
+- Broader command alias/rename discussion.
 
 ## v0.8.7 Scope
 

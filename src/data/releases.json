@@ -1,4 +1,22 @@
 {
+  "0.8.8": {
+    "title": "SlickBot v0.8.8",
+    "summary": "Standardizes support workflow review states for tickets, reports, applications, and appeals.",
+    "notes": [
+      "Report resolve and dismiss controls now open a required decision-reason modal before finalizing the report.",
+      "Report review embeds now keep original details, show a clear decision reason, include an Add Details control while open, and use consistent status colors.",
+      "Ticket control embeds now show explicit status, opened/closed metadata, close reason, and transcript status when a ticket is closed but remains visible.",
+      "Application and appeal review embeds now use consistent support workflow status labels, with pending/open items in orange, approvals/resolutions in green, denials in red, and closed/dismissed items muted.",
+      "Appeal denial DMs now use the same red denial styling as the review channel embed.",
+      "Added a reports.decision_reason migration for clearer final report decision tracking."
+    ],
+    "commands": [
+      "/ticket manager",
+      "/report manager",
+      "/application manager",
+      "/appeal manager"
+    ]
+  },
   "0.8.7": {
     "title": "SlickBot v0.8.7",
     "summary": "Audits and tightens permissions for public panels, message triggers, native reactions, and interactive controls.",
@@ -100,7 +118,7 @@
     "summary": "Polishes Join-to-Create voice control panels with lock status emojis and modal-based owner controls.",
     "notes": [
       "Added lock and unlock emojis to the Join-to-Create control panel buttons.",
-      "Updated the temporary voice status field to show 🔒 Locked or 🔓 Unlocked.",
+      "Updated the temporary voice status field to show \ud83d\udd12 Locked or \ud83d\udd13 Unlocked.",
       "Added button-driven modals for Rename, Set Limit, Permit User, Remove User, and Transfer Ownership so members can adjust rooms without memorizing slash commands.",
       "Changed Delete Channel from an immediate action to a confirmation modal that requires typing DELETE.",
       "Control panels continue to refresh after owner actions so status, owner, and limit details stay current."

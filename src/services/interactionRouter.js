@@ -30,6 +30,7 @@ const {
   buildTicketModal,
   buildReportModal,
   buildReportDetailsModal,
+  buildReportReviewReasonModal,
   buildAppealModal,
   buildAppealReasonModal,
   buildApplicationReviewReasonModal,
@@ -368,9 +369,7 @@ async function handleButton(interaction, ctx) {
     const action = status === 'RESOLVED' ? ActionKeys.ReportsResolve : ActionKeys.ReportsDismiss;
     if (!(await requireAction(interaction, ctx, action, ModuleKeys.REPORTS))) return true;
     const reportId = id.replace(CustomIds.ReportResolvePrefix, '').replace(CustomIds.ReportDismissPrefix, '');
-    const report = await reports.reviewReport({ guildId: interaction.guildId, reportId, reviewer: interaction.user, status, logger: ctx.logger });
-    if (!report) return replyPrivate(interaction, { embeds: [createWarningEmbed('Report Not Found', 'The report could not be found.')] });
-    await updatePanel(interaction, buildReportReviewPayload(report));
+    await interaction.showModal(buildReportReviewReasonModal(reportId, status));
     return true;
   }
 
@@ -891,6 +890,19 @@ async function handleModal(interaction, ctx) {
     if (!report) return replyPrivate(interaction, { embeds: [createWarningEmbed('Report Not Found', 'The report could not be found.')] });
     await reports.refreshReviewMessage({ client: ctx.client, report }).catch(() => {});
     await replyPrivate(interaction, { embeds: [createSuccessEmbed('Report Details Added', `Details were added to report #${report.report_number}.`)] });
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.ReportReviewReasonModalPrefix)) {
+    const rest = id.slice(CustomIds.ReportReviewReasonModalPrefix.length);
+    const [status, reportId] = rest.split(':');
+    const action = status === 'RESOLVED' ? ActionKeys.ReportsResolve : ActionKeys.ReportsDismiss;
+    if (!(await requireAction(interaction, ctx, action, ModuleKeys.REPORTS))) return true;
+    const reason = interaction.fields.getTextInputValue('reason') || null;
+    const report = await reports.reviewReport({ guildId: interaction.guildId, reportId, reviewer: interaction.user, status, reason, logger: ctx.logger });
+    if (!report) return replyPrivate(interaction, { embeds: [createWarningEmbed('Report Not Found', 'The report could not be found.')] });
+    await reports.refreshReviewMessage({ client: ctx.client, report }).catch(() => {});
+    await replyPrivate(interaction, { embeds: [createSuccessEmbed('Report Reviewed', `Report #${report.report_number} marked **${report.status}**.`)] });
     return true;
   }
 

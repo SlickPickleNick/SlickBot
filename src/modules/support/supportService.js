@@ -39,6 +39,32 @@ function formatTimestamp(value) {
   return `<t:${Math.floor(date.getTime() / 1000)}:f>`;
 }
 
+const SUPPORT_STATUS_LABELS = Object.freeze({
+  OPEN: '🟠 **Open**',
+  CLAIMED: '🔵 **Claimed**',
+  PENDING: '🟠 **Pending Review**',
+  APPROVED: '✅ **Approved**',
+  DENIED: '⛔ **Denied**',
+  RESOLVED: '✅ **Resolved**',
+  DISMISSED: '⚪ **Dismissed**',
+  CLOSED: '⚪ **Closed**'
+});
+
+function formatSupportStatus(status) {
+  const normalized = normalizeStatus(status || 'OPEN');
+  return SUPPORT_STATUS_LABELS[normalized] || `**${normalized || 'UNKNOWN'}**`;
+}
+
+function supportStatusColor(status, fallback = SlickBotColors.PRIMARY) {
+  const normalized = normalizeStatus(status || 'OPEN');
+  if (['APPROVED', 'RESOLVED'].includes(normalized)) return SlickBotColors.SUCCESS;
+  if (['DENIED'].includes(normalized)) return SlickBotColors.ERROR;
+  if (['DISMISSED', 'CLOSED'].includes(normalized)) return SlickBotColors.MUTED;
+  if (['PENDING', 'OPEN'].includes(normalized)) return SlickBotColors.WARNING;
+  if (['CLAIMED'].includes(normalized)) return SlickBotColors.PRIMARY;
+  return fallback;
+}
+
 function normalizeChannelName(value) {
   return String(value || '')
     .toLowerCase()
@@ -468,9 +494,10 @@ class TicketService {
 
     const type = currentTicket.ticket_type_id ? await this.getTypeById(currentTicket.guild_id || interaction.guildId, currentTicket.ticket_type_id) : null;
     const addedUsers = await this.listActiveAddedUsers(currentTicket.id);
+    const isClosed = normalizeStatus(currentTicket.status) === 'CLOSED';
     await message.edit({
       embeds: [buildTicketControlEmbed(currentTicket, type, addedUsers)],
-      components: [buildTicketControlRow()]
+      components: isClosed ? [] : [buildTicketControlRow()]
     }).catch(() => {});
     return true;
   }
@@ -648,10 +675,12 @@ class TicketService {
       [interaction.user.id, reason, transcriptSent, ticket.id]
     );
 
+    const closedTicket = result.rows[0];
+    await this.refreshTicketControlMessage({ interaction, ticket: closedTicket }).catch(() => {});
     await interaction.channel.permissionOverwrites.edit(ticket.opener_user_id, { SendMessages: false }).catch(() => {});
     await interaction.channel.setName(`closed-${interaction.channel.name}`.slice(0, 95)).catch(() => {});
     await logger.log({ guildId: interaction.guildId, eventKey: 'ticket-close', title: 'Ticket Closed', body: `Ticket #${ticket.ticket_number} closed by ${interaction.user.tag}. Transcript sent: **${transcriptSent ? 'Yes' : 'No'}**.\nReason: ${reason}`, actorUserId: interaction.user.id, metadata: { ticketId: ticket.id, transcriptSent } }).catch(() => {});
-    return { ok: true, ticket: result.rows[0], transcriptSent, shouldDelete: transcriptSent === true, deleteSeconds: Number(type?.close_delete_seconds || config.close_delete_seconds || 10) };
+    return { ok: true, ticket: closedTicket, transcriptSent, shouldDelete: transcriptSent === true, deleteSeconds: Number(type?.close_delete_seconds || config.close_delete_seconds || 10) };
   }
 
   async buildTranscript(channel, ticket, reason, closedBy) {
@@ -679,22 +708,32 @@ class TicketService {
 }
 
 function buildTicketControlEmbed(ticket, ticketType, addedUsers = []) {
+  const status = normalizeStatus(ticket.status || 'OPEN');
+  const closedAt = formatTimestamp(ticket.closed_at);
+  const createdAt = formatTimestamp(ticket.created_at);
   const lines = [
+    `Status: ${formatSupportStatus(status)}`,
     `Opened By: <@${ticket.opener_user_id}>`,
+    createdAt ? `Opened: ${createdAt}` : null,
     `Type: **${ticket.type || ticketType?.name || 'Ticket'}**`,
     `Priority: **${ticket.priority || 'NORMAL'}**`
   ];
 
   if (ticket.claimed_by_user_id) lines.push(`Claimed By: <@${ticket.claimed_by_user_id}>`);
   if (ticket.escalated_by_user_id) lines.push(`Escalated By: <@${ticket.escalated_by_user_id}>`);
+  if (status === 'CLOSED') {
+    if (ticket.closed_by_user_id) lines.push(`Closed By: <@${ticket.closed_by_user_id}>${closedAt ? ` on ${closedAt}` : ''}`);
+    if (ticket.close_reason) lines.push(`Close Reason: ${truncate(ticket.close_reason, 700)}`);
+    lines.push(`Transcript Sent: **${ticket.transcript_sent ? 'Yes' : 'No'}**`);
+  }
   if (addedUsers.length) lines.push(`Added Users: ${addedUsers.map((entry) => `<@${entry.user_id}>`).join(', ')}`);
 
   lines.push('', '**Details**', truncate(ticket.details || 'No details provided.', 2400));
 
   return createBaseEmbed({
     title: `Ticket #${ticket.ticket_number}: ${ticket.subject}`,
-    description: lines.join('\n'),
-    color: ticket.priority === 'ESCALATED' ? SlickBotColors.WARNING : SlickBotColors.PRIMARY,
+    description: lines.filter(Boolean).join('\n'),
+    color: status === 'CLOSED' ? SlickBotColors.MUTED : ticket.priority === 'ESCALATED' ? SlickBotColors.WARNING : SlickBotColors.PRIMARY,
     footer: 'SlickBot Tickets'
   });
 }
@@ -779,16 +818,24 @@ class ReportService {
     return report;
   }
 
-  async reviewReport({ guildId, reportId, reviewer, status, logger, details = null }) {
-    const noteSql = details ? `, review_notes = CONCAT(COALESCE(review_notes, ''), $5)` : '';
-    const params = details ? [normalizeStatus(status), reviewer.id, guildId, reportId, `\n[${new Date().toISOString()}] Decision details from ${reviewer.tag}: ${details}`] : [normalizeStatus(status), reviewer.id, guildId, reportId];
+  async reviewReport({ guildId, reportId, reviewer, status, logger, reason = null, details = null }) {
+    const normalizedStatus = normalizeStatus(status);
+    const note = details ? `\n[${new Date().toISOString()}] ${reviewer.tag}: ${details}` : null;
     const result = await query(
-      `UPDATE reports SET status = $1, reviewed_by_user_id = $2, reviewed_at = NOW(), updated_at = NOW() ${noteSql} WHERE guild_id = $3 AND id = $4 RETURNING *`,
-      params
+      `UPDATE reports
+       SET status = $1,
+           reviewed_by_user_id = $2,
+           reviewed_at = NOW(),
+           decision_reason = $3,
+           review_notes = CASE WHEN $4::text IS NULL THEN review_notes ELSE CONCAT(COALESCE(review_notes, ''), $4) END,
+           updated_at = NOW()
+       WHERE guild_id = $5 AND id = $6
+       RETURNING *`,
+      [normalizedStatus, reviewer.id, reason || null, note, guildId, reportId]
     );
     const report = result.rows[0] || null;
     if (!report) return null;
-    await logger.log({ guildId, eventKey: 'report-review', title: 'Report Reviewed', body: `Report #${report.report_number} marked **${report.status}** by ${reviewer.tag}.`, actorUserId: reviewer.id, metadata: { reportId: report.id, status: report.status } }).catch(() => {});
+    await logger.log({ guildId, eventKey: 'report-review', title: 'Report Reviewed', body: `Report #${report.report_number} marked **${report.status}** by ${reviewer.tag}.${reason ? ` Reason: ${reason}` : ''}`, actorUserId: reviewer.id, metadata: { reportId: report.id, status: report.status } }).catch(() => {});
     return report;
   }
 
@@ -821,19 +868,14 @@ function buildReportReviewPayload(report) {
   const isClosed = isResolved || isDismissed;
   const reviewedAt = formatTimestamp(report.reviewed_at);
   const ticketOpenedAt = formatTimestamp(report.linked_ticket_opened_at);
-  const color = isResolved
-    ? SlickBotColors.SUCCESS
-    : isDismissed
-      ? 0x747f8d
-      : status === 'CLAIMED'
-        ? SlickBotColors.PRIMARY
-        : SlickBotColors.WARNING;
+  const color = supportStatusColor(status, SlickBotColors.WARNING);
 
   const lines = [
-    `Status: **${status}**`,
+    `Status: ${formatSupportStatus(status)}`,
     `Reporter: <@${report.reporter_user_id}>`,
     report.claimed_by_user_id ? `Claimed By: <@${report.claimed_by_user_id}>` : 'Claimed By: Not claimed',
     report.reviewed_by_user_id ? `Reviewed By: <@${report.reviewed_by_user_id}>${reviewedAt ? ` on ${reviewedAt}` : ''}` : null,
+    report.decision_reason ? `Decision Reason: ${truncate(report.decision_reason, 700)}` : null,
     report.target_user_id ? `Target: <@${report.target_user_id}>` : null,
     report.message_link ? `Message: ${report.message_link}` : null,
     `Type: **${report.report_type}**`,
@@ -855,9 +897,10 @@ function buildReportReviewPayload(report) {
 
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId(`${CustomIds.ReportClaimPrefix}${report.id}`).setLabel(status === 'CLAIMED' ? 'Claimed' : 'Claim').setStyle(ButtonStyle.Primary).setDisabled(status === 'CLAIMED'),
+    new ButtonBuilder().setCustomId(`${CustomIds.ReportDetailsPrefix}${report.id}`).setLabel('Add Details').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(`${CustomIds.ReportOpenTicketPrefix}${report.id}`).setLabel(report.linked_ticket_id ? 'Ticket Opened' : 'Open Ticket').setStyle(ButtonStyle.Primary).setDisabled(Boolean(report.linked_ticket_id)),
     new ButtonBuilder().setCustomId(`${CustomIds.ReportResolvePrefix}${report.id}`).setLabel('Resolve').setStyle(ButtonStyle.Success),
-    new ButtonBuilder().setCustomId(`${CustomIds.ReportDismissPrefix}${report.id}`).setLabel('Dismiss').setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId(`${CustomIds.ReportOpenTicketPrefix}${report.id}`).setLabel(report.linked_ticket_id ? 'Ticket Opened' : 'Open Ticket').setStyle(ButtonStyle.Danger).setDisabled(Boolean(report.linked_ticket_id))
+    new ButtonBuilder().setCustomId(`${CustomIds.ReportDismissPrefix}${report.id}`).setLabel('Dismiss').setStyle(ButtonStyle.Danger)
   );
   return { embeds: [embed], components: [row] };
 }
@@ -1160,12 +1203,12 @@ function buildApplicationReviewPayload(submission) {
   const isClosed = status === 'APPROVED' || status === 'DENIED';
   const reviewedAt = formatTimestamp(submission.reviewed_at);
   const submittedAt = formatTimestamp(submission.created_at);
-  const color = status === 'APPROVED' ? SlickBotColors.SUCCESS : status === 'DENIED' ? SlickBotColors.ERROR : SlickBotColors.WARNING;
+  const color = supportStatusColor(status, SlickBotColors.WARNING);
 
   const embed = createBaseEmbed({
     title: `${submission.application_name} Application #${submission.submission_number}`,
     description: [
-      `Status: **${status}**`,
+      `Status: ${formatSupportStatus(status)}`,
       `Applicant: <@${submission.applicant_user_id}>`,
       submittedAt ? `Submitted: ${submittedAt}` : null,
       submission.reviewed_by_user_id ? `Reviewed By: <@${submission.reviewed_by_user_id}>${reviewedAt ? ` on ${reviewedAt}` : ''}` : null,
@@ -1281,12 +1324,12 @@ function buildAppealReviewPayload(appeal) {
   const status = normalizeStatus(appeal.status || 'PENDING');
   const isClosed = status === 'APPROVED' || status === 'DENIED';
   const reviewedAt = formatTimestamp(appeal.reviewed_at);
-  const color = status === 'APPROVED' ? SlickBotColors.SUCCESS : status === 'DENIED' ? SlickBotColors.WARNING : SlickBotColors.INFO;
+  const color = supportStatusColor(status, SlickBotColors.WARNING);
 
   const embed = createBaseEmbed({
     title: `Appeal #${appeal.appeal_number}`,
     description: [
-      `Status: **${status}**`,
+      `Status: ${formatSupportStatus(status)}`,
       `Appellant: <@${appeal.appellant_user_id}>`,
       appeal.case_number ? `Case: **#${appeal.case_number}**` : 'Case: Not provided',
       appeal.reviewed_by_user_id ? `Reviewed By: <@${appeal.reviewed_by_user_id}>${reviewedAt ? ` on ${reviewedAt}` : ''}` : null,
@@ -1336,7 +1379,7 @@ function buildAppealDecisionDmPayload(appeal, config) {
     embeds: [createBaseEmbed({
       title: `Appeal #${appeal.appeal_number} Decision`,
       description: lines.filter(Boolean).join('\n'),
-      color: status === 'APPROVED' ? SlickBotColors.SUCCESS : SlickBotColors.WARNING,
+      color: status === 'APPROVED' ? SlickBotColors.SUCCESS : status === 'DENIED' ? SlickBotColors.ERROR : SlickBotColors.WARNING,
       footer: 'SlickBot Appeals'
     })]
   };
@@ -1369,6 +1412,14 @@ function buildReportDetailsModal(reportId) {
     .setCustomId(`${CustomIds.ReportDetailsModalPrefix}${reportId}`)
     .setTitle('Add Report Details')
     .addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('details').setLabel('Details to add').setStyle(TextInputStyle.Paragraph).setRequired(true).setMaxLength(1500)));
+}
+
+function buildReportReviewReasonModal(reportId, status) {
+  const isResolve = normalizeStatus(status) === 'RESOLVED';
+  return new ModalBuilder()
+    .setCustomId(`${CustomIds.ReportReviewReasonModalPrefix}${normalizeStatus(status)}:${reportId}`)
+    .setTitle(`${isResolve ? 'Resolve' : 'Dismiss'} Report`)
+    .addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('reason').setLabel(`${isResolve ? 'Resolution' : 'Dismissal'} reason`).setStyle(TextInputStyle.Paragraph).setRequired(true).setMaxLength(1000)));
 }
 
 function buildAppealModal() {
@@ -1404,6 +1455,7 @@ module.exports = {
   buildTicketModal,
   buildReportModal,
   buildReportDetailsModal,
+  buildReportReviewReasonModal,
   buildAppealModal,
   buildAppealReasonModal,
   buildApplicationReviewReasonModal,

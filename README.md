@@ -4,7 +4,29 @@ SlickBot is an all-in-one Discord server management bot built for the SlickPickl
 
 ## Version
 
-Current package: **v0.8.7**
+Current package: **v0.8.8**
+
+## v0.8.8 Updates
+
+### Support Workflow Consistency Pass
+
+- Standardized support workflow status displays for tickets, reports, applications, and appeals.
+- Report **Resolve** and **Dismiss** controls now open a required decision-reason popup before the report is finalized.
+- Report review embeds now preserve the original report content, show decision reason, keep review notes, and include an **Add Details** button while the report is still open.
+- Ticket control embeds now show explicit ticket status, opened/closed metadata, close reason, and transcript status when a closed ticket remains visible.
+- Application and appeal review embeds now use consistent pending/approved/denied status labels and colors.
+- Appeal denials now use red/error styling instead of warning/orange styling in both review embeds and decision DMs.
+- Added a backward-compatible `reports.decision_reason` database field.
+
+Updated systems:
+
+```text
+Tickets
+Reports
+Applications
+Appeals
+Support review controls
+```
 
 ## v0.8.7 Updates
 
