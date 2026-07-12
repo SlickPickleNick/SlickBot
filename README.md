@@ -18,14 +18,17 @@ Current package: **v0.8.9**
 - Messages that are not numbers or enabled math expressions are ignored by default in the counting channel and do not reset the game.
 - Editing or deleting an accepted counting message resets the active sequence by default; each behavior can be disabled separately in Counting setup.
 - Accepted counting messages now receive a configurable accepted-count reaction, and failed count attempts receive a configurable failed-count reaction. Defaults use the green-check and no-entry-sign equivalents, with hardened alias/custom-emoji fallback handling so accepted counts reliably receive the configured reaction when SlickBot has channel reaction permissions.
+- Counting failures now send an embed that pings the member, shows what they sent, shows the expected number, displays the 🏆 all-time server record, and calls out `NEW RECORD SET: #` when the failed run had reached a new all-time record.
 - Accepted counting messages do not earn normal message XP by default; this can be enabled separately.
 - Tic-Tac-Toe and Connect Four use public challenge messages with accept/decline buttons, turn-restricted controls, win/draw detection, session expiration, persistent statistics, and configurable win XP. Draws award half of the configured win XP to both players.
+- Added `/games panel post`, `/games panel edit`, and `/games panel refresh` for a public Community Games launcher panel that can be pinned and edited later. Counting uses a channel-link button, while Tic-Tac-Toe and Connect Four open a user-selection flow and return a direct link to the posted challenge message.
 - Added Community Games permission actions, public play defaults, logging, diagnostics, setup/module status, help entries, and PostgreSQL persistence.
 
 Updated commands:
 
 ```text
 /games manager
+/games panel post|edit|refresh
 /games counting setup|enable|disable|status|reset|set-number|leaderboard
 /games counting ignored-role-add|ignored-role-remove
 /games counting ignored-user-add|ignored-user-remove

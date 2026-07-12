@@ -46,9 +46,11 @@ SlickBot is being built as a modular all-in-one Discord server management bot fo
 - Editing or deleting an accepted counting message resets the active sequence by default; each behavior can be disabled separately in Counting setup.
 - Added optional milestone XP and a separate setting for whether accepted counting messages receive normal Leveling XP.
 - Added configurable accepted-count and failed-count reactions for Counting. Defaults use the green-check and no-entry-sign equivalents, with custom emoji strings supported through `/games counting setup`. The reaction path now resolves aliases, pasted custom emoji, named guild emoji, and Unicode fallback values before giving up.
+- Counting failures now use a structured embed that pings the member, shows the submitted value, expected number, 🏆 all-time record, and `NEW RECORD SET: #` when appropriate.
 - Added button-based Tic-Tac-Toe challenges with player acceptance, turn controls, automatic win/draw detection, expiration, statistics, and configurable win XP. Draws award half XP to both players.
 - Added button-based Connect Four challenges with a persistent 7-column board, player acceptance, turn controls, automatic win/draw detection, expiration, statistics, and configurable win XP. Draws award half XP to both players.
-- Added PostgreSQL persistence for game configurations, counting state/statistics/ignore lists, counting reaction settings, multiplayer sessions, board-game XP settings, and player records.
+- Added tracked public Community Games panels with `/games panel post`, `/games panel edit`, and `/games panel refresh`. Public panel buttons route Counting users to the configured counting channel and start Tic-Tac-Toe or Connect Four through a user select menu, then return a direct link to the challenge message.
+- Added PostgreSQL persistence for game configurations, public games panels, counting state/statistics/ignore lists, counting reaction settings, multiplayer sessions, board-game XP settings, and player records.
 - Added Community Games permission defaults, public play controls, logging events, `/help`, `/setup`, `/modules`, and `/bot test` integration.
 
 ## v0.8.8 Scope

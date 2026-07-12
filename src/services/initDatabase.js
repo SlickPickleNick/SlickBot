@@ -1174,6 +1174,23 @@ async function initDatabase() {
   await query(`CREATE INDEX IF NOT EXISTS idx_community_game_stats_user ON community_game_stats(guild_id, user_id, game_key);`);
 
   await query(`
+    CREATE TABLE IF NOT EXISTS community_game_panels (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      channel_id TEXT NOT NULL,
+      message_id TEXT,
+      title TEXT NOT NULL DEFAULT 'Community Games',
+      description TEXT NOT NULL DEFAULT 'Choose a game below to start playing.',
+      header_image_url TEXT,
+      active BOOLEAN NOT NULL DEFAULT true,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await query(`CREATE INDEX IF NOT EXISTS idx_community_game_panels_guild_active ON community_game_panels(guild_id, active);`);
+
+  await query(`
     CREATE TABLE IF NOT EXISTS role_permission_levels (
       id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
       guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,

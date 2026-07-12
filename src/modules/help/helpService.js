@@ -130,7 +130,8 @@ const HELP_CATALOG = Object.freeze([
   { moduleKey: ModuleKeys.COMMUNITY_GAMES, actionKey: ActionKeys.GamesPlay, command: '/games tic-tac-toe challenge|stats', description: 'Challenge a member to Tic-Tac-Toe or view player statistics.' },
   { moduleKey: ModuleKeys.COMMUNITY_GAMES, actionKey: ActionKeys.GamesPlay, command: '/games connect-four challenge|stats', description: 'Challenge a member to Connect Four or view player statistics.' },
   { moduleKey: ModuleKeys.COMMUNITY_GAMES, actionKey: ActionKeys.GamesView, command: '/games manager and /games counting status', description: 'Review all Community Games configuration and counting state.' },
-  { moduleKey: ModuleKeys.COMMUNITY_GAMES, actionKey: ActionKeys.GamesConfigure, command: '/games counting setup|enable|disable|reset|set-number', description: 'Configure Counting rules, reactions, and staff controls.' },
+  { moduleKey: ModuleKeys.COMMUNITY_GAMES, actionKey: ActionKeys.GamesConfigure, command: '/games panel post|edit|refresh', description: 'Post or update a public launcher panel for available Community Games.' },
+  { moduleKey: ModuleKeys.COMMUNITY_GAMES, actionKey: ActionKeys.GamesConfigure, command: '/games counting setup|enable|disable|reset|set-number', description: 'Configure Counting rules, reactions, failure embeds, and staff controls.' },
   { moduleKey: ModuleKeys.COMMUNITY_GAMES, actionKey: ActionKeys.GamesConfigure, command: '/games tic-tac-toe setup|enable|disable', description: 'Configure or toggle Tic-Tac-Toe, including win XP.' },
   { moduleKey: ModuleKeys.COMMUNITY_GAMES, actionKey: ActionKeys.GamesConfigure, command: '/games connect-four setup|enable|disable', description: 'Configure or toggle Connect Four, including win XP.' },
 

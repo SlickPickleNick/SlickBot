@@ -12,12 +12,18 @@
       "Added button-based Tic-Tac-Toe challenges with accept/decline controls, turn validation, win/draw detection, automatic expiration, and persistent player statistics.",
       "Added button-based Connect Four challenges with a persistent board, column controls, turn validation, win/draw detection, automatic expiration, and persistent player statistics.",
       "Counting setup now supports configurable accepted-count and failed-count reaction emojis. The defaults use the green-check and no-entry-sign equivalents, custom emoji strings can be provided through /games counting setup, and the accepted-count reaction path now includes alias/custom-emoji fallback resolution.",
+      "Counting failures now send an embed that pings the member, shows what they sent, shows the expected number, displays the \ud83c\udfc6 all-time server record, and calls out NEW RECORD SET when the failed run had reached a new all-time record.",
       "Tic-Tac-Toe and Connect Four now award configurable Leveling XP when a player wins. Draws award half of the configured win XP to both players.",
+      "Added tracked public Community Games launcher panels with /games panel post, /games panel edit, and /games panel refresh. Counting panel buttons link to the configured counting channel; Tic-Tac-Toe and Connect Four buttons open a user-selection flow and return a direct link to the posted challenge message.",
       "Added backward-compatible win_xp, accepted_reaction_emoji, and failed_reaction_emoji migrations for Community Games configuration.",
+      "Added the community_game_panels table for tracked, editable public Games launcher panels.",
       "Added Community Games permission actions, public play defaults, logging, setup/module status, help entries, diagnostics, and backward-compatible PostgreSQL migrations."
     ],
     "commands": [
       "/games manager",
+      "/games panel refresh",
+      "/games panel edit",
+      "/games panel post",
       "/games counting setup",
       "/games counting enable",
       "/games counting disable",

@@ -144,8 +144,8 @@ const MODULE_SETUP_CATALOG = Object.freeze({
   [ModuleKeys.COMMUNITY_GAMES]: {
     name: 'Community Games', category: 'Community Systems', description: 'Runs persistent Counting plus button-based Tic-Tac-Toe and Connect Four challenges.',
     managerCommand: '/games manager', setupCommand: '/games counting setup',
-    nextSteps: ['Open `/games manager` to review all game configurations.', 'Configure a counting channel with `/games counting setup`.', 'Enable each game separately with its `/games ... enable` command.', 'Test Tic-Tac-Toe and Connect Four with a second member.'],
-    usefulCommands: ['/games manager', '/games counting setup', '/games counting enable', '/games tic-tac-toe enable', '/games connect-four enable']
+    nextSteps: ['Open `/games manager` to review all game configurations.', 'Configure a counting channel with `/games counting setup`.', 'Enable each game separately with its `/games ... enable` command.', 'Post a public launcher with `/games panel post` and pin that message if desired.', 'Test Tic-Tac-Toe and Connect Four with a second member.'],
+    usefulCommands: ['/games manager', '/games panel post', '/games panel edit', '/games counting setup', '/games counting enable', '/games tic-tac-toe enable', '/games connect-four enable']
   },
   [ModuleKeys.JOIN_TO_CREATE]: {
     name: 'Join-to-Create Voice', category: 'Community Systems', description: 'Creates temporary voice rooms when members join configured hub channels.',

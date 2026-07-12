@@ -60,6 +60,19 @@ function countingChannelLabel(channelId) {
   return channelId ? `<#${channelId}>` : 'Not configured';
 }
 
+function channelUrl(guildId, channelId) {
+  return `https://discord.com/channels/${guildId}/${channelId}`;
+}
+
+function messageUrl(guildId, channelId, messageId) {
+  return `https://discord.com/channels/${guildId}/${channelId}/${messageId}`;
+}
+
+function truncateField(value, max = 1024) {
+  const text = String(value ?? 'None');
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+}
+
 function normalizeBoard(value, expectedLength) {
   const board = Array.isArray(value) ? value.map((cell) => Number(cell) || 0) : [];
   return board.length === expectedLength ? board : Array(expectedLength).fill(0);
@@ -674,6 +687,8 @@ class CommunityGameService {
           number: parsed,
           record: newRecord,
           config: live,
+          current,
+          record: BigInt(live.record_number || 0),
           suppressNormalXp: live.normal_message_xp !== true
         };
       } else {
@@ -707,6 +722,8 @@ class CommunityGameService {
           expected,
           shouldReset,
           config: live,
+          current,
+          record: BigInt(live.record_number || 0),
           suppressNormalXp: live.normal_message_xp !== true
         };
       }
@@ -749,35 +766,38 @@ class CommunityGameService {
 
     await reactToCountingMessage(message, outcome.config.failed_reaction_emoji, DEFAULT_COUNTING_FAILED_REACTION);
     if (outcome.config.delete_invalid_messages) await message.delete().catch(() => {});
+
+    const sentValue = outcome.parsed == null ? message.content : outcome.parsed.toString();
+    const reason = outcome.consecutive ? 'Consecutive turn' : outcome.parsed == null ? 'Non-counting message' : 'Incorrect number';
+    const newRecord = outcome.current === outcome.record && outcome.record > 0n ? outcome.record : null;
+    await message.channel.send({
+      content: `<@${message.author.id}>`,
+      embeds: [buildCountingFailureEmbed({
+        userId: message.author.id,
+        sentValue,
+        expected: outcome.expected,
+        record: outcome.record,
+        newRecord,
+        reason,
+        reset: outcome.shouldReset,
+        next: outcome.shouldReset ? BigInt(outcome.config.starting_number || 1) : outcome.expected
+      })],
+      allowedMentions: { parse: [], users: [message.author.id] }
+    }).catch(() => {});
+
     if (outcome.shouldReset) {
-      const next = BigInt(outcome.config.starting_number || 1);
-      const resetText = replaceTemplate(outcome.config.reset_message || DEFAULT_RESET_MESSAGE, {
-        user: `<@${message.author.id}>`,
-        username: message.author.username,
-        number: outcome.parsed == null ? message.content : outcome.parsed.toString(),
-        expected: outcome.expected.toString(),
-        next: next.toString(),
-        record: String(outcome.config.record_number || 0),
-        channel: message.channelId,
-        server: message.guild.name,
-        reason: outcome.consecutive ? 'consecutive turn' : 'incorrect number'
-      });
-      await message.channel.send({ content: resetText, allowedMentions: { parse: [], users: [message.author.id] } }).catch(() => {});
       await logger?.log?.({
         guildId: message.guild.id,
         eventKey: 'community-game-reset',
         title: 'Counting Game Reset',
-        body: `Member: <@${message.author.id}>\nExpected: **${outcome.expected.toString()}**\nReason: **${outcome.consecutive ? 'Consecutive turn' : outcome.parsed == null ? 'Non-counting message' : 'Incorrect number'}**`,
+        body: `Member: <@${message.author.id}>
+Sent: **${truncateField(sentValue, 200)}**
+Expected: **${outcome.expected.toString()}**
+Record: **${outcome.record.toString()}**
+Reason: **${reason}**`,
         actorUserId: message.author.id,
-        metadata: { game: GAME_KEYS.COUNTING, expected: outcome.expected.toString() }
+        metadata: { game: GAME_KEYS.COUNTING, expected: outcome.expected.toString(), sent: sentValue }
       }).catch(() => {});
-    } else {
-      const feedback = `That entry was not accepted. The next number is **${outcome.expected.toString()}**.`;
-      if (outcome.config.delete_invalid_messages) {
-        await message.channel.send({ content: feedback, allowedMentions: { parse: [] } }).catch(() => {});
-      } else {
-        await message.reply({ content: feedback, allowedMentions: { parse: [], repliedUser: false } }).catch(() => {});
-      }
     }
     return outcome;
   }
@@ -1113,6 +1133,61 @@ Next Number: **${outcome.next.toString()}**`,
     return awards;
   }
 
+
+  async createPanelChallenge({ interaction, gameKey, opponent }) {
+    const config = await this.getGameConfig(interaction.guildId, gameKey);
+    if (!config?.enabled) return { ok: false, reason: `${gameLabel(gameKey)} is disabled in this server.` };
+    if (opponent.bot) return { ok: false, reason: 'Bots cannot join community game challenges.' };
+    if (opponent.id === interaction.user.id) return { ok: false, reason: 'Choose another server member as your opponent.' };
+
+    const targetChannelId = config.channel_id || interaction.channelId;
+    const targetChannel = await interaction.guild.channels.fetch(targetChannelId).catch(() => null);
+    if (!targetChannel?.isTextBased?.()) return { ok: false, reason: `${gameLabel(gameKey)} could not find a valid text channel to post the game.` };
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(`SELECT pg_advisory_xact_lock(hashtext($1)::bigint)`, [`${interaction.guildId}:${gameKey}`]);
+      await client.query(
+        `UPDATE community_game_sessions
+         SET status = 'EXPIRED', updated_at = NOW()
+         WHERE guild_id = $1 AND game_key = $2 AND status IN ('PENDING', 'ACTIVE') AND expires_at <= NOW()`,
+        [interaction.guildId, gameKey]
+      );
+
+      const active = await client.query(
+        `SELECT 1 FROM community_game_sessions
+         WHERE guild_id = $1
+           AND game_key = $2
+           AND status IN ('PENDING', 'ACTIVE')
+           AND expires_at > NOW()
+           AND (player_one_id = ANY($3::text[]) OR player_two_id = ANY($3::text[]))
+         LIMIT 1`,
+        [interaction.guildId, gameKey, [interaction.user.id, opponent.id]]
+      );
+      if (active.rows.length) {
+        await client.query('ROLLBACK');
+        return { ok: false, reason: 'One of these players already has a pending or active game of this type.' };
+      }
+
+      const board = gameKey === GAME_KEYS.TIC_TAC_TOE ? Array(9).fill(0) : Array(42).fill(0);
+      const result = await client.query(
+        `INSERT INTO community_game_sessions
+         (guild_id, game_key, channel_id, player_one_id, player_two_id, current_player_id, board, status, expires_at)
+         VALUES ($1, $2, $3, $4, $5, $4, $6::jsonb, 'PENDING', NOW() + INTERVAL '10 minutes')
+         RETURNING *`,
+        [interaction.guildId, gameKey, targetChannelId, interaction.user.id, opponent.id, JSON.stringify(board)]
+      );
+      await client.query('COMMIT');
+      return { ok: true, session: result.rows[0], channel: targetChannel };
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   buildChallengePayload(session) {
     const expires = Math.floor(new Date(session.expires_at).getTime() / 1000);
     const embed = createBaseEmbed({
@@ -1250,6 +1325,133 @@ Next Number: **${outcome.next.toString()}**`,
       await message.edit(payload).catch(() => {});
     }
     return updated.rows.length;
+  }
+
+
+  async createGamePanel({ guildId, channel, title, description, headerImageUrl }) {
+    const payload = await this.buildPublicGamesPanel(guildId, {
+      title: title || 'Community Games',
+      description: description || 'Choose a game below to start playing.',
+      header_image_url: headerImageUrl || null
+    });
+    const message = await channel.send(payload);
+    const result = await query(
+      `INSERT INTO community_game_panels (guild_id, channel_id, message_id, title, description, header_image_url, active)
+       VALUES ($1, $2, $3, $4, $5, $6, true)
+       RETURNING *`,
+      [guildId, channel.id, message.id, title || 'Community Games', description || 'Choose a game below to start playing.', headerImageUrl || null]
+    );
+    return { panel: result.rows[0], message };
+  }
+
+  async editGamePanels({ guildId, title, description, headerImageUrl, clearHeader = false, client = null }) {
+    const values = [];
+    const sets = [];
+    let index = 2;
+    if (title !== undefined) {
+      sets.push(`title = $${index++}`);
+      values.push(title || 'Community Games');
+    }
+    if (description !== undefined) {
+      sets.push(`description = $${index++}`);
+      values.push(description || 'Choose a game below to start playing.');
+    }
+    if (clearHeader) {
+      sets.push(`header_image_url = NULL`);
+    } else if (headerImageUrl !== undefined) {
+      sets.push(`header_image_url = $${index++}`);
+      values.push(headerImageUrl || null);
+    }
+    if (!sets.length) {
+      const current = await this.getActiveGamePanels(guildId);
+      return { updated: 0, refreshed: client ? await this.refreshGamePanels(client, guildId) : 0, panels: current };
+    }
+    sets.push(`updated_at = NOW()`);
+    const result = await query(
+      `UPDATE community_game_panels
+       SET ${sets.join(', ')}
+       WHERE guild_id = $1 AND active = true
+       RETURNING *`,
+      [guildId, ...values]
+    );
+    const refreshed = client ? await this.refreshGamePanels(client, guildId) : 0;
+    return { updated: result.rows.length, refreshed, panels: result.rows };
+  }
+
+  async getActiveGamePanels(guildId) {
+    const result = await query(
+      `SELECT * FROM community_game_panels
+       WHERE guild_id = $1 AND active = true
+       ORDER BY created_at DESC`,
+      [guildId]
+    );
+    return result.rows;
+  }
+
+  async refreshGamePanels(discordClient, guildId) {
+    if (!discordClient || !guildId) return 0;
+    const panels = await this.getActiveGamePanels(guildId);
+    let refreshed = 0;
+    for (const panel of panels) {
+      if (!panel.channel_id || !panel.message_id) continue;
+      const channel = await discordClient.channels.fetch(panel.channel_id).catch(() => null);
+      if (!channel?.isTextBased?.()) {
+        await query(`UPDATE community_game_panels SET active = false, updated_at = NOW() WHERE id = $1`, [panel.id]);
+        continue;
+      }
+      const message = await channel.messages.fetch(panel.message_id).catch(() => null);
+      if (!message) {
+        await query(`UPDATE community_game_panels SET active = false, updated_at = NOW() WHERE id = $1`, [panel.id]);
+        continue;
+      }
+      await message.edit(await this.buildPublicGamesPanel(guildId, panel)).then(() => { refreshed += 1; }).catch(() => {});
+    }
+    return refreshed;
+  }
+
+  async buildPublicGamesPanel(guildId, panel = null) {
+    const [configs, counting] = await Promise.all([
+      this.getAllGameConfigs(guildId),
+      this.getCountingConfig(guildId)
+    ]);
+    const byKey = new Map(configs.map((config) => [config.game_key, config]));
+    const countingAvailable = Boolean(byKey.get(GAME_KEYS.COUNTING)?.enabled && counting?.channel_id);
+    const tttAvailable = Boolean(byKey.get(GAME_KEYS.TIC_TAC_TOE)?.enabled);
+    const connectAvailable = Boolean(byKey.get(GAME_KEYS.CONNECT_FOUR)?.enabled);
+    const availableLines = [];
+    if (countingAvailable) availableLines.push(`• **Counting** — Continue the count in <#${counting.channel_id}>.`);
+    if (tttAvailable) availableLines.push('• **Tic-Tac-Toe** — Select an opponent and start a board game.');
+    if (connectAvailable) availableLines.push('• **Connect Four** — Select an opponent and start a board game.');
+
+    const description = [
+      panel?.description || 'Choose a game below to start playing.',
+      '',
+      availableLines.length ? '**Available Games**' : '**Available Games**\nNo games are currently enabled.',
+      ...availableLines
+    ].join('\n');
+
+    const embed = createBaseEmbed({
+      title: panel?.title || 'Community Games',
+      description,
+      color: availableLines.length ? SlickBotColors.INFO : SlickBotColors.MUTED,
+      footer: 'SlickBot Community Games'
+    });
+    const buttons = [];
+    if (countingAvailable) {
+      buttons.push(new ButtonBuilder()
+        .setLabel('Counting')
+        .setStyle(ButtonStyle.Link)
+        .setURL(channelUrl(guildId, counting.channel_id)));
+    }
+    if (tttAvailable) buttons.push(makeSessionButton(CustomIds.GamePanelTicTacToe, 'Tic-Tac-Toe', ButtonStyle.Primary));
+    if (connectAvailable) buttons.push(makeSessionButton(CustomIds.GamePanelConnectFour, 'Connect Four', ButtonStyle.Primary));
+    const components = buttons.length ? [new ActionRowBuilder().addComponents(...buttons.slice(0, 5))] : [];
+    return {
+      content: panel?.header_image_url || '',
+      embeds: [embed],
+      components,
+      allowedMentions: { parse: [] }
+    };
   }
 
   async buildManagerPanel(guildId) {
@@ -1435,6 +1637,27 @@ async function recordGameStats(client, session, winnerUserId, draw) {
       [session.guild_id, userId, session.game_key, won ? 1 : 0, lost ? 1 : 0, draw ? 1 : 0]
     );
   }
+}
+
+function buildCountingFailureEmbed({ userId, sentValue, expected, record, newRecord, reason, reset, next }) {
+  const lines = [
+    `<@${userId}>, that count was not accepted.`,
+    '',
+    `Sent: **${truncateField(sentValue, 200)}**`,
+    `Expected: **${BigInt(expected || 0).toString()}**`,
+    `Reason: **${reason || 'Incorrect number'}**`,
+    `Next Number: **${BigInt(next || expected || 0).toString()}**`,
+    '',
+    `🏆 All-Time Server Record: **${BigInt(record || 0).toString()}**`
+  ];
+  if (newRecord) lines.push(`NEW RECORD SET: **${BigInt(newRecord).toString()}**`);
+  lines.push('', reset ? 'The count has been reset.' : 'The count was not reset because reset-on-incorrect is disabled.');
+  return createBaseEmbed({
+    title: reset ? 'Counting Reset' : 'Counting Entry Rejected',
+    description: lines.join('\n'),
+    color: reset ? SlickBotColors.ERROR : SlickBotColors.WARNING,
+    footer: 'SlickBot Community Games'
+  });
 }
 
 function buildCountingStatusEmbed(config) {

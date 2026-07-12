@@ -58,6 +58,32 @@ let commandBuilder = new SlashCommandBuilder()
   .addSubcommand((sub) => sub.setName('manager').setDescription('Open the Community Games manager.'))
   .addSubcommandGroup((group) =>
     group
+      .setName('panel')
+      .setDescription('Post and edit the public Community Games panel.')
+      .addSubcommand((sub) =>
+        sub
+          .setName('post')
+          .setDescription('Post a public panel where members can start available games.')
+          .addChannelOption((option) => option
+            .setName('channel')
+            .setDescription('Channel where SlickBot should post the games panel.')
+            .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)
+            .setRequired(true))
+          .addStringOption((option) => option.setName('title').setDescription('Panel title.').setMaxLength(100).setRequired(false))
+          .addStringOption((option) => option.setName('description').setDescription('Panel description.').setMaxLength(1000).setRequired(false))
+          .addStringOption((option) => option.setName('header_image').setDescription('Optional Discord image/media URL shown above the embed.').setMaxLength(500).setRequired(false)))
+      .addSubcommand((sub) =>
+        sub
+          .setName('edit')
+          .setDescription('Edit all active tracked Community Games panels.')
+          .addStringOption((option) => option.setName('title').setDescription('New panel title.').setMaxLength(100).setRequired(false))
+          .addStringOption((option) => option.setName('description').setDescription('New panel description.').setMaxLength(1000).setRequired(false))
+          .addStringOption((option) => option.setName('header_image').setDescription('New header image URL.').setMaxLength(500).setRequired(false))
+          .addBooleanOption((option) => option.setName('clear_header').setDescription('Remove the saved header image.').setRequired(false)))
+      .addSubcommand((sub) => sub.setName('refresh').setDescription('Refresh all active tracked Community Games panels.'))
+  )
+  .addSubcommandGroup((group) =>
+    group
       .setName('counting')
       .setDescription('Configure and manage the persistent counting game.')
       .addSubcommand((sub) =>
@@ -147,6 +173,45 @@ module.exports = {
 
     if (!group && sub === 'manager') return replyPrivate(interaction, await games.buildManagerPanel(interaction.guildId));
 
+    if (group === 'panel') {
+      if (sub === 'post') {
+        const channel = interaction.options.getChannel('channel', true);
+        const result = await games.createGamePanel({
+          guildId: interaction.guildId,
+          channel,
+          title: interaction.options.getString('title') || undefined,
+          description: interaction.options.getString('description') || undefined,
+          headerImageUrl: interaction.options.getString('header_image') || undefined
+        });
+        await logConfig(ctx, interaction, 'Community Games Panel Posted', `Channel: <#${channel.id}>
+Message: ${result.message.url || 'posted'}`);
+        return replyPrivate(interaction, { embeds: [createSuccessEmbed('Community Games Panel Posted', `Posted the Community Games panel in <#${channel.id}>.
+[Open panel](${result.message.url})`)] });
+      }
+
+      if (sub === 'edit') {
+        const clearHeader = interaction.options.getBoolean('clear_header') || false;
+        const headerImage = interaction.options.getString('header_image');
+        if (clearHeader && headerImage) return replyPrivate(interaction, { embeds: [createWarningEmbed('Choose One Header Option', 'Use either `header_image` or `clear_header`, not both.')] });
+        const result = await games.editGamePanels({
+          guildId: interaction.guildId,
+          title: interaction.options.getString('title') ?? undefined,
+          description: interaction.options.getString('description') ?? undefined,
+          headerImageUrl: headerImage ?? undefined,
+          clearHeader,
+          client: ctx.client
+        });
+        await logConfig(ctx, interaction, 'Community Games Panel Edited', `Active Panels Updated: **${result.updated}**
+Messages Refreshed: **${result.refreshed}**`);
+        return replyPrivate(interaction, { embeds: [createSuccessEmbed('Community Games Panels Updated', `Updated **${result.updated}** active panel record(s) and refreshed **${result.refreshed}** message(s).`)] });
+      }
+
+      if (sub === 'refresh') {
+        const refreshed = await games.refreshGamePanels(ctx.client, interaction.guildId);
+        return replyPrivate(interaction, { embeds: [createSuccessEmbed('Community Games Panels Refreshed', `Refreshed **${refreshed}** active panel message(s).`)] });
+      }
+    }
+
     if (group === 'counting') {
       if (sub === 'setup') {
         const channel = interaction.options.getChannel('channel');
@@ -169,6 +234,7 @@ module.exports = {
           failedReactionEmoji: interaction.options.getString('failed_reaction') ?? undefined
         });
         await logConfig(ctx, interaction, 'Counting Configuration Updated', `Channel: ${config.channel_id ? `<#${config.channel_id}>` : 'Not configured'}\nIgnore Non-Counting Messages: **${config.ignore_non_number_messages !== false ? 'Enabled' : 'Disabled'}**\nAccepted Reaction: **${config.accepted_reaction_emoji}**\nFailed Reaction: **${config.failed_reaction_emoji}**`);
+        await games.refreshGamePanels(ctx.client, interaction.guildId).catch(() => {});
         return replyPrivate(interaction, { embeds: [createSuccessEmbed('Counting Configuration Saved', `Counting channel: ${config.channel_id ? `<#${config.channel_id}>` : '**not configured**'}\nCurrent number: **${config.current_number}**\nNon-counting messages are **${config.ignore_non_number_messages !== false ? 'ignored' : 'treated as invalid'}**.\nAccepted reaction: **${config.accepted_reaction_emoji}**\nFailed reaction: **${config.failed_reaction_emoji}**`)] });
       }
 
@@ -177,6 +243,7 @@ module.exports = {
         const result = await games.setGameEnabled(interaction.guildId, GAME_KEYS.COUNTING, enabled);
         if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Counting Not Enabled', result.reason)] });
         await logConfig(ctx, interaction, `Counting ${enabled ? 'Enabled' : 'Disabled'}`, `Status: **${enabled ? 'Enabled' : 'Disabled'}**`);
+        await games.refreshGamePanels(ctx.client, interaction.guildId).catch(() => {});
         return replyPrivate(interaction, { embeds: [createSuccessEmbed(`Counting ${enabled ? 'Enabled' : 'Disabled'}`, `The Counting game is now **${enabled ? 'enabled' : 'disabled'}**.`)] });
       }
 
@@ -233,6 +300,7 @@ module.exports = {
         winXp: interaction.options.getInteger('win_xp') ?? undefined
       });
       await logConfig(ctx, interaction, `${label} Configuration Updated`, `Allowed Channel: ${config.channel_id ? `<#${config.channel_id}>` : 'Any text channel'}\nWin XP: **${config.win_xp}**\nDraw XP: **${Math.floor(Number(config.win_xp || 0) / 2)}** each`);
+      await games.refreshGamePanels(ctx.client, interaction.guildId).catch(() => {});
       return replyPrivate(interaction, { embeds: [createSuccessEmbed(`${label} Configuration Saved`, `${label} challenges can be started in ${config.channel_id ? `<#${config.channel_id}>` : '**any text channel**'}.\nWin XP: **${config.win_xp}**\nDraw XP: **${Math.floor(Number(config.win_xp || 0) / 2)}** each.`)] });
     }
 
@@ -240,6 +308,7 @@ module.exports = {
       const enabled = sub === 'enable';
       await games.setGameEnabled(interaction.guildId, gameKey, enabled);
       await logConfig(ctx, interaction, `${label} ${enabled ? 'Enabled' : 'Disabled'}`, `Status: **${enabled ? 'Enabled' : 'Disabled'}**`);
+      await games.refreshGamePanels(ctx.client, interaction.guildId).catch(() => {});
       return replyPrivate(interaction, { embeds: [createSuccessEmbed(`${label} ${enabled ? 'Enabled' : 'Disabled'}`, `${label} is now **${enabled ? 'enabled' : 'disabled'}**.`)] });
     }
 

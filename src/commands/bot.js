@@ -126,7 +126,7 @@ const MODULE_FIXES = Object.freeze({
   [ModuleKeys.BOT_UPDATES]: 'Run `/bot-updates setup` and configure an update channel.',
   [ModuleKeys.CUSTOM_COMMANDS]: 'Run `/custom-command create` to add your first command.',
   [ModuleKeys.JOIN_TO_CREATE]: 'Run `/join-create create-hub` or `/join-create setup` to configure a hub channel.',
-  [ModuleKeys.COMMUNITY_GAMES]: 'Run `/games manager`, configure Counting if desired, then enable each game separately.'
+  [ModuleKeys.COMMUNITY_GAMES]: 'Run `/games manager`, configure games, enable each game separately, then post a launcher with `/games panel post` if desired.'
 });
 
 function statusIcon(status) {

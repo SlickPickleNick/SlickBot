@@ -1,4 +1,4 @@
-const { MessageFlags } = require('discord.js');
+const { ActionRowBuilder, MessageFlags, UserSelectMenuBuilder } = require('discord.js');
 const { CustomIds } = require('../modules/ui/customIds');
 const { ActionKeys } = require('../modules/permissions/actionKeys');
 const { ModuleKeys, isCoreModule } = require('../modules/moduleRegistry');
@@ -83,6 +83,30 @@ async function handleComponentInteraction(interaction, ctx) {
 
 async function handleButton(interaction, ctx) {
   const id = interaction.customId;
+
+
+  if (id === CustomIds.GamePanelTicTacToe || id === CustomIds.GamePanelConnectFour) {
+    if (!(await requirePublicAction(interaction, ctx, ActionKeys.GamesPlay, ModuleKeys.COMMUNITY_GAMES))) return true;
+    const gameKey = id === CustomIds.GamePanelTicTacToe ? GAME_KEYS.TIC_TAC_TOE : GAME_KEYS.CONNECT_FOUR;
+    const label = gameKey === GAME_KEYS.TIC_TAC_TOE ? 'Tic-Tac-Toe' : 'Connect Four';
+    const row = new ActionRowBuilder().addComponents(
+      new UserSelectMenuBuilder()
+        .setCustomId(`${CustomIds.GamePanelOpponentSelectPrefix}${gameKey}`)
+        .setPlaceholder(`Choose a ${label} opponent`)
+        .setMinValues(1)
+        .setMaxValues(1)
+    );
+    await replyPrivate(interaction, {
+      embeds: [createBaseEmbed({
+        title: `Start ${label}`,
+        description: 'Select the member you want to challenge. SlickBot will post the game challenge and send you a link to it.',
+        color: SlickBotColors.INFO,
+        footer: 'SlickBot Community Games'
+      })],
+      components: [row]
+    });
+    return true;
+  }
 
   if (id.startsWith(CustomIds.GameChallengeAcceptPrefix) || id.startsWith(CustomIds.GameChallengeDeclinePrefix)) {
     if (!(await requirePublicAction(interaction, ctx, ActionKeys.GamesPlay, ModuleKeys.COMMUNITY_GAMES))) return true;
@@ -830,6 +854,38 @@ async function handleButton(interaction, ctx) {
 
 async function handleSelect(interaction, ctx) {
   const id = interaction.customId;
+
+  if (id.startsWith(CustomIds.GamePanelOpponentSelectPrefix)) {
+    if (!(await requirePublicAction(interaction, ctx, ActionKeys.GamesPlay, ModuleKeys.COMMUNITY_GAMES))) return true;
+    const gameKey = id.slice(CustomIds.GamePanelOpponentSelectPrefix.length);
+    const label = gameKey === GAME_KEYS.TIC_TAC_TOE ? 'Tic-Tac-Toe' : 'Connect Four';
+    const opponentId = interaction.values?.[0];
+    const opponent = opponentId ? await interaction.client.users.fetch(opponentId).catch(() => null) : null;
+    if (!opponent) return replyPrivate(interaction, { embeds: [createWarningEmbed(`${label} Challenge Not Started`, 'That member could not be found.')], deleteAfterSeconds: 10 });
+
+    try {
+      const result = await communityGames.createPanelChallenge({ interaction, gameKey, opponent });
+      if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed(`${label} Challenge Not Started`, result.reason)], deleteAfterSeconds: 15 });
+      const message = await result.channel.send(communityGames.buildChallengePayload(result.session));
+      const session = await communityGames.attachSessionMessage(result.session.id, message.id);
+      await ctx.logger.log({
+        guildId: interaction.guildId,
+        eventKey: 'community-game-started',
+        title: `${label} Challenge Created From Games Panel`,
+        body: `Challenger: <@${interaction.user.id}>\nOpponent: <@${opponent.id}>\nChannel: <#${result.channel.id}>\nMessage: ${message.url}`,
+        actorUserId: interaction.user.id,
+        metadata: { game: gameKey, sessionId: session?.id || result.session.id, source: 'public_panel' }
+      }).catch(() => {});
+      await updatePanel(interaction, {
+        embeds: [createSuccessEmbed(`${label} Challenge Started`, `Your ${label} challenge was posted in <#${result.channel.id}>.\n[Open game challenge](${message.url})`)],
+        components: []
+      });
+    } catch (error) {
+      await updatePanel(interaction, { embeds: [createWarningEmbed(`${label} Challenge Not Started`, error instanceof Error ? error.message : String(error))], components: [] });
+    }
+    return true;
+  }
+
   if (id === CustomIds.HelpEnabledSelect || id === CustomIds.HelpDisabledSelect) {
     if (!(await requireAction(interaction, ctx, ActionKeys.Help, ModuleKeys.PERMISSIONS))) return true;
     await updatePanel(interaction, await buildHelpPayload(interaction, ctx, {
