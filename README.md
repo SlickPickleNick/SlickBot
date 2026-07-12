@@ -4,7 +4,42 @@ SlickBot is an all-in-one Discord server management bot built for the SlickPickl
 
 ## Version
 
-Current package: **v0.7.0**
+Current package: **v0.8.0**
+
+
+## v0.8.0 Updates
+
+### Join-to-Create Voice Module
+
+- Added the **Join-to-Create Voice** module as a completed implemented module.
+- Staff can register an existing voice channel as a join-to-create hub or create a new hub channel through SlickBot.
+- When a member joins a configured hub, SlickBot creates a temporary voice channel, moves the member into it, and tracks the channel owner.
+- Temporary voice channels support owner controls for rename, user limit, lock, unlock, permit, remove, transfer, and claim.
+- Empty temporary voice channels are automatically deleted after the configured delay.
+- Startup repair checks tracked temporary channels after Railway restarts and schedules cleanup for empty rooms.
+- Added persistent hub/temp-channel storage, module diagnostics, module-manager status, permission defaults, and logging events.
+
+New command group:
+
+```text
+/join-create panel
+/join-create setup source_channel:Join to Create category:Voice name_template:{username}'s Voice
+/join-create create-hub name:Join to Create category:Voice
+/join-create list
+/join-create view hub:Hub
+/join-create enable hub:Hub
+/join-create disable hub:Hub
+/join-create delete hub:Hub delete_active:false
+/join-create cleanup include_occupied:false
+/join-create rename name:New Room Name
+/join-create limit limit:5
+/join-create lock
+/join-create unlock
+/join-create permit user:@member
+/join-create remove user:@member
+/join-create transfer user:@member
+/join-create claim
+```
 
 ## v0.7.0 Updates
 

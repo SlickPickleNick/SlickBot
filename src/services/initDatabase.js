@@ -751,6 +751,64 @@ async function initDatabase() {
 
 
   await query(`
+    CREATE TABLE IF NOT EXISTS join_create_hubs (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      source_channel_id TEXT NOT NULL,
+      category_id TEXT,
+      hub_name TEXT NOT NULL DEFAULT 'Join to Create',
+      enabled BOOLEAN NOT NULL DEFAULT true,
+      name_template TEXT NOT NULL DEFAULT '{username}''s Voice',
+      user_limit INTEGER NOT NULL DEFAULT 0,
+      bitrate INTEGER,
+      private_enabled BOOLEAN NOT NULL DEFAULT false,
+      owner_controls_enabled BOOLEAN NOT NULL DEFAULT true,
+      delete_when_empty BOOLEAN NOT NULL DEFAULT true,
+      empty_delete_delay_seconds INTEGER NOT NULL DEFAULT 30,
+      staff_role_id TEXT,
+      created_by_user_id TEXT,
+      updated_by_user_id TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(guild_id, source_channel_id)
+    );
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS join_create_temp_channels (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      hub_id TEXT REFERENCES join_create_hubs(id) ON DELETE SET NULL,
+      channel_id TEXT UNIQUE NOT NULL,
+      owner_user_id TEXT,
+      status TEXT NOT NULL DEFAULT 'ACTIVE',
+      name TEXT,
+      locked BOOLEAN NOT NULL DEFAULT false,
+      user_limit INTEGER NOT NULL DEFAULT 0,
+      last_empty_at TIMESTAMPTZ,
+      deleted_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await query(`ALTER TABLE join_create_hubs ADD COLUMN IF NOT EXISTS category_id TEXT;`).catch(() => {});
+  await query(`ALTER TABLE join_create_hubs ADD COLUMN IF NOT EXISTS hub_name TEXT NOT NULL DEFAULT 'Join to Create';`).catch(() => {});
+  await query(`ALTER TABLE join_create_hubs ADD COLUMN IF NOT EXISTS enabled BOOLEAN NOT NULL DEFAULT true;`).catch(() => {});
+  await query(`ALTER TABLE join_create_hubs ADD COLUMN IF NOT EXISTS name_template TEXT NOT NULL DEFAULT '{username}''s Voice';`).catch(() => {});
+  await query(`ALTER TABLE join_create_hubs ADD COLUMN IF NOT EXISTS user_limit INTEGER NOT NULL DEFAULT 0;`).catch(() => {});
+  await query(`ALTER TABLE join_create_hubs ADD COLUMN IF NOT EXISTS bitrate INTEGER;`).catch(() => {});
+  await query(`ALTER TABLE join_create_hubs ADD COLUMN IF NOT EXISTS private_enabled BOOLEAN NOT NULL DEFAULT false;`).catch(() => {});
+  await query(`ALTER TABLE join_create_hubs ADD COLUMN IF NOT EXISTS owner_controls_enabled BOOLEAN NOT NULL DEFAULT true;`).catch(() => {});
+  await query(`ALTER TABLE join_create_hubs ADD COLUMN IF NOT EXISTS delete_when_empty BOOLEAN NOT NULL DEFAULT true;`).catch(() => {});
+  await query(`ALTER TABLE join_create_hubs ADD COLUMN IF NOT EXISTS empty_delete_delay_seconds INTEGER NOT NULL DEFAULT 30;`).catch(() => {});
+  await query(`ALTER TABLE join_create_hubs ADD COLUMN IF NOT EXISTS staff_role_id TEXT;`).catch(() => {});
+  await query(`ALTER TABLE join_create_temp_channels ADD COLUMN IF NOT EXISTS locked BOOLEAN NOT NULL DEFAULT false;`).catch(() => {});
+  await query(`ALTER TABLE join_create_temp_channels ADD COLUMN IF NOT EXISTS user_limit INTEGER NOT NULL DEFAULT 0;`).catch(() => {});
+  await query(`ALTER TABLE join_create_temp_channels ADD COLUMN IF NOT EXISTS last_empty_at TIMESTAMPTZ;`).catch(() => {});
+
+
+  await query(`
     CREATE TABLE IF NOT EXISTS custom_command_configs (
       id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
       guild_id TEXT UNIQUE NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
@@ -1048,6 +1106,10 @@ async function initDatabase() {
   await query(`CREATE INDEX IF NOT EXISTS idx_log_queue_pending ON log_queue_items(guild_id, event_key, flushed_at);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_bot_update_roles_guild ON bot_update_ping_roles(guild_id);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_bot_update_announcements_guild ON bot_update_announcements(guild_id, announced_at DESC);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_join_create_hubs_guild ON join_create_hubs(guild_id, enabled);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_join_create_hubs_source ON join_create_hubs(guild_id, source_channel_id);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_join_create_temp_active ON join_create_temp_channels(guild_id, status);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_join_create_temp_owner ON join_create_temp_channels(guild_id, owner_user_id);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_custom_commands_guild_name ON custom_commands(guild_id, name);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_custom_commands_guild_enabled ON custom_commands(guild_id, enabled);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_custom_command_usage_guild_created ON custom_command_usage_logs(guild_id, created_at DESC);`);

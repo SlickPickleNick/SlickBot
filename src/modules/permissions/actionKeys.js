@@ -107,6 +107,13 @@ const ActionKeys = Object.freeze({
   CustomCommandsDelete: 'custom-commands.delete',
   CustomCommandsEnable: 'custom-commands.enable',
 
+  JoinCreateView: 'join-create.view',
+  JoinCreateSetup: 'join-create.setup',
+  JoinCreateEdit: 'join-create.edit',
+  JoinCreateDelete: 'join-create.delete',
+  JoinCreateCleanup: 'join-create.cleanup',
+  TempVoiceManage: 'join-create.temp.manage',
+
   LevelingUse: 'leveling.use',
   LevelingView: 'leveling.view',
   LevelingConfigure: 'leveling.configure',
@@ -241,6 +248,13 @@ const defaultActionLevels = Object.freeze({
   [ActionKeys.CustomCommandsDelete]: PermissionLevels.MODERATOR,
   [ActionKeys.CustomCommandsEnable]: PermissionLevels.MODERATOR,
 
+  [ActionKeys.JoinCreateView]: PermissionLevels.MODERATOR,
+  [ActionKeys.JoinCreateSetup]: PermissionLevels.SENIOR_MODERATOR,
+  [ActionKeys.JoinCreateEdit]: PermissionLevels.SENIOR_MODERATOR,
+  [ActionKeys.JoinCreateDelete]: PermissionLevels.SENIOR_MODERATOR,
+  [ActionKeys.JoinCreateCleanup]: PermissionLevels.SENIOR_MODERATOR,
+  [ActionKeys.TempVoiceManage]: PermissionLevels.EVERYONE,
+
   [ActionKeys.LevelingUse]: PermissionLevels.EVERYONE,
   [ActionKeys.LevelingView]: PermissionLevels.MODERATOR,
   [ActionKeys.LevelingConfigure]: PermissionLevels.SENIOR_MODERATOR,
@@ -282,12 +296,13 @@ const defaultPublicActions = Object.freeze([
   ActionKeys.GiveawaysEnter,
   ActionKeys.BirthdaysUse,
   ActionKeys.LevelingUse,
-  ActionKeys.CustomCommandsUse
+  ActionKeys.CustomCommandsUse,
+  ActionKeys.TempVoiceManage
 ]);
 
 const defaultTeamPermissions = Object.freeze(Object.values(ActionKeys));
 
-const PERMISSION_DEFAULTS_VERSION = '0.7.0';
+const PERMISSION_DEFAULTS_VERSION = '0.8.0';
 
 module.exports = {
   ActionKeys,

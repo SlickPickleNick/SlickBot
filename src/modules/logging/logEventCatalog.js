@@ -106,6 +106,12 @@ const LogModuleCatalog = Object.freeze([
     label: 'Custom Commands',
     description: 'Custom command configuration and trigger activity.',
     defaultDelivery: 'IMMEDIATE'
+  },
+  {
+    key: 'join-create',
+    label: 'Join-to-Create Voice',
+    description: 'Temporary voice channel creation, cleanup, and owner controls.',
+    defaultDelivery: 'IMMEDIATE'
   }
 ]);
 
@@ -187,7 +193,13 @@ const LogEventCatalog = Object.freeze([
 
   { key: 'custom-command-config', moduleKey: 'custom-commands', label: 'Custom Command Config', description: 'Custom command creation, edits, deletes, and prefix changes.', defaultDelivery: 'IMMEDIATE' },
   { key: 'custom-command-used', moduleKey: 'custom-commands', label: 'Custom Command Used', description: 'A member triggered a custom command.', defaultDelivery: 'IMMEDIATE' },
-  { key: 'custom-command-error', moduleKey: 'custom-commands', label: 'Custom Command Error', description: 'A custom command failed while processing.', defaultDelivery: 'IMMEDIATE' }
+  { key: 'custom-command-error', moduleKey: 'custom-commands', label: 'Custom Command Error', description: 'A custom command failed while processing.', defaultDelivery: 'IMMEDIATE' },
+
+  { key: 'join-create-config', moduleKey: 'join-create', label: 'Join-to-Create Config', description: 'Join-to-create hub settings changed.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'join-create-created', moduleKey: 'join-create', label: 'Temporary Voice Created', description: 'A temporary voice channel was created.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'join-create-deleted', moduleKey: 'join-create', label: 'Temporary Voice Deleted', description: 'A temporary voice channel was deleted or cleaned up.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'join-create-control', moduleKey: 'join-create', label: 'Temporary Voice Updated', description: 'A temporary voice channel owner control was used.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'join-create-error', moduleKey: 'join-create', label: 'Join-to-Create Error', description: 'Join-to-create processing failed.', defaultDelivery: 'IMMEDIATE' }
 ]);
 
 const StarterLogModuleKeys = Object.freeze(['core', 'moderation']);

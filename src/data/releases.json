@@ -1,4 +1,31 @@
 {
+  "0.8.0": {
+    "title": "SlickBot v0.8.0",
+    "summary": "Adds the Join-to-Create Voice module for temporary voice rooms with owner controls and automatic cleanup.",
+    "notes": [
+      "Added the Join-to-Create Voice module as a completed implemented module.",
+      "Staff can register an existing voice channel as a join-to-create hub or create a new hub channel through Discord commands.",
+      "When a member joins a configured hub, SlickBot creates a temporary voice channel, moves the member into it, and tracks ownership in PostgreSQL.",
+      "Temporary voice channels support owner controls for rename, user limit, lock, unlock, permit, remove, transfer, and claim.",
+      "Empty temporary voice channels are automatically cleaned up after the configured delay, with startup repair for tracked channels after restarts.",
+      "Added join-to-create database storage, diagnostics, module status, permissions, and logging events."
+    ],
+    "commands": [
+      "/join-create panel",
+      "/join-create setup",
+      "/join-create create-hub",
+      "/join-create list",
+      "/join-create cleanup",
+      "/join-create rename",
+      "/join-create limit",
+      "/join-create lock",
+      "/join-create unlock",
+      "/join-create permit",
+      "/join-create remove",
+      "/join-create transfer",
+      "/join-create claim"
+    ]
+  },
   "0.7.0": {
     "title": "SlickBot v0.7.0",
     "summary": "Adds the Custom Commands module for staff-managed text and embed responses triggered by members in chat.",

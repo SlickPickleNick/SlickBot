@@ -21,12 +21,14 @@ const { ScheduledMessageService } = require('../automation/scheduledMessageServi
 const { ServerStatsService } = require('../community/serverStatsService');
 const { LevelingService } = require('../community/levelingService');
 const { CustomCommandService } = require('../custom/customCommandService');
+const { JoinCreateService } = require('../voice/joinCreateService');
 const giveaways = new GiveawayService();
 const birthdays = new BirthdayService();
 const scheduledMessages = new ScheduledMessageService();
 const serverStats = new ServerStatsService();
 const leveling = new LevelingService();
 const customCommands = new CustomCommandService();
+const joinCreate = new JoinCreateService();
 
 async function ensureDefaultModules(guildId) {
   for (const moduleConfig of defaultModules) {
@@ -292,6 +294,19 @@ async function getModuleStatus(guildId, row) {
     if (active > 0) return { moduleKey: row.module_key, core: false, state: 'READY', emoji: '🟢', label: 'Fully enabled', note: `${active}/${total} command(s)` };
     if (total > 0) return { moduleKey: row.module_key, core: false, state: 'PARTIAL', emoji: '🟠', label: 'Partially enabled', note: `${total} disabled command(s)` };
     return { moduleKey: row.module_key, core: false, state: 'NEEDS_CONFIG', emoji: '🟣', label: 'Needs configuration', note: 'Run /custom-command create' };
+  }
+
+
+  if (row.module_key === 'JOIN_TO_CREATE') {
+    const [hubs, active] = await Promise.all([
+      query(`SELECT COUNT(*)::int AS count FROM join_create_hubs WHERE guild_id = $1 AND enabled = true`, [guildId]).catch(() => ({ rows: [{ count: 0 }] })),
+      query(`SELECT COUNT(*)::int AS count FROM join_create_temp_channels WHERE guild_id = $1 AND status = 'ACTIVE'`, [guildId]).catch(() => ({ rows: [{ count: 0 }] }))
+    ]);
+    const hubCount = hubs.rows[0]?.count || 0;
+    const activeCount = active.rows[0]?.count || 0;
+    if (hubCount > 0) return { moduleKey: row.module_key, core: false, state: 'READY', emoji: '🟢', label: 'Fully enabled', note: `${hubCount} hub(s), ${activeCount} active` };
+    if (activeCount > 0) return { moduleKey: row.module_key, core: false, state: 'PARTIAL', emoji: '🟠', label: 'Partially enabled', note: `${activeCount} active, setup needed` };
+    return { moduleKey: row.module_key, core: false, state: 'NEEDS_CONFIG', emoji: '🟣', label: 'Needs configuration', note: 'Run /join-create setup' };
   }
 
   return { moduleKey: row.module_key, core: false, state: 'PARTIAL', emoji: '🟠', label: 'Partially enabled', note: 'Module shell only' };

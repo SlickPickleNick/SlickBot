@@ -90,6 +90,11 @@ const MODULE_CHECKS = {
     { name: 'Custom command config', sql: 'SELECT COUNT(*)::int AS count FROM custom_command_configs WHERE guild_id = $1' },
     { name: 'Custom commands', sql: 'SELECT COUNT(*)::int AS count FROM custom_commands WHERE guild_id = $1' },
     { name: 'Usage logs', sql: 'SELECT COUNT(*)::int AS count FROM custom_command_usage_logs WHERE guild_id = $1' }
+  ],
+  [ModuleKeys.JOIN_TO_CREATE]: [
+    { name: 'Join-create hubs', sql: 'SELECT COUNT(*)::int AS count FROM join_create_hubs WHERE guild_id = $1' },
+    { name: 'Active temp channels', sql: "SELECT COUNT(*)::int AS count FROM join_create_temp_channels WHERE guild_id = $1 AND status = 'ACTIVE'" },
+    { name: 'All temp channels', sql: 'SELECT COUNT(*)::int AS count FROM join_create_temp_channels WHERE guild_id = $1' }
   ]
 };
 

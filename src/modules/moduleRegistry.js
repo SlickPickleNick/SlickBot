@@ -40,7 +40,7 @@ const defaultModules = [
   { key: ModuleKeys.SERVER_STATS, enabled: true },
   { key: ModuleKeys.BOT_UPDATES, enabled: true },
   { key: ModuleKeys.CUSTOM_COMMANDS, enabled: true },
-  { key: ModuleKeys.JOIN_TO_CREATE, enabled: false },
+  { key: ModuleKeys.JOIN_TO_CREATE, enabled: true },
   { key: ModuleKeys.UTILITY, enabled: false }
 ];
 
@@ -66,7 +66,8 @@ const implementedModules = Object.freeze([
   ModuleKeys.LEVELING,
   ModuleKeys.SERVER_STATS,
   ModuleKeys.BOT_UPDATES,
-  ModuleKeys.CUSTOM_COMMANDS
+  ModuleKeys.CUSTOM_COMMANDS,
+  ModuleKeys.JOIN_TO_CREATE
 ]);
 
 function isImplementedModule(moduleKey) {

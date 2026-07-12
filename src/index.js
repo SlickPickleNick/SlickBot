@@ -18,6 +18,7 @@ const { ScheduledMessageService } = require('./modules/automation/scheduledMessa
 const { ServerStatsService } = require('./modules/community/serverStatsService');
 const { BotUpdatesService } = require('./modules/status/botUpdatesService');
 const { CustomCommandService } = require('./modules/custom/customCommandService');
+const { JoinCreateService } = require('./modules/voice/joinCreateService');
 const { LevelingService } = require('./modules/community/levelingService');
 const { handleReactionRole, syncAllPublishedReactionPanels } = require('./modules/community/rolePanelService');
 const { handleComponentInteraction } = require('./services/interactionRouter');
@@ -48,6 +49,7 @@ const scheduledMessages = new ScheduledMessageService();
 const serverStats = new ServerStatsService();
 const botUpdates = new BotUpdatesService();
 const customCommands = new CustomCommandService();
+const joinCreate = new JoinCreateService();
 const leveling = new LevelingService();
 const healthServer = startHealthServer(client);
 
@@ -96,6 +98,7 @@ client.once(Events.ClientReady, async (readyClient) => {
   }
 
   await botUpdates.announceStartup(readyClient, logger).catch((error) => console.error('Failed to process bot update announcements:', error));
+  await joinCreate.repairStartup(readyClient, logger).catch((error) => console.error('Failed to repair join-to-create channels:', error));
 
   for (const guild of readyClient.guilds.cache.values()) {
     const reactionRolesEnabled = await permissions.isModuleEnabled(guild.id, 'REACTION_ROLES').catch(() => false);
@@ -258,6 +261,10 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
     }
   }).catch((error) => console.error('Failed to log voice state:', error));
   const guild = newState.guild || oldState.guild;
+  const joinCreateEnabled = await permissions.isModuleEnabled(guild.id, 'JOIN_TO_CREATE').catch(() => false);
+  if (joinCreateEnabled) {
+    await joinCreate.handleVoiceState(oldState, newState, logger).catch((error) => console.error('Failed to process join-to-create voice state:', error));
+  }
   serverStats.scheduleVoiceStateUpdate(guild, logger, 'voice state');
 });
 

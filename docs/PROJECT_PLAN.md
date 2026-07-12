@@ -1,6 +1,6 @@
 # SlickBot Project Plan
 
-## Current Version: 0.7.0
+## Current Version: 0.8.0
 
 SlickBot is being built as a modular all-in-one Discord server management bot for the SlickPickleNick community.
 
@@ -29,7 +29,22 @@ SlickBot is being built as a modular all-in-one Discord server management bot fo
 - Server stats
 - Bot update announcements
 - Custom commands
+- Join-to-create voice channels
 - Leveling / XP
+
+
+## v0.8.0 Scope
+
+### Join-to-Create Voice
+
+- Implemented the `JOIN_TO_CREATE` module.
+- Added `/join-create` command group for hub setup, hub creation, list/view, enable/disable, delete, cleanup, and member owner controls.
+- Added voice-state handling so joining a configured hub creates a tracked temporary voice channel and moves the member into it.
+- Added temporary voice owner controls for rename, user limit, lock, unlock, permit, remove, transfer, and claim.
+- Added automatic cleanup for empty temporary channels using the configured deletion delay.
+- Added startup repair to mark missing tracked channels deleted and schedule cleanup for empty temporary channels after restarts.
+- Added `join_create_hubs` and `join_create_temp_channels` persistence tables.
+- Added Join-to-Create permission actions, public owner-control defaults, module default permission level, logging events, diagnostics, module-manager status, and release notes.
 
 ## v0.7.0 Scope
 
@@ -124,7 +139,6 @@ SlickBot is being built as a modular all-in-one Discord server management bot fo
 
 ## Future Modules
 
-- Join-to-create voice channels
 - Utility tools
 - Full onboarding wizard
 
