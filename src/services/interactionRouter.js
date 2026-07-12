@@ -740,6 +740,21 @@ async function handleSelect(interaction, ctx) {
     return true;
   }
 
+
+  if (id.startsWith(CustomIds.ReportReviewIndexFilterPrefix)) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.ReportsReview, ModuleKeys.REPORTS))) return true;
+    const rest = id.slice(CustomIds.ReportReviewIndexFilterPrefix.length);
+    const [indexId, statusFilter] = rest.split(':');
+    await interaction.deferUpdate();
+    const index = await reports.updateReviewIndexFilter({ guildId: interaction.guildId, indexId, statusFilter });
+    if (!index) {
+      await interaction.followUp({ embeds: [createWarningEmbed('Review Index Not Found', 'This report review index could not be found.')], flags: MessageFlags.Ephemeral }).catch(() => {});
+      return true;
+    }
+    await reports.refreshReviewIndex({ client: ctx.client, index }).catch(() => {});
+    return true;
+  }
+
   if (id === CustomIds.TicketTypeSelect) {
     if (!(await requirePublicAction(interaction, ctx, ActionKeys.TicketsOpen, ModuleKeys.TICKETS))) return true;
     const typeId = interaction.values[0];
@@ -983,6 +998,7 @@ async function handleModal(interaction, ctx) {
     const report = await reports.reviewReport({ guildId: interaction.guildId, reportId, reviewer: interaction.user, status, reason, logger: ctx.logger });
     if (!report) return replyPrivate(interaction, { embeds: [createWarningEmbed('Report Not Found', 'The report could not be found.')] });
     await reports.refreshReviewMessage({ client: ctx.client, report }).catch(() => {});
+    await reports.refreshReviewIndexes({ client: ctx.client, guildId: interaction.guildId }).catch(() => {});
     await replyPrivate(interaction, { embeds: [createSuccessEmbed('Report Reviewed', `Report #${report.report_number} marked **${report.status}**.`)] });
     return true;
   }

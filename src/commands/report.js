@@ -5,7 +5,7 @@ const { replyPrivate } = require('../utils/reply');
 const { ReportService } = require('../modules/support/supportService');
 const { buildSupportResetConfirmationPayload } = require('../modules/support/supportResetService');
 const { buildReportsPanel, buildPublicReportPanel } = require('../modules/support/supportUi');
-const { createSuccessEmbed } = require('../modules/ui/uiService');
+const { createSuccessEmbed, createWarningEmbed } = require('../modules/ui/uiService');
 const { recordPublishedPanel } = require('../modules/panels/publishedPanelService');
 const { refreshPublishedPanel, formatRefreshSummary } = require('../modules/panels/panelUpdateService');
 
@@ -38,6 +38,13 @@ module.exports = {
     )
     .addSubcommand((subcommand) =>
       subcommand
+        .setName('review-index')
+        .setDescription('Post or refresh a report review index in the report review channel.')
+        .addStringOption((option) => option.setName('status').setDescription('Reports to show. Defaults to open.').setRequired(false).addChoices({ name: 'Open', value: 'OPEN' }, { name: 'Dismissed', value: 'DISMISSED' }, { name: 'Resolved', value: 'RESOLVED' }))
+        .addChannelOption((option) => option.setName('channel').setDescription('Review channel to post the index in. Defaults to configured review channel/current channel.').addChannelTypes(ChannelType.GuildText).setRequired(false))
+    )
+    .addSubcommand((subcommand) =>
+      subcommand
         .setName('user')
         .setDescription('Privately report a specific user to staff.')
         .addStringOption((option) => option.setName('details').setDescription('What happened?').setRequired(true).setMaxLength(1800))
@@ -53,6 +60,7 @@ module.exports = {
     if (subcommand === 'setup') return ActionKeys.ReportsConfigure;
     if (subcommand === 'manager') return ActionKeys.ReportsManager;
     if (subcommand === 'panel') return ActionKeys.ReportsPostPanel;
+    if (subcommand === 'review-index') return ActionKeys.ReportsReview;
     if (subcommand === 'user' || subcommand === 'issue') return ActionKeys.ReportsSubmit;
     return ActionKeys.ReportsReview;
   },
@@ -83,6 +91,15 @@ module.exports = {
       const message = await channel.send(buildPublicReportPanel(await reports.getConfig(interaction.guildId)));
       await recordPublishedPanel({ guildId: interaction.guildId, panelType: 'report', panelRef: '*', channelId: channel.id, messageId: message.id });
       return replyPrivate(interaction, { embeds: [createSuccessEmbed('Report Panel Posted', `Panel posted in <#${channel.id}>. Future report panel edits will update this message automatically.`)] });
+    }
+
+    if (subcommand === 'review-index') {
+      const config = await reports.getConfig(interaction.guildId);
+      const channel = interaction.options.getChannel('channel') || (config?.review_channel_id ? await ctx.client.channels.fetch(config.review_channel_id).catch(() => null) : null) || interaction.channel;
+      const status = interaction.options.getString('status') || 'OPEN';
+      if (!channel || !channel.isTextBased?.()) return replyPrivate(interaction, { embeds: [createWarningEmbed('Review Index Not Posted', 'I could not resolve a text channel for the report review index.')] });
+      const index = await reports.createReviewIndex({ guildId: interaction.guildId, channelId: channel.id, statusFilter: status, createdByUserId: interaction.user.id, client: ctx.client });
+      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Report Review Index Posted', `Report review index posted/refreshed in <#${channel.id}>. Default filter: **${index.status_filter}**.`)] });
     }
 
     if (subcommand === 'user') {

@@ -18,7 +18,7 @@ const SUPPORT_RESET_MODULES = Object.freeze({
     panelType: 'report',
     moduleKey: 'REPORTS',
     actionKey: 'reports.reset',
-    warning: 'This clears report setup, report submissions/review records, and tracked report panel posts. It does not delete Discord review messages that already exist.'
+    warning: 'This clears report setup, report submissions/review records, report review indexes, and tracked report panel posts. It does not delete Discord review messages that already exist.'
   },
   applications: {
     key: 'applications',
@@ -64,13 +64,14 @@ async function getSupportResetSummary(guildId, moduleKey) {
   }
 
   if (mod.key === 'reports') {
-    const [configs, reports, openReports, trackedPanels] = await Promise.all([
+    const [configs, reports, openReports, reviewIndexes, trackedPanels] = await Promise.all([
       countRows(`SELECT COUNT(*) FROM report_configs WHERE guild_id = $1`, [guildId]),
       countRows(`SELECT COUNT(*) FROM reports WHERE guild_id = $1`, [guildId]),
       countRows(`SELECT COUNT(*) FROM reports WHERE guild_id = $1 AND status NOT IN ('RESOLVED', 'DISMISSED')`, [guildId]),
+      countRows(`SELECT COUNT(*) FROM report_review_indexes WHERE guild_id = $1 AND active = true`, [guildId]),
       countRows(`SELECT COUNT(*) FROM panel_messages WHERE guild_id = $1 AND panel_type = 'report' AND active = true`, [guildId])
     ]);
-    return { mod, counts: { configs, reports, openReports, trackedPanels } };
+    return { mod, counts: { configs, reports, openReports, reviewIndexes, trackedPanels } };
   }
 
   if (mod.key === 'applications') {
@@ -144,6 +145,7 @@ async function resetSupportModule(guildId, moduleKey) {
     await query(`UPDATE panel_messages SET active = false, updated_at = NOW() WHERE guild_id = $1 AND panel_type = 'ticket'`, [guildId]);
   } else if (mod.key === 'reports') {
     await query(`DELETE FROM reports WHERE guild_id = $1`, [guildId]);
+    await query(`DELETE FROM report_review_indexes WHERE guild_id = $1`, [guildId]).catch(() => {});
     await query(`DELETE FROM report_configs WHERE guild_id = $1`, [guildId]);
     await query(`UPDATE panel_messages SET active = false, updated_at = NOW() WHERE guild_id = $1 AND panel_type = 'report'`, [guildId]);
   } else if (mod.key === 'applications') {

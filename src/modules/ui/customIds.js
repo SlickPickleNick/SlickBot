@@ -83,6 +83,7 @@ const CustomIds = Object.freeze({
   ReportDetailsPrefix: 'slickbot:report:details:',
   ReportOpenTicketPrefix: 'slickbot:report:ticket:',
   ReportReviewReasonModalPrefix: 'slickbot:modal:report-review:',
+  ReportReviewIndexFilterPrefix: 'slickbot:report:index-filter:',
 
   ApplicationsRefresh: 'slickbot:applications:refresh',
   ApplicationApplyPrefix: 'slickbot:application:apply:',

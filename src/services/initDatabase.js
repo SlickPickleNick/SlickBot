@@ -403,6 +403,20 @@ async function initDatabase() {
   await query(`ALTER TABLE reports ADD COLUMN IF NOT EXISTS linked_ticket_opened_by_user_id TEXT;`).catch(() => {});
   await query(`ALTER TABLE reports ADD COLUMN IF NOT EXISTS linked_ticket_opened_at TIMESTAMPTZ;`).catch(() => {});
   await query(`ALTER TABLE reports ADD COLUMN IF NOT EXISTS decision_reason TEXT;`).catch(() => {});
+  await query(`
+    CREATE TABLE IF NOT EXISTS report_review_indexes (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      channel_id TEXT NOT NULL,
+      message_id TEXT,
+      status_filter TEXT NOT NULL DEFAULT 'OPEN',
+      active BOOLEAN NOT NULL DEFAULT true,
+      created_by_user_id TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS idx_report_review_indexes_guild_active ON report_review_indexes(guild_id, active);`).catch(() => {});
 
   await query(`
     CREATE TABLE IF NOT EXISTS application_questions (

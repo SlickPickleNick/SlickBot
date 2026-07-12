@@ -276,6 +276,61 @@ function buildApplicationReviewIndexPayload(index, submissions = [], typeName = 
   return { embeds: [embed], components: [row] };
 }
 
+
+function reportReviewMessageUrl(report) {
+  if (!report?.guild_id || !report?.review_channel_id || !report?.review_message_id) return null;
+  return `https://discord.com/channels/${report.guild_id}/${report.review_channel_id}/${report.review_message_id}`;
+}
+
+function formatReportIndexFilterLabel(index) {
+  const filter = normalizeStatus(index?.status_filter || 'OPEN');
+  if (filter === 'DISMISSED') return 'Dismissed Reports';
+  if (filter === 'RESOLVED') return 'Resolved Reports';
+  return 'Open Reports';
+}
+
+function buildReportReviewIndexPayload(index, reports = []) {
+  const filter = normalizeStatus(index?.status_filter || 'OPEN');
+  const visible = reports.slice(0, 20);
+  const lines = visible.length ? visible.map((report) => {
+    const url = reportReviewMessageUrl(report);
+    const submittedAt = formatTimestamp(report.created_at);
+    const reviewedAt = formatTimestamp(report.reviewed_at);
+    const status = formatSupportStatus(report.status || 'OPEN');
+    const link = url ? `[Open Review](${url})` : 'Review message unavailable';
+    const target = report.target_user_id ? ` · Target: <@${report.target_user_id}>` : '';
+    const reviewer = report.reviewed_by_user_id ? ` · Reviewed by <@${report.reviewed_by_user_id}>${reviewedAt ? ` on ${reviewedAt}` : ''}` : '';
+    return `• **#${report.report_number}** · ${status} · Reporter: <@${report.reporter_user_id}>${target}${submittedAt ? ` · ${submittedAt}` : ''}${reviewer}\n  ${link}`;
+  }).join('\n') : `No ${filter.toLowerCase()} reports found for this index.`;
+
+  const embed = createBaseEmbed({
+    title: 'Server Reports - Review Filter',
+    description: [
+      `**Current Filter:** ${formatReportIndexFilterLabel(index)}`,
+      '',
+      lines,
+      reports.length > visible.length ? `\nShowing **${visible.length}/${reports.length}** reports. Use the review channel search or change the filter for more.` : null,
+      '',
+      'This index is refreshed when new reports are submitted or when report statuses change.'
+    ].filter(Boolean).join('\n'),
+    color: filter === 'RESOLVED' ? SlickBotColors.SUCCESS : filter === 'DISMISSED' ? SlickBotColors.MUTED : SlickBotColors.WARNING,
+    footer: 'SlickBot Reports'
+  });
+
+  const makeButton = (status, label, style) => new ButtonBuilder()
+    .setCustomId(`${CustomIds.ReportReviewIndexFilterPrefix}${index.id}:${status}`)
+    .setLabel(label)
+    .setStyle(filter === status ? ButtonStyle.Success : style);
+
+  const row = new ActionRowBuilder().addComponents(
+    makeButton('OPEN', 'Open', ButtonStyle.Secondary),
+    makeButton('DISMISSED', 'Dismissed', ButtonStyle.Secondary),
+    makeButton('RESOLVED', 'Resolved', ButtonStyle.Secondary)
+  );
+
+  return { embeds: [embed], components: [row] };
+}
+
 function hasAnyRole(member, roleIds = []) {
   if (!member?.roles?.cache) return false;
   return roleIds.some((roleId) => member.roles.cache.has(roleId));
@@ -877,6 +932,7 @@ class ReportService {
       report.review_message_id = sent.id;
     }
     await logger.log({ guildId: interaction.guildId, eventKey: 'report-submit', title: 'Report Submitted', body: `Report #${report.report_number} submitted by ${interaction.user.tag}.${targetUser ? ` Target: ${targetUser.tag}.` : ''}`, actorUserId: interaction.user.id, metadata: { reportId: report.id, targetUserId: targetUser?.id || null } }).catch(() => {});
+    await this.refreshReviewIndexes({ client, guildId: interaction.guildId }).catch(() => {});
     return report;
   }
 
@@ -894,7 +950,7 @@ class ReportService {
   }
 
   async addDetails({ guildId, reportId, reviewer, details, logger }) {
-    const result = await query(`UPDATE reports SET review_notes = CONCAT(COALESCE(review_notes, ''), $1::text), updated_at = NOW() WHERE guild_id = $2 AND id = $3 RETURNING *`, [`\n[${new Date().toISOString()}] ${reviewer.tag}: ${details}`, guildId, reportId]);
+    const result = await query(`UPDATE reports SET review_notes = CONCAT(COALESCE(review_notes, ''), $1::text), updated_at = NOW() WHERE guild_id = $2 AND id = $3 RETURNING *`, [`\n• ${formatTimestamp(new Date())} · <@${reviewer.id}>: ${details}`, guildId, reportId]);
     const report = result.rows[0] || null;
     if (!report) return null;
     await logger.log({ guildId, eventKey: 'report-note', title: 'Report Details Added', body: `Details added to report #${report.report_number} by ${reviewer.tag}.`, actorUserId: reviewer.id, metadata: { reportId } }).catch(() => {});
@@ -903,7 +959,7 @@ class ReportService {
 
   async reviewReport({ guildId, reportId, reviewer, status, logger, reason = null, details = null }) {
     const normalizedStatus = normalizeStatus(status);
-    const note = details ? `\n[${new Date().toISOString()}] ${reviewer.tag}: ${details}` : null;
+    const note = details ? `\n• ${formatTimestamp(new Date())} · <@${reviewer.id}>: ${details}` : null;
     const result = await query(
       `UPDATE reports
        SET status = $1,
@@ -941,6 +997,70 @@ class ReportService {
       [ticketId, reviewer?.id || null, guildId, reportId]
     ).catch(() => ({ rows: [] }));
     return result.rows[0] || null;
+  }
+
+  async createReviewIndex({ guildId, channelId, statusFilter = 'OPEN', createdByUserId = null, client = null }) {
+    const normalizedFilter = ['OPEN', 'DISMISSED', 'RESOLVED'].includes(normalizeStatus(statusFilter)) ? normalizeStatus(statusFilter) : 'OPEN';
+    const existing = await query(
+      `SELECT * FROM report_review_indexes WHERE guild_id = $1 AND channel_id = $2 LIMIT 1`,
+      [guildId, channelId]
+    ).catch(() => ({ rows: [] }));
+    const result = existing.rows[0]
+      ? await query(`UPDATE report_review_indexes SET status_filter = $1, active = true, updated_at = NOW() WHERE id = $2 RETURNING *`, [normalizedFilter, existing.rows[0].id])
+      : await query(
+        `INSERT INTO report_review_indexes (guild_id, channel_id, status_filter, created_by_user_id, active) VALUES ($1, $2, $3, $4, true) RETURNING *`,
+        [guildId, channelId, normalizedFilter, createdByUserId || null]
+      );
+    const index = result.rows[0];
+    if (client) await this.refreshReviewIndex({ client, index }).catch(() => {});
+    return index;
+  }
+
+  async updateReviewIndexFilter({ guildId, indexId, statusFilter }) {
+    const normalizedFilter = ['OPEN', 'DISMISSED', 'RESOLVED'].includes(normalizeStatus(statusFilter)) ? normalizeStatus(statusFilter) : 'OPEN';
+    const result = await query(`UPDATE report_review_indexes SET status_filter = $1, updated_at = NOW() WHERE guild_id = $2 AND id = $3 AND active = true RETURNING *`, [normalizedFilter, guildId, indexId]).catch(() => ({ rows: [] }));
+    return result.rows[0] || null;
+  }
+
+  async getReviewIndexReports(index) {
+    const filter = normalizeStatus(index.status_filter || 'OPEN');
+    const params = [index.guild_id];
+    const clauses = ['guild_id = $1'];
+    if (filter === 'OPEN') {
+      clauses.push(`status NOT IN ('RESOLVED', 'DISMISSED')`);
+    } else {
+      params.push(filter);
+      clauses.push(`status = $${params.length}`);
+    }
+    const result = await query(
+      `SELECT * FROM reports WHERE ${clauses.join(' AND ')} ORDER BY created_at DESC LIMIT 50`,
+      params
+    ).catch(() => ({ rows: [] }));
+    return result.rows;
+  }
+
+  async refreshReviewIndex({ client, index }) {
+    if (!index?.channel_id) return false;
+    const channel = await fetchSendableChannel(client, index.channel_id);
+    if (!channel) return false;
+    if (index.message_id && channel.messages?.fetch) {
+      const oldMessage = await channel.messages.fetch(index.message_id).catch(() => null);
+      if (oldMessage?.delete) await oldMessage.delete().catch(() => {});
+    }
+    const reports = await this.getReviewIndexReports(index);
+    const sent = await channel.send(buildReportReviewIndexPayload(index, reports)).catch(() => null);
+    if (!sent) return false;
+    await query(`UPDATE report_review_indexes SET message_id = $1, updated_at = NOW() WHERE id = $2`, [sent.id, index.id]).catch(() => {});
+    return true;
+  }
+
+  async refreshReviewIndexes({ client, guildId }) {
+    const result = await query(`SELECT * FROM report_review_indexes WHERE guild_id = $1 AND active = true`, [guildId]).catch(() => ({ rows: [] }));
+    let refreshed = 0;
+    for (const index of result.rows) {
+      if (await this.refreshReviewIndex({ client, index }).catch(() => false)) refreshed += 1;
+    }
+    return refreshed;
   }
 }
 
@@ -991,24 +1111,20 @@ function buildReportReviewPayload(report) {
 
 function buildApplicationQuestionPayload(session, applicationName, question, questionIndex, questionCount) {
   const deadlineText = formatRelativeTimestamp(session.expires_at);
+  const deadlineFull = formatTimestamp(session.expires_at);
   const timeoutText = formatDuration(session.question_timeout_seconds || 180);
-  return {
-    embeds: [createBaseEmbed({
-      title: `${applicationName} Application`,
-      description: [
-        `Question **${questionIndex + 1}** of **${questionCount}**`,
-        '',
-        `**${question.question_text}**`,
-        '',
-        question.required === false ? 'This question is optional. Reply with `skip` if you do not want to answer it.' : 'Reply to this DM with your answer.',
-        '',
-        `**Answer within:** ${deadlineText || timeoutText}`,
-        deadlineText ? `Timeout length: **${timeoutText}**` : null
-      ].filter(Boolean).join('\n'),
-      color: SlickBotColors.PRIMARY,
-      footer: 'SlickBot Applications'
-    })]
-  };
+  const embed = createBaseEmbed({
+    title: `${applicationName} Application · Question ${questionIndex + 1}/${questionCount}`,
+    description: 'Reply to this DM with your answer to the question below.',
+    color: SlickBotColors.PRIMARY,
+    footer: 'SlickBot Applications'
+  });
+  embed.addFields(
+    { name: `Question ${questionIndex + 1}`, value: truncate(String(question.question_text || 'Question unavailable.'), 1000) },
+    { name: 'Required', value: question.required === false ? 'No. Reply with `skip` if you do not want to answer it.' : 'Yes.', inline: true },
+    { name: 'Answer Deadline', value: [deadlineText || timeoutText, deadlineFull ? `Exact time: ${deadlineFull}` : null, `Timeout length: **${timeoutText}**`].filter(Boolean).join('\n'), inline: true }
+  );
+  return { embeds: [embed] };
 }
 
 function buildApplicationConfirmPayload(session, applicationName, answers) {
