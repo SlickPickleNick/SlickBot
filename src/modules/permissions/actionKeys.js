@@ -4,6 +4,7 @@ const ActionKeys = Object.freeze({
   BotPing: 'bot.ping',
   BotVersion: 'bot.version',
   BotTest: 'bot.test',
+  Help: 'help.view',
   Setup: 'setup.run',
   TeamsManage: 'permissions.teams.manage',
   PermissionsPanel: 'permissions.panel',
@@ -142,6 +143,7 @@ const defaultActionLevels = Object.freeze({
   [ActionKeys.BotPing]: PermissionLevels.EVERYONE,
   [ActionKeys.BotVersion]: PermissionLevels.EVERYONE,
   [ActionKeys.BotTest]: PermissionLevels.MODERATOR,
+  [ActionKeys.Help]: PermissionLevels.EVERYONE,
 
   [ActionKeys.Setup]: PermissionLevels.SENIOR_MODERATOR,
   [ActionKeys.TeamsManage]: PermissionLevels.OWNER,
@@ -288,6 +290,7 @@ const defaultModuleLevels = Object.freeze({
 const defaultPublicActions = Object.freeze([
   ActionKeys.BotPing,
   ActionKeys.BotVersion,
+  ActionKeys.Help,
   ActionKeys.TicketsOpen,
   ActionKeys.ReportsSubmit,
   ActionKeys.ApplicationsApply,
@@ -302,7 +305,7 @@ const defaultPublicActions = Object.freeze([
 
 const defaultTeamPermissions = Object.freeze(Object.values(ActionKeys));
 
-const PERMISSION_DEFAULTS_VERSION = '0.8.3';
+const PERMISSION_DEFAULTS_VERSION = '0.8.4';
 
 module.exports = {
   ActionKeys,

@@ -525,5 +525,6 @@ module.exports = {
   buildLoggingPanel,
   buildTeamsPanel,
   buildPermissionsPanel,
-  buildCommunityPanel
+  buildCommunityPanel,
+  getModuleStatus
 };

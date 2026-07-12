@@ -12,6 +12,13 @@ const CustomIds = Object.freeze({
   PermissionsModuleSelect: 'slickbot:permissions:module-select',
   PermissionsCommandSelect: 'slickbot:permissions:command-select',
 
+
+  HelpRefresh: 'slickbot:help:refresh',
+  HelpEnabled: 'slickbot:help:enabled',
+  HelpDisabled: 'slickbot:help:disabled',
+  HelpEnabledSelect: 'slickbot:help:enabled-select',
+  HelpDisabledSelect: 'slickbot:help:disabled-select',
+
   ApplicationCancelPrefix: 'slickbot:application:cancel:',
   ApplicationSubmitPrefix: 'slickbot:application:submit:',
   SetupModeration: 'slickbot:setup:moderation',

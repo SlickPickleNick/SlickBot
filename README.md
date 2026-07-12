@@ -4,10 +4,26 @@ SlickBot is an all-in-one Discord server management bot built for the SlickPickl
 
 ## Version
 
-Current package: **v0.8.3**
+Current package: **v0.8.4**
 
+## v0.8.4 Updates
 
+### Interactive Help and Diagnostics Polish
 
+- Added `/help` as a permission-aware interactive help center.
+- Help opens with enabled modules by default and includes a Disabled Modules view for admins who want to inspect hidden module command groups.
+- Help pages filter command/control items by the user's current SlickBot permission level and module access where possible.
+- Module help pages are grouped into Member Commands, Staff Commands, and Owner / Admin Commands when those sections are visible to the user.
+- Improved `/bot test` with clearer module health states: Ready, Partially Configured, Needs Setup, Disabled, Warning, and Error.
+- Diagnostic errors now use the Discord `:no_entry:`-style `⛔` icon.
+- `/bot test` now includes recommended fixes for failed, incomplete, or unconfigured module checks.
+- No existing command groups were renamed in this release.
+
+New command:
+
+```text
+/help
+```
 
 ## v0.8.3 Updates
 

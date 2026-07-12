@@ -10,6 +10,7 @@ const {
 } = require('../modules/permissions/actionKeys');
 const { replyPrivate } = require('../utils/reply');
 const { createBaseEmbed, createSuccessEmbed, SlickBotColors } = require('../modules/ui/uiService');
+const { getModuleStatus } = require('../modules/ui/panels');
 
 const MODULE_CHECKS = {
   [ModuleKeys.PERMISSIONS]: [
@@ -98,11 +99,31 @@ const MODULE_CHECKS = {
   ]
 };
 
+const MODULE_FIXES = Object.freeze({
+  [ModuleKeys.LOGGING]: 'Run `/logging panel`, then configure channels with `/logging set-channel`.',
+  [ModuleKeys.TICKETS]: 'Run `/ticket setup`, create ticket types as needed, then post a ticket panel with `/ticket panel`.',
+  [ModuleKeys.REPORTS]: 'Run `/report setup` and set a review channel.',
+  [ModuleKeys.APPLICATIONS]: 'Run `/application setup`, add questions with `/application question-add`, then post an application panel.',
+  [ModuleKeys.APPEALS]: 'Run `/appeal setup` or `/appeal edit` and set a review channel.',
+  [ModuleKeys.WELCOME]: 'Run `/welcome setup` and optionally configure auto roles.',
+  [ModuleKeys.REACTION_ROLES]: 'Run `/roles create-panel`, add options, then post the panel.',
+  [ModuleKeys.GIVEAWAYS]: 'Run `/giveaway setup` and set a default channel.',
+  [ModuleKeys.BIRTHDAYS]: 'Run `/birthday setup` and configure an announcement channel or birthday role.',
+  [ModuleKeys.SCHEDULED_MESSAGES]: 'Run `/schedule setup` and set a default channel.',
+  [ModuleKeys.LEVELING]: 'Run `/level setup` and review rewards/multipliers with `/level manager`.',
+  [ModuleKeys.SERVER_STATS]: 'Run `/stats setup`, confirm SlickBot can rename the configured stat channels, then run `/stats refresh`.',
+  [ModuleKeys.BOT_UPDATES]: 'Run `/bot-updates setup` and configure an update channel.',
+  [ModuleKeys.CUSTOM_COMMANDS]: 'Run `/custom-command create` to add your first command.',
+  [ModuleKeys.JOIN_TO_CREATE]: 'Run `/join-create create-hub` or `/join-create setup` to configure a hub channel.'
+});
+
 function statusIcon(status) {
   if (status === 'ok') return '✅';
   if (status === 'disabled') return '⏸️';
   if (status === 'warning') return '⚠️';
-  return '❌';
+  if (status === 'needs_setup') return '🟣';
+  if (status === 'partial') return '🟠';
+  return '⛔';
 }
 
 function findMissingCoverage() {
@@ -114,7 +135,18 @@ function findMissingCoverage() {
   };
 }
 
-async function runModuleHealthCheck(guildId, moduleKey, enabled) {
+function recommendedFixFor(check) {
+  if (check.fix) return check.fix;
+  if (check.moduleKey && MODULE_FIXES[check.moduleKey]) return MODULE_FIXES[check.moduleKey];
+  if (check.name === 'Database connection') return 'Check Railway Postgres is attached and `DATABASE_URL` is available to the deployment.';
+  if (check.name === 'Guild configuration') return 'Run `/setup` in the server, then run `/bot test` again.';
+  if (String(check.name || '').startsWith('Module records')) return 'Run `/modules panel` or `/permissions apply-defaults` to reseed module records.';
+  if (check.name === 'Permission defaults') return 'Run `/permissions apply-defaults` to reseed the current permission defaults.';
+  if (check.name === 'Discord client connection') return 'Check Railway logs, bot token, and Discord gateway connectivity.';
+  return null;
+}
+
+async function runDbCheck(guildId, moduleKey) {
   const checks = MODULE_CHECKS[moduleKey] || [];
   const details = [];
   for (const check of checks) {
@@ -126,20 +158,61 @@ async function runModuleHealthCheck(guildId, moduleKey, enabled) {
       return {
         moduleKey,
         status: 'error',
-        detail: `${check.name} failed: ${error instanceof Error ? error.message : String(error)}`
+        detail: `${check.name} failed: ${error instanceof Error ? error.message : String(error)}`,
+        fix: 'This usually indicates a missing/failed database migration. Check Railway startup logs and rerun the latest build.'
       };
     }
   }
 
-  if (!enabled) {
-    return { moduleKey, status: 'disabled', detail: 'disabled in this server' };
-  }
-
   if (!checks.length) {
-    return { moduleKey, status: 'warning', detail: 'no diagnostic checks registered' };
+    return { moduleKey, status: 'warning', detail: 'no database diagnostic checks registered' };
   }
 
   return { moduleKey, status: 'ok', detail: details.join(' · ') };
+}
+
+function normalizeModuleHealth(dbHealth, setupStatus, enabled) {
+  if (!enabled) return { moduleKey: dbHealth.moduleKey, status: 'disabled', detail: 'Disabled in this server.' };
+  if (dbHealth.status === 'error') return dbHealth;
+  if (!setupStatus) return dbHealth;
+
+  if (setupStatus.state === 'READY') {
+    return { moduleKey: dbHealth.moduleKey, status: 'ok', detail: `${setupStatus.label} — ${setupStatus.note || dbHealth.detail}` };
+  }
+  if (setupStatus.state === 'NEEDS_CONFIG') {
+    return { moduleKey: dbHealth.moduleKey, status: 'needs_setup', detail: `Needs Setup — ${setupStatus.note || 'configuration required'}` };
+  }
+  if (setupStatus.state === 'PARTIAL') {
+    return { moduleKey: dbHealth.moduleKey, status: 'partial', detail: `Partially Configured — ${setupStatus.note || 'review settings'}` };
+  }
+  if (setupStatus.state === 'DISABLED') {
+    return { moduleKey: dbHealth.moduleKey, status: 'disabled', detail: setupStatus.note || 'Disabled in this server.' };
+  }
+
+  return dbHealth;
+}
+
+function chunkLines(lines, maxLength = 3600) {
+  const chunks = [];
+  let current = [];
+  let currentLength = 0;
+  for (const line of lines) {
+    const nextLength = currentLength + line.length + 1;
+    if (nextLength > maxLength && current.length) {
+      chunks.push(current);
+      current = [];
+      currentLength = 0;
+    }
+    current.push(line);
+    currentLength += line.length + 1;
+  }
+  if (current.length) chunks.push(current);
+  return chunks;
+}
+
+function compactDetail(value, maxLength = 190) {
+  const text = String(value || 'No detail.');
+  return text.length > maxLength ? `${text.slice(0, maxLength - 3)}...` : text;
 }
 
 module.exports = {
@@ -202,7 +275,11 @@ module.exports = {
       );
       moduleRows = result.rows;
       const implementedCount = moduleRows.filter((row) => implementedModules.includes(row.module_key)).length;
-      checks.push({ name: `Module records (${implementedCount}/${implementedModules.length})`, status: implementedCount >= implementedModules.length ? 'ok' : 'error' });
+      checks.push({
+        name: `Module records (${implementedCount}/${implementedModules.length})`,
+        status: implementedCount >= implementedModules.length ? 'ok' : 'error',
+        detail: implementedCount >= implementedModules.length ? null : 'One or more implemented modules is missing a config row.'
+      });
     } catch (error) {
       checks.push({ name: 'Module records', status: 'error', detail: error instanceof Error ? error.message : String(error) });
     }
@@ -222,36 +299,69 @@ module.exports = {
     for (const moduleKey of implementedModules) {
       const row = moduleRows.find((entry) => entry.module_key === moduleKey);
       if (!row) {
-        moduleHealth.push({ moduleKey, status: 'error', detail: 'missing module config row' });
+        moduleHealth.push({ moduleKey, status: 'error', detail: 'Missing module config row.', fix: 'Run `/modules panel` or `/permissions apply-defaults` to reseed module configuration.' });
         continue;
       }
-      moduleHealth.push(await runModuleHealthCheck(interaction.guildId, moduleKey, row.enabled));
+      const dbHealth = await runDbCheck(interaction.guildId, moduleKey);
+      let setupStatus = null;
+      try {
+        setupStatus = await getModuleStatus(interaction.guildId, row);
+      } catch (error) {
+        moduleHealth.push({ moduleKey, status: 'error', detail: `Setup status failed: ${error instanceof Error ? error.message : String(error)}`, fix: 'Check Railway logs for the module status query failure.' });
+        continue;
+      }
+      moduleHealth.push(normalizeModuleHealth(dbHealth, setupStatus, Boolean(row.enabled)));
     }
 
-    const failed = checks.filter((check) => check.status === 'error').length + moduleHealth.filter((check) => check.status === 'error').length;
-    const warnings = checks.filter((check) => check.status === 'warning').length + moduleHealth.filter((check) => check.status === 'warning').length;
-    const moduleLines = moduleHealth.map((check) => `${statusIcon(check.status)} **${check.moduleKey}**: ${check.detail}`);
+    const errors = [...checks, ...moduleHealth].filter((check) => check.status === 'error');
+    const warnings = [...checks, ...moduleHealth].filter((check) => ['warning', 'needs_setup', 'partial'].includes(check.status));
+    const moduleLines = moduleHealth.map((check) => `${statusIcon(check.status)} **${check.moduleKey}** — ${compactDetail(check.detail)}`);
+    const recommendations = [...errors, ...warnings]
+      .map((check) => {
+        const fix = recommendedFixFor(check);
+        return fix ? `${statusIcon(check.status)} **${check.moduleKey || check.name}**: ${fix}` : null;
+      })
+      .filter(Boolean);
 
-    const description = [
+    const coreLines = checks.map((check) => `${statusIcon(check.status)} ${check.name}${check.detail ? ` — ${compactDetail(check.detail, 160)}` : ''}`);
+    const resultLine = errors.length
+      ? `**Result:** ${errors.length} error(s) found. Review the recommended fixes below.`
+      : warnings.length
+        ? `**Result:** No blocking errors found. ${warnings.length} module(s)/check(s) need setup or review.`
+        : '**Result:** All enabled modules passed their diagnostic checks.';
+
+    const baseDescription = [
       `Running **SlickBot v${packageInfo.version}**`,
       `Permission defaults: **${PERMISSION_DEFAULTS_VERSION}**`,
       '',
       '**Core Checks**',
-      ...checks.map((check) => `${statusIcon(check.status)} ${check.name}${check.detail ? ` — ${check.detail}` : ''}`),
+      ...coreLines,
       '',
-      '**Module Health**',
-      ...moduleLines,
+      '**Status Legend**',
+      '✅ Ready · 🟠 Partially Configured · 🟣 Needs Setup · ⏸️ Disabled · ⚠️ Warning · ⛔ Error',
       '',
-      failed ? `**Result:** ${failed} error(s) found. Review the failed module line(s) above.` : warnings ? `**Result:** Passed with ${warnings} warning(s).` : '**Result:** All enabled modules passed their diagnostic checks.'
-    ].join('\n');
+      '**Module Health**'
+    ];
 
-    return replyPrivate(interaction, {
-      embeds: [createBaseEmbed({
-        title: failed ? 'SlickBot Diagnostic Check Failed' : warnings ? 'SlickBot Diagnostic Check Completed with Warnings' : 'SlickBot Diagnostic Check Passed',
-        description,
-        color: failed ? SlickBotColors.ERROR : warnings ? SlickBotColors.WARNING : SlickBotColors.SUCCESS,
-        footer: 'Safe diagnostic. It verifies module config and database readiness without posting panels, renaming channels, or sending test messages.'
-      })]
-    });
+    const chunks = chunkLines([...baseDescription, ...moduleLines, '', resultLine]);
+    const embeds = chunks.map((chunk, index) => createBaseEmbed({
+      title: index === 0
+        ? errors.length ? 'SlickBot Diagnostic Check Failed' : warnings.length ? 'SlickBot Diagnostic Check Needs Review' : 'SlickBot Diagnostic Check Passed'
+        : 'SlickBot Diagnostic Check Continued',
+      description: chunk.join('\n'),
+      color: errors.length ? SlickBotColors.ERROR : warnings.length ? SlickBotColors.WARNING : SlickBotColors.SUCCESS,
+      footer: 'Safe diagnostic. It verifies module setup and database readiness without posting panels, renaming channels, or sending test messages.'
+    }));
+
+    if (recommendations.length) {
+      embeds.push(createBaseEmbed({
+        title: 'Recommended Fixes',
+        description: chunkLines(recommendations, 3600)[0].join('\n'),
+        color: errors.length ? SlickBotColors.ERROR : SlickBotColors.WARNING,
+        footer: 'Run the recommended command(s), then run /bot test again.'
+      }));
+    }
+
+    return replyPrivate(interaction, { embeds: embeds.slice(0, 10) });
   }
 };

@@ -1,5 +1,6 @@
 const pingCommand = require('./ping');
 const botCommand = require('./bot');
+const helpCommand = require('./help');
 const setupCommand = require('./setup');
 const teamCommand = require('./team');
 const modulesCommand = require('./modules');
@@ -29,6 +30,7 @@ const joinCreateCommand = require('./joinCreate');
 const commands = [
   pingCommand,
   botCommand,
+  helpCommand,
   setupCommand,
   teamCommand,
   modulesCommand,

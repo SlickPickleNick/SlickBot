@@ -4,6 +4,7 @@ const { ModuleKeys, isCoreModule } = require('../modules/moduleRegistry');
 const { query } = require('./db');
 const { replyPrivate, acknowledgeQuietly } = require('../utils/reply');
 const { buildSetupPanel, buildModulesPanel, buildLoggingPanel, buildTeamsPanel, buildPermissionsPanel, buildCommunityPanel } = require('../modules/ui/panels');
+const { buildHelpPayload } = require('../modules/help/helpService');
 const { buildModerationPanel, buildRecentCasesPanel } = require('../modules/moderation/moderationUi');
 const { buildStatusPanel } = require('../commands/status');
 const { createBaseEmbed, createSuccessEmbed, createWarningEmbed, SlickBotColors } = require('../modules/ui/uiService');
@@ -76,6 +77,18 @@ async function handleButton(interaction, ctx) {
   const id = interaction.customId;
 
 
+
+  if (id === CustomIds.HelpRefresh || id === CustomIds.HelpEnabled) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.Help, ModuleKeys.PERMISSIONS))) return true;
+    await updatePanel(interaction, await buildHelpPayload(interaction, ctx, { mode: 'enabled' }));
+    return true;
+  }
+
+  if (id === CustomIds.HelpDisabled) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.Help, ModuleKeys.PERMISSIONS))) return true;
+    await updatePanel(interaction, await buildHelpPayload(interaction, ctx, { mode: 'disabled' }));
+    return true;
+  }
 
   if (id === CustomIds.ResetCancel) {
     await updatePanel(interaction, { embeds: [createSuccessEmbed('Reset Cancelled', 'No SlickBot data was changed.')], components: [] });
@@ -554,6 +567,15 @@ async function handleButton(interaction, ctx) {
 
 async function handleSelect(interaction, ctx) {
   const id = interaction.customId;
+  if (id === CustomIds.HelpEnabledSelect || id === CustomIds.HelpDisabledSelect) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.Help, ModuleKeys.PERMISSIONS))) return true;
+    await updatePanel(interaction, await buildHelpPayload(interaction, ctx, {
+      mode: id === CustomIds.HelpDisabledSelect ? 'disabled' : 'enabled',
+      moduleKey: interaction.values[0]
+    }));
+    return true;
+  }
+
   if (id === CustomIds.ModulesSelect) {
     if (!(await requireAction(interaction, ctx, ActionKeys.ModulesManage, ModuleKeys.PERMISSIONS))) return true;
     const moduleKey = interaction.values[0];

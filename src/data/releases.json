@@ -1,4 +1,21 @@
 {
+  "0.8.4": {
+    "title": "SlickBot v0.8.4",
+    "summary": "Adds an interactive /help menu and improves bot diagnostics with clearer module health, errors, and recommended fixes.",
+    "notes": [
+      "Added /help as an interactive help center with enabled modules shown by default.",
+      "Help pages are filtered by the user's SlickBot permission level and module state so members only see commands relevant to them.",
+      "Added a Disabled Modules view inside /help for admins who want to inspect commands hidden by disabled modules.",
+      "Expanded /bot test with clearer Ready, Partially Configured, Needs Setup, Disabled, Warning, and Error statuses.",
+      "Updated diagnostic errors to use the Discord no_entry-style status icon and added recommended fixes for failed or incomplete module checks.",
+      "No command groups were renamed in this release."
+    ],
+    "commands": [
+      "/help",
+      "/bot test",
+      "/bot version"
+    ]
+  },
   "0.8.3": {
     "title": "SlickBot v0.8.3",
     "summary": "Improves Join-to-Create user controls with native Discord user select menus.",
