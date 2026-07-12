@@ -27,7 +27,8 @@
       "Application review index filter buttons now silently refresh the index without sending a separate hidden confirmation message.",
       "Application review index embeds are now titled after the selected application, using {application name} - Review Filter, or All Server Applications - Review Filters for all-type indexes.",
       "Report Add Details entries now use Discord timestamps so staff can see exactly when each note was added.",
-      "Added /report review-index to post a refreshed Server Reports - Review Filter index with Open, Dismissed, and Resolved filters and links to report review messages.",
+      "Added /report review-index to post a refreshed Server Reports - Review Filter index with Open, Dismissed, Resolved, and All filters and links to report review messages.",
+      "Fixed Report Review Index filter buttons so they are handled as button interactions instead of select-menu interactions.",
       "Report review indexes are deleted and resent at the bottom of the review channel when new reports arrive, report statuses change, or reviewers change the index filter.",
       "Application question DMs now separate the question into a dedicated embed field so the prompt is easier for applicants to read."
     ],

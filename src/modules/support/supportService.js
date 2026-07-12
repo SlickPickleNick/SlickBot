@@ -284,6 +284,7 @@ function reportReviewMessageUrl(report) {
 
 function formatReportIndexFilterLabel(index) {
   const filter = normalizeStatus(index?.status_filter || 'OPEN');
+  if (filter === 'ALL') return 'All Reports';
   if (filter === 'DISMISSED') return 'Dismissed Reports';
   if (filter === 'RESOLVED') return 'Resolved Reports';
   return 'Open Reports';
@@ -301,7 +302,7 @@ function buildReportReviewIndexPayload(index, reports = []) {
     const target = report.target_user_id ? ` · Target: <@${report.target_user_id}>` : '';
     const reviewer = report.reviewed_by_user_id ? ` · Reviewed by <@${report.reviewed_by_user_id}>${reviewedAt ? ` on ${reviewedAt}` : ''}` : '';
     return `• **#${report.report_number}** · ${status} · Reporter: <@${report.reporter_user_id}>${target}${submittedAt ? ` · ${submittedAt}` : ''}${reviewer}\n  ${link}`;
-  }).join('\n') : `No ${filter.toLowerCase()} reports found for this index.`;
+  }).join('\n') : filter === 'ALL' ? 'No reports found for this index.' : `No ${filter.toLowerCase()} reports found for this index.`;
 
   const embed = createBaseEmbed({
     title: 'Server Reports - Review Filter',
@@ -313,7 +314,7 @@ function buildReportReviewIndexPayload(index, reports = []) {
       '',
       'This index is refreshed when new reports are submitted or when report statuses change.'
     ].filter(Boolean).join('\n'),
-    color: filter === 'RESOLVED' ? SlickBotColors.SUCCESS : filter === 'DISMISSED' ? SlickBotColors.MUTED : SlickBotColors.WARNING,
+    color: filter === 'RESOLVED' ? SlickBotColors.SUCCESS : filter === 'DISMISSED' ? SlickBotColors.MUTED : filter === 'ALL' ? SlickBotColors.INFO : SlickBotColors.WARNING,
     footer: 'SlickBot Reports'
   });
 
@@ -325,7 +326,8 @@ function buildReportReviewIndexPayload(index, reports = []) {
   const row = new ActionRowBuilder().addComponents(
     makeButton('OPEN', 'Open', ButtonStyle.Secondary),
     makeButton('DISMISSED', 'Dismissed', ButtonStyle.Secondary),
-    makeButton('RESOLVED', 'Resolved', ButtonStyle.Secondary)
+    makeButton('RESOLVED', 'Resolved', ButtonStyle.Secondary),
+    makeButton('ALL', 'All', ButtonStyle.Secondary)
   );
 
   return { embeds: [embed], components: [row] };
@@ -1000,7 +1002,7 @@ class ReportService {
   }
 
   async createReviewIndex({ guildId, channelId, statusFilter = 'OPEN', createdByUserId = null, client = null }) {
-    const normalizedFilter = ['OPEN', 'DISMISSED', 'RESOLVED'].includes(normalizeStatus(statusFilter)) ? normalizeStatus(statusFilter) : 'OPEN';
+    const normalizedFilter = ['OPEN', 'DISMISSED', 'RESOLVED', 'ALL'].includes(normalizeStatus(statusFilter)) ? normalizeStatus(statusFilter) : 'OPEN';
     const existing = await query(
       `SELECT * FROM report_review_indexes WHERE guild_id = $1 AND channel_id = $2 LIMIT 1`,
       [guildId, channelId]
@@ -1017,7 +1019,7 @@ class ReportService {
   }
 
   async updateReviewIndexFilter({ guildId, indexId, statusFilter }) {
-    const normalizedFilter = ['OPEN', 'DISMISSED', 'RESOLVED'].includes(normalizeStatus(statusFilter)) ? normalizeStatus(statusFilter) : 'OPEN';
+    const normalizedFilter = ['OPEN', 'DISMISSED', 'RESOLVED', 'ALL'].includes(normalizeStatus(statusFilter)) ? normalizeStatus(statusFilter) : 'OPEN';
     const result = await query(`UPDATE report_review_indexes SET status_filter = $1, updated_at = NOW() WHERE guild_id = $2 AND id = $3 AND active = true RETURNING *`, [normalizedFilter, guildId, indexId]).catch(() => ({ rows: [] }));
     return result.rows[0] || null;
   }
@@ -1028,7 +1030,7 @@ class ReportService {
     const clauses = ['guild_id = $1'];
     if (filter === 'OPEN') {
       clauses.push(`status NOT IN ('RESOLVED', 'DISMISSED')`);
-    } else {
+    } else if (filter !== 'ALL') {
       params.push(filter);
       clauses.push(`status = $${params.length}`);
     }

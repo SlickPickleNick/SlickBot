@@ -271,3 +271,8 @@ Deferred larger work:
 ## Design Direction
 
 SlickBot should continue to use polished embeds, buttons, setup panels, guided message flows, and compact status indicators instead of plain text-only command output.
+
+
+### v0.8.8 Report Review Index Filter Patch
+- Report Review Index filter buttons now route correctly as button interactions.
+- Added an All filter to the report review index alongside Open, Dismissed, and Resolved.

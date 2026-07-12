@@ -662,3 +662,8 @@ Optional log setup:
 - Fixed `/stats setup` so you can configure only one or two stat channels without providing every available channel/template option.
 - Server stats now safely use default templates when templates are not provided.
 - Server stats refresh now handles no configured stat channels gracefully instead of throwing during setup.
+
+
+### v0.8.8 Report Review Index Filter Patch
+- Report Review Index filter buttons now route correctly as button interactions.
+- Added an All filter to the report review index alongside Open, Dismissed, and Resolved.

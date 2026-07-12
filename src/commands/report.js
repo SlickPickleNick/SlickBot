@@ -40,7 +40,7 @@ module.exports = {
       subcommand
         .setName('review-index')
         .setDescription('Post or refresh a report review index in the report review channel.')
-        .addStringOption((option) => option.setName('status').setDescription('Reports to show. Defaults to open.').setRequired(false).addChoices({ name: 'Open', value: 'OPEN' }, { name: 'Dismissed', value: 'DISMISSED' }, { name: 'Resolved', value: 'RESOLVED' }))
+        .addStringOption((option) => option.setName('status').setDescription('Reports to show. Defaults to open.').setRequired(false).addChoices({ name: 'Open', value: 'OPEN' }, { name: 'Dismissed', value: 'DISMISSED' }, { name: 'Resolved', value: 'RESOLVED' }, { name: 'All', value: 'ALL' }))
         .addChannelOption((option) => option.setName('channel').setDescription('Review channel to post the index in. Defaults to configured review channel/current channel.').addChannelTypes(ChannelType.GuildText).setRequired(false))
     )
     .addSubcommand((subcommand) =>

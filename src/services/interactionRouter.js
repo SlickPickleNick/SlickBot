@@ -82,7 +82,19 @@ async function handleComponentInteraction(interaction, ctx) {
 async function handleButton(interaction, ctx) {
   const id = interaction.customId;
 
-
+  if (id.startsWith(CustomIds.ReportReviewIndexFilterPrefix)) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.ReportsReview, ModuleKeys.REPORTS))) return true;
+    const rest = id.slice(CustomIds.ReportReviewIndexFilterPrefix.length);
+    const [indexId, statusFilter] = rest.split(':');
+    await interaction.deferUpdate();
+    const index = await reports.updateReviewIndexFilter({ guildId: interaction.guildId, indexId, statusFilter });
+    if (!index) {
+      await interaction.followUp({ embeds: [createWarningEmbed('Review Index Not Found', 'This report review index could not be found.')], flags: MessageFlags.Ephemeral }).catch(() => {});
+      return true;
+    }
+    await reports.refreshReviewIndex({ client: ctx.client, index }).catch(() => {});
+    return true;
+  }
 
   if (id === CustomIds.HelpRefresh || id === CustomIds.HelpEnabled) {
     if (!(await requireAction(interaction, ctx, ActionKeys.Help, ModuleKeys.PERMISSIONS))) return true;
@@ -737,21 +749,6 @@ async function handleSelect(interaction, ctx) {
   if (id === CustomIds.PermissionsTeamSelect) {
     if (!(await requireAction(interaction, ctx, ActionKeys.PermissionsPanel, ModuleKeys.PERMISSIONS))) return true;
     await updatePanel(interaction, await buildPermissionsPanel(interaction.guildId, interaction.values[0]));
-    return true;
-  }
-
-
-  if (id.startsWith(CustomIds.ReportReviewIndexFilterPrefix)) {
-    if (!(await requireAction(interaction, ctx, ActionKeys.ReportsReview, ModuleKeys.REPORTS))) return true;
-    const rest = id.slice(CustomIds.ReportReviewIndexFilterPrefix.length);
-    const [indexId, statusFilter] = rest.split(':');
-    await interaction.deferUpdate();
-    const index = await reports.updateReviewIndexFilter({ guildId: interaction.guildId, indexId, statusFilter });
-    if (!index) {
-      await interaction.followUp({ embeds: [createWarningEmbed('Review Index Not Found', 'This report review index could not be found.')], flags: MessageFlags.Ephemeral }).catch(() => {});
-      return true;
-    }
-    await reports.refreshReviewIndex({ client: ctx.client, index }).catch(() => {});
     return true;
   }
 
