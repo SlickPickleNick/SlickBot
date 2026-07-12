@@ -4,8 +4,34 @@ SlickBot is an all-in-one Discord server management bot built for the SlickPickl
 
 ## Version
 
-Current package: **v0.8.9**
+Current package: **v0.9.0**
 
+
+## v0.9.0 Updates
+
+### Knowledge Base / FAQ
+
+- Added the **Knowledge Base / FAQ** module under Community Systems.
+- Added a forum-backed FAQ setup where staff manually create FAQ posts in a Discord forum channel and SlickBot maintains the master FAQ index post.
+- The master FAQ post is created by SlickBot, stores a generated embed, links to FAQ posts, and groups posts by the forum tag(s) assigned to each post. Posts with multiple tags are listed under each matching category.
+- The master FAQ index refreshes when FAQ forum posts are created, updated, deleted, or retagged. Staff can also force a refresh with `/faq refresh`.
+- Added `/faq setup`, `/faq edit`, `/faq refresh`, `/faq status`, `/faq panel`, and `/faq answer`.
+- Added autocomplete for `/faq answer question:` using the configured forum posts.
+- Added the **FAQ Reply** message context command for staff. This opens a short modal, finds the matching FAQ post, and replies directly to the selected user message with the FAQ link.
+- FAQ replies tell the member to review the linked FAQ and, when configured, direct them to the saved ticket channel if they still need support.
+- Added FAQ permission actions, logging events, setup/module status, help entries, diagnostics, and PostgreSQL persistence.
+
+Updated commands:
+
+```text
+/faq setup
+/faq edit
+/faq refresh
+/faq status
+/faq panel
+/faq answer
+FAQ Reply message command
+```
 
 ## v0.8.9 Updates
 

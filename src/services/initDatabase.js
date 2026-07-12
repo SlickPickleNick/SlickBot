@@ -1190,6 +1190,29 @@ async function initDatabase() {
 
   await query(`CREATE INDEX IF NOT EXISTS idx_community_game_panels_guild_active ON community_game_panels(guild_id, active);`);
 
+
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS faq_configs (
+      guild_id TEXT PRIMARY KEY REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      forum_channel_id TEXT,
+      master_thread_id TEXT,
+      master_message_id TEXT,
+      ticket_channel_id TEXT,
+      master_title TEXT NOT NULL DEFAULT 'Knowledge Base / FAQ',
+      master_description TEXT NOT NULL DEFAULT 'Browse the FAQ posts below by category. Categories are based on this forum channel''s post tags.',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await query(`ALTER TABLE faq_configs ADD COLUMN IF NOT EXISTS master_thread_id TEXT;`);
+  await query(`ALTER TABLE faq_configs ADD COLUMN IF NOT EXISTS master_message_id TEXT;`);
+  await query(`ALTER TABLE faq_configs ADD COLUMN IF NOT EXISTS ticket_channel_id TEXT;`);
+  await query(`ALTER TABLE faq_configs ADD COLUMN IF NOT EXISTS master_title TEXT NOT NULL DEFAULT 'Knowledge Base / FAQ';`);
+  await query(`ALTER TABLE faq_configs ADD COLUMN IF NOT EXISTS master_description TEXT NOT NULL DEFAULT 'Browse the FAQ posts below by category. Categories are based on this forum channel''s post tags.';`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_faq_configs_forum ON faq_configs(guild_id, forum_channel_id);`);
+
   await query(`
     CREATE TABLE IF NOT EXISTS role_permission_levels (
       id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,

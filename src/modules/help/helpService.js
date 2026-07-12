@@ -27,6 +27,7 @@ const MODULE_LABELS = Object.freeze({
   [ModuleKeys.BIRTHDAYS]: 'Birthdays',
   [ModuleKeys.LEVELING]: 'Leveling',
   [ModuleKeys.COMMUNITY_GAMES]: 'Community Games',
+  [ModuleKeys.FAQ]: 'Knowledge Base / FAQ',
   [ModuleKeys.SERVER_STATS]: 'Server Stats',
   [ModuleKeys.BOT_UPDATES]: 'Bot Updates',
   [ModuleKeys.CUSTOM_COMMANDS]: 'Custom Commands',
@@ -134,6 +135,11 @@ const HELP_CATALOG = Object.freeze([
   { moduleKey: ModuleKeys.COMMUNITY_GAMES, actionKey: ActionKeys.GamesConfigure, command: '/games counting setup|enable|disable|reset|set-number', description: 'Configure Counting rules, reactions, failure embeds, and staff controls.' },
   { moduleKey: ModuleKeys.COMMUNITY_GAMES, actionKey: ActionKeys.GamesConfigure, command: '/games tic-tac-toe setup|enable|disable', description: 'Configure or toggle Tic-Tac-Toe, including win XP.' },
   { moduleKey: ModuleKeys.COMMUNITY_GAMES, actionKey: ActionKeys.GamesConfigure, command: '/games connect-four setup|enable|disable', description: 'Configure or toggle Connect Four, including win XP.' },
+
+  { moduleKey: ModuleKeys.FAQ, actionKey: ActionKeys.FaqAnswer, command: '/faq answer', description: 'Send a linked FAQ response to a member or message.' },
+  { moduleKey: ModuleKeys.FAQ, actionKey: ActionKeys.FaqAnswer, command: 'FAQ Reply message command', description: 'Right-click a message and use Apps → FAQ Reply for a direct FAQ response.' },
+  { moduleKey: ModuleKeys.FAQ, actionKey: ActionKeys.FaqView, command: '/faq status|panel', description: 'View Knowledge Base / FAQ setup status.' },
+  { moduleKey: ModuleKeys.FAQ, actionKey: ActionKeys.FaqConfigure, command: '/faq setup|edit|refresh', description: 'Configure the FAQ forum and refresh the master index post.' },
 
   { moduleKey: ModuleKeys.SCHEDULED_MESSAGES, actionKey: ActionKeys.ScheduledMessagesView, command: '/schedule manager|list', description: 'View scheduled messages.' },
   { moduleKey: ModuleKeys.SCHEDULED_MESSAGES, actionKey: ActionKeys.ScheduledMessagesConfigure, command: '/schedule setup', description: 'Configure schedule defaults.' },

@@ -21,6 +21,7 @@ const { ScheduledMessageService } = require('../modules/automation/scheduledMess
 const { ServerStatsService } = require('../modules/community/serverStatsService');
 const { LevelingService } = require('../modules/community/levelingService');
 const { CommunityGameService, GAME_KEYS } = require('../modules/community/gameService');
+const { FaqService } = require('../modules/community/faqService');
 const { buildRoleManagerPanel, toggleRole } = require('../modules/community/rolePanelService');
 const { JoinCreateService } = require('../modules/voice/joinCreateService');
 const { CustomCommandService } = require('../modules/custom/customCommandService');
@@ -53,6 +54,7 @@ const leveling = new LevelingService();
 const joinCreate = new JoinCreateService();
 const customCommands = new CustomCommandService();
 const communityGames = new CommunityGameService();
+const faq = new FaqService();
 
 async function handleComponentInteraction(interaction, ctx) {
   if (!interaction.guildId) {
@@ -366,6 +368,12 @@ async function handleButton(interaction, ctx) {
   if (id === CustomIds.GamesConnectFour) {
     if (!(await requireAction(interaction, ctx, ActionKeys.GamesView, ModuleKeys.COMMUNITY_GAMES))) return true;
     await updatePanel(interaction, await communityGames.buildBoardGamePanel(interaction.guildId, GAME_KEYS.CONNECT_FOUR));
+    return true;
+  }
+
+  if (id === CustomIds.FaqRefresh) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.FaqView, ModuleKeys.FAQ))) return true;
+    await updatePanel(interaction, await faq.buildManagerPanel(interaction.guildId));
     return true;
   }
 
@@ -1274,6 +1282,20 @@ async function handleModal(interaction, ctx) {
     }
   }
 
+  if (id.startsWith(CustomIds.FaqAnswerModalPrefix)) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.FaqAnswer, ModuleKeys.FAQ))) return true;
+    const rest = id.slice(CustomIds.FaqAnswerModalPrefix.length);
+    const [channelId, messageId] = rest.split(':');
+    const question = interaction.fields.getTextInputValue('question');
+    const channel = await interaction.guild.channels.fetch(channelId).catch(() => null);
+    const targetMessage = channel?.messages?.fetch ? await channel.messages.fetch(messageId).catch(() => null) : null;
+    if (!targetMessage) return replyPrivate(interaction, { embeds: [createWarningEmbed('Message Not Found', 'SlickBot could not fetch the selected message.')] });
+    const result = await faq.sendFaqAnswer({ guild: interaction.guild, channel: interaction.channel, actorUser: interaction.user, question, targetMessage, logger: ctx.logger });
+    if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('FAQ Reply Not Sent', result.reason)] });
+    await replyPrivate(interaction, { embeds: [createSuccessEmbed('FAQ Reply Sent', `Linked FAQ: **${result.thread.name}**.`)], deleteAfterSeconds: 10 });
+    return true;
+  }
+
   if (id.startsWith(CustomIds.PanelDesignModalPrefix)) {
     if (!(await requireAction(interaction, ctx, ActionKeys.PanelsConfigure, ModuleKeys.PERMISSIONS))) return true;
     const { target, name } = parsePanelDesignModalId(id);
@@ -1363,7 +1385,7 @@ async function requireAnySupportAction(interaction, ctx) {
 
 
 async function requireAnyCommunityAction(interaction, ctx) {
-  const checks = [[ActionKeys.WelcomeView, ModuleKeys.WELCOME], [ActionKeys.RolePanelsView, ModuleKeys.REACTION_ROLES], [ActionKeys.GiveawaysView, ModuleKeys.GIVEAWAYS], [ActionKeys.BirthdaysView, ModuleKeys.BIRTHDAYS], [ActionKeys.LevelingView, ModuleKeys.LEVELING], [ActionKeys.GamesView, ModuleKeys.COMMUNITY_GAMES], [ActionKeys.ScheduledMessagesView, ModuleKeys.SCHEDULED_MESSAGES], [ActionKeys.ServerStatsView, ModuleKeys.SERVER_STATS], [ActionKeys.CustomCommandsView, ModuleKeys.CUSTOM_COMMANDS], [ActionKeys.JoinCreateView, ModuleKeys.JOIN_TO_CREATE]];
+  const checks = [[ActionKeys.WelcomeView, ModuleKeys.WELCOME], [ActionKeys.RolePanelsView, ModuleKeys.REACTION_ROLES], [ActionKeys.GiveawaysView, ModuleKeys.GIVEAWAYS], [ActionKeys.BirthdaysView, ModuleKeys.BIRTHDAYS], [ActionKeys.LevelingView, ModuleKeys.LEVELING], [ActionKeys.GamesView, ModuleKeys.COMMUNITY_GAMES], [ActionKeys.FaqView, ModuleKeys.FAQ], [ActionKeys.ScheduledMessagesView, ModuleKeys.SCHEDULED_MESSAGES], [ActionKeys.ServerStatsView, ModuleKeys.SERVER_STATS], [ActionKeys.CustomCommandsView, ModuleKeys.CUSTOM_COMMANDS], [ActionKeys.JoinCreateView, ModuleKeys.JOIN_TO_CREATE]];
   for (const [action, moduleKey] of checks) {
     const result = await ctx.permissions.checkInteraction(interaction, action, moduleKey);
     if (result.allowed) return true;

@@ -38,6 +38,7 @@ const CustomIds = Object.freeze({
   GamesCounting: 'slickbot:games:counting',
   GamesTicTacToe: 'slickbot:games:tic-tac-toe',
   GamesConnectFour: 'slickbot:games:connect-four',
+  FaqRefresh: 'slickbot:faq:refresh',
   GamePanelTicTacToe: 'slickbot:games:panel:tic-tac-toe',
   GamePanelConnectFour: 'slickbot:games:panel:connect-four',
   GamePanelOpponentSelectPrefix: 'slickbot:games:panel-opponent:',
@@ -124,6 +125,7 @@ const CustomIds = Object.freeze({
   ApplicationReviewReasonModalPrefix: 'slickbot:modal:application-review:',
   ApplicationModalPrefix: 'slickbot:modal:application:',
   PanelDesignModalPrefix: 'slickbot:modal:panel-design:',
+  FaqAnswerModalPrefix: 'slickbot:modal:faq-answer:',
 
   RolePanelSelectPrefix: 'slickbot:rolepanel-select:',
 

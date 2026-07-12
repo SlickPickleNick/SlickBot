@@ -96,6 +96,12 @@ const LogModuleCatalog = Object.freeze([
     defaultDelivery: 'IMMEDIATE'
   },
   {
+    key: 'faq',
+    label: 'Knowledge Base / FAQ',
+    description: 'FAQ forum index refreshes, configuration, and staff FAQ replies.',
+    defaultDelivery: 'IMMEDIATE'
+  },
+  {
     key: 'server-stats',
     label: 'Server Stats',
     description: 'Member, human, bot, and voice counter channel updates.',
@@ -195,6 +201,11 @@ const LogEventCatalog = Object.freeze([
   { key: 'community-game-reset', moduleKey: 'community-games', label: 'Counting Reset', description: 'An invalid counting entry reset the count.', defaultDelivery: 'IMMEDIATE' },
   { key: 'community-game-milestone', moduleKey: 'community-games', label: 'Counting Milestone', description: 'The counting channel reached a configured milestone.', defaultDelivery: 'IMMEDIATE' },
   { key: 'community-game-error', moduleKey: 'community-games', label: 'Game Error', description: 'A community game action failed during runtime processing.', defaultDelivery: 'IMMEDIATE' },
+
+  { key: 'faq-config', moduleKey: 'faq', label: 'FAQ Config', description: 'Knowledge Base / FAQ settings changed.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'faq-index', moduleKey: 'faq', label: 'FAQ Index', description: 'The FAQ master forum post was created or refreshed.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'faq-answer', moduleKey: 'faq', label: 'FAQ Answer', description: 'A staff member sent an FAQ response link.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'faq-error', moduleKey: 'faq', label: 'FAQ Error', description: 'FAQ forum processing failed.', defaultDelivery: 'IMMEDIATE' },
 
   { key: 'server-stats-config', moduleKey: 'server-stats', label: 'Server Stats Config', description: 'Server stats configuration changed.', defaultDelivery: 'IMMEDIATE' },
   { key: 'server-stats-update', moduleKey: 'server-stats', label: 'Server Stats Updated', description: 'Server stat counter channels were refreshed.', defaultDelivery: 'IMMEDIATE' },

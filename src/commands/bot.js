@@ -107,6 +107,9 @@ const MODULE_CHECKS = {
     { name: 'Active counting entries', sql: 'SELECT COUNT(*)::int AS count FROM counting_game_entries WHERE guild_id = $1' },
     { name: 'Game sessions', sql: 'SELECT COUNT(*)::int AS count FROM community_game_sessions WHERE guild_id = $1' },
     { name: 'Game statistics', sql: 'SELECT COUNT(*)::int AS count FROM community_game_stats WHERE guild_id = $1' }
+  ],
+  [ModuleKeys.FAQ]: [
+    { name: 'FAQ config', sql: 'SELECT COUNT(*)::int AS count FROM faq_configs WHERE guild_id = $1' }
   ]
 };
 
@@ -126,7 +129,8 @@ const MODULE_FIXES = Object.freeze({
   [ModuleKeys.BOT_UPDATES]: 'Run `/bot-updates setup` and configure an update channel.',
   [ModuleKeys.CUSTOM_COMMANDS]: 'Run `/custom-command create` to add your first command.',
   [ModuleKeys.JOIN_TO_CREATE]: 'Run `/join-create create-hub` or `/join-create setup` to configure a hub channel.',
-  [ModuleKeys.COMMUNITY_GAMES]: 'Run `/games manager`, configure games, enable each game separately, then post a launcher with `/games panel post` if desired.'
+  [ModuleKeys.COMMUNITY_GAMES]: 'Run `/games manager`, configure games, enable each game separately, then post a launcher with `/games panel post` if desired.',
+  [ModuleKeys.FAQ]: 'Run `/faq setup` with a forum channel, create FAQ posts in that forum, then run `/faq refresh`.'
 });
 
 function statusIcon(status) {

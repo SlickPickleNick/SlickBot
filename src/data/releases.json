@@ -1,4 +1,29 @@
 {
+  "0.9.0": {
+    "title": "SlickBot v0.9.0",
+    "summary": "Adds a forum-backed Knowledge Base / FAQ module with an auto-updating master index and moderator FAQ reply tools.",
+    "notes": [
+      "Added the FAQ module under Community Systems for forum-backed Knowledge Base navigation.",
+      "Added /faq setup to configure a Discord forum channel and create SlickBot's master FAQ index post.",
+      "SlickBot keeps individual FAQ posts staff-created and manages only the master index post.",
+      "The master FAQ embed links to FAQ forum posts and groups them by assigned forum tags, listing multi-tag posts under each matching category.",
+      "The master FAQ post refreshes automatically when forum posts are created, updated, deleted, or retagged, and can be manually refreshed with /faq refresh.",
+      "Added /faq edit, /faq status, /faq panel, and /faq answer.",
+      "Added autocomplete for /faq answer question: from the configured forum posts.",
+      "Added the FAQ Reply message context command so staff can right-click a user message, enter FAQ search text in a modal, and have SlickBot reply directly to that message with the matching FAQ link.",
+      "FAQ replies direct users to the configured ticket channel when one is saved.",
+      "Added FAQ permission actions, logging events, setup/module status, help entries, diagnostics, and backward-compatible PostgreSQL migrations."
+    ],
+    "commands": [
+      "/faq setup",
+      "/faq edit",
+      "/faq refresh",
+      "/faq status",
+      "/faq panel",
+      "/faq answer",
+      "FAQ Reply message command"
+    ]
+  },
   "0.8.9": {
     "title": "SlickBot v0.8.9",
     "summary": "Adds the Community Games module with Counting, Tic-Tac-Toe, Connect Four, board-game XP awards, and configurable counting reactions.",

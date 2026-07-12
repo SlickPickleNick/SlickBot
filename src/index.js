@@ -21,6 +21,7 @@ const { CustomCommandService } = require('./modules/custom/customCommandService'
 const { JoinCreateService } = require('./modules/voice/joinCreateService');
 const { LevelingService } = require('./modules/community/levelingService');
 const { CommunityGameService } = require('./modules/community/gameService');
+const { FaqService } = require('./modules/community/faqService');
 const { handleReactionRole, syncAllPublishedReactionPanels } = require('./modules/community/rolePanelService');
 const { handleComponentInteraction } = require('./services/interactionRouter');
 const { ActionKeys } = require('./modules/permissions/actionKeys');
@@ -55,6 +56,7 @@ const customCommands = new CustomCommandService();
 const joinCreate = new JoinCreateService();
 const leveling = new LevelingService();
 const communityGames = new CommunityGameService();
+const faq = new FaqService();
 const healthServer = startHealthServer(client);
 
 client.once(Events.ClientReady, async (readyClient) => {
@@ -354,6 +356,36 @@ async function handleCountingMessageMutationEvent(message, mutationType) {
   });
 }
 
+
+async function handleFaqThreadChange(thread, action) {
+  const guildId = thread?.guild?.id || thread?.guildId;
+  if (!guildId) return;
+  const faqEnabled = await permissions.isModuleEnabled(guildId, ModuleKeys.FAQ).catch(() => false);
+  if (!faqEnabled) return;
+  await faq.handleForumThreadChange(thread, client, logger).catch(async (error) => {
+    console.error(`Failed to refresh FAQ index after thread ${action}:`, error);
+    await logger.log({
+      guildId,
+      eventKey: 'faq-error',
+      title: 'FAQ Forum Refresh Failed',
+      body: error instanceof Error ? error.message : String(error),
+      metadata: { threadId: thread?.id || null, parentId: thread?.parentId || thread?.parent?.id || null, action }
+    }).catch(() => {});
+  });
+}
+
+client.on(Events.ThreadCreate, async (thread) => {
+  await handleFaqThreadChange(thread, 'created');
+});
+
+client.on(Events.ThreadUpdate, async (oldThread, newThread) => {
+  await handleFaqThreadChange(newThread || oldThread, 'updated');
+});
+
+client.on(Events.ThreadDelete, async (thread) => {
+  await handleFaqThreadChange(thread, 'deleted');
+});
+
 client.on(Events.MessageReactionAdd, async (reaction, user) => {
   if (user?.bot) return;
   const guildId = reaction.message?.guildId;
@@ -398,6 +430,29 @@ client.on(Events.InteractionCreate, async (interaction) => {
       await replyPrivate(interaction, 'You are currently blocked from interacting with SlickBot.');
       return;
     }
+
+    if (interaction.isMessageContextMenuCommand?.()) {
+      const command = commandMap.get(interaction.commandName);
+      if (!command) {
+        await replyPrivate(interaction, 'Unknown command.');
+        return;
+      }
+      const actionKey = typeof command.getActionKey === 'function' ? command.getActionKey(interaction) : command.actionKey;
+      const moduleKey = typeof command.getModuleKey === 'function' ? command.getModuleKey(interaction) : command.moduleKey;
+      const permissionResult = await permissions.checkInteraction(interaction, actionKey, moduleKey);
+      if (!permissionResult.allowed) {
+        await replyPrivate(interaction, permissionResult.reason || 'You do not have permission to use this command.');
+        return;
+      }
+      try {
+        await command.execute(interaction, { client, permissions, logger, status, moderation });
+      } catch (error) {
+        console.error(`Context command failed: ${interaction.commandName}`, error);
+        await replyPrivate(interaction, 'Something went wrong while running that command. Check the bot logs for details.').catch(() => {});
+      }
+      return;
+    }
+
     await handleComponentInteraction(interaction, { client, permissions, logger, status, moderation }).catch((error) => {
       console.error('Component interaction failed:', error);
     });

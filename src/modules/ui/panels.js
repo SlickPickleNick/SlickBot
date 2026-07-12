@@ -23,6 +23,7 @@ const { LevelingService } = require('../community/levelingService');
 const { CustomCommandService } = require('../custom/customCommandService');
 const { JoinCreateService } = require('../voice/joinCreateService');
 const { CommunityGameService } = require('../community/gameService');
+const { FaqService } = require('../community/faqService');
 const giveaways = new GiveawayService();
 const birthdays = new BirthdayService();
 const scheduledMessages = new ScheduledMessageService();
@@ -31,6 +32,7 @@ const leveling = new LevelingService();
 const customCommands = new CustomCommandService();
 const joinCreate = new JoinCreateService();
 const communityGames = new CommunityGameService();
+const faq = new FaqService();
 
 const STATUS_META = Object.freeze({
   READY: { emoji: '✅', label: 'Ready', color: SlickBotColors.SUCCESS },
@@ -45,7 +47,7 @@ const STATUS_META = Object.freeze({
 const MODULE_CATEGORIES = Object.freeze([
   { key: 'CORE', label: 'Core Setup', modules: [ModuleKeys.PERMISSIONS, ModuleKeys.LOGGING, ModuleKeys.STATUS, ModuleKeys.MODERATION] },
   { key: 'SUPPORT', label: 'Support Systems', modules: [ModuleKeys.TICKETS, ModuleKeys.REPORTS, ModuleKeys.APPLICATIONS, ModuleKeys.APPEALS] },
-  { key: 'COMMUNITY', label: 'Community Systems', modules: [ModuleKeys.WELCOME, ModuleKeys.REACTION_ROLES, ModuleKeys.GIVEAWAYS, ModuleKeys.BIRTHDAYS, ModuleKeys.LEVELING, ModuleKeys.COMMUNITY_GAMES, ModuleKeys.SERVER_STATS, ModuleKeys.CUSTOM_COMMANDS, ModuleKeys.JOIN_TO_CREATE] },
+  { key: 'COMMUNITY', label: 'Community Systems', modules: [ModuleKeys.WELCOME, ModuleKeys.REACTION_ROLES, ModuleKeys.GIVEAWAYS, ModuleKeys.BIRTHDAYS, ModuleKeys.LEVELING, ModuleKeys.COMMUNITY_GAMES, ModuleKeys.FAQ, ModuleKeys.SERVER_STATS, ModuleKeys.CUSTOM_COMMANDS, ModuleKeys.JOIN_TO_CREATE] },
   { key: 'AUTOMATION', label: 'Automation Systems', modules: [ModuleKeys.SCHEDULED_MESSAGES, ModuleKeys.BOT_UPDATES] },
   { key: 'BACKLOG', label: 'Coming Soon', modules: [ModuleKeys.UTILITY] }
 ]);
@@ -146,6 +148,12 @@ const MODULE_SETUP_CATALOG = Object.freeze({
     managerCommand: '/games manager', setupCommand: '/games counting setup',
     nextSteps: ['Open `/games manager` to review all game configurations.', 'Configure a counting channel with `/games counting setup`.', 'Enable each game separately with its `/games ... enable` command.', 'Post a public launcher with `/games panel post` and pin that message if desired.', 'Test Tic-Tac-Toe and Connect Four with a second member.'],
     usefulCommands: ['/games manager', '/games panel post', '/games panel edit', '/games counting setup', '/games counting enable', '/games tic-tac-toe enable', '/games connect-four enable']
+  },
+  [ModuleKeys.FAQ]: {
+    name: 'Knowledge Base / FAQ', category: 'Community Systems', description: 'Maintains a forum-backed FAQ index and gives moderators quick linked FAQ replies.',
+    managerCommand: '/faq panel', setupCommand: '/faq setup',
+    nextSteps: ['Run `/faq setup` with a forum channel.', 'Create FAQ posts manually in that forum and assign forum tags for categories.', 'Use `/faq refresh` after major changes or let SlickBot update the master index from forum events.', 'Use `/faq answer` or the FAQ Reply message context command to send FAQ links to members.'],
+    usefulCommands: ['/faq setup', '/faq refresh', '/faq answer', '/faq status', 'FAQ Reply message command']
   },
   [ModuleKeys.JOIN_TO_CREATE]: {
     name: 'Join-to-Create Voice', category: 'Community Systems', description: 'Creates temporary voice rooms when members join configured hub channels.',
@@ -579,6 +587,14 @@ async function getModuleStatus(guildId, row) {
     return { moduleKey: row.module_key, core: false, state: 'READY', emoji: '✅', label: 'Ready', note: `${enabled.length}/3 enabled · ${active.rows[0]?.count || 0} active` };
   }
 
+  if (row.module_key === 'FAQ') {
+    const cfg = await query(`SELECT forum_channel_id, master_thread_id, ticket_channel_id FROM faq_configs WHERE guild_id = $1 LIMIT 1`, [guildId]).catch(() => ({ rows: [] }));
+    const config = cfg.rows[0] || {};
+    if (config.forum_channel_id && config.master_thread_id) return { moduleKey: row.module_key, core: false, state: 'READY', emoji: '✅', label: 'Ready', note: 'Forum index active' };
+    if (config.forum_channel_id) return { moduleKey: row.module_key, core: false, state: 'PARTIAL', emoji: '🟠', label: 'Partially Configured', note: 'Forum set; master post missing' };
+    return { moduleKey: row.module_key, core: false, state: 'NEEDS_CONFIG', emoji: '🟣', label: 'Needs Setup', note: 'Run /faq setup' };
+  }
+
   if (row.module_key === 'SERVER_STATS') {
     const cfg = await query(`SELECT enabled, member_channel_id, human_channel_id, bot_channel_id, voice_channel_id FROM server_stats_configs WHERE guild_id = $1 LIMIT 1`, [guildId]).catch(() => ({ rows: [] }));
     const config = cfg.rows[0] || {};
@@ -882,6 +898,7 @@ async function buildCommunityPanel(guildId) {
   const giveawayPayload = await giveaways.buildManagerPanel(guildId);
   const birthdayPayload = await birthdays.buildManagerPanel(guildId);
   const gamesPayload = await communityGames.buildManagerPanel(guildId).catch(() => ({ embeds: [{ data: { description: 'Community games not configured.' } }] }));
+  const faqPayload = await faq.buildManagerPanel(guildId).catch(() => ({ embeds: [{ data: { description: 'FAQ not configured.' } }] }));
   const statsPayload = await serverStats.buildManagerPanel({ id: guildId, memberCount: 0, members: { fetch: async () => null, cache: { size: 0, filter: () => ({ size: 0 }) } }, channels: { cache: { filter: () => ({ reduce: () => 0 }) } } }).catch(() => ({ embeds: [{ data: { description: 'Server stats not configured.' } }] }));
   const levelingPayload = await leveling.buildManagerPanel(guildId).catch(() => ({ embeds: [{ data: { description: 'Leveling not configured.' } }] }));
   const customPayload = await customCommands.buildManagerPanel(guildId).catch(() => ({ embeds: [{ data: { description: 'Custom commands not configured.' } }] }));
@@ -909,6 +926,9 @@ async function buildCommunityPanel(guildId) {
       '**Community Games**',
       compactCommunityText(gamesPayload, 'No community game status available.'),
       '',
+      '**Knowledge Base / FAQ**',
+      compactCommunityText(faqPayload, 'No FAQ status available.'),
+      '',
       '**Server Stats**',
       compactCommunityText(statsPayload, 'No server stats status available.'),
       '',
@@ -934,9 +954,12 @@ async function buildCommunityPanel(guildId) {
     createPanelButton(CustomIds.CustomCommandsRefresh, 'Custom Commands', ButtonStyle.Secondary, '💬'),
     createPanelButton(CustomIds.JoinCreateRefresh, 'Join Voice', ButtonStyle.Secondary, '🔊'),
     createPanelButton(CustomIds.GamesRefresh, 'Games', ButtonStyle.Secondary),
+    createPanelButton(CustomIds.FaqRefresh, 'FAQ', ButtonStyle.Secondary)
+  ]);
+  const rowThree = createButtonRow([
     createPanelButton(CustomIds.SetupRefresh, 'Back to Setup', ButtonStyle.Primary, '↩️')
   ]);
-  return { embeds: [embed], components: [rowOne, rowTwo] };
+  return { embeds: [embed], components: [rowOne, rowTwo, rowThree] };
 }
 
 module.exports = {

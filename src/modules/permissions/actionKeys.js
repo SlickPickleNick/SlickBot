@@ -129,6 +129,10 @@ const ActionKeys = Object.freeze({
   GamesView: 'community-games.view',
   GamesConfigure: 'community-games.configure',
 
+  FaqAnswer: 'faq.answer',
+  FaqView: 'faq.view',
+  FaqConfigure: 'faq.configure',
+
   PanelsConfigure: 'panels.configure',
 
   ServerReset: 'server.reset'
@@ -280,6 +284,10 @@ const defaultActionLevels = Object.freeze({
   [ActionKeys.GamesView]: PermissionLevels.MODERATOR,
   [ActionKeys.GamesConfigure]: PermissionLevels.SENIOR_MODERATOR,
 
+  [ActionKeys.FaqAnswer]: PermissionLevels.MODERATOR,
+  [ActionKeys.FaqView]: PermissionLevels.MODERATOR,
+  [ActionKeys.FaqConfigure]: PermissionLevels.SENIOR_MODERATOR,
+
   [ActionKeys.ServerReset]: PermissionLevels.OWNER
 });
 
@@ -303,6 +311,7 @@ const defaultModuleLevels = Object.freeze({
   [ModuleKeys.CUSTOM_COMMANDS]: PermissionLevels.EVERYONE,
   [ModuleKeys.JOIN_TO_CREATE]: PermissionLevels.EVERYONE,
   [ModuleKeys.COMMUNITY_GAMES]: PermissionLevels.EVERYONE,
+  [ModuleKeys.FAQ]: PermissionLevels.MODERATOR,
   [ModuleKeys.UTILITY]: PermissionLevels.EVERYONE
 });
 
@@ -325,7 +334,7 @@ const defaultPublicActions = Object.freeze([
 
 const defaultTeamPermissions = Object.freeze(Object.values(ActionKeys));
 
-const PERMISSION_DEFAULTS_VERSION = '0.8.9';
+const PERMISSION_DEFAULTS_VERSION = '0.9.0';
 
 module.exports = {
   ActionKeys,

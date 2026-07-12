@@ -27,6 +27,8 @@ const botUpdatesCommand = require('./botUpdates');
 const customCommand = require('./customCommand');
 const joinCreateCommand = require('./joinCreate');
 const gamesCommand = require('./games');
+const faqCommand = require('./faq');
+const faqReplyCommand = require('./faqReply');
 
 const commands = [
   pingCommand,
@@ -57,7 +59,9 @@ const commands = [
   botUpdatesCommand,
   customCommand,
   joinCreateCommand,
-  gamesCommand
+  gamesCommand,
+  faqCommand,
+  faqReplyCommand
 ];
 
 const commandMap = new Map(commands.map((command) => [command.data.name, command]));

@@ -1,6 +1,6 @@
 # SlickBot Project Plan
 
-## Current Version: 0.8.9
+## Current Version: 0.9.0
 
 SlickBot is being built as a modular all-in-one Discord server management bot for the SlickPickleNick community.
 
@@ -32,7 +32,26 @@ SlickBot is being built as a modular all-in-one Discord server management bot fo
 - Join-to-create voice channels
 - Leveling / XP
 - Community Games: Counting, Tic-Tac-Toe, and Connect Four
+- Knowledge Base / FAQ
 
+
+
+## v0.9.0 Scope
+
+### Knowledge Base / FAQ
+
+- Implemented the `FAQ` module under the Community setup category.
+- Added `/faq setup` for selecting a Discord forum channel and creating/refreshing SlickBot's master FAQ index post.
+- FAQ posts are created manually by staff as forum posts. SlickBot does not create individual FAQ items.
+- The master FAQ index embed links to forum FAQ posts and organizes them by the forum tags assigned to each post. Posts with multiple tags are listed under each matching category.
+- Added automatic master-index refresh handling for forum thread create, update, delete, and tag-change activity.
+- Added `/faq edit` for updating master title/description and the optional ticket channel used in FAQ reply text.
+- Added `/faq refresh`, `/faq status`, and `/faq panel` for staff review and manual index repair.
+- Added `/faq answer question:` with autocomplete from current FAQ forum posts, plus optional target user and message-link support.
+- Added the **FAQ Reply** message context command so staff can right-click a user message, choose Apps → FAQ Reply, enter FAQ search text, and have SlickBot reply directly to that message with the FAQ link.
+- FAQ replies tell the user to review the linked FAQ and, when configured, direct them to the ticket channel if they still need support.
+- Added PostgreSQL persistence for FAQ configuration and master index tracking.
+- Added FAQ permission defaults, logging events, `/help`, `/setup`, `/modules`, and `/bot test` integration.
 
 ## v0.8.9 Scope
 
