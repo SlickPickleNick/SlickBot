@@ -47,6 +47,12 @@ SlickBot is being built as a modular all-in-one Discord server management bot fo
 - Added configurable per-question application session timeouts through `/application setup`; the default is 3 minutes.
 - Application question DMs now show a live Discord timestamp for the answer deadline.
 - Expired active application sessions are cancelled automatically and the applicant is notified by DM.
+- Report public panels now use a Discord user picker before the required details modal, reducing username/User ID typing for reporters.
+- Report panel submissions now only require the incident details field. Target user/message context are optional, while `/report user` keeps the reported user required for slash-command reports.
+- Added `/application close` and `/application reopen` so staff can pause/resume submissions for a type without deleting setup.
+- Application public panels can now include all application types in one dropdown panel when posted without a specific type; closed types remain visible but respond with a not-accepting-submissions message.
+- Added `/application review-index` for posting a refreshed review index that links to application review messages and supports Pending, Approved, Denied, and All filters.
+- Application review indexes are deleted and resent at the bottom of the review channel when new applications arrive, statuses change, or the index filter changes.
 - No command groups were renamed.
 
 Deferred larger work:

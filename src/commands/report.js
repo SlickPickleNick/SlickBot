@@ -39,10 +39,10 @@ module.exports = {
     .addSubcommand((subcommand) =>
       subcommand
         .setName('user')
-        .setDescription('Privately report a user to staff.')
-        .addUserOption((option) => option.setName('user').setDescription('User being reported.').setRequired(true))
+        .setDescription('Privately report a specific user to staff.')
         .addStringOption((option) => option.setName('details').setDescription('What happened?').setRequired(true).setMaxLength(1800))
-        .addStringOption((option) => option.setName('message_link').setDescription('Optional Discord message link.').setRequired(false).setMaxLength(300))
+        .addUserOption((option) => option.setName('user').setDescription('User being reported.').setRequired(true))
+        .addStringOption((option) => option.setName('message_link').setDescription('Optional Discord message link/context.').setRequired(false).setMaxLength(300))
     )
     .addSubcommand((subcommand) => subcommand.setName('issue').setDescription('Privately report a general issue to staff.').addStringOption((option) => option.setName('details').setDescription('What happened?').setRequired(true).setMaxLength(1800))),
   actionKey: ActionKeys.ReportsPanel,

@@ -66,10 +66,30 @@ module.exports = {
     )
     .addSubcommand((subcommand) =>
       subcommand
+        .setName('close')
+        .setDescription('Temporarily close an application type to new submissions.')
+        .addStringOption((option) => option.setName('type').setDescription('Application type name.').setRequired(true).setMaxLength(80))
+    )
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName('reopen')
+        .setDescription('Reopen an application type to new submissions.')
+        .addStringOption((option) => option.setName('type').setDescription('Application type name.').setRequired(true).setMaxLength(80))
+    )
+    .addSubcommand((subcommand) =>
+      subcommand
         .setName('panel')
         .setDescription('Post a public application panel.')
-        .addStringOption((option) => option.setName('type').setDescription('Application type name.').setRequired(true).setMaxLength(80))
+        .addStringOption((option) => option.setName('type').setDescription('Application type name, or leave blank/use all for all enabled types.').setRequired(false).setMaxLength(80))
         .addChannelOption((option) => option.setName('channel').setDescription('Channel to post the panel in. Defaults to current channel.').addChannelTypes(ChannelType.GuildText).setRequired(false))
+    )
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName('review-index')
+        .setDescription('Post or refresh an application review index in a review channel.')
+        .addStringOption((option) => option.setName('type').setDescription('Application type name, or leave blank/use all for all types.').setRequired(false).setMaxLength(80))
+        .addStringOption((option) => option.setName('status').setDescription('Applications to show. Defaults to pending.').setRequired(false).addChoices({ name: 'Pending', value: 'PENDING' }, { name: 'Approved', value: 'APPROVED' }, { name: 'Denied', value: 'DENIED' }, { name: 'All', value: 'ALL' }))
+        .addChannelOption((option) => option.setName('channel').setDescription('Review channel to post the index in. Defaults to type review channel/current channel.').addChannelTypes(ChannelType.GuildText).setRequired(false))
     )
     .addSubcommand((subcommand) =>
       subcommand
@@ -82,9 +102,10 @@ module.exports = {
   getActionKey(interaction) {
     const subcommand = interaction.options.getSubcommand();
     if (subcommand === 'reset') return ActionKeys.ApplicationsReset;
-    if (['setup', 'delete', 'question-add', 'question-clear'].includes(subcommand)) return ActionKeys.ApplicationsConfigure;
+    if (['setup', 'delete', 'close', 'reopen', 'question-add', 'question-clear'].includes(subcommand)) return ActionKeys.ApplicationsConfigure;
     if (subcommand === 'manager' || subcommand === 'question-list') return ActionKeys.ApplicationsManager;
     if (subcommand === 'panel') return ActionKeys.ApplicationsPostPanel;
+    if (subcommand === 'review-index') return ActionKeys.ApplicationsReview;
     if (subcommand === 'apply') return ActionKeys.ApplicationsApply;
     return ActionKeys.ApplicationsReview;
   },
@@ -117,6 +138,7 @@ module.exports = {
       });
       await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'setup', title: 'Application Settings Updated', body: `${type.name} application settings updated by ${interaction.user.tag}.`, actorUserId: interaction.user.id }).catch(() => {});
       const refresh = await refreshPublishedPanel(ctx.client, interaction.guildId, 'application', type.id).catch(() => null);
+      await refreshPublishedPanel(ctx.client, interaction.guildId, 'application', '*').catch(() => null);
       const timeoutMinutes = Math.max(1, Math.round((type.question_timeout_seconds || 180) / 60));
       return replyPrivate(interaction, { embeds: [createSuccessEmbed('Application Type Configured', `Application type **${type.name}** is ready. Users will have **${timeoutMinutes} minute(s)** to answer each question. Use \`/application question-add\` to customize the DM questions.${formatRefreshSummary(refresh)}`)] });
     }
@@ -130,7 +152,19 @@ module.exports = {
       if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Application Type Not Deleted', result.reason)] });
       await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'setup', title: 'Application Type Deleted', body: `Application type **${result.type.name}** was deleted by ${interaction.user.tag}.`, actorUserId: interaction.user.id }).catch(() => {});
       const refresh = await refreshPublishedPanel(ctx.client, interaction.guildId, 'application', result.type.id).catch(() => null);
+      await refreshPublishedPanel(ctx.client, interaction.guildId, 'application', '*').catch(() => null);
       return replyPrivate(interaction, { embeds: [createSuccessEmbed('Application Type Deleted', `Deleted application type **${result.type.name}**.${formatRefreshSummary(refresh)}`)] });
+    }
+
+    if (subcommand === 'close' || subcommand === 'reopen') {
+      const accepting = subcommand === 'reopen';
+      const typeName = interaction.options.getString('type', true);
+      const result = await applications.setTypeAccepting(interaction.guildId, typeName, accepting);
+      if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Application Type Not Found', result.reason)] });
+      await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'setup', title: accepting ? 'Application Type Reopened' : 'Application Type Closed', body: `Application type **${result.type.name}** was ${accepting ? 'reopened to' : 'closed to'} new submissions by ${interaction.user.tag}.`, actorUserId: interaction.user.id }).catch(() => {});
+      const refresh = await refreshPublishedPanel(ctx.client, interaction.guildId, 'application', result.type.id).catch(() => null);
+      await refreshPublishedPanel(ctx.client, interaction.guildId, 'application', '*').catch(() => null);
+      return replyPrivate(interaction, { embeds: [createSuccessEmbed(accepting ? 'Application Type Reopened' : 'Application Type Closed', `**${result.type.name}** is ${accepting ? 'now accepting' : 'not currently accepting'} new submissions.${formatRefreshSummary(refresh)}`)] });
     }
 
     if (subcommand === 'question-add') {
@@ -138,6 +172,7 @@ module.exports = {
       if (!question) return replyPrivate(interaction, { embeds: [createWarningEmbed('Application Type Not Found', 'Create the application type with `/application setup` first.')] });
       const type = await applications.getTypeByName(interaction.guildId, interaction.options.getString('type', true));
       const refresh = type ? await refreshPublishedPanel(ctx.client, interaction.guildId, 'application', type.id).catch(() => null) : null;
+      if (type) await refreshPublishedPanel(ctx.client, interaction.guildId, 'application', '*').catch(() => null);
       return replyPrivate(interaction, { embeds: [createSuccessEmbed('Application Question Added', `Question added at order **${question.display_order}**.${formatRefreshSummary(refresh)}`)] });
     }
 
@@ -153,21 +188,46 @@ module.exports = {
       const type = await applications.clearQuestions(interaction.guildId, interaction.options.getString('type', true));
       if (!type) return replyPrivate(interaction, { embeds: [createWarningEmbed('Application Type Not Found', 'That application type could not be found.')] });
       const refresh = await refreshPublishedPanel(ctx.client, interaction.guildId, 'application', type.id).catch(() => null);
+      await refreshPublishedPanel(ctx.client, interaction.guildId, 'application', '*').catch(() => null);
       return replyPrivate(interaction, { embeds: [createSuccessEmbed('Application Questions Cleared', `Questions cleared for **${type.name}**.${formatRefreshSummary(refresh)}`)] });
     }
 
     if (subcommand === 'panel') {
-      const type = await applications.getTypeByName(interaction.guildId, interaction.options.getString('type', true));
-      if (!type) return replyPrivate(interaction, { embeds: [createWarningEmbed('Application Type Not Found', 'Create it with `/application setup` first.')] });
+      const typeName = interaction.options.getString('type') || 'all';
       const channel = interaction.options.getChannel('channel') || interaction.channel;
+      if (typeName.trim().toLowerCase() === 'all') {
+        const types = await applications.listTypes(interaction.guildId);
+        if (!types.length) return replyPrivate(interaction, { embeds: [createWarningEmbed('No Application Types', 'Create at least one application type with `/application setup` first.')] });
+        const message = await channel.send(buildPublicApplicationPanel(types));
+        await recordPublishedPanel({ guildId: interaction.guildId, panelType: 'application', panelRef: '*', channelId: channel.id, messageId: message.id });
+        return replyPrivate(interaction, { embeds: [createSuccessEmbed('Application Panel Posted', `Multi-application panel posted in <#${channel.id}>. It includes **${types.length}** application type(s). Closed types will show an availability message if selected.`)] });
+      }
+
+      const type = await applications.getTypeByName(interaction.guildId, typeName);
+      if (!type) return replyPrivate(interaction, { embeds: [createWarningEmbed('Application Type Not Found', 'Create it with `/application setup` first, or leave `type` blank to post all enabled applications.')] });
       const message = await channel.send(buildPublicApplicationPanel(type));
       await recordPublishedPanel({ guildId: interaction.guildId, panelType: 'application', panelRef: type.id, channelId: channel.id, messageId: message.id });
       return replyPrivate(interaction, { embeds: [createSuccessEmbed('Application Panel Posted', `Panel posted in <#${channel.id}>. Future edits for **${type.name}** will update this message automatically.`)] });
     }
 
+    if (subcommand === 'review-index') {
+      const typeName = interaction.options.getString('type') || 'all';
+      const status = interaction.options.getString('status') || 'PENDING';
+      let type = null;
+      if (typeName.trim().toLowerCase() !== 'all') {
+        type = await applications.getTypeByName(interaction.guildId, typeName);
+        if (!type) return replyPrivate(interaction, { embeds: [createWarningEmbed('Application Type Not Found', 'Create it with `/application setup` first, or leave `type` blank to index all application types.')] });
+      }
+      const channel = interaction.options.getChannel('channel') || (type?.review_channel_id ? await ctx.client.channels.fetch(type.review_channel_id).catch(() => null) : null) || interaction.channel;
+      if (!channel || !channel.isTextBased?.()) return replyPrivate(interaction, { embeds: [createWarningEmbed('Review Index Not Posted', 'I could not resolve a text channel for the application review index.')] });
+      const index = await applications.createReviewIndex({ guildId: interaction.guildId, channelId: channel.id, applicationTypeId: type?.id || null, statusFilter: status, createdByUserId: interaction.user.id, client: ctx.client });
+      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Application Review Index Posted', `Review index for **${type?.name || 'all application types'}** posted/refreshed in <#${channel.id}>. Default filter: **${index.status_filter}**.`)] });
+    }
+
     if (subcommand === 'apply') {
       const type = await applications.getTypeByName(interaction.guildId, interaction.options.getString('type', true));
-      if (!type || !type.enabled) return replyPrivate(interaction, { embeds: [createWarningEmbed('Application Unavailable', 'This application type is not currently available.')] });
+      if (!type) return replyPrivate(interaction, { embeds: [createWarningEmbed('Application Type Not Found', 'That application type could not be found.')] });
+      if (type.enabled === false) return replyPrivate(interaction, { embeds: [createWarningEmbed('Application Not Accepting Submissions', `The **${type.name}** application is not currently accepting submissions at this time.`)] });
       const result = await applications.startApplicationDm({ interaction, client: ctx.client, logger: ctx.logger, applicationType: type });
       if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Application Not Started', result.reason)] });
       return replyPrivate(interaction, { embeds: [createSuccessEmbed('Application Started', `I sent you a DM with the first question. Question count: **${result.questionCount}**.`)] });

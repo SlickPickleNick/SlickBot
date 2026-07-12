@@ -84,7 +84,7 @@ const HELP_CATALOG = Object.freeze([
 
   { moduleKey: ModuleKeys.APPLICATIONS, actionKey: ActionKeys.ApplicationsApply, command: '/application apply', description: 'Start an application through DM.' },
   { moduleKey: ModuleKeys.APPLICATIONS, actionKey: ActionKeys.ApplicationsPanel, command: '/application manager', description: 'Open the application manager.' },
-  { moduleKey: ModuleKeys.APPLICATIONS, actionKey: ActionKeys.ApplicationsConfigure, command: '/application setup|question-add|question-list|question-clear|delete', description: 'Configure custom application types/questions.' },
+  { moduleKey: ModuleKeys.APPLICATIONS, actionKey: ActionKeys.ApplicationsConfigure, command: '/application setup|question-add|question-list|question-clear|close|reopen|delete', description: 'Configure custom application types/questions.' },
   { moduleKey: ModuleKeys.APPLICATIONS, actionKey: ActionKeys.ApplicationsPostPanel, command: '/application panel', description: 'Post a public application panel.' },
   { moduleKey: ModuleKeys.APPLICATIONS, actionKey: ActionKeys.ApplicationsReview, command: 'Application review buttons', description: 'Open review threads and inspect submissions.' },
   { moduleKey: ModuleKeys.APPLICATIONS, actionKey: ActionKeys.ApplicationsApprove, command: 'Approve application', description: 'Approve an application with a reason.' },

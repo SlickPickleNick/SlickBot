@@ -74,6 +74,9 @@ const CustomIds = Object.freeze({
   ReportsRefresh: 'slickbot:reports:refresh',
   ReportOpen: 'slickbot:report:open',
   ReportSelect: 'slickbot:report:select',
+  ReportUserSelect: 'slickbot:report:user-select',
+  ReportNoUser: 'slickbot:report:no-user',
+  ReportUserModalPrefix: 'slickbot:modal:report-user:',
   ReportClaimPrefix: 'slickbot:report:claim:',
   ReportResolvePrefix: 'slickbot:report:resolve:',
   ReportDismissPrefix: 'slickbot:report:dismiss:',
@@ -87,6 +90,7 @@ const CustomIds = Object.freeze({
   ApplicationApprovePrefix: 'slickbot:application:approve:',
   ApplicationDenyPrefix: 'slickbot:application:deny:',
   ApplicationReviewThreadPrefix: 'slickbot:application:thread:',
+  ApplicationReviewIndexFilterPrefix: 'slickbot:application:index-filter:',
 
   AppealsRefresh: 'slickbot:appeals:refresh',
   AppealOpen: 'slickbot:appeal:open',

@@ -7,7 +7,8 @@ const {
   ModalBuilder,
   PermissionFlagsBits,
   TextInputBuilder,
-  TextInputStyle
+  TextInputStyle,
+  UserSelectMenuBuilder
 } = require('discord.js');
 const { query } = require('../../services/db');
 const { CustomIds } = require('../ui/customIds');
@@ -218,6 +219,59 @@ function buildApplicationReviewThreadPayload(submission) {
   };
 }
 
+
+function applicationReviewMessageUrl(submission) {
+  if (!submission?.guild_id || !submission?.review_channel_id || !submission?.review_message_id) return null;
+  return `https://discord.com/channels/${submission.guild_id}/${submission.review_channel_id}/${submission.review_message_id}`;
+}
+
+function formatApplicationIndexTitle(index, typeName = null) {
+  const filter = normalizeStatus(index?.status_filter || 'PENDING');
+  const label = filter === 'ALL' ? 'All' : filter.charAt(0) + filter.slice(1).toLowerCase();
+  return `${typeName || 'All Applications'} · ${label}`;
+}
+
+function buildApplicationReviewIndexPayload(index, submissions = [], typeName = null) {
+  const filter = normalizeStatus(index?.status_filter || 'PENDING');
+  const visible = submissions.slice(0, 20);
+  const lines = visible.length ? visible.map((submission) => {
+    const url = applicationReviewMessageUrl(submission);
+    const submittedAt = formatTimestamp(submission.created_at);
+    const reviewedAt = formatTimestamp(submission.reviewed_at);
+    const status = formatSupportStatus(submission.status || 'PENDING');
+    const link = url ? `[Open Review](${url})` : 'Review message unavailable';
+    const reviewer = submission.reviewed_by_user_id ? ` · Reviewed by <@${submission.reviewed_by_user_id}>${reviewedAt ? ` on ${reviewedAt}` : ''}` : '';
+    return `• **#${submission.submission_number}** · ${submission.application_name} · ${status} · <@${submission.applicant_user_id}>${submittedAt ? ` · ${submittedAt}` : ''}${reviewer}\n  ${link}`;
+  }).join('\n') : `No ${filter === 'ALL' ? '' : filter.toLowerCase()} applications found for this index.`;
+
+  const embed = createBaseEmbed({
+    title: 'Application Review Index',
+    description: [
+      `**Viewing:** ${formatApplicationIndexTitle(index, typeName)}`,
+      '',
+      lines,
+      submissions.length > visible.length ? `\nShowing **${visible.length}/${submissions.length}** applications. Use the review channel search or change the filter for more.` : null,
+      '',
+      'This index is refreshed when new applications are submitted or when application statuses change.'
+    ].filter(Boolean).join('\n'),
+    color: filter === 'APPROVED' ? SlickBotColors.SUCCESS : filter === 'DENIED' ? SlickBotColors.ERROR : filter === 'ALL' ? SlickBotColors.INFO : SlickBotColors.WARNING,
+    footer: 'SlickBot Applications'
+  });
+
+  const makeButton = (status, label, style) => new ButtonBuilder()
+    .setCustomId(`${CustomIds.ApplicationReviewIndexFilterPrefix}${index.id}:${status}`)
+    .setLabel(label)
+    .setStyle(filter === status ? ButtonStyle.Success : style);
+
+  const row = new ActionRowBuilder().addComponents(
+    makeButton('PENDING', 'Pending', ButtonStyle.Secondary),
+    makeButton('APPROVED', 'Approved', ButtonStyle.Secondary),
+    makeButton('DENIED', 'Denied', ButtonStyle.Secondary),
+    makeButton('ALL', 'All', ButtonStyle.Secondary)
+  );
+
+  return { embeds: [embed], components: [row] };
+}
 
 function hasAnyRole(member, roleIds = []) {
   if (!member?.roles?.cache) return false;
@@ -998,7 +1052,7 @@ class ApplicationService {
          panel_header_image_url = COALESCE(EXCLUDED.panel_header_image_url, application_types.panel_header_image_url),
          panel_display_mode = COALESCE(EXCLUDED.panel_display_mode, application_types.panel_display_mode),
          question_timeout_seconds = CASE WHEN $14 IS NULL THEN application_types.question_timeout_seconds ELSE EXCLUDED.question_timeout_seconds END,
-         enabled = true,
+         enabled = application_types.enabled,
          updated_at = NOW() RETURNING *`,
       [guildId, input.name, input.description || null, input.reviewChannelId || null, input.pendingRoleId || null, input.approvedRoleId || null, Boolean(input.autoAssignApprovedRole), input.submissionConfirmationMessage || null, input.panelTitle || null, input.panelDescription || null, input.panelColor || null, input.panelHeaderImageUrl || null, input.panelDisplayMode || null, input.questionTimeoutSeconds == null ? null : clampApplicationTimeoutSeconds(input.questionTimeoutSeconds)]
     );
@@ -1013,6 +1067,14 @@ class ApplicationService {
   async getTypeById(guildId, id) {
     const result = await query(`SELECT * FROM application_types WHERE guild_id = $1 AND id = $2 LIMIT 1`, [guildId, id]);
     return result.rows[0] || null;
+  }
+
+  async listTypes(guildId, { enabledOnly = false } = {}) {
+    const result = await query(
+      `SELECT * FROM application_types WHERE guild_id = $1${enabledOnly ? " AND enabled = true" : ""} ORDER BY name ASC`,
+      [guildId]
+    );
+    return result.rows;
   }
 
   async getQuestions(applicationTypeId) {
@@ -1043,7 +1105,20 @@ class ApplicationService {
     return { ok: true, type };
   }
 
+  async setTypeAccepting(guildId, typeName, accepting = true) {
+    const result = await query(
+      `UPDATE application_types SET enabled = $1, updated_at = NOW() WHERE guild_id = $2 AND LOWER(name) = LOWER($3) RETURNING *`,
+      [Boolean(accepting), guildId, typeName]
+    );
+    const type = result.rows[0] || null;
+    if (!type) return { ok: false, reason: 'Application type not found.' };
+    return { ok: true, type };
+  }
+
   async startApplicationDm({ interaction, client, logger, applicationType }) {
+    if (!applicationType || applicationType.enabled === false) {
+      return { ok: false, reason: `The **${applicationType?.name || 'selected'}** application is not currently accepting submissions at this time.` };
+    }
     const duplicate = await query(`SELECT id FROM application_submissions WHERE guild_id = $1 AND application_type_id = $2 AND applicant_user_id = $3 AND status = 'PENDING' LIMIT 1`, [interaction.guildId, applicationType.id, interaction.user.id]);
     if (duplicate.rowCount > 0) return { ok: false, reason: 'You already have a pending application for this type.' };
 
@@ -1216,11 +1291,92 @@ class ApplicationService {
       }
     }
     await logger.log({ guildId, eventKey: 'application-submit', title: 'Application Submitted', body: `${user.tag} submitted ${applicationType.name} application #${submission.submission_number}.`, actorUserId: user.id, metadata: { submissionId: submission.id, applicationTypeId: applicationType.id } }).catch(() => {});
+    await this.refreshReviewIndexes({ client, guildId, applicationTypeId: applicationType.id }).catch(() => {});
     return { ok: true, submission };
   }
 
   async submitApplication({ interaction, client, logger, applicationType, answers }) {
     return this.submitApplicationDirect({ guildId: interaction.guildId, guild: interaction.guild, user: interaction.user, client, logger, applicationType, answers });
+  }
+
+  async createReviewIndex({ guildId, channelId, applicationTypeId = null, statusFilter = 'PENDING', createdByUserId = null, client = null }) {
+    const normalizedFilter = ['PENDING', 'APPROVED', 'DENIED', 'ALL'].includes(normalizeStatus(statusFilter)) ? normalizeStatus(statusFilter) : 'PENDING';
+    const existing = await query(
+      `SELECT * FROM application_review_indexes WHERE guild_id = $1 AND channel_id = $2 AND COALESCE(application_type_id, '*') = COALESCE($3::text, '*') LIMIT 1`,
+      [guildId, channelId, applicationTypeId || null]
+    ).catch(() => ({ rows: [] }));
+    const result = existing.rows[0]
+      ? await query(`UPDATE application_review_indexes SET status_filter = $1, active = true, updated_at = NOW() WHERE id = $2 RETURNING *`, [normalizedFilter, existing.rows[0].id])
+      : await query(
+        `INSERT INTO application_review_indexes (guild_id, application_type_id, channel_id, status_filter, created_by_user_id, active) VALUES ($1, $2, $3, $4, $5, true) RETURNING *`,
+        [guildId, applicationTypeId || null, channelId, normalizedFilter, createdByUserId || null]
+      );
+    const index = result.rows[0];
+    if (client) await this.refreshReviewIndex({ client, index }).catch(() => {});
+    return index;
+  }
+
+  async getReviewIndex(guildId, indexId) {
+    const result = await query(`SELECT * FROM application_review_indexes WHERE guild_id = $1 AND id = $2 AND active = true LIMIT 1`, [guildId, indexId]).catch(() => ({ rows: [] }));
+    return result.rows[0] || null;
+  }
+
+  async updateReviewIndexFilter({ guildId, indexId, statusFilter }) {
+    const normalizedFilter = ['PENDING', 'APPROVED', 'DENIED', 'ALL'].includes(normalizeStatus(statusFilter)) ? normalizeStatus(statusFilter) : 'PENDING';
+    const result = await query(`UPDATE application_review_indexes SET status_filter = $1, updated_at = NOW() WHERE guild_id = $2 AND id = $3 AND active = true RETURNING *`, [normalizedFilter, guildId, indexId]).catch(() => ({ rows: [] }));
+    return result.rows[0] || null;
+  }
+
+  async getReviewIndexSubmissions(index) {
+    const params = [index.guild_id];
+    const clauses = ['s.guild_id = $1'];
+    if (index.application_type_id) {
+      params.push(index.application_type_id);
+      clauses.push(`s.application_type_id = $${params.length}`);
+    }
+    const filter = normalizeStatus(index.status_filter || 'PENDING');
+    if (filter !== 'ALL') {
+      params.push(filter);
+      clauses.push(`s.status = $${params.length}`);
+    }
+    const result = await query(
+      `SELECT s.*, t.name AS type_name
+       FROM application_submissions s
+       LEFT JOIN application_types t ON t.id = s.application_type_id
+       WHERE ${clauses.join(' AND ')}
+       ORDER BY s.created_at DESC
+       LIMIT 50`,
+      params
+    ).catch(() => ({ rows: [] }));
+    return result.rows;
+  }
+
+  async refreshReviewIndex({ client, index }) {
+    if (!index?.channel_id) return false;
+    const channel = await fetchSendableChannel(client, index.channel_id);
+    if (!channel) return false;
+    if (index.message_id && channel.messages?.fetch) {
+      const oldMessage = await channel.messages.fetch(index.message_id).catch(() => null);
+      if (oldMessage?.delete) await oldMessage.delete().catch(() => {});
+    }
+    const type = index.application_type_id ? await this.getTypeById(index.guild_id, index.application_type_id).catch(() => null) : null;
+    const submissions = await this.getReviewIndexSubmissions(index);
+    const sent = await channel.send(buildApplicationReviewIndexPayload(index, submissions, type?.name || null)).catch(() => null);
+    if (!sent) return false;
+    await query(`UPDATE application_review_indexes SET message_id = $1, updated_at = NOW() WHERE id = $2`, [sent.id, index.id]).catch(() => {});
+    return true;
+  }
+
+  async refreshReviewIndexes({ client, guildId, applicationTypeId = null }) {
+    const result = await query(
+      `SELECT * FROM application_review_indexes WHERE guild_id = $1 AND active = true AND (application_type_id IS NULL OR application_type_id = $2)`,
+      [guildId, applicationTypeId || null]
+    ).catch(() => ({ rows: [] }));
+    let refreshed = 0;
+    for (const index of result.rows) {
+      if (await this.refreshReviewIndex({ client, index }).catch(() => false)) refreshed += 1;
+    }
+    return refreshed;
   }
 
   async openReviewThread({ interaction, client, logger, submissionId }) {
@@ -1271,6 +1427,7 @@ class ApplicationService {
     await this.refreshReviewMessage({ client, submission: { ...submission, ...updated } }).catch(() => {});
     await this.closeReviewThread({ client, submission: { ...submission, ...updated } }).catch(() => {});
     await logger.log({ guildId: interaction.guildId, eventKey: 'application-review', title: 'Application Reviewed', body: `${submission.application_name} application #${submission.submission_number} marked **${nextStatus}** by ${interaction.user.tag}.${reason ? ` Reason: ${reason}` : ''}`, actorUserId: interaction.user.id, metadata: { submissionId: submission.id, status: nextStatus } }).catch(() => {});
+    await this.refreshReviewIndexes({ client, guildId: interaction.guildId, applicationTypeId: submission.application_type_id }).catch(() => {});
     return updated;
   }
 
@@ -1498,12 +1655,38 @@ function buildTicketModal(ticketType = null) {
   return modal.addComponents(...rows.slice(0, 5));
 }
 
-function buildReportModal() {
+function buildReportTargetPickerPayload() {
+  const select = new UserSelectMenuBuilder()
+    .setCustomId(CustomIds.ReportUserSelect)
+    .setPlaceholder('Search for the user being reported, if applicable')
+    .setMinValues(1)
+    .setMaxValues(1);
+
+  const row = new ActionRowBuilder().addComponents(select);
+  const skipRow = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(CustomIds.ReportNoUser).setLabel('No Specific User').setStyle(ButtonStyle.Secondary)
+  );
+
+  return {
+    embeds: [createBaseEmbed({
+      title: 'Submit Report',
+      description: [
+        'Select the user you are reporting, or choose **No Specific User** if this report is not about a specific member.',
+        '',
+        'After this, SlickBot will ask what happened.'
+      ].join('\n'),
+      color: SlickBotColors.WARNING,
+      footer: 'SlickBot Reports'
+    })],
+    components: [row, skipRow]
+  };
+}
+
+function buildReportModal(targetUserId = null) {
   return new ModalBuilder()
-    .setCustomId(CustomIds.ReportModal)
+    .setCustomId(targetUserId ? `${CustomIds.ReportUserModalPrefix}${targetUserId}` : CustomIds.ReportModal)
     .setTitle('Submit Report')
     .addComponents(
-      new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('target').setLabel('User ID / Username / Message Link').setStyle(TextInputStyle.Short).setRequired(false).setMaxLength(200)),
       new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('details').setLabel('What happened?').setStyle(TextInputStyle.Paragraph).setRequired(true).setMaxLength(1800))
     );
 }
@@ -1555,6 +1738,7 @@ module.exports = {
   AppealService,
   buildTicketModal,
   buildReportModal,
+  buildReportTargetPickerPayload,
   buildReportDetailsModal,
   buildReportReviewReasonModal,
   buildAppealModal,

@@ -23,6 +23,13 @@ Current package: **v0.8.8**
 - Application types now support a configurable per-question session timeout through `/application setup`; the default is **3 minutes**.
 - Application question DMs now show a live Discord timestamp for how long the user has left to answer.
 - If a user does not answer before the timeout, SlickBot cancels the active application session and DMs them that their application was cancelled because they did not respond in time.
+- Report panels now open a Discord user picker before the required report details popup, so reporters can select the user being reported instead of typing a username or ID.
+- Report panel submissions now only require the **What happened?** field. User target and message/context are optional.
+- `/report user` keeps the reported user as a required slash-command option, while `/report issue` and public report panels support general reports.
+- `/application close` and `/application reopen` can temporarily stop or resume submissions for an application type without deleting its setup.
+- `/application panel` can now post one panel containing all application types when `type` is left blank or set to `all`; closed types remain visible but show a not-accepting-submissions message if selected.
+- Added `/application review-index` to post a refreshed application review index in a review channel, including links to the original review messages.
+- Application review indexes support Pending, Approved, Denied, and All filters, and are deleted/reposted at the bottom of the review channel when applications are submitted or reviewed.
 
 Updated systems:
 
@@ -34,6 +41,10 @@ Appeals
 Support review controls
 Support module reset tools
 Application session timeouts
+Report user picker flow
+Multi-application panels
+Application open/closed submission controls
+Application review indexes
 ```
 
 ## v0.8.7 Updates

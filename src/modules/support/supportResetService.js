@@ -74,15 +74,16 @@ async function getSupportResetSummary(guildId, moduleKey) {
   }
 
   if (mod.key === 'applications') {
-    const [types, questions, sessions, submissions, pendingSubmissions, trackedPanels] = await Promise.all([
+    const [types, questions, sessions, submissions, pendingSubmissions, reviewIndexes, trackedPanels] = await Promise.all([
       countRows(`SELECT COUNT(*) FROM application_types WHERE guild_id = $1`, [guildId]),
       countRows(`SELECT COUNT(*) FROM application_questions q INNER JOIN application_types t ON q.application_type_id = t.id WHERE t.guild_id = $1`, [guildId]),
       countRows(`SELECT COUNT(*) FROM application_sessions WHERE guild_id = $1`, [guildId]),
       countRows(`SELECT COUNT(*) FROM application_submissions WHERE guild_id = $1`, [guildId]),
       countRows(`SELECT COUNT(*) FROM application_submissions WHERE guild_id = $1 AND status = 'PENDING'`, [guildId]),
+      countRows(`SELECT COUNT(*) FROM application_review_indexes WHERE guild_id = $1 AND active = true`, [guildId]),
       countRows(`SELECT COUNT(*) FROM panel_messages WHERE guild_id = $1 AND panel_type = 'application' AND active = true`, [guildId])
     ]);
-    return { mod, counts: { types, questions, sessions, submissions, pendingSubmissions, trackedPanels } };
+    return { mod, counts: { types, questions, sessions, submissions, pendingSubmissions, reviewIndexes, trackedPanels } };
   }
 
   const [configs, appeals, pendingAppeals, trackedPanels] = await Promise.all([
@@ -148,6 +149,7 @@ async function resetSupportModule(guildId, moduleKey) {
   } else if (mod.key === 'applications') {
     await query(`DELETE FROM application_sessions WHERE guild_id = $1`, [guildId]);
     await query(`DELETE FROM application_submissions WHERE guild_id = $1`, [guildId]);
+    await query(`DELETE FROM application_review_indexes WHERE guild_id = $1`, [guildId]).catch(() => {});
     await query(`DELETE FROM application_types WHERE guild_id = $1`, [guildId]);
     await query(`UPDATE panel_messages SET active = false, updated_at = NOW() WHERE guild_id = $1 AND panel_type = 'application'`, [guildId]);
   } else if (mod.key === 'appeals') {

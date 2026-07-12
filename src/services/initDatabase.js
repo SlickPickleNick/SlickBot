@@ -463,6 +463,21 @@ async function initDatabase() {
   await query(`ALTER TABLE application_submissions ADD COLUMN IF NOT EXISTS review_thread_id TEXT;`).catch(() => {});
   await query(`ALTER TABLE application_sessions ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ;`).catch(() => {});
   await query(`UPDATE application_sessions SET expires_at = updated_at + INTERVAL '180 seconds' WHERE status = 'ACTIVE' AND expires_at IS NULL;`).catch(() => {});
+  await query(`
+    CREATE TABLE IF NOT EXISTS application_review_indexes (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      application_type_id TEXT REFERENCES application_types(id) ON DELETE CASCADE,
+      channel_id TEXT NOT NULL,
+      message_id TEXT,
+      status_filter TEXT NOT NULL DEFAULT 'PENDING',
+      active BOOLEAN NOT NULL DEFAULT true,
+      created_by_user_id TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS idx_application_review_indexes_guild_type ON application_review_indexes(guild_id, application_type_id, active);`).catch(() => {});
   await query(`DELETE FROM application_types WHERE name = 'Moderator' AND description = 'Apply to help moderate the SlickPickleNick community.'`).catch(() => {});
 
   await query(`ALTER TABLE appeal_configs ADD COLUMN IF NOT EXISTS panel_title TEXT;`).catch(() => {});

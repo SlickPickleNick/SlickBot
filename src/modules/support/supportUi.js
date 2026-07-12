@@ -150,7 +150,7 @@ async function buildApplicationsPanel(guildId) {
   const typeLines = types.rowCount
     ? await Promise.all(types.rows.map(async (type) => {
       const questions = await query(`SELECT COUNT(*)::int AS count FROM application_questions WHERE application_type_id = $1`, [type.id]).catch(() => ({ rows: [{ count: 0 }] }));
-      return `• **${type.name}** — ${type.enabled ? 'Enabled' : 'Disabled'} · Questions: **${questions.rows[0]?.count || 0}** · Timeout: **${Math.max(1, Math.round((type.question_timeout_seconds || 180) / 60))} min/question** · Review: ${type.review_channel_id ? `<#${type.review_channel_id}>` : 'Not set'}`;
+      return `• **${type.name}** — ${type.enabled ? 'Open' : 'Closed'} · Questions: **${questions.rows[0]?.count || 0}** · Timeout: **${Math.max(1, Math.round((type.question_timeout_seconds || 180) / 60))} min/question** · Review: ${type.review_channel_id ? `<#${type.review_channel_id}>` : 'Not set'}`;
     })).then((lines) => lines.join('\n'))
     : 'No application types configured yet. Use `/application setup`, then add questions with `/application question-add`.';
 
@@ -243,13 +243,49 @@ function buildPublicReportPanel(config = null) {
   return withPanelHeaderImage({ embeds: [embed], components: [createButtonRow([createPanelButton(CustomIds.ReportOpen, 'Submit Report', ButtonStyle.Danger, '🚩')])] }, config?.panel_header_image_url);
 }
 
-function buildPublicApplicationPanel(type) {
-  const embed = createBaseEmbed({ title: type.panel_title || `${type.name} Application`, description: type.panel_description || type.description || 'Use this panel to start a DM-based application.', color: parseHexColor(type.panel_color, SlickBotColors.PRIMARY), footer: `SlickBot Applications · ${getPanelDisplayMode(type.panel_display_mode)}` });
+function buildPublicApplicationPanel(input) {
+  const types = Array.isArray(input) ? input.filter(Boolean).slice(0, 25) : [input].filter(Boolean);
+  const isMulti = Array.isArray(input);
+  const type = types[0] || null;
+
+  if (!types.length) {
+    return {
+      embeds: [createBaseEmbed({
+        title: 'Applications',
+        description: 'No applications are currently available.',
+        color: SlickBotColors.MUTED,
+        footer: 'SlickBot Applications'
+      })],
+      components: []
+    };
+  }
+
+  if (isMulti && types.length > 1) {
+    const openCount = types.filter((entry) => entry.enabled !== false).length;
+    const embed = createBaseEmbed({
+      title: 'Applications',
+      description: openCount
+        ? 'Select the application you want to start. SlickBot will continue the application through DM. Closed application types will show an availability message if selected.'
+        : 'Applications are listed below, but none are currently accepting submissions.',
+      color: openCount ? SlickBotColors.PRIMARY : SlickBotColors.MUTED,
+      footer: 'SlickBot Applications · DROPDOWN'
+    });
+    const options = types.map((entry) => ({
+      label: String(entry.panel_title || entry.name).slice(0, 100),
+      value: entry.id,
+      description: String(entry.enabled === false ? 'Currently closed to new submissions.' : (entry.description || `Start the ${entry.name} application.`)).slice(0, 100),
+      emoji: entry.enabled === false ? '🔒' : '📝'
+    }));
+    return withPanelHeaderImage({ embeds: [embed], components: [createSelectRow(`${CustomIds.ApplicationSelectPrefix}all`, 'Select an application...', options)] }, null);
+  }
+
+  const isClosed = type.enabled === false;
+  const embed = createBaseEmbed({ title: type.panel_title || `${type.name} Application`, description: isClosed ? 'This application type is not currently accepting submissions at this time.' : (type.panel_description || type.description || 'Use this panel to start a DM-based application.'), color: isClosed ? SlickBotColors.MUTED : parseHexColor(type.panel_color, SlickBotColors.PRIMARY), footer: `SlickBot Applications · ${getPanelDisplayMode(type.panel_display_mode)}` });
   const customId = `${CustomIds.ApplicationApplyPrefix}${type.id}`;
   if (getPanelDisplayMode(type.panel_display_mode) === 'DROPDOWN') {
-    return withPanelHeaderImage({ embeds: [embed], components: [createSelectRow(`${CustomIds.ApplicationSelectPrefix}${type.id}`, 'Choose an action...', [{ label: `Start ${type.name}`.slice(0, 100), value: type.id, description: 'Start this DM-based application.', emoji: '📝' }])] }, type.panel_header_image_url);
+    return withPanelHeaderImage({ embeds: [embed], components: [createSelectRow(`${CustomIds.ApplicationSelectPrefix}${type.id}`, 'Choose an action...', [{ label: `${isClosed ? 'Closed' : 'Start'} ${type.name}`.slice(0, 100), value: type.id, description: isClosed ? 'Currently closed to new submissions.' : 'Start this DM-based application.', emoji: isClosed ? '🔒' : '📝' }])] }, type.panel_header_image_url);
   }
-  return withPanelHeaderImage({ embeds: [embed], components: [createButtonRow([createPanelButton(customId, 'Start Application', ButtonStyle.Primary, '📝')])] }, type.panel_header_image_url);
+  return withPanelHeaderImage({ embeds: [embed], components: [createButtonRow([createPanelButton(customId, isClosed ? 'Applications Closed' : 'Start Application', isClosed ? ButtonStyle.Secondary : ButtonStyle.Primary, isClosed ? '🔒' : '📝')])] }, type.panel_header_image_url);
 }
 
 function buildPublicAppealPanel(config = null) {

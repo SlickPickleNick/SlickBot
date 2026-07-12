@@ -29,6 +29,7 @@ const {
   AppealService,
   buildTicketModal,
   buildReportModal,
+  buildReportTargetPickerPayload,
   buildReportDetailsModal,
   buildReportReviewReasonModal,
   buildAppealModal,
@@ -398,6 +399,12 @@ async function handleButton(interaction, ctx) {
 
   if (id === CustomIds.ReportOpen) {
     if (!(await requirePublicAction(interaction, ctx, ActionKeys.ReportsSubmit, ModuleKeys.REPORTS))) return true;
+    await replyPrivate(interaction, buildReportTargetPickerPayload());
+    return true;
+  }
+
+  if (id === CustomIds.ReportNoUser) {
+    if (!(await requirePublicAction(interaction, ctx, ActionKeys.ReportsSubmit, ModuleKeys.REPORTS))) return true;
     await interaction.showModal(buildReportModal());
     return true;
   }
@@ -449,7 +456,8 @@ async function handleButton(interaction, ctx) {
     if (!(await requirePublicAction(interaction, ctx, ActionKeys.ApplicationsApply, ModuleKeys.APPLICATIONS))) return true;
     const typeId = id.slice(CustomIds.ApplicationApplyPrefix.length);
     const type = await applications.getTypeById(interaction.guildId, typeId);
-    if (!type || !type.enabled) return replyPrivate(interaction, { embeds: [createWarningEmbed('Application Unavailable', 'This application type is not currently available.')] });
+    if (!type) return replyPrivate(interaction, { embeds: [createWarningEmbed('Application Type Not Found', 'That application type could not be found.')] });
+    if (type.enabled === false) return replyPrivate(interaction, { embeds: [createWarningEmbed('Application Not Accepting Submissions', `The **${type.name}** application is not currently accepting submissions at this time.`)] });
     const result = await applications.startApplicationDm({ interaction, client: ctx.client, logger: ctx.logger, applicationType: type });
     if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Application Not Started', result.reason)] });
     await replyPrivate(interaction, { embeds: [createSuccessEmbed('Application Started', `I sent you a DM with the first question. Question count: **${result.questionCount}**.`)] });
@@ -475,6 +483,18 @@ async function handleButton(interaction, ctx) {
     const result = await applications.openReviewThread({ interaction, client: ctx.client, logger: ctx.logger, submissionId });
     if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Review Thread Not Opened', result.reason)] });
     await replyPrivate(interaction, { embeds: [createSuccessEmbed(result.existing ? 'Review Thread Opened' : 'Review Thread Created', `Application #${result.submission.submission_number} review thread: <#${result.thread.id}>.`)] });
+    return true;
+  }
+
+
+  if (id.startsWith(CustomIds.ApplicationReviewIndexFilterPrefix)) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.ApplicationsReview, ModuleKeys.APPLICATIONS))) return true;
+    const rest = id.slice(CustomIds.ApplicationReviewIndexFilterPrefix.length);
+    const [indexId, statusFilter] = rest.split(':');
+    const index = await applications.updateReviewIndexFilter({ guildId: interaction.guildId, indexId, statusFilter });
+    if (!index) return replyPrivate(interaction, { embeds: [createWarningEmbed('Review Index Not Found', 'This application review index could not be found.')] });
+    await applications.refreshReviewIndex({ client: ctx.client, index }).catch(() => {});
+    await replyPrivate(interaction, { embeds: [createSuccessEmbed('Review Index Updated', `Application review index filter set to **${index.status_filter}** and reposted at the bottom of the channel.`)], deleteAfterSeconds: 10 });
     return true;
   }
 
@@ -727,7 +747,14 @@ async function handleSelect(interaction, ctx) {
 
   if (id === CustomIds.ReportSelect) {
     if (!(await requirePublicAction(interaction, ctx, ActionKeys.ReportsSubmit, ModuleKeys.REPORTS))) return true;
-    await interaction.showModal(buildReportModal());
+    await replyPrivate(interaction, buildReportTargetPickerPayload());
+    return true;
+  }
+
+  if (id === CustomIds.ReportUserSelect) {
+    if (!(await requirePublicAction(interaction, ctx, ActionKeys.ReportsSubmit, ModuleKeys.REPORTS))) return true;
+    const targetUserId = interaction.values?.[0] || null;
+    await interaction.showModal(buildReportModal(targetUserId));
     return true;
   }
 
@@ -741,7 +768,8 @@ async function handleSelect(interaction, ctx) {
     if (!(await requirePublicAction(interaction, ctx, ActionKeys.ApplicationsApply, ModuleKeys.APPLICATIONS))) return true;
     const typeId = interaction.values[0] || id.slice(CustomIds.ApplicationSelectPrefix.length);
     const type = await applications.getTypeById(interaction.guildId, typeId);
-    if (!type || !type.enabled) return replyPrivate(interaction, { embeds: [createWarningEmbed('Application Unavailable', 'This application type is not currently available.')] });
+    if (!type) return replyPrivate(interaction, { embeds: [createWarningEmbed('Application Type Not Found', 'That application type could not be found.')] });
+    if (type.enabled === false) return replyPrivate(interaction, { embeds: [createWarningEmbed('Application Not Accepting Submissions', `The **${type.name}** application is not currently accepting submissions at this time.`)] });
     const result = await applications.startApplicationDm({ interaction, client: ctx.client, logger: ctx.logger, applicationType: type });
     if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Application Not Started', result.reason)] });
     await replyPrivate(interaction, { embeds: [createSuccessEmbed('Application Started', `I sent you a DM with the first question. Question count: **${result.questionCount}**.`)] });
@@ -921,11 +949,13 @@ async function handleModal(interaction, ctx) {
     return true;
   }
 
-  if (id === CustomIds.ReportModal) {
+  if (id === CustomIds.ReportModal || id.startsWith(CustomIds.ReportUserModalPrefix)) {
     if (!(await requirePublicAction(interaction, ctx, ActionKeys.ReportsSubmit, ModuleKeys.REPORTS))) return true;
-    const target = interaction.fields.getTextInputValue('target') || '';
+    const targetUserId = id.startsWith(CustomIds.ReportUserModalPrefix) ? id.slice(CustomIds.ReportUserModalPrefix.length) : null;
     const details = interaction.fields.getTextInputValue('details');
-    const report = await reports.createReport({ interaction, client: ctx.client, logger: ctx.logger, type: 'Panel Report', details: target ? `Target/Context: ${target}\n\n${details}` : details });
+    let targetUser = null;
+    if (targetUserId) targetUser = await ctx.client.users.fetch(targetUserId).catch(() => null);
+    const report = await reports.createReport({ interaction, client: ctx.client, logger: ctx.logger, type: targetUser ? 'User Report' : 'Panel Report', targetUser, details });
     await replyPrivate(interaction, { embeds: [createSuccessEmbed('Report Submitted', `Report #${report.report_number} was sent to staff.`)] });
     return true;
   }

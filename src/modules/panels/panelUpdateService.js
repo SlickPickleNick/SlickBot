@@ -15,6 +15,10 @@ async function buildPayload(guildId, panelType, panelRef = '*') {
   if (panelType === 'report') return buildPublicReportPanel(await reports.getConfig(guildId));
   if (panelType === 'appeal') return buildPublicAppealPanel(await appeals.getConfig(guildId));
   if (panelType === 'application') {
+    if (String(panelRef || '*') === '*') {
+      const types = await applications.listTypes(guildId);
+      return buildPublicApplicationPanel(types);
+    }
     const type = await applications.getTypeById(guildId, panelRef) || await applications.getTypeByName?.(guildId, panelRef);
     if (!type) return null;
     return buildPublicApplicationPanel(type);

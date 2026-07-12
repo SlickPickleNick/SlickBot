@@ -13,7 +13,15 @@
       "Each support reset shows a private confirmation prompt with affected record counts before any data is cleared.",
       "Application types now have a configurable per-question session timeout with a default of 3 minutes.",
       "Application question DMs now show a live Discord timestamp indicating how long the applicant has left to answer.",
-      "Expired application sessions are automatically cancelled and the applicant receives a DM explaining that the application was cancelled because they did not respond in time."
+      "Expired application sessions are automatically cancelled and the applicant receives a DM explaining that the application was cancelled because they did not respond in time.",
+      "Report panels now use a Discord user picker before the required report-details modal, so reporters can select the user being reported instead of typing usernames or IDs.",
+      "Report panel submissions now only require the What Happened field; target user and message/context are optional.",
+      "Application panels can now include all enabled application types in one multi-application dropdown panel when /application panel is run without a specific type or with type:all.",
+      "Added /application review-index to post a refreshed review index for pending, approved, denied, or all applications, with links to the review messages in the review channel.",
+      "Application review indexes are deleted and resent at the bottom of the configured review channel when new applications arrive, statuses change, or reviewers change the index filter.",
+      "Restored /report user so the user option is required, while report panel submissions still support general reports with no selected user.",
+      "Added /application close and /application reopen so staff can temporarily stop or resume submissions for an application type without deleting its setup.",
+      "Application panels now keep closed application types visible and show a not-accepting-submissions message if a user tries to start one."
     ],
     "commands": [
       "/ticket manager",
@@ -23,7 +31,11 @@
       "/ticket reset",
       "/report reset",
       "/application reset",
-      "/appeal reset"
+      "/appeal reset",
+      "/application panel",
+      "/application review-index",
+      "/application close",
+      "/application reopen"
     ]
   },
   "0.8.7": {
