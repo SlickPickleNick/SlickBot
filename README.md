@@ -4,7 +4,34 @@ SlickBot is an all-in-one Discord server management bot built for the SlickPickl
 
 ## Version
 
-Current package: **v0.6.7**
+Current package: **v0.7.0**
+
+## v0.7.0 Updates
+
+### Custom Commands Module
+
+- Added the **Custom Commands** module as a completed implemented module.
+- Staff can create, edit, delete, enable, disable, list, view, and test custom commands from Discord.
+- Members can trigger enabled commands with the configured prefix, such as `!rules`.
+- Custom command responses support plain text or embed mode. Embed mode can be enabled or disabled when creating or editing a command.
+- Embed responses support an optional title and hex accent color.
+- Commands support per-user cooldowns plus optional channel and role restrictions.
+- Added persistent command storage, usage tracking, module diagnostics, module manager status, permission defaults, and logging events.
+
+New command group:
+
+```text
+/custom-command panel
+/custom-command create trigger:rules response:Read the rules in #rules embed_mode:true
+/custom-command edit command:rules embed_mode:false
+/custom-command delete command:rules
+/custom-command list
+/custom-command view command:rules
+/custom-command enable command:rules
+/custom-command disable command:rules
+/custom-command test command:rules
+/custom-command prefix prefix:!
+```
 
 ## v0.6.7 Updates
 

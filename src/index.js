@@ -17,6 +17,7 @@ const { BirthdayService } = require('./modules/community/birthdayService');
 const { ScheduledMessageService } = require('./modules/automation/scheduledMessageService');
 const { ServerStatsService } = require('./modules/community/serverStatsService');
 const { BotUpdatesService } = require('./modules/status/botUpdatesService');
+const { CustomCommandService } = require('./modules/custom/customCommandService');
 const { LevelingService } = require('./modules/community/levelingService');
 const { handleReactionRole, syncAllPublishedReactionPanels } = require('./modules/community/rolePanelService');
 const { handleComponentInteraction } = require('./services/interactionRouter');
@@ -46,6 +47,7 @@ const birthdays = new BirthdayService();
 const scheduledMessages = new ScheduledMessageService();
 const serverStats = new ServerStatsService();
 const botUpdates = new BotUpdatesService();
+const customCommands = new CustomCommandService();
 const leveling = new LevelingService();
 const healthServer = startHealthServer(client);
 
@@ -265,6 +267,20 @@ client.on(Events.MessageCreate, async (message) => {
 
   if (message.guild) {
     if (await permissions.isIgnored(message.guild.id, message.author.id).catch(() => false)) return;
+    const customCommandsEnabled = await permissions.isModuleEnabled(message.guild.id, 'CUSTOM_COMMANDS').catch(() => false);
+    if (customCommandsEnabled) {
+      await customCommands.handleMessage(message, logger).catch(async (error) => {
+        console.error('Failed to process custom command:', error);
+        await logger.log({
+          guildId: message.guild.id,
+          eventKey: 'custom-command-error',
+          title: 'Custom Command Error',
+          body: error instanceof Error ? error.message : String(error),
+          metadata: { channelId: message.channelId, authorId: message.author.id }
+        }).catch(() => {});
+      });
+    }
+
     const levelingEnabled = await permissions.isModuleEnabled(message.guild.id, 'LEVELING').catch(() => false);
     if (levelingEnabled) {
       await leveling.processMessage(message, logger).catch((error) => console.error('Failed to process message XP:', error));

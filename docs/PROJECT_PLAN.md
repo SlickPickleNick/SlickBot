@@ -1,6 +1,6 @@
 # SlickBot Project Plan
 
-## Current Version: 0.6.7
+## Current Version: 0.7.0
 
 SlickBot is being built as a modular all-in-one Discord server management bot for the SlickPickleNick community.
 
@@ -28,7 +28,20 @@ SlickBot is being built as a modular all-in-one Discord server management bot fo
 - Scheduled messages
 - Server stats
 - Bot update announcements
+- Custom commands
 - Leveling / XP
+
+## v0.7.0 Scope
+
+### Custom Commands
+
+- Implemented the `CUSTOM_COMMANDS` module.
+- Added `/custom-command` command group for staff-managed command creation, editing, deletion, listing, viewing, enabling, disabling, testing, and prefix configuration.
+- Added text-channel trigger handling so members can run commands such as `!rules`.
+- Added optional embed mode when creating or editing a command. Embed responses support optional title and color settings.
+- Added per-command cooldowns and optional allowed-channel and allowed-role restrictions.
+- Added persistent custom command configuration, command storage, and usage tracking tables.
+- Added Custom Commands permission actions, public usage defaults, module default permission level, logging events, diagnostics, module-manager status, and release notes.
 
 ## v0.6.7 Scope
 
@@ -112,7 +125,6 @@ SlickBot is being built as a modular all-in-one Discord server management bot fo
 ## Future Modules
 
 - Join-to-create voice channels
-- Custom commands
 - Utility tools
 - Full onboarding wizard
 

@@ -85,6 +85,11 @@ const MODULE_CHECKS = {
     { name: 'Update config', sql: 'SELECT COUNT(*)::int AS count FROM bot_update_configs WHERE guild_id = $1' },
     { name: 'Ping roles', sql: 'SELECT COUNT(*)::int AS count FROM bot_update_ping_roles WHERE guild_id = $1' },
     { name: 'Announcements', sql: 'SELECT COUNT(*)::int AS count FROM bot_update_announcements WHERE guild_id = $1' }
+  ],
+  [ModuleKeys.CUSTOM_COMMANDS]: [
+    { name: 'Custom command config', sql: 'SELECT COUNT(*)::int AS count FROM custom_command_configs WHERE guild_id = $1' },
+    { name: 'Custom commands', sql: 'SELECT COUNT(*)::int AS count FROM custom_commands WHERE guild_id = $1' },
+    { name: 'Usage logs', sql: 'SELECT COUNT(*)::int AS count FROM custom_command_usage_logs WHERE guild_id = $1' }
   ]
 };
 

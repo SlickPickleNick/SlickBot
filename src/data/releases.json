@@ -1,4 +1,26 @@
 {
+  "0.7.0": {
+    "title": "SlickBot v0.7.0",
+    "summary": "Adds the Custom Commands module for staff-managed text and embed responses triggered by members in chat.",
+    "notes": [
+      "Added the Custom Commands module as a completed implemented module.",
+      "Staff can create, edit, delete, enable, disable, view, list, and test custom commands through Discord slash commands.",
+      "Members can trigger enabled custom commands with the configured prefix, such as !rules.",
+      "Custom command responses support plain text or embed mode, including optional embed title and color.",
+      "Added per-command cooldowns plus optional channel and role restrictions.",
+      "Added custom command database storage, usage tracking, diagnostics, module status, permissions, and logging events."
+    ],
+    "commands": [
+      "/custom-command panel",
+      "/custom-command create",
+      "/custom-command edit",
+      "/custom-command delete",
+      "/custom-command list",
+      "/custom-command view",
+      "/custom-command test",
+      "/custom-command prefix"
+    ]
+  },
   "0.6.7": {
     "title": "SlickBot v0.6.7",
     "summary": "Refines server stats so voice counters update from voice events while the interval refresh remains a backup.",

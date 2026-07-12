@@ -100,6 +100,12 @@ const LogModuleCatalog = Object.freeze([
     label: 'Bot Updates',
     description: 'SlickBot release announcement configuration and delivery.',
     defaultDelivery: 'IMMEDIATE'
+  },
+  {
+    key: 'custom-commands',
+    label: 'Custom Commands',
+    description: 'Custom command configuration and trigger activity.',
+    defaultDelivery: 'IMMEDIATE'
   }
 ]);
 
@@ -177,7 +183,11 @@ const LogEventCatalog = Object.freeze([
 
   { key: 'bot-update-config', moduleKey: 'bot-updates', label: 'Bot Updates Configured', description: 'Bot update announcement settings changed.', defaultDelivery: 'IMMEDIATE' },
   { key: 'bot-update-announcement', moduleKey: 'bot-updates', label: 'Bot Update Announced', description: 'SlickBot posted a release update message.', defaultDelivery: 'IMMEDIATE' },
-  { key: 'bot-update-announcement-failed', moduleKey: 'bot-updates', label: 'Bot Update Announcement Failed', description: 'SlickBot could not post a configured release update message.', defaultDelivery: 'IMMEDIATE' }
+  { key: 'bot-update-announcement-failed', moduleKey: 'bot-updates', label: 'Bot Update Announcement Failed', description: 'SlickBot could not post a configured release update message.', defaultDelivery: 'IMMEDIATE' },
+
+  { key: 'custom-command-config', moduleKey: 'custom-commands', label: 'Custom Command Config', description: 'Custom command creation, edits, deletes, and prefix changes.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'custom-command-used', moduleKey: 'custom-commands', label: 'Custom Command Used', description: 'A member triggered a custom command.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'custom-command-error', moduleKey: 'custom-commands', label: 'Custom Command Error', description: 'A custom command failed while processing.', defaultDelivery: 'IMMEDIATE' }
 ]);
 
 const StarterLogModuleKeys = Object.freeze(['core', 'moderation']);

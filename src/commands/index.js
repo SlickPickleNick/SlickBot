@@ -23,6 +23,7 @@ const scheduleCommand = require('./schedule');
 const statsCommand = require('./stats');
 const levelCommand = require('./level');
 const botUpdatesCommand = require('./botUpdates');
+const customCommand = require('./customCommand');
 
 const commands = [
   pingCommand,
@@ -49,7 +50,8 @@ const commands = [
   scheduleCommand,
   statsCommand,
   levelCommand,
-  botUpdatesCommand
+  botUpdatesCommand,
+  customCommand
 ];
 
 const commandMap = new Map(commands.map((command) => [command.data.name, command]));

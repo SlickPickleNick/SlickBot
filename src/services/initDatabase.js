@@ -749,6 +749,66 @@ async function initDatabase() {
     );
   `);
 
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS custom_command_configs (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT UNIQUE NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      enabled BOOLEAN NOT NULL DEFAULT true,
+      prefix TEXT NOT NULL DEFAULT '!',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS custom_commands (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      response TEXT NOT NULL,
+      embed_enabled BOOLEAN NOT NULL DEFAULT false,
+      embed_title TEXT,
+      embed_color TEXT,
+      cooldown_seconds INTEGER NOT NULL DEFAULT 0,
+      allowed_channel_id TEXT,
+      allowed_role_id TEXT,
+      enabled BOOLEAN NOT NULL DEFAULT true,
+      usage_count INTEGER NOT NULL DEFAULT 0,
+      last_used_at TIMESTAMPTZ,
+      created_by_user_id TEXT,
+      updated_by_user_id TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(guild_id, name)
+    );
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS custom_command_usage_logs (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      command_id TEXT REFERENCES custom_commands(id) ON DELETE SET NULL,
+      user_id TEXT NOT NULL,
+      channel_id TEXT,
+      message_id TEXT,
+      response_message_id TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await query(`ALTER TABLE custom_command_configs ADD COLUMN IF NOT EXISTS enabled BOOLEAN NOT NULL DEFAULT true;`).catch(() => {});
+  await query(`ALTER TABLE custom_command_configs ADD COLUMN IF NOT EXISTS prefix TEXT NOT NULL DEFAULT '!';`).catch(() => {});
+  await query(`ALTER TABLE custom_commands ADD COLUMN IF NOT EXISTS embed_enabled BOOLEAN NOT NULL DEFAULT false;`).catch(() => {});
+  await query(`ALTER TABLE custom_commands ADD COLUMN IF NOT EXISTS embed_title TEXT;`).catch(() => {});
+  await query(`ALTER TABLE custom_commands ADD COLUMN IF NOT EXISTS embed_color TEXT;`).catch(() => {});
+  await query(`ALTER TABLE custom_commands ADD COLUMN IF NOT EXISTS cooldown_seconds INTEGER NOT NULL DEFAULT 0;`).catch(() => {});
+  await query(`ALTER TABLE custom_commands ADD COLUMN IF NOT EXISTS allowed_channel_id TEXT;`).catch(() => {});
+  await query(`ALTER TABLE custom_commands ADD COLUMN IF NOT EXISTS allowed_role_id TEXT;`).catch(() => {});
+  await query(`ALTER TABLE custom_commands ADD COLUMN IF NOT EXISTS enabled BOOLEAN NOT NULL DEFAULT true;`).catch(() => {});
+  await query(`ALTER TABLE custom_commands ADD COLUMN IF NOT EXISTS usage_count INTEGER NOT NULL DEFAULT 0;`).catch(() => {});
+  await query(`ALTER TABLE custom_commands ADD COLUMN IF NOT EXISTS last_used_at TIMESTAMPTZ;`).catch(() => {});
+
   await query(`
     CREATE TABLE IF NOT EXISTS scheduled_message_configs (
       id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
@@ -988,6 +1048,9 @@ async function initDatabase() {
   await query(`CREATE INDEX IF NOT EXISTS idx_log_queue_pending ON log_queue_items(guild_id, event_key, flushed_at);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_bot_update_roles_guild ON bot_update_ping_roles(guild_id);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_bot_update_announcements_guild ON bot_update_announcements(guild_id, announced_at DESC);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_custom_commands_guild_name ON custom_commands(guild_id, name);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_custom_commands_guild_enabled ON custom_commands(guild_id, enabled);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_custom_command_usage_guild_created ON custom_command_usage_logs(guild_id, created_at DESC);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_audit_logs_guild_created ON audit_logs(guild_id, created_at);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_bot_presence_guild ON bot_presence_settings(guild_id);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_moderation_cases_guild_target ON moderation_cases(guild_id, target_user_id, created_at DESC);`);

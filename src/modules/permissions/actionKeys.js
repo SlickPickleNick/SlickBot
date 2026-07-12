@@ -100,6 +100,13 @@ const ActionKeys = Object.freeze({
   BotUpdatesConfigure: 'bot-updates.configure',
   BotUpdatesSend: 'bot-updates.send',
 
+  CustomCommandsUse: 'custom-commands.use',
+  CustomCommandsView: 'custom-commands.view',
+  CustomCommandsCreate: 'custom-commands.create',
+  CustomCommandsEdit: 'custom-commands.edit',
+  CustomCommandsDelete: 'custom-commands.delete',
+  CustomCommandsEnable: 'custom-commands.enable',
+
   LevelingUse: 'leveling.use',
   LevelingView: 'leveling.view',
   LevelingConfigure: 'leveling.configure',
@@ -227,6 +234,13 @@ const defaultActionLevels = Object.freeze({
   [ActionKeys.BotUpdatesConfigure]: PermissionLevels.SENIOR_MODERATOR,
   [ActionKeys.BotUpdatesSend]: PermissionLevels.SENIOR_MODERATOR,
 
+  [ActionKeys.CustomCommandsUse]: PermissionLevels.EVERYONE,
+  [ActionKeys.CustomCommandsView]: PermissionLevels.MODERATOR,
+  [ActionKeys.CustomCommandsCreate]: PermissionLevels.MODERATOR,
+  [ActionKeys.CustomCommandsEdit]: PermissionLevels.MODERATOR,
+  [ActionKeys.CustomCommandsDelete]: PermissionLevels.MODERATOR,
+  [ActionKeys.CustomCommandsEnable]: PermissionLevels.MODERATOR,
+
   [ActionKeys.LevelingUse]: PermissionLevels.EVERYONE,
   [ActionKeys.LevelingView]: PermissionLevels.MODERATOR,
   [ActionKeys.LevelingConfigure]: PermissionLevels.SENIOR_MODERATOR,
@@ -252,8 +266,8 @@ const defaultModuleLevels = Object.freeze({
   [ModuleKeys.LEVELING]: PermissionLevels.EVERYONE,
   [ModuleKeys.SERVER_STATS]: PermissionLevels.MODERATOR,
   [ModuleKeys.BOT_UPDATES]: PermissionLevels.MODERATOR,
-  [ModuleKeys.JOIN_TO_CREATE]: PermissionLevels.EVERYONE,
   [ModuleKeys.CUSTOM_COMMANDS]: PermissionLevels.EVERYONE,
+  [ModuleKeys.JOIN_TO_CREATE]: PermissionLevels.EVERYONE,
   [ModuleKeys.UTILITY]: PermissionLevels.EVERYONE
 });
 
@@ -267,12 +281,13 @@ const defaultPublicActions = Object.freeze([
   ActionKeys.RolePanelsUse,
   ActionKeys.GiveawaysEnter,
   ActionKeys.BirthdaysUse,
-  ActionKeys.LevelingUse
+  ActionKeys.LevelingUse,
+  ActionKeys.CustomCommandsUse
 ]);
 
 const defaultTeamPermissions = Object.freeze(Object.values(ActionKeys));
 
-const PERMISSION_DEFAULTS_VERSION = '0.6.7';
+const PERMISSION_DEFAULTS_VERSION = '0.7.0';
 
 module.exports = {
   ActionKeys,

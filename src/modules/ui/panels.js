@@ -20,11 +20,13 @@ const { BirthdayService } = require('../community/birthdayService');
 const { ScheduledMessageService } = require('../automation/scheduledMessageService');
 const { ServerStatsService } = require('../community/serverStatsService');
 const { LevelingService } = require('../community/levelingService');
+const { CustomCommandService } = require('../custom/customCommandService');
 const giveaways = new GiveawayService();
 const birthdays = new BirthdayService();
 const scheduledMessages = new ScheduledMessageService();
 const serverStats = new ServerStatsService();
 const leveling = new LevelingService();
+const customCommands = new CustomCommandService();
 
 async function ensureDefaultModules(guildId) {
   for (const moduleConfig of defaultModules) {
@@ -277,6 +279,21 @@ async function getModuleStatus(guildId, row) {
     return { moduleKey: row.module_key, core: false, state: 'NEEDS_CONFIG', emoji: '🟣', label: 'Needs configuration', note: 'Run /bot-updates setup' };
   }
 
+  if (row.module_key === 'CUSTOM_COMMANDS') {
+    const [cfg, commands, enabled] = await Promise.all([
+      query(`SELECT enabled, prefix FROM custom_command_configs WHERE guild_id = $1 LIMIT 1`, [guildId]).catch(() => ({ rows: [] })),
+      query(`SELECT COUNT(*)::int AS count FROM custom_commands WHERE guild_id = $1`, [guildId]).catch(() => ({ rows: [{ count: 0 }] })),
+      query(`SELECT COUNT(*)::int AS count FROM custom_commands WHERE guild_id = $1 AND enabled = true`, [guildId]).catch(() => ({ rows: [{ count: 0 }] }))
+    ]);
+    const config = cfg.rows[0] || {};
+    const total = commands.rows[0]?.count || 0;
+    const active = enabled.rows[0]?.count || 0;
+    if (config.enabled === false) return { moduleKey: row.module_key, core: false, state: 'DISABLED', emoji: '🔴', label: 'Disabled', note: 'Listener off' };
+    if (active > 0) return { moduleKey: row.module_key, core: false, state: 'READY', emoji: '🟢', label: 'Fully enabled', note: `${active}/${total} command(s)` };
+    if (total > 0) return { moduleKey: row.module_key, core: false, state: 'PARTIAL', emoji: '🟠', label: 'Partially enabled', note: `${total} disabled command(s)` };
+    return { moduleKey: row.module_key, core: false, state: 'NEEDS_CONFIG', emoji: '🟣', label: 'Needs configuration', note: 'Run /custom-command create' };
+  }
+
   return { moduleKey: row.module_key, core: false, state: 'PARTIAL', emoji: '🟠', label: 'Partially enabled', note: 'Module shell only' };
 }
 
@@ -465,7 +482,10 @@ async function buildCommunityPanel(guildId) {
       '**Server Stats**',
       compactCommunityText(statsPayload, 'No server stats status available.'),
       '',
-      'Use `/welcome manager`, `/roles manager`, `/giveaway manager`, `/birthday manager`, `/level manager`, or `/stats manager` for focused setup controls.'
+      '**Custom Commands**',
+      compactCommunityText(await customCommands.buildManagerPanel(guildId).catch(() => ({ embeds: [{ data: { description: 'Custom commands not configured.' } }] })), 'No custom command status available.'),
+      '',
+      'Use `/welcome manager`, `/roles manager`, `/giveaway manager`, `/birthday manager`, `/level manager`, `/stats manager`, or `/custom-command panel` for focused setup controls.'
     ].join('\n'),
     color: SlickBotColors.INFO
   });
