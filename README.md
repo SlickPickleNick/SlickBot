@@ -13,6 +13,7 @@ Current package: **v0.8.8**
 - Standardized support workflow status displays for tickets, reports, applications, and appeals.
 - Report **Resolve** and **Dismiss** controls now open a required decision-reason popup before the report is finalized.
 - Report review embeds now preserve the original report content, show decision reason, keep review notes, and include an **Add Details** button while the report is still open.
+- Fixed a PostgreSQL parameter typing issue that caused the report **Add Details** modal to fail on Railway.
 - Ticket control embeds now show explicit ticket status, opened/closed metadata, close reason, and transcript status when a closed ticket remains visible.
 - Application and appeal review embeds now use consistent pending/approved/denied status labels and colors.
 - Appeal denials now use red/error styling instead of warning/orange styling in both review embeds and decision DMs.
@@ -26,6 +27,9 @@ Current package: **v0.8.8**
 - Report panels now open a Discord user picker before the required report details popup, so reporters can select the user being reported instead of typing a username or ID.
 - Report panel submissions now only require the **What happened?** field. User target and message/context are optional.
 - `/report user` keeps the reported user as a required slash-command option, while `/report issue` and public report panels support general reports.
+- Removed deprecated `fetchReply` interaction response options to avoid Discord.js deprecation warnings.
+- Application review index filter buttons now silently refresh the index without sending a separate hidden confirmation message.
+- Application review index embeds now use `{application name} - Review Filter`, or `All Server Applications - Review Filters` for all-type indexes.
 - `/application close` and `/application reopen` can temporarily stop or resume submissions for an application type without deleting its setup.
 - `/application panel` can now post one panel containing all application types when `type` is left blank or set to `all`; closed types remain visible but show a not-accepting-submissions message if selected.
 - Added `/application review-index` to post a refreshed application review index in a review channel, including links to the original review messages.

@@ -225,10 +225,13 @@ function applicationReviewMessageUrl(submission) {
   return `https://discord.com/channels/${submission.guild_id}/${submission.review_channel_id}/${submission.review_message_id}`;
 }
 
-function formatApplicationIndexTitle(index, typeName = null) {
+function formatApplicationIndexTitle(_index, typeName = null) {
+  return typeName ? `${typeName} - Review Filter` : 'All Server Applications - Review Filters';
+}
+
+function formatApplicationIndexFilterLabel(index) {
   const filter = normalizeStatus(index?.status_filter || 'PENDING');
-  const label = filter === 'ALL' ? 'All' : filter.charAt(0) + filter.slice(1).toLowerCase();
-  return `${typeName || 'All Applications'} · ${label}`;
+  return filter === 'ALL' ? 'All Applications' : `${filter.charAt(0)}${filter.slice(1).toLowerCase()} Applications`;
 }
 
 function buildApplicationReviewIndexPayload(index, submissions = [], typeName = null) {
@@ -245,9 +248,9 @@ function buildApplicationReviewIndexPayload(index, submissions = [], typeName = 
   }).join('\n') : `No ${filter === 'ALL' ? '' : filter.toLowerCase()} applications found for this index.`;
 
   const embed = createBaseEmbed({
-    title: 'Application Review Index',
+    title: formatApplicationIndexTitle(index, typeName),
     description: [
-      `**Viewing:** ${formatApplicationIndexTitle(index, typeName)}`,
+      `**Current Filter:** ${formatApplicationIndexFilterLabel(index)}`,
       '',
       lines,
       submissions.length > visible.length ? `\nShowing **${visible.length}/${submissions.length}** applications. Use the review channel search or change the filter for more.` : null,
@@ -891,7 +894,7 @@ class ReportService {
   }
 
   async addDetails({ guildId, reportId, reviewer, details, logger }) {
-    const result = await query(`UPDATE reports SET review_notes = CONCAT(COALESCE(review_notes, ''), $1), updated_at = NOW() WHERE guild_id = $2 AND id = $3 RETURNING *`, [`\n[${new Date().toISOString()}] ${reviewer.tag}: ${details}`, guildId, reportId]);
+    const result = await query(`UPDATE reports SET review_notes = CONCAT(COALESCE(review_notes, ''), $1::text), updated_at = NOW() WHERE guild_id = $2 AND id = $3 RETURNING *`, [`\n[${new Date().toISOString()}] ${reviewer.tag}: ${details}`, guildId, reportId]);
     const report = result.rows[0] || null;
     if (!report) return null;
     await logger.log({ guildId, eventKey: 'report-note', title: 'Report Details Added', body: `Details added to report #${report.report_number} by ${reviewer.tag}.`, actorUserId: reviewer.id, metadata: { reportId } }).catch(() => {});
@@ -907,7 +910,7 @@ class ReportService {
            reviewed_by_user_id = $2,
            reviewed_at = NOW(),
            decision_reason = $3,
-           review_notes = CASE WHEN $4::text IS NULL THEN review_notes ELSE CONCAT(COALESCE(review_notes, ''), $4) END,
+           review_notes = CASE WHEN $4::text IS NULL THEN review_notes ELSE CONCAT(COALESCE(review_notes, ''), $4::text) END,
            updated_at = NOW()
        WHERE guild_id = $5 AND id = $6
        RETURNING *`,

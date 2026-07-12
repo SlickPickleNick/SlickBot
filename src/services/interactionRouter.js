@@ -1,3 +1,4 @@
+const { MessageFlags } = require('discord.js');
 const { CustomIds } = require('../modules/ui/customIds');
 const { ActionKeys } = require('../modules/permissions/actionKeys');
 const { ModuleKeys, isCoreModule } = require('../modules/moduleRegistry');
@@ -491,10 +492,13 @@ async function handleButton(interaction, ctx) {
     if (!(await requireAction(interaction, ctx, ActionKeys.ApplicationsReview, ModuleKeys.APPLICATIONS))) return true;
     const rest = id.slice(CustomIds.ApplicationReviewIndexFilterPrefix.length);
     const [indexId, statusFilter] = rest.split(':');
+    await interaction.deferUpdate();
     const index = await applications.updateReviewIndexFilter({ guildId: interaction.guildId, indexId, statusFilter });
-    if (!index) return replyPrivate(interaction, { embeds: [createWarningEmbed('Review Index Not Found', 'This application review index could not be found.')] });
+    if (!index) {
+      await interaction.followUp({ embeds: [createWarningEmbed('Review Index Not Found', 'This application review index could not be found.')], flags: MessageFlags.Ephemeral }).catch(() => {});
+      return true;
+    }
     await applications.refreshReviewIndex({ client: ctx.client, index }).catch(() => {});
-    await replyPrivate(interaction, { embeds: [createSuccessEmbed('Review Index Updated', `Application review index filter set to **${index.status_filter}** and reposted at the bottom of the channel.`)], deleteAfterSeconds: 10 });
     return true;
   }
 

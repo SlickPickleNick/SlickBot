@@ -63,7 +63,7 @@ async function replyPrivate(interaction, options) {
   const deleteAfterSeconds = extractAutoDeleteSeconds(payload);
   payload.flags = MessageFlags.Ephemeral;
 
-  let response;
+  let response = null;
   let isFollowUp = false;
   if (interaction.deferred && !interaction.replied && typeof interaction.editReply === 'function') {
     const editPayload = { ...payload };
@@ -71,9 +71,12 @@ async function replyPrivate(interaction, options) {
     response = await interaction.editReply(editPayload);
   } else if (interaction.replied) {
     isFollowUp = true;
-    response = await interaction.followUp({ ...payload, fetchReply: deleteAfterSeconds > 0 });
+    response = await interaction.followUp(payload);
   } else {
-    response = await interaction.reply({ ...payload, fetchReply: deleteAfterSeconds > 0 });
+    await interaction.reply(payload);
+    if (deleteAfterSeconds > 0 && typeof interaction.fetchReply === 'function') {
+      response = await interaction.fetchReply().catch(() => null);
+    }
   }
 
   scheduleEphemeralDelete(interaction, response, deleteAfterSeconds, isFollowUp);

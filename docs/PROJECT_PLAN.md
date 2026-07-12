@@ -39,6 +39,7 @@ SlickBot is being built as a modular all-in-one Discord server management bot fo
 - Reviewed the main ticket, report, application, and appeal review flows for consistency.
 - Added required decision-reason modals for report resolve/dismiss controls, matching the reason-first review behavior used by applications and appeals.
 - Updated report review embeds so they preserve original content, display decision reasons, keep review notes, and expose Add Details while the report is still open.
+- Fixed the report Add Details modal PostgreSQL parameter typing issue reported from Railway logs.
 - Updated ticket control embeds so closed tickets show closed status, close reason, closed-by metadata, and transcript status if the channel remains visible.
 - Standardized support status labels/colors across review embeds: open/pending items use orange, approved/resolved items use green, denied items use red, and dismissed/closed items use muted styling.
 - Added a backward-compatible `reports.decision_reason` migration.
@@ -52,6 +53,9 @@ SlickBot is being built as a modular all-in-one Discord server management bot fo
 - Added `/application close` and `/application reopen` so staff can pause/resume submissions for a type without deleting setup.
 - Application public panels can now include all application types in one dropdown panel when posted without a specific type; closed types remain visible but respond with a not-accepting-submissions message.
 - Added `/application review-index` for posting a refreshed review index that links to application review messages and supports Pending, Approved, Denied, and All filters.
+- Removed deprecated `fetchReply` interaction response options to avoid Discord.js deprecation warnings.
+- Application review index filter changes now silently refresh the index without an extra hidden confirmation message.
+- Application review index titles now use `{application name} - Review Filter`, or `All Server Applications - Review Filters` for all-type indexes.
 - Application review indexes are deleted and resent at the bottom of the review channel when new applications arrive, statuses change, or the index filter changes.
 - No command groups were renamed.
 

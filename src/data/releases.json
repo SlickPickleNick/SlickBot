@@ -21,7 +21,11 @@
       "Application review indexes are deleted and resent at the bottom of the configured review channel when new applications arrive, statuses change, or reviewers change the index filter.",
       "Restored /report user so the user option is required, while report panel submissions still support general reports with no selected user.",
       "Added /application close and /application reopen so staff can temporarily stop or resume submissions for an application type without deleting its setup.",
-      "Application panels now keep closed application types visible and show a not-accepting-submissions message if a user tries to start one."
+      "Application panels now keep closed application types visible and show a not-accepting-submissions message if a user tries to start one.",
+      "Fixed a PostgreSQL parameter typing issue that caused the report Add Details modal to fail on Railway.",
+      "Removed deprecated fetchReply interaction response options to avoid Discord.js deprecation warnings during private auto-delete replies.",
+      "Application review index filter buttons now silently refresh the index without sending a separate hidden confirmation message.",
+      "Application review index embeds are now titled after the selected application, using {application name} - Review Filter, or All Server Applications - Review Filters for all-type indexes."
     ],
     "commands": [
       "/ticket manager",
