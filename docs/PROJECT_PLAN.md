@@ -54,8 +54,14 @@ SlickBot is being built as a modular all-in-one Discord server management bot fo
 - Report panel submissions now only require the incident details field. Target user/message context are optional, while `/report user` keeps the reported user required for slash-command reports.
 - Added `/application close` and `/application reopen` so staff can pause/resume submissions for a type without deleting setup.
 - Application public panels can now include all application types in one dropdown panel when posted without a specific type; closed types remain visible but respond with a not-accepting-submissions message.
-- Added `/report review-index` for posting a refreshed **Server Reports - Review Filter** index with Open, Dismissed, and Resolved filters and links to report review messages.
+- Added `/report review-index` for posting a refreshed **Server Reports - Review Filter** index with Open, Dismissed, Resolved, and All filters and links to report review messages.
 - Added `/application review-index` for posting a refreshed review index that links to application review messages and supports Pending, Approved, Denied, and All filters.
+- Added `/ticket review-index` for posting a **Server Tickets - Review Filter** index with Open, Unclaimed, Claimed, Escalated, Closed, and All filters.
+- Ticket review indexes link directly to active ticket channels/control messages and refresh when tickets are opened, claimed, reprioritized, escalated, or closed.
+- Added `/appeal review-index` for posting a **Server Appeals - Review Filter** index with Pending, Approved, Denied, and All filters and links to appeal review messages.
+- Appeal review indexes refresh when appeals are submitted or decided.
+- Ticket and appeal review indexes use the same delete-and-resend behavior as report/application indexes so the active index remains at the bottom of its staff channel.
+- Added backward-compatible `ticket_review_indexes` and `appeal_review_indexes` PostgreSQL tables, reset coverage, permission coverage, diagnostics, and setup/help references.
 - Removed deprecated `fetchReply` interaction response options to avoid Discord.js deprecation warnings.
 - Application review index filter changes now silently refresh the index without an extra hidden confirmation message.
 - Application review index titles now use `{application name} - Review Filter`, or `All Server Applications - Review Filters` for all-type indexes.
@@ -273,6 +279,9 @@ Deferred larger work:
 SlickBot should continue to use polished embeds, buttons, setup panels, guided message flows, and compact status indicators instead of plain text-only command output.
 
 
-### v0.8.8 Report Review Index Filter Patch
+### v0.8.8 Support Review Index Patches
 - Report Review Index filter buttons now route correctly as button interactions.
 - Added an All filter to the report review index alongside Open, Dismissed, and Resolved.
+- Added filtered, auto-refreshing review indexes for Tickets and Appeals.
+- Ticket indexes support Open, Unclaimed, Claimed, Escalated, Closed, and All views.
+- Appeal indexes support Pending, Approved, Denied, and All views.

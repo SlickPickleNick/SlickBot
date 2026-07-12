@@ -82,6 +82,34 @@ async function handleComponentInteraction(interaction, ctx) {
 async function handleButton(interaction, ctx) {
   const id = interaction.customId;
 
+  if (id.startsWith(CustomIds.TicketReviewIndexFilterPrefix)) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.TicketsReview, ModuleKeys.TICKETS))) return true;
+    const rest = id.slice(CustomIds.TicketReviewIndexFilterPrefix.length);
+    const [indexId, statusFilter] = rest.split(':');
+    await interaction.deferUpdate();
+    const index = await tickets.updateReviewIndexFilter({ guildId: interaction.guildId, indexId, statusFilter });
+    if (!index) {
+      await interaction.followUp({ embeds: [createWarningEmbed('Review Index Not Found', 'This ticket review index could not be found.')], flags: MessageFlags.Ephemeral }).catch(() => {});
+      return true;
+    }
+    await tickets.refreshReviewIndex({ client: ctx.client, index }).catch(() => {});
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.AppealReviewIndexFilterPrefix)) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.AppealsReview, ModuleKeys.APPEALS))) return true;
+    const rest = id.slice(CustomIds.AppealReviewIndexFilterPrefix.length);
+    const [indexId, statusFilter] = rest.split(':');
+    await interaction.deferUpdate();
+    const index = await appeals.updateReviewIndexFilter({ guildId: interaction.guildId, indexId, statusFilter });
+    if (!index) {
+      await interaction.followUp({ embeds: [createWarningEmbed('Review Index Not Found', 'This appeal review index could not be found.')], flags: MessageFlags.Ephemeral }).catch(() => {});
+      return true;
+    }
+    await appeals.refreshReviewIndex({ client: ctx.client, index }).catch(() => {});
+    return true;
+  }
+
   if (id.startsWith(CustomIds.ReportReviewIndexFilterPrefix)) {
     if (!(await requireAction(interaction, ctx, ActionKeys.ReportsReview, ModuleKeys.REPORTS))) return true;
     const rest = id.slice(CustomIds.ReportReviewIndexFilterPrefix.length);
@@ -384,7 +412,7 @@ async function handleButton(interaction, ctx) {
     if (!(await requireAction(interaction, ctx, ActionKeys.TicketsClaim, ModuleKeys.TICKETS))) return true;
     const access = await tickets.canManageTicket({ interaction });
     if (!access.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Ticket Control Restricted', access.reason)] });
-    const result = await tickets.claimTicket({ interaction, logger: ctx.logger });
+    const result = await tickets.claimTicket({ interaction, client: ctx.client, logger: ctx.logger });
     if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Ticket Not Found', result.reason)] });
     await replyPrivate(interaction, { embeds: [createSuccessEmbed('Ticket Claimed', `Ticket #${result.ticket.ticket_number} is now assigned to <@${interaction.user.id}>.`)], deleteAfterSeconds: 10 });
     return true;
@@ -394,7 +422,7 @@ async function handleButton(interaction, ctx) {
     if (!(await requireAction(interaction, ctx, ActionKeys.TicketsManage, ModuleKeys.TICKETS))) return true;
     const access = await tickets.canManageTicket({ interaction });
     if (!access.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Ticket Control Restricted', access.reason)] });
-    const result = await tickets.escalateTicket({ interaction, logger: ctx.logger, reason: 'Escalated from ticket control button.' });
+    const result = await tickets.escalateTicket({ interaction, client: ctx.client, logger: ctx.logger, reason: 'Escalated from ticket control button.' });
     if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Ticket Not Escalated', result.reason)] });
     const mentions = result.roleIds.map((roleId) => `<@&${roleId}>`).join(' ');
     await interaction.channel.send({ content: `${mentions} Ticket #${result.ticket.ticket_number} has been escalated.`.trim() }).catch(() => {});
@@ -428,6 +456,7 @@ async function handleButton(interaction, ctx) {
     const report = await reports.claimReport({ guildId: interaction.guildId, reportId, reviewer: interaction.user, logger: ctx.logger });
     if (!report) return replyPrivate(interaction, { embeds: [createWarningEmbed('Report Not Found', 'The report could not be found or is already closed.')] });
     await updatePanel(interaction, buildReportReviewPayload(report));
+    await reports.refreshReviewIndexes({ client: ctx.client, guildId: interaction.guildId }).catch(() => {});
     return true;
   }
 

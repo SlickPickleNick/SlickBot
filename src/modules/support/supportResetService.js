@@ -10,7 +10,7 @@ const SUPPORT_RESET_MODULES = Object.freeze({
     panelType: 'ticket',
     moduleKey: 'TICKETS',
     actionKey: 'tickets.reset',
-    warning: 'This clears ticket setup, ticket types/questions, ticket records, added-user records, and tracked ticket panel posts. It does not delete Discord ticket channels that already exist.'
+    warning: 'This clears ticket setup, ticket types/questions, ticket records, added-user records, ticket review indexes, and tracked ticket panel posts. It does not delete Discord ticket channels that already exist.'
   },
   reports: {
     key: 'reports',
@@ -34,7 +34,7 @@ const SUPPORT_RESET_MODULES = Object.freeze({
     panelType: 'appeal',
     moduleKey: 'APPEALS',
     actionKey: 'appeals.reset',
-    warning: 'This clears appeal setup, appeal submissions/review records, and tracked appeal panel posts. It does not delete Discord review messages that already exist.'
+    warning: 'This clears appeal setup, appeal submissions/review records, appeal review indexes, and tracked appeal panel posts. It does not delete Discord review messages that already exist.'
   }
 });
 
@@ -52,15 +52,16 @@ async function getSupportResetSummary(guildId, moduleKey) {
   if (!mod) throw new Error('Unknown support reset module.');
 
   if (mod.key === 'tickets') {
-    const [configs, types, tickets, activeTickets, addedUsers, trackedPanels] = await Promise.all([
+    const [configs, types, tickets, activeTickets, addedUsers, reviewIndexes, trackedPanels] = await Promise.all([
       countRows(`SELECT COUNT(*) FROM ticket_configs WHERE guild_id = $1`, [guildId]),
       countRows(`SELECT COUNT(*) FROM ticket_types WHERE guild_id = $1`, [guildId]),
       countRows(`SELECT COUNT(*) FROM tickets WHERE guild_id = $1`, [guildId]),
       countRows(`SELECT COUNT(*) FROM tickets WHERE guild_id = $1 AND status <> 'CLOSED'`, [guildId]),
       countRows(`SELECT COUNT(*) FROM ticket_added_users WHERE guild_id = $1`, [guildId]),
+      countRows(`SELECT COUNT(*) FROM ticket_review_indexes WHERE guild_id = $1 AND active = true`, [guildId]),
       countRows(`SELECT COUNT(*) FROM panel_messages WHERE guild_id = $1 AND panel_type = 'ticket' AND active = true`, [guildId])
     ]);
-    return { mod, counts: { configs, types, tickets, activeTickets, addedUsers, trackedPanels } };
+    return { mod, counts: { configs, types, tickets, activeTickets, addedUsers, reviewIndexes, trackedPanels } };
   }
 
   if (mod.key === 'reports') {
@@ -87,13 +88,14 @@ async function getSupportResetSummary(guildId, moduleKey) {
     return { mod, counts: { types, questions, sessions, submissions, pendingSubmissions, reviewIndexes, trackedPanels } };
   }
 
-  const [configs, appeals, pendingAppeals, trackedPanels] = await Promise.all([
+  const [configs, appeals, pendingAppeals, reviewIndexes, trackedPanels] = await Promise.all([
     countRows(`SELECT COUNT(*) FROM appeal_configs WHERE guild_id = $1`, [guildId]),
     countRows(`SELECT COUNT(*) FROM appeals WHERE guild_id = $1`, [guildId]),
     countRows(`SELECT COUNT(*) FROM appeals WHERE guild_id = $1 AND status = 'PENDING'`, [guildId]),
+    countRows(`SELECT COUNT(*) FROM appeal_review_indexes WHERE guild_id = $1 AND active = true`, [guildId]),
     countRows(`SELECT COUNT(*) FROM panel_messages WHERE guild_id = $1 AND panel_type = 'appeal' AND active = true`, [guildId])
   ]);
-  return { mod, counts: { configs, appeals, pendingAppeals, trackedPanels } };
+  return { mod, counts: { configs, appeals, pendingAppeals, reviewIndexes, trackedPanels } };
 }
 
 function formatCounts(counts) {
@@ -138,6 +140,7 @@ async function resetSupportModule(guildId, moduleKey) {
   const before = await getSupportResetSummary(guildId, mod.key);
 
   if (mod.key === 'tickets') {
+    await query(`DELETE FROM ticket_review_indexes WHERE guild_id = $1`, [guildId]).catch(() => {});
     await query(`DELETE FROM ticket_added_users WHERE guild_id = $1`, [guildId]);
     await query(`DELETE FROM tickets WHERE guild_id = $1`, [guildId]);
     await query(`DELETE FROM ticket_types WHERE guild_id = $1`, [guildId]);
@@ -155,6 +158,7 @@ async function resetSupportModule(guildId, moduleKey) {
     await query(`DELETE FROM application_types WHERE guild_id = $1`, [guildId]);
     await query(`UPDATE panel_messages SET active = false, updated_at = NOW() WHERE guild_id = $1 AND panel_type = 'application'`, [guildId]);
   } else if (mod.key === 'appeals') {
+    await query(`DELETE FROM appeal_review_indexes WHERE guild_id = $1`, [guildId]).catch(() => {});
     await query(`DELETE FROM appeals WHERE guild_id = $1`, [guildId]);
     await query(`DELETE FROM appeal_configs WHERE guild_id = $1`, [guildId]);
     await query(`UPDATE panel_messages SET active = false, updated_at = NOW() WHERE guild_id = $1 AND panel_type = 'appeal'`, [guildId]);

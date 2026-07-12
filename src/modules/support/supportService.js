@@ -333,6 +333,148 @@ function buildReportReviewIndexPayload(index, reports = []) {
   return { embeds: [embed], components: [row] };
 }
 
+function ticketReviewMessageUrl(ticket) {
+  if (!ticket?.guild_id || !ticket?.channel_id || normalizeStatus(ticket.status) === 'CLOSED') return null;
+  if (ticket.control_message_id) return `https://discord.com/channels/${ticket.guild_id}/${ticket.channel_id}/${ticket.control_message_id}`;
+  return `https://discord.com/channels/${ticket.guild_id}/${ticket.channel_id}`;
+}
+
+function formatTicketIndexFilterLabel(index) {
+  const filter = normalizeStatus(index?.status_filter || 'OPEN');
+  const labels = {
+    OPEN: 'All Open Tickets',
+    UNCLAIMED: 'Unclaimed Tickets',
+    CLAIMED: 'Claimed Tickets',
+    ESCALATED: 'Escalated Tickets',
+    CLOSED: 'Closed Tickets',
+    ALL: 'All Tickets'
+  };
+  return labels[filter] || labels.OPEN;
+}
+
+function formatTicketOperationalStatus(ticket) {
+  const status = normalizeStatus(ticket?.status || 'OPEN');
+  if (status === 'CLOSED') return formatSupportStatus('CLOSED');
+  if (normalizeStatus(ticket?.priority) === 'ESCALATED') return '🟠 **Escalated**';
+  if (ticket?.claimed_by_user_id) return formatSupportStatus('CLAIMED');
+  return '🟠 **Open · Unclaimed**';
+}
+
+function buildTicketReviewIndexPayload(index, tickets = []) {
+  const filter = normalizeStatus(index?.status_filter || 'OPEN');
+  const visible = tickets.slice(0, 20);
+  const lines = visible.length ? visible.map((ticket) => {
+    const url = ticketReviewMessageUrl(ticket);
+    const openedAt = formatTimestamp(ticket.created_at);
+    const closedAt = formatTimestamp(ticket.closed_at);
+    const link = url ? `[Open Ticket](${url})` : 'Ticket closed; channel may no longer be available';
+    const claimed = ticket.claimed_by_user_id ? ` · Claimed by <@${ticket.claimed_by_user_id}>` : '';
+    const closed = ticket.closed_by_user_id ? ` · Closed by <@${ticket.closed_by_user_id}>${closedAt ? ` on ${closedAt}` : ''}` : '';
+    return `• **#${ticket.ticket_number}** · ${ticket.type || 'Ticket'} · ${formatTicketOperationalStatus(ticket)} · Priority: **${ticket.priority || 'NORMAL'}** · Opener: <@${ticket.opener_user_id}>${claimed}${openedAt ? ` · ${openedAt}` : ''}${closed}\n  ${link}`;
+  }).join('\n') : `No ${formatTicketIndexFilterLabel(index).toLowerCase()} found for this index.`;
+
+  const color = filter === 'CLOSED'
+    ? SlickBotColors.MUTED
+    : filter === 'ESCALATED'
+      ? SlickBotColors.WARNING
+      : filter === 'CLAIMED'
+        ? SlickBotColors.INFO
+        : filter === 'ALL'
+          ? SlickBotColors.INFO
+          : SlickBotColors.WARNING;
+
+  const embed = createBaseEmbed({
+    title: 'Server Tickets - Review Filter',
+    description: [
+      `**Current Filter:** ${formatTicketIndexFilterLabel(index)}`,
+      '',
+      lines,
+      tickets.length > visible.length ? `\nShowing **${visible.length}/${tickets.length}** tickets. Use server search or change the filter for more.` : null,
+      '',
+      'This index is refreshed when tickets are opened, claimed, reprioritized, escalated, or closed.'
+    ].filter(Boolean).join('\n'),
+    color,
+    footer: 'SlickBot Tickets'
+  });
+
+  const makeButton = (status, label) => new ButtonBuilder()
+    .setCustomId(`${CustomIds.TicketReviewIndexFilterPrefix}${index.id}:${status}`)
+    .setLabel(label)
+    .setStyle(filter === status ? ButtonStyle.Success : ButtonStyle.Secondary);
+
+  return {
+    embeds: [embed],
+    components: [
+      new ActionRowBuilder().addComponents(
+        makeButton('OPEN', 'Open'),
+        makeButton('UNCLAIMED', 'Unclaimed'),
+        makeButton('CLAIMED', 'Claimed'),
+        makeButton('ESCALATED', 'Escalated')
+      ),
+      new ActionRowBuilder().addComponents(
+        makeButton('CLOSED', 'Closed'),
+        makeButton('ALL', 'All')
+      )
+    ]
+  };
+}
+
+function appealReviewMessageUrl(appeal) {
+  if (!appeal?.guild_id || !appeal?.review_channel_id || !appeal?.review_message_id) return null;
+  return `https://discord.com/channels/${appeal.guild_id}/${appeal.review_channel_id}/${appeal.review_message_id}`;
+}
+
+function formatAppealIndexFilterLabel(index) {
+  const filter = normalizeStatus(index?.status_filter || 'PENDING');
+  if (filter === 'ALL') return 'All Appeals';
+  if (filter === 'APPROVED') return 'Approved Appeals';
+  if (filter === 'DENIED') return 'Denied Appeals';
+  return 'Pending Appeals';
+}
+
+function buildAppealReviewIndexPayload(index, appeals = []) {
+  const filter = normalizeStatus(index?.status_filter || 'PENDING');
+  const visible = appeals.slice(0, 20);
+  const lines = visible.length ? visible.map((appeal) => {
+    const url = appealReviewMessageUrl(appeal);
+    const submittedAt = formatTimestamp(appeal.created_at);
+    const reviewedAt = formatTimestamp(appeal.reviewed_at);
+    const link = url ? `[Open Review](${url})` : 'Review message unavailable';
+    const caseLabel = appeal.case_number ? ` · Case #${appeal.case_number}` : '';
+    const reviewer = appeal.reviewed_by_user_id ? ` · Reviewed by <@${appeal.reviewed_by_user_id}>${reviewedAt ? ` on ${reviewedAt}` : ''}` : '';
+    return `• **#${appeal.appeal_number}** · ${formatSupportStatus(appeal.status || 'PENDING')} · Appellant: <@${appeal.appellant_user_id}>${caseLabel}${submittedAt ? ` · ${submittedAt}` : ''}${reviewer}\n  ${link}`;
+  }).join('\n') : `No ${formatAppealIndexFilterLabel(index).toLowerCase()} found for this index.`;
+
+  const embed = createBaseEmbed({
+    title: 'Server Appeals - Review Filter',
+    description: [
+      `**Current Filter:** ${formatAppealIndexFilterLabel(index)}`,
+      '',
+      lines,
+      appeals.length > visible.length ? `\nShowing **${visible.length}/${appeals.length}** appeals. Use the review channel search or change the filter for more.` : null,
+      '',
+      'This index is refreshed when new appeals are submitted or when appeal statuses change.'
+    ].filter(Boolean).join('\n'),
+    color: filter === 'APPROVED' ? SlickBotColors.SUCCESS : filter === 'DENIED' ? SlickBotColors.ERROR : filter === 'ALL' ? SlickBotColors.INFO : SlickBotColors.WARNING,
+    footer: 'SlickBot Appeals'
+  });
+
+  const makeButton = (status, label) => new ButtonBuilder()
+    .setCustomId(`${CustomIds.AppealReviewIndexFilterPrefix}${index.id}:${status}`)
+    .setLabel(label)
+    .setStyle(filter === status ? ButtonStyle.Success : ButtonStyle.Secondary);
+
+  return {
+    embeds: [embed],
+    components: [new ActionRowBuilder().addComponents(
+      makeButton('PENDING', 'Pending'),
+      makeButton('APPROVED', 'Approved'),
+      makeButton('DENIED', 'Denied'),
+      makeButton('ALL', 'All')
+    )]
+  };
+}
+
 function hasAnyRole(member, roleIds = []) {
   if (!member?.roles?.cache) return false;
   return roleIds.some((roleId) => member.roles.cache.has(roleId));
@@ -500,6 +642,73 @@ class TicketService {
     return { ok: true, type };
   }
 
+  async createReviewIndex({ guildId, channelId, statusFilter = 'OPEN', createdByUserId = null, client = null }) {
+    const allowedFilters = ['OPEN', 'UNCLAIMED', 'CLAIMED', 'ESCALATED', 'CLOSED', 'ALL'];
+    const normalizedFilter = allowedFilters.includes(normalizeStatus(statusFilter)) ? normalizeStatus(statusFilter) : 'OPEN';
+    const existing = await query(
+      `SELECT * FROM ticket_review_indexes WHERE guild_id = $1 AND channel_id = $2 LIMIT 1`,
+      [guildId, channelId]
+    ).catch(() => ({ rows: [] }));
+    const result = existing.rows[0]
+      ? await query(`UPDATE ticket_review_indexes SET status_filter = $1, active = true, updated_at = NOW() WHERE id = $2 RETURNING *`, [normalizedFilter, existing.rows[0].id])
+      : await query(
+        `INSERT INTO ticket_review_indexes (guild_id, channel_id, status_filter, created_by_user_id, active) VALUES ($1, $2, $3, $4, true) RETURNING *`,
+        [guildId, channelId, normalizedFilter, createdByUserId || null]
+      );
+    const index = result.rows[0];
+    if (client) await this.refreshReviewIndex({ client, index }).catch(() => {});
+    return index;
+  }
+
+  async updateReviewIndexFilter({ guildId, indexId, statusFilter }) {
+    const allowedFilters = ['OPEN', 'UNCLAIMED', 'CLAIMED', 'ESCALATED', 'CLOSED', 'ALL'];
+    const normalizedFilter = allowedFilters.includes(normalizeStatus(statusFilter)) ? normalizeStatus(statusFilter) : 'OPEN';
+    const result = await query(
+      `UPDATE ticket_review_indexes SET status_filter = $1, updated_at = NOW() WHERE guild_id = $2 AND id = $3 AND active = true RETURNING *`,
+      [normalizedFilter, guildId, indexId]
+    ).catch(() => ({ rows: [] }));
+    return result.rows[0] || null;
+  }
+
+  async getReviewIndexTickets(index) {
+    const filter = normalizeStatus(index.status_filter || 'OPEN');
+    const clauses = ['guild_id = $1'];
+    if (filter === 'OPEN') clauses.push(`status = 'OPEN'`);
+    else if (filter === 'UNCLAIMED') clauses.push(`status = 'OPEN' AND claimed_by_user_id IS NULL`);
+    else if (filter === 'CLAIMED') clauses.push(`status = 'OPEN' AND claimed_by_user_id IS NOT NULL`);
+    else if (filter === 'ESCALATED') clauses.push(`status = 'OPEN' AND priority = 'ESCALATED'`);
+    else if (filter === 'CLOSED') clauses.push(`status = 'CLOSED'`);
+    const result = await query(
+      `SELECT * FROM tickets WHERE ${clauses.join(' AND ')} ORDER BY created_at DESC LIMIT 50`,
+      [index.guild_id]
+    ).catch(() => ({ rows: [] }));
+    return result.rows;
+  }
+
+  async refreshReviewIndex({ client, index }) {
+    if (!index?.channel_id) return false;
+    const channel = await fetchSendableChannel(client, index.channel_id);
+    if (!channel) return false;
+    if (index.message_id && channel.messages?.fetch) {
+      const oldMessage = await channel.messages.fetch(index.message_id).catch(() => null);
+      if (oldMessage?.delete) await oldMessage.delete().catch(() => {});
+    }
+    const indexTickets = await this.getReviewIndexTickets(index);
+    const sent = await channel.send(buildTicketReviewIndexPayload(index, indexTickets)).catch(() => null);
+    if (!sent) return false;
+    await query(`UPDATE ticket_review_indexes SET message_id = $1, updated_at = NOW() WHERE id = $2`, [sent.id, index.id]).catch(() => {});
+    return true;
+  }
+
+  async refreshReviewIndexes({ client, guildId }) {
+    const result = await query(`SELECT * FROM ticket_review_indexes WHERE guild_id = $1 AND active = true`, [guildId]).catch(() => ({ rows: [] }));
+    let refreshed = 0;
+    for (const index of result.rows) {
+      if (await this.refreshReviewIndex({ client, index }).catch(() => false)) refreshed += 1;
+    }
+    return refreshed;
+  }
+
   async createTicket({ interaction, client, logger, type = 'Admin Support', ticketType = null, openerUser = null, actorUser = null, subject, details, answers = null, reviewerRoleIdsOverride = null, skipTicketLimit = false }) {
     const guild = interaction.guild;
     const guildId = interaction.guildId;
@@ -575,6 +784,7 @@ class TicketService {
       actorUserId: actor.id,
       metadata: { ticketId: ticket.id, channelId: channel.id, openerUserId: opener.id }
     }).catch(() => {});
+    await this.refreshReviewIndexes({ client, guildId }).catch(() => {});
 
     return { ok: true, ticket, channel };
   }
@@ -642,7 +852,7 @@ class TicketService {
     return true;
   }
 
-  async claimTicket({ interaction, logger }) {
+  async claimTicket({ interaction, client = null, logger }) {
     const ticket = await this.findOpenTicketByChannel(interaction.guildId, interaction.channelId);
     if (!ticket) return { ok: false, reason: 'This channel is not an open SlickBot ticket.' };
 
@@ -650,20 +860,22 @@ class TicketService {
     const updatedTicket = result.rows[0];
     await this.refreshTicketControlMessage({ interaction, ticket: updatedTicket }).catch(() => {});
     await logger.log({ guildId: interaction.guildId, eventKey: 'ticket-claim', title: 'Ticket Claimed', body: `Ticket #${ticket.ticket_number} claimed by ${interaction.user.tag}.`, actorUserId: interaction.user.id, metadata: { ticketId: ticket.id } }).catch(() => {});
+    if (client) await this.refreshReviewIndexes({ client, guildId: interaction.guildId }).catch(() => {});
     return { ok: true, ticket: updatedTicket };
   }
 
-  async setPriority({ interaction, logger, priority }) {
+  async setPriority({ interaction, client = null, logger, priority }) {
     const ticket = await this.findOpenTicketByChannel(interaction.guildId, interaction.channelId);
     if (!ticket) return { ok: false, reason: 'This channel is not an open SlickBot ticket.' };
     const result = await query(`UPDATE tickets SET priority = $1, updated_at = NOW() WHERE id = $2 RETURNING *`, [priority, ticket.id]);
     const updatedTicket = result.rows[0];
     await this.refreshTicketControlMessage({ interaction, ticket: updatedTicket }).catch(() => {});
     await logger.log({ guildId: interaction.guildId, eventKey: 'ticket-priority', title: 'Ticket Priority Updated', body: `Ticket #${ticket.ticket_number} priority changed to **${priority}** by ${interaction.user.tag}.`, actorUserId: interaction.user.id, metadata: { ticketId: ticket.id, priority } }).catch(() => {});
+    if (client) await this.refreshReviewIndexes({ client, guildId: interaction.guildId }).catch(() => {});
     return { ok: true, ticket: updatedTicket };
   }
 
-  async escalateTicket({ interaction, logger, reason = 'No escalation reason provided.' }) {
+  async escalateTicket({ interaction, client = null, logger, reason = 'No escalation reason provided.' }) {
     const ticket = await this.findOpenTicketByChannel(interaction.guildId, interaction.channelId);
     if (!ticket) return { ok: false, reason: 'This channel is not an open SlickBot ticket.' };
 
@@ -692,6 +904,7 @@ class TicketService {
     const updatedTicket = result.rows[0];
     await this.refreshTicketControlMessage({ interaction, ticket: updatedTicket }).catch(() => {});
     await logger.log({ guildId: interaction.guildId, eventKey: 'ticket-escalate', title: 'Ticket Escalated', body: `Ticket #${ticket.ticket_number} escalated by ${interaction.user.tag}.\nReason: ${reason}`, actorUserId: interaction.user.id, metadata: { ticketId: ticket.id, escalatedRoles } }).catch(() => {});
+    if (client) await this.refreshReviewIndexes({ client, guildId: interaction.guildId }).catch(() => {});
     return { ok: true, ticket: updatedTicket, roleIds: escalatedRoles };
   }
 
@@ -820,6 +1033,7 @@ class TicketService {
     await interaction.channel.permissionOverwrites.edit(ticket.opener_user_id, { SendMessages: false }).catch(() => {});
     await interaction.channel.setName(`closed-${interaction.channel.name}`.slice(0, 95)).catch(() => {});
     await logger.log({ guildId: interaction.guildId, eventKey: 'ticket-close', title: 'Ticket Closed', body: `Ticket #${ticket.ticket_number} closed by ${interaction.user.tag}. Transcript sent: **${transcriptSent ? 'Yes' : 'No'}**.\nReason: ${reason}`, actorUserId: interaction.user.id, metadata: { ticketId: ticket.id, transcriptSent } }).catch(() => {});
+    await this.refreshReviewIndexes({ client, guildId: interaction.guildId }).catch(() => {});
     return { ok: true, ticket: closedTicket, transcriptSent, shouldDelete: transcriptSent === true, deleteSeconds: Number(type?.close_delete_seconds || config.close_delete_seconds || 10) };
   }
 
@@ -1649,6 +1863,71 @@ class AppealService {
     return result.rows[0] || null;
   }
 
+  async createReviewIndex({ guildId, channelId, statusFilter = 'PENDING', createdByUserId = null, client = null }) {
+    const normalizedFilter = ['PENDING', 'APPROVED', 'DENIED', 'ALL'].includes(normalizeStatus(statusFilter)) ? normalizeStatus(statusFilter) : 'PENDING';
+    const existing = await query(
+      `SELECT * FROM appeal_review_indexes WHERE guild_id = $1 AND channel_id = $2 LIMIT 1`,
+      [guildId, channelId]
+    ).catch(() => ({ rows: [] }));
+    const result = existing.rows[0]
+      ? await query(`UPDATE appeal_review_indexes SET status_filter = $1, active = true, updated_at = NOW() WHERE id = $2 RETURNING *`, [normalizedFilter, existing.rows[0].id])
+      : await query(
+        `INSERT INTO appeal_review_indexes (guild_id, channel_id, status_filter, created_by_user_id, active) VALUES ($1, $2, $3, $4, true) RETURNING *`,
+        [guildId, channelId, normalizedFilter, createdByUserId || null]
+      );
+    const index = result.rows[0];
+    if (client) await this.refreshReviewIndex({ client, index }).catch(() => {});
+    return index;
+  }
+
+  async updateReviewIndexFilter({ guildId, indexId, statusFilter }) {
+    const normalizedFilter = ['PENDING', 'APPROVED', 'DENIED', 'ALL'].includes(normalizeStatus(statusFilter)) ? normalizeStatus(statusFilter) : 'PENDING';
+    const result = await query(
+      `UPDATE appeal_review_indexes SET status_filter = $1, updated_at = NOW() WHERE guild_id = $2 AND id = $3 AND active = true RETURNING *`,
+      [normalizedFilter, guildId, indexId]
+    ).catch(() => ({ rows: [] }));
+    return result.rows[0] || null;
+  }
+
+  async getReviewIndexAppeals(index) {
+    const filter = normalizeStatus(index.status_filter || 'PENDING');
+    const params = [index.guild_id];
+    const clauses = ['guild_id = $1'];
+    if (filter !== 'ALL') {
+      params.push(filter);
+      clauses.push(`status = $${params.length}`);
+    }
+    const result = await query(
+      `SELECT * FROM appeals WHERE ${clauses.join(' AND ')} ORDER BY created_at DESC LIMIT 50`,
+      params
+    ).catch(() => ({ rows: [] }));
+    return result.rows;
+  }
+
+  async refreshReviewIndex({ client, index }) {
+    if (!index?.channel_id) return false;
+    const channel = await fetchSendableChannel(client, index.channel_id);
+    if (!channel) return false;
+    if (index.message_id && channel.messages?.fetch) {
+      const oldMessage = await channel.messages.fetch(index.message_id).catch(() => null);
+      if (oldMessage?.delete) await oldMessage.delete().catch(() => {});
+    }
+    const indexAppeals = await this.getReviewIndexAppeals(index);
+    const sent = await channel.send(buildAppealReviewIndexPayload(index, indexAppeals)).catch(() => null);
+    if (!sent) return false;
+    await query(`UPDATE appeal_review_indexes SET message_id = $1, updated_at = NOW() WHERE id = $2`, [sent.id, index.id]).catch(() => {});
+    return true;
+  }
+
+  async refreshReviewIndexes({ client, guildId }) {
+    const result = await query(`SELECT * FROM appeal_review_indexes WHERE guild_id = $1 AND active = true`, [guildId]).catch(() => ({ rows: [] }));
+    let refreshed = 0;
+    for (const index of result.rows) {
+      if (await this.refreshReviewIndex({ client, index }).catch(() => false)) refreshed += 1;
+    }
+    return refreshed;
+  }
+
   async submitAppeal({ interaction, client, logger, caseNumber, reason, details }) {
     const next = await query(nextNumberQuery('appeals', 'appeal_number'), [interaction.guildId]);
     const appealNumber = Number(next.rows[0].next_number);
@@ -1667,6 +1946,7 @@ class AppealService {
       appeal.review_message_id = sent.id;
     }
     await logger.log({ guildId: interaction.guildId, eventKey: 'appeal-submit', title: 'Appeal Submitted', body: `Appeal #${appeal.appeal_number} submitted by ${interaction.user.tag}${caseNumber ? ` for case #${caseNumber}` : ''}.`, actorUserId: interaction.user.id, metadata: { appealId: appeal.id, caseNumber } }).catch(() => {});
+    await this.refreshReviewIndexes({ client, guildId: interaction.guildId }).catch(() => {});
     return appeal;
   }
 
@@ -1686,6 +1966,7 @@ class AppealService {
     }
     await this.refreshReviewMessage({ client, appeal }).catch(() => {});
     await logger.log({ guildId: interaction.guildId, eventKey: 'appeal-review', title: 'Appeal Reviewed', body: `Appeal #${appeal.appeal_number} marked **${nextStatus}** by ${interaction.user.tag}.${reason ? ` Reason: ${reason}` : ''}`, actorUserId: interaction.user.id, metadata: { appealId: appeal.id, status: nextStatus } }).catch(() => {});
+    await this.refreshReviewIndexes({ client, guildId: interaction.guildId }).catch(() => {});
     return appeal;
   }
 

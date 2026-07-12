@@ -393,6 +393,21 @@ async function initDatabase() {
     );
   `);
 
+  await query(`
+    CREATE TABLE IF NOT EXISTS ticket_review_indexes (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      channel_id TEXT NOT NULL,
+      message_id TEXT,
+      status_filter TEXT NOT NULL DEFAULT 'OPEN',
+      active BOOLEAN NOT NULL DEFAULT true,
+      created_by_user_id TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS idx_ticket_review_indexes_guild_active ON ticket_review_indexes(guild_id, active);`).catch(() => {});
+
   await query(`ALTER TABLE report_configs ADD COLUMN IF NOT EXISTS ping_role_id TEXT;`).catch(() => {});
   await query(`ALTER TABLE report_configs ADD COLUMN IF NOT EXISTS ping_team_id TEXT REFERENCES permission_teams(id) ON DELETE SET NULL;`).catch(() => {});
   await query(`ALTER TABLE reports ADD COLUMN IF NOT EXISTS claimed_by_user_id TEXT;`).catch(() => {});
@@ -493,6 +508,21 @@ async function initDatabase() {
   `);
   await query(`CREATE INDEX IF NOT EXISTS idx_application_review_indexes_guild_type ON application_review_indexes(guild_id, application_type_id, active);`).catch(() => {});
   await query(`DELETE FROM application_types WHERE name = 'Moderator' AND description = 'Apply to help moderate the SlickPickleNick community.'`).catch(() => {});
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS appeal_review_indexes (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      channel_id TEXT NOT NULL,
+      message_id TEXT,
+      status_filter TEXT NOT NULL DEFAULT 'PENDING',
+      active BOOLEAN NOT NULL DEFAULT true,
+      created_by_user_id TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS idx_appeal_review_indexes_guild_active ON appeal_review_indexes(guild_id, active);`).catch(() => {});
 
   await query(`ALTER TABLE appeal_configs ADD COLUMN IF NOT EXISTS panel_title TEXT;`).catch(() => {});
   await query(`ALTER TABLE appeal_configs ADD COLUMN IF NOT EXISTS panel_description TEXT;`).catch(() => {});

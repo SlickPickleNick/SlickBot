@@ -73,6 +73,7 @@ const HELP_CATALOG = Object.freeze([
   { moduleKey: ModuleKeys.TICKETS, actionKey: ActionKeys.TicketsPanel, command: '/ticket manager', description: 'Open the ticket manager.' },
   { moduleKey: ModuleKeys.TICKETS, actionKey: ActionKeys.TicketsConfigure, command: '/ticket setup|type-setup|question-add|question-clear|type-delete', description: 'Configure ticket categories, teams, and questions.' },
   { moduleKey: ModuleKeys.TICKETS, actionKey: ActionKeys.TicketsPostPanel, command: '/ticket panel', description: 'Post a public ticket panel.' },
+  { moduleKey: ModuleKeys.TICKETS, actionKey: ActionKeys.TicketsReview, command: '/ticket review-index', description: 'Post or refresh the staff ticket review index.' },
   { moduleKey: ModuleKeys.TICKETS, actionKey: ActionKeys.TicketsClaim, command: '/ticket claim', description: 'Claim the current ticket.' },
   { moduleKey: ModuleKeys.TICKETS, actionKey: ActionKeys.TicketsManage, command: '/ticket priority|escalate|add-user|remove-user', description: 'Manage a ticket channel.' },
   { moduleKey: ModuleKeys.TICKETS, actionKey: ActionKeys.TicketsClose, command: '/ticket close', description: 'Close a ticket with transcript handling.' },
@@ -81,12 +82,13 @@ const HELP_CATALOG = Object.freeze([
   { moduleKey: ModuleKeys.REPORTS, actionKey: ActionKeys.ReportsPanel, command: '/report manager', description: 'Open the report manager.' },
   { moduleKey: ModuleKeys.REPORTS, actionKey: ActionKeys.ReportsConfigure, command: '/report setup', description: 'Configure report review settings.' },
   { moduleKey: ModuleKeys.REPORTS, actionKey: ActionKeys.ReportsPostPanel, command: '/report panel', description: 'Post the public report panel.' },
+  { moduleKey: ModuleKeys.REPORTS, actionKey: ActionKeys.ReportsReview, command: '/report review-index', description: 'Post or refresh the report review index.' },
 
   { moduleKey: ModuleKeys.APPLICATIONS, actionKey: ActionKeys.ApplicationsApply, command: '/application apply', description: 'Start an application through DM.' },
   { moduleKey: ModuleKeys.APPLICATIONS, actionKey: ActionKeys.ApplicationsPanel, command: '/application manager', description: 'Open the application manager.' },
   { moduleKey: ModuleKeys.APPLICATIONS, actionKey: ActionKeys.ApplicationsConfigure, command: '/application setup|question-add|question-list|question-clear|close|reopen|delete', description: 'Configure custom application types/questions.' },
   { moduleKey: ModuleKeys.APPLICATIONS, actionKey: ActionKeys.ApplicationsPostPanel, command: '/application panel', description: 'Post a public application panel.' },
-  { moduleKey: ModuleKeys.APPLICATIONS, actionKey: ActionKeys.ApplicationsReview, command: 'Application review buttons', description: 'Open review threads and inspect submissions.' },
+  { moduleKey: ModuleKeys.APPLICATIONS, actionKey: ActionKeys.ApplicationsReview, command: '/application review-index and review buttons', description: 'Post review indexes, open review threads, and inspect submissions.' },
   { moduleKey: ModuleKeys.APPLICATIONS, actionKey: ActionKeys.ApplicationsApprove, command: 'Approve application', description: 'Approve an application with a reason.' },
   { moduleKey: ModuleKeys.APPLICATIONS, actionKey: ActionKeys.ApplicationsDeny, command: 'Deny application', description: 'Deny an application with a reason.' },
 
@@ -94,6 +96,7 @@ const HELP_CATALOG = Object.freeze([
   { moduleKey: ModuleKeys.APPEALS, actionKey: ActionKeys.AppealsPanel, command: '/appeal manager', description: 'Open the appeal manager.' },
   { moduleKey: ModuleKeys.APPEALS, actionKey: ActionKeys.AppealsConfigure, command: '/appeal setup|edit', description: 'Configure or update appeal settings.' },
   { moduleKey: ModuleKeys.APPEALS, actionKey: ActionKeys.AppealsPostPanel, command: '/appeal panel', description: 'Post a public appeal panel.' },
+  { moduleKey: ModuleKeys.APPEALS, actionKey: ActionKeys.AppealsReview, command: '/appeal review-index', description: 'Post or refresh the appeal review index.' },
   { moduleKey: ModuleKeys.APPEALS, actionKey: ActionKeys.AppealsApprove, command: 'Approve appeal', description: 'Approve an appeal with a reason.' },
   { moduleKey: ModuleKeys.APPEALS, actionKey: ActionKeys.AppealsDeny, command: 'Deny appeal', description: 'Deny an appeal with a reason.' },
 

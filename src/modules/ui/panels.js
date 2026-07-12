@@ -76,26 +76,26 @@ const MODULE_SETUP_CATALOG = Object.freeze({
   [ModuleKeys.TICKETS]: {
     name: 'Tickets', category: 'Support Systems', description: 'Creates private support channels with ticket types, questions, staff assignment, escalation, transcripts, and panels.',
     managerCommand: '/ticket manager', setupCommand: '/ticket setup',
-    nextSteps: ['Run `/ticket setup` for category, log channel, and staff/escalation teams.', 'Create ticket types with `/ticket type-setup`.', 'Add questions with `/ticket question-add` if needed.', 'Post the public panel with `/ticket panel`.'],
-    usefulCommands: ['/ticket manager', '/ticket setup', '/ticket type-setup', '/ticket question-add', '/ticket panel']
+    nextSteps: ['Run `/ticket setup` for category, log channel, and staff/escalation teams.', 'Create ticket types with `/ticket type-setup`.', 'Add questions with `/ticket question-add` if needed.', 'Post the public panel with `/ticket panel`.', 'Post a staff review index with `/ticket review-index`.'],
+    usefulCommands: ['/ticket manager', '/ticket setup', '/ticket type-setup', '/ticket question-add', '/ticket panel', '/ticket review-index']
   },
   [ModuleKeys.REPORTS]: {
     name: 'Reports', category: 'Support Systems', description: 'Allows private user reports, staff review actions, follow-up tickets, and review-channel embeds.',
     managerCommand: '/report manager', setupCommand: '/report setup',
-    nextSteps: ['Run `/report setup` and set a review channel.', 'Post a report panel with `/report panel`.', 'Review report notification and ping settings.'],
-    usefulCommands: ['/report manager', '/report setup', '/report panel']
+    nextSteps: ['Run `/report setup` and set a review channel.', 'Post a report panel with `/report panel`.', 'Review report notification and ping settings.', 'Post a staff review index with `/report review-index`.'],
+    usefulCommands: ['/report manager', '/report setup', '/report panel', '/report review-index']
   },
   [ModuleKeys.APPLICATIONS]: {
     name: 'Applications', category: 'Support Systems', description: 'Runs custom application types through DMs, records answers, and sends review embeds with transcripts.',
     managerCommand: '/application manager', setupCommand: '/application setup',
-    nextSteps: ['Create an application type with `/application setup`.', 'Add custom questions with `/application question-add`.', 'Post the public application panel with `/application panel`.', 'Test the application flow from a non-staff account if possible.'],
-    usefulCommands: ['/application manager', '/application setup', '/application question-add', '/application question-list', '/application panel']
+    nextSteps: ['Create an application type with `/application setup`.', 'Add custom questions with `/application question-add`.', 'Post the public application panel with `/application panel`.', 'Test the application flow from a non-staff account if possible.', 'Post a review index with `/application review-index`.'],
+    usefulCommands: ['/application manager', '/application setup', '/application question-add', '/application question-list', '/application panel', '/application review-index']
   },
   [ModuleKeys.APPEALS]: {
     name: 'Appeals', category: 'Support Systems', description: 'Collects appeals, sends them to a review channel, and manages approve/deny decisions and DMs.',
     managerCommand: '/appeal manager', setupCommand: '/appeal setup',
-    nextSteps: ['Run `/appeal setup` for the initial review channel and panel settings.', 'Use `/appeal edit` for partial changes later.', 'Post the public panel with `/appeal panel`.'],
-    usefulCommands: ['/appeal manager', '/appeal setup', '/appeal edit', '/appeal panel']
+    nextSteps: ['Run `/appeal setup` for the initial review channel and panel settings.', 'Use `/appeal edit` for partial changes later.', 'Post the public panel with `/appeal panel`.', 'Post a staff review index with `/appeal review-index`.'],
+    usefulCommands: ['/appeal manager', '/appeal setup', '/appeal edit', '/appeal panel', '/appeal review-index']
   },
   [ModuleKeys.WELCOME]: {
     name: 'Welcome / Auto Roles', category: 'Community Systems', description: 'Sends welcome messages and grants configured roles when members join.',

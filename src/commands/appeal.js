@@ -5,7 +5,7 @@ const { replyPrivate } = require('../utils/reply');
 const { AppealService } = require('../modules/support/supportService');
 const { buildSupportResetConfirmationPayload } = require('../modules/support/supportResetService');
 const { buildAppealsPanel, buildPublicAppealPanel } = require('../modules/support/supportUi');
-const { createSuccessEmbed } = require('../modules/ui/uiService');
+const { createSuccessEmbed, createWarningEmbed } = require('../modules/ui/uiService');
 const { recordPublishedPanel } = require('../modules/panels/publishedPanelService');
 const { refreshPublishedPanel, formatRefreshSummary } = require('../modules/panels/panelUpdateService');
 
@@ -51,6 +51,18 @@ module.exports = {
     )
     .addSubcommand((subcommand) =>
       subcommand
+        .setName('review-index')
+        .setDescription('Post or refresh an appeal review index in the review channel.')
+        .addStringOption((option) => option.setName('status').setDescription('Appeals to show. Defaults to pending.').setRequired(false).addChoices(
+          { name: 'Pending', value: 'PENDING' },
+          { name: 'Approved', value: 'APPROVED' },
+          { name: 'Denied', value: 'DENIED' },
+          { name: 'All', value: 'ALL' }
+        ))
+        .addChannelOption((option) => option.setName('channel').setDescription('Review channel for the index. Defaults to the configured appeal review channel/current channel.').addChannelTypes(ChannelType.GuildText).setRequired(false))
+    )
+    .addSubcommand((subcommand) =>
+      subcommand
         .setName('submit')
         .setDescription('Submit an appeal.')
         .addStringOption((option) => option.setName('reason').setDescription('Why should staff review this?').setRequired(true).setMaxLength(1000))
@@ -65,6 +77,7 @@ module.exports = {
     if (subcommand === 'setup' || subcommand === 'edit') return ActionKeys.AppealsConfigure;
     if (subcommand === 'manager') return ActionKeys.AppealsManager;
     if (subcommand === 'panel') return ActionKeys.AppealsPostPanel;
+    if (subcommand === 'review-index') return ActionKeys.AppealsReview;
     if (subcommand === 'submit') return ActionKeys.AppealsSubmit;
     return ActionKeys.AppealsReview;
   },
@@ -119,6 +132,15 @@ module.exports = {
       const message = await channel.send(buildPublicAppealPanel(await appeals.getConfig(interaction.guildId)));
       await recordPublishedPanel({ guildId: interaction.guildId, panelType: 'appeal', panelRef: '*', channelId: channel.id, messageId: message.id });
       return replyPrivate(interaction, { embeds: [createSuccessEmbed('Appeal Panel Posted', `Panel posted in <#${channel.id}>. Future appeal panel edits will update this message automatically.`)] });
+    }
+
+    if (subcommand === 'review-index') {
+      const config = await appeals.getConfig(interaction.guildId);
+      const channel = interaction.options.getChannel('channel') || (config?.review_channel_id ? await ctx.client.channels.fetch(config.review_channel_id).catch(() => null) : null) || interaction.channel;
+      const status = interaction.options.getString('status') || 'PENDING';
+      if (!channel || !channel.isTextBased?.()) return replyPrivate(interaction, { embeds: [createWarningEmbed('Review Index Not Posted', 'I could not resolve a text channel for the appeal review index.')] });
+      const index = await appeals.createReviewIndex({ guildId: interaction.guildId, channelId: channel.id, statusFilter: status, createdByUserId: interaction.user.id, client: ctx.client });
+      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Appeal Review Index Posted', `Appeal review index posted/refreshed in <#${channel.id}>. Default filter: **${index.status_filter}**.`)] });
     }
 
     if (subcommand === 'submit') {

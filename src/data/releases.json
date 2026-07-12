@@ -30,7 +30,13 @@
       "Added /report review-index to post a refreshed Server Reports - Review Filter index with Open, Dismissed, Resolved, and All filters and links to report review messages.",
       "Fixed Report Review Index filter buttons so they are handled as button interactions instead of select-menu interactions.",
       "Report review indexes are deleted and resent at the bottom of the review channel when new reports arrive, report statuses change, or reviewers change the index filter.",
-      "Application question DMs now separate the question into a dedicated embed field so the prompt is easier for applicants to read."
+      "Application question DMs now separate the question into a dedicated embed field so the prompt is easier for applicants to read.",
+      "Added /ticket review-index to post a Server Tickets - Review Filter index with Open, Unclaimed, Claimed, Escalated, Closed, and All filters.",
+      "Ticket review indexes link to active ticket channels/control messages and automatically refresh when tickets are opened, claimed, reprioritized, escalated, or closed.",
+      "Added /appeal review-index to post a Server Appeals - Review Filter index with Pending, Approved, Denied, and All filters and links to appeal review messages.",
+      "Appeal review indexes automatically refresh when appeals are submitted or approved/denied.",
+      "Ticket and appeal review indexes use the same delete-and-resend behavior as report/application indexes so the current index remains at the bottom of the selected staff channel.",
+      "Added backward-compatible ticket_review_indexes and appeal_review_indexes tables, support reset coverage, permission defaults, diagnostics, and setup/help references."
     ],
     "commands": [
       "/ticket manager",
@@ -45,7 +51,9 @@
       "/application review-index",
       "/application close",
       "/application reopen",
-      "/report review-index"
+      "/report review-index",
+      "/ticket review-index",
+      "/appeal review-index"
     ]
   },
   "0.8.7": {

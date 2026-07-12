@@ -70,6 +70,7 @@ const CustomIds = Object.freeze({
   TicketClose: 'slickbot:ticket:close',
   TicketCloseReason: 'slickbot:ticket:close-reason',
   TicketEscalate: 'slickbot:ticket:escalate',
+  TicketReviewIndexFilterPrefix: 'slickbot:ticket:index-filter:',
 
   ReportsRefresh: 'slickbot:reports:refresh',
   ReportOpen: 'slickbot:report:open',
@@ -100,6 +101,7 @@ const CustomIds = Object.freeze({
   AppealDenyPrefix: 'slickbot:appeal:deny:',
   AppealApproveReasonPrefix: 'slickbot:appeal:approve-reason:',
   AppealDenyReasonPrefix: 'slickbot:appeal:deny-reason:',
+  AppealReviewIndexFilterPrefix: 'slickbot:appeal:index-filter:',
 
   TicketModalPrefix: 'slickbot:modal:ticket:',
   TicketModal: 'slickbot:modal:ticket',

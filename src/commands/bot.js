@@ -34,21 +34,25 @@ const MODULE_CHECKS = {
     { name: 'Ticket config', sql: 'SELECT COUNT(*)::int AS count FROM ticket_configs WHERE guild_id = $1' },
     { name: 'Ticket types', sql: 'SELECT COUNT(*)::int AS count FROM ticket_types WHERE guild_id = $1' },
     { name: 'Tickets', sql: 'SELECT COUNT(*)::int AS count FROM tickets WHERE guild_id = $1' },
-    { name: 'Added-user tracking', sql: 'SELECT COUNT(*)::int AS count FROM ticket_added_users WHERE guild_id = $1' }
+    { name: 'Added-user tracking', sql: 'SELECT COUNT(*)::int AS count FROM ticket_added_users WHERE guild_id = $1' },
+    { name: 'Ticket review indexes', sql: 'SELECT COUNT(*)::int AS count FROM ticket_review_indexes WHERE guild_id = $1' }
   ],
   [ModuleKeys.REPORTS]: [
     { name: 'Report config', sql: 'SELECT COUNT(*)::int AS count FROM report_configs WHERE guild_id = $1' },
-    { name: 'Reports', sql: 'SELECT COUNT(*)::int AS count FROM reports WHERE guild_id = $1' }
+    { name: 'Reports', sql: 'SELECT COUNT(*)::int AS count FROM reports WHERE guild_id = $1' },
+    { name: 'Report review indexes', sql: 'SELECT COUNT(*)::int AS count FROM report_review_indexes WHERE guild_id = $1' }
   ],
   [ModuleKeys.APPLICATIONS]: [
     { name: 'Application types', sql: 'SELECT COUNT(*)::int AS count FROM application_types WHERE guild_id = $1' },
     { name: 'Application questions', sql: 'SELECT COUNT(*)::int AS count FROM application_questions q INNER JOIN application_types t ON t.id = q.application_type_id WHERE t.guild_id = $1' },
     { name: 'Application sessions', sql: 'SELECT COUNT(*)::int AS count FROM application_sessions WHERE guild_id = $1' },
-    { name: 'Application submissions', sql: 'SELECT COUNT(*)::int AS count FROM application_submissions WHERE guild_id = $1' }
+    { name: 'Application submissions', sql: 'SELECT COUNT(*)::int AS count FROM application_submissions WHERE guild_id = $1' },
+    { name: 'Application review indexes', sql: 'SELECT COUNT(*)::int AS count FROM application_review_indexes WHERE guild_id = $1' }
   ],
   [ModuleKeys.APPEALS]: [
     { name: 'Appeal config', sql: 'SELECT COUNT(*)::int AS count FROM appeal_configs WHERE guild_id = $1' },
-    { name: 'Appeals', sql: 'SELECT COUNT(*)::int AS count FROM appeals WHERE guild_id = $1' }
+    { name: 'Appeals', sql: 'SELECT COUNT(*)::int AS count FROM appeals WHERE guild_id = $1' },
+    { name: 'Appeal review indexes', sql: 'SELECT COUNT(*)::int AS count FROM appeal_review_indexes WHERE guild_id = $1' }
   ],
   [ModuleKeys.SCHEDULED_MESSAGES]: [
     { name: 'Scheduled config', sql: 'SELECT COUNT(*)::int AS count FROM scheduled_message_configs WHERE guild_id = $1' },

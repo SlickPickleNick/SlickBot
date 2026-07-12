@@ -36,6 +36,12 @@ Current package: **v0.8.8**
 - `/application panel` can now post one panel containing all application types when `type` is left blank or set to `all`; closed types remain visible but show a not-accepting-submissions message if selected.
 - Added `/report review-index` to post a refreshed **Server Reports - Review Filter** index with Open, Dismissed, and Resolved filters.
 - Added `/application review-index` to post a refreshed application review index in a review channel, including links to the original review messages.
+- Added `/ticket review-index` to post a refreshed **Server Tickets - Review Filter** index with Open, Unclaimed, Claimed, Escalated, Closed, and All filters.
+- Ticket review indexes link to active ticket channels/control messages and automatically refresh when tickets are opened, claimed, reprioritized, escalated, or closed.
+- Added `/appeal review-index` to post a refreshed **Server Appeals - Review Filter** index with Pending, Approved, Denied, and All filters and links to the original appeal review messages.
+- Appeal review indexes automatically refresh when appeals are submitted or decided.
+- Ticket and appeal indexes are deleted and reposted at the bottom of their staff channels when records or filters change.
+- Added backward-compatible Ticket and Appeal review-index tables, support-reset coverage, diagnostics, permission coverage, and help/setup references.
 - Application review indexes support Pending, Approved, Denied, and All filters, and are deleted/reposted at the bottom of the review channel when applications are submitted or reviewed.
 
 Updated systems:
@@ -53,6 +59,8 @@ Multi-application panels
 Application open/closed submission controls
 Application review indexes
 Report review indexes
+Ticket review indexes
+Appeal review indexes
 ```
 
 ## v0.8.7 Updates
@@ -664,6 +672,9 @@ Optional log setup:
 - Server stats refresh now handles no configured stat channels gracefully instead of throwing during setup.
 
 
-### v0.8.8 Report Review Index Filter Patch
+### v0.8.8 Support Review Index Patches
 - Report Review Index filter buttons now route correctly as button interactions.
 - Added an All filter to the report review index alongside Open, Dismissed, and Resolved.
+- Added filtered, auto-refreshing review indexes for Tickets and Appeals.
+- Ticket indexes support Open, Unclaimed, Claimed, Escalated, Closed, and All views.
+- Appeal indexes support Pending, Approved, Denied, and All views.

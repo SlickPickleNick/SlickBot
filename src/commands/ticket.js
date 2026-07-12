@@ -91,6 +91,20 @@ module.exports = {
         .setDescription('Post a public ticket launcher panel with ticket-type buttons.')
         .addChannelOption((option) => option.setName('channel').setDescription('Channel to post the panel in. Defaults to current channel.').addChannelTypes(ChannelType.GuildText).setRequired(false))
     )
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName('review-index')
+        .setDescription('Post or refresh a ticket review index for staff.')
+        .addStringOption((option) => option.setName('status').setDescription('Tickets to show. Defaults to open.').setRequired(false).addChoices(
+          { name: 'Open', value: 'OPEN' },
+          { name: 'Unclaimed', value: 'UNCLAIMED' },
+          { name: 'Claimed', value: 'CLAIMED' },
+          { name: 'Escalated', value: 'ESCALATED' },
+          { name: 'Closed', value: 'CLOSED' },
+          { name: 'All', value: 'ALL' }
+        ))
+        .addChannelOption((option) => option.setName('channel').setDescription('Staff channel for the index. Defaults to the configured ticket log channel/current channel.').addChannelTypes(ChannelType.GuildText).setRequired(false))
+    )
     .addSubcommand((subcommand) => subcommand.setName('open').setDescription('Open the default support ticket modal.'))
     .addSubcommand((subcommand) => subcommand.setName('claim').setDescription('Claim the current ticket.'))
     .addSubcommand((subcommand) =>
@@ -138,6 +152,7 @@ module.exports = {
     if (['setup', 'type-setup', 'type-delete', 'question-add', 'question-clear'].includes(subcommand)) return ActionKeys.TicketsConfigure;
     if (subcommand === 'manager') return ActionKeys.TicketsManager;
     if (subcommand === 'panel') return ActionKeys.TicketsPostPanel;
+    if (subcommand === 'review-index') return ActionKeys.TicketsReview;
     if (subcommand === 'open') return ActionKeys.TicketsOpen;
     if (subcommand === 'claim') return ActionKeys.TicketsClaim;
     if (subcommand === 'close') return ActionKeys.TicketsClose;
@@ -231,6 +246,15 @@ module.exports = {
       return replyPrivate(interaction, { embeds: [createSuccessEmbed('Ticket Panel Posted', `Panel posted in <#${channel.id}>. Future ticket panel edits will update this message automatically.`)] });
     }
 
+    if (subcommand === 'review-index') {
+      const config = await tickets.getConfig(interaction.guildId);
+      const channel = interaction.options.getChannel('channel') || (config?.log_channel_id ? await ctx.client.channels.fetch(config.log_channel_id).catch(() => null) : null) || interaction.channel;
+      const status = interaction.options.getString('status') || 'OPEN';
+      if (!channel || !channel.isTextBased?.()) return replyPrivate(interaction, { embeds: [createWarningEmbed('Review Index Not Posted', 'I could not resolve a text channel for the ticket review index.')] });
+      const index = await tickets.createReviewIndex({ guildId: interaction.guildId, channelId: channel.id, statusFilter: status, createdByUserId: interaction.user.id, client: ctx.client });
+      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Ticket Review Index Posted', `Ticket review index posted/refreshed in <#${channel.id}>. Default filter: **${index.status_filter}**.`)] });
+    }
+
     if (subcommand === 'open') {
       const type = await tickets.ensureDefaultType(interaction.guildId);
       await interaction.showModal(buildTicketModal(type));
@@ -239,7 +263,7 @@ module.exports = {
 
     if (subcommand === 'claim') {
       if (!(await requireTicketStaff(interaction))) return;
-      const result = await tickets.claimTicket({ interaction, logger: ctx.logger });
+      const result = await tickets.claimTicket({ interaction, client: ctx.client, logger: ctx.logger });
       if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Ticket Not Found', result.reason)] });
       await replyPrivate(interaction, { embeds: [createSuccessEmbed('Ticket Claimed', `Ticket #${result.ticket.ticket_number} is now assigned to you.`)] });
       return;
@@ -247,14 +271,14 @@ module.exports = {
 
     if (subcommand === 'priority') {
       if (!(await requireTicketStaff(interaction))) return;
-      const result = await tickets.setPriority({ interaction, logger: ctx.logger, priority: interaction.options.getString('level', true) });
+      const result = await tickets.setPriority({ interaction, client: ctx.client, logger: ctx.logger, priority: interaction.options.getString('level', true) });
       if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Ticket Not Found', result.reason)] });
       return replyPrivate(interaction, { embeds: [createSuccessEmbed('Priority Updated', `Ticket #${result.ticket.ticket_number} priority set to **${result.ticket.priority}**.`)] });
     }
 
     if (subcommand === 'escalate') {
       if (!(await requireTicketStaff(interaction))) return;
-      const result = await tickets.escalateTicket({ interaction, logger: ctx.logger, reason: interaction.options.getString('reason') || 'No reason provided.' });
+      const result = await tickets.escalateTicket({ interaction, client: ctx.client, logger: ctx.logger, reason: interaction.options.getString('reason') || 'No reason provided.' });
       if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Ticket Not Escalated', result.reason)] });
       const mentions = result.roleIds.map((roleId) => `<@&${roleId}>`).join(' ');
       await interaction.channel.send({ content: `${mentions} Ticket #${result.ticket.ticket_number} has been escalated.`.trim() }).catch(() => {});

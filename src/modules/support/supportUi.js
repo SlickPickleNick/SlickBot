@@ -97,7 +97,8 @@ async function buildTicketsPanel(guildId) {
       '**Ticket Types**',
       typeLines,
       '',
-      'Use `/ticket type-setup` and `/ticket question-add` to customize ticket buttons and intake questions.'
+      'Use `/ticket type-setup` and `/ticket question-add` to customize ticket buttons and intake questions.',
+      'Use `/ticket review-index` to post a staff index for open, unclaimed, claimed, escalated, closed, or all tickets.'
     ].join('\n'),
     color: SlickBotColors.INFO
   });
@@ -195,7 +196,8 @@ async function buildAppealsPanel(guildId) {
       `DM Decisions: **${cfg?.dm_decision_enabled ? 'Enabled' : 'Disabled'}**`,
       `Include Submission in DM: **${cfg?.dm_include_submission ? 'Enabled' : 'Disabled'}**`,
       '',
-      'Appeal reviewers can approve/deny immediately or open a decision reason modal.'
+      'Appeal reviewers can approve/deny with a decision reason.',
+      'Use `/appeal review-index` to post a filtered staff index for pending, approved, denied, or all appeals.'
     ].join('\n'),
     color: SlickBotColors.INFO
   });
