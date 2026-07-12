@@ -1,7 +1,8 @@
 const {
   ActionRowBuilder,
   ButtonBuilder,
-  ButtonStyle
+  ButtonStyle,
+  PermissionFlagsBits
 } = require('discord.js');
 const { pool, query } = require('../../services/db');
 const { LevelingService } = require('./levelingService');
@@ -72,33 +73,93 @@ function replaceTemplate(template, values) {
   return output.slice(0, 1900);
 }
 
+const REACTION_ALIASES = Object.freeze({
+  ':greencheck:': '✅',
+  'greencheck': '✅',
+  ':white_check_mark:': '✅',
+  'white_check_mark': '✅',
+  ':no_entry_sign:': '🚫',
+  'no_entry_sign': '🚫',
+  ':no_entry:': '⛔',
+  'no_entry': '⛔'
+});
+
 function normalizeReactionEmoji(value, fallback) {
   const raw = String(value || '').trim();
   if (!raw) return fallback;
   const named = raw.toLowerCase();
-  const aliases = {
-    ':greencheck:': '✅',
-    'greencheck': '✅',
-    ':white_check_mark:': '✅',
-    'white_check_mark': '✅',
-    ':no_entry_sign:': '🚫',
-    'no_entry_sign': '🚫',
-    ':no_entry:': '⛔',
-    'no_entry': '⛔'
-  };
-  return aliases[named] || raw.slice(0, 100);
+  return (REACTION_ALIASES[named] || raw).slice(0, 100);
 }
 
-async function reactToCountingMessage(message, emoji) {
-  const value = String(emoji || '').trim();
-  if (!value || !message || typeof message.react !== 'function') return false;
-  const direct = await message.react(value).then(() => true).catch(() => false);
-  if (direct) return true;
-  const named = value.match(/^:([A-Za-z0-9_~-]{2,32}):$/);
-  if (!named || !message.guild?.emojis?.cache) return false;
-  const guildEmoji = message.guild.emojis.cache.find((emojiObject) => emojiObject.name === named[1]);
-  if (!guildEmoji) return false;
-  return message.react(guildEmoji).then(() => true).catch(() => false);
+function uniqueReactionCandidates(values) {
+  const seen = new Set();
+  const output = [];
+  for (const value of values) {
+    const candidate = String(value || '').trim();
+    if (!candidate || seen.has(candidate)) continue;
+    seen.add(candidate);
+    output.push(candidate);
+  }
+  return output;
+}
+
+async function resolveNamedGuildEmoji(message, emojiName) {
+  const name = String(emojiName || '').trim();
+  if (!name || !message.guild) return null;
+  const cached = message.guild.emojis?.cache?.find((emojiObject) => emojiObject.name === name);
+  if (cached) return cached;
+  const manager = message.guild.emojis;
+  if (!manager || typeof manager.fetch !== 'function') return null;
+  const fetched = await manager.fetch().catch(() => null);
+  return fetched?.find?.((emojiObject) => emojiObject.name === name) || null;
+}
+
+function buildReactionCandidates(rawEmoji, fallbackEmoji) {
+  const raw = String(rawEmoji || '').trim();
+  const fallback = String(fallbackEmoji || '').trim();
+  const normalized = normalizeReactionEmoji(raw || fallback, fallback);
+  const candidates = [normalized];
+  const custom = raw.match(/^<a?:([A-Za-z0-9_~-]{2,32}):(\d{15,25})>$/);
+  if (custom) {
+    candidates.push(`${custom[1]}:${custom[2]}`, custom[2], raw);
+  }
+  const namedRaw = raw.match(/^:([A-Za-z0-9_~-]{2,32}):$/);
+  if (namedRaw) {
+    const alias = REACTION_ALIASES[raw.toLowerCase()];
+    if (alias) candidates.push(alias);
+    candidates.push(`guild-name:${namedRaw[1]}`);
+  }
+  const namedNormalized = normalized.match(/^:([A-Za-z0-9_~-]{2,32}):$/);
+  if (namedNormalized) candidates.push(`guild-name:${namedNormalized[1]}`);
+  if (fallback) candidates.push(fallback);
+  return uniqueReactionCandidates(candidates);
+}
+
+async function reactToCountingMessage(message, emoji, fallbackEmoji) {
+  if (!message || typeof message.react !== 'function') return false;
+
+  const botUserId = message.client?.user?.id;
+  const botMember = message.guild?.members?.me
+    || (botUserId && message.guild?.members?.cache?.get(botUserId))
+    || (botUserId && message.guild ? await message.guild.members.fetch(botUserId).catch(() => null) : null);
+  const botPermissions = botMember && typeof message.channel?.permissionsFor === 'function'
+    ? message.channel.permissionsFor(botMember)
+    : null;
+  if (botPermissions && (!botPermissions.has(PermissionFlagsBits.AddReactions) || !botPermissions.has(PermissionFlagsBits.ReadMessageHistory))) {
+    return false;
+  }
+
+  const target = typeof message.fetch === 'function' ? await message.fetch().catch(() => message) : message;
+  for (const candidate of buildReactionCandidates(emoji, fallbackEmoji)) {
+    if (candidate.startsWith('guild-name:')) {
+      const guildEmoji = await resolveNamedGuildEmoji(target, candidate.slice('guild-name:'.length));
+      if (!guildEmoji) continue;
+      if (await target.react(guildEmoji).then(() => true).catch(() => false)) return true;
+      continue;
+    }
+    if (await target.react(candidate).then(() => true).catch(() => false)) return true;
+  }
+  return false;
 }
 
 function parseIntegerOrExpression(content, allowExpressions) {
@@ -657,7 +718,7 @@ class CommunityGameService {
     }
 
     if (outcome.correct) {
-      await reactToCountingMessage(message, outcome.config.accepted_reaction_emoji || DEFAULT_COUNTING_ACCEPTED_REACTION);
+      await reactToCountingMessage(message, outcome.config.accepted_reaction_emoji, DEFAULT_COUNTING_ACCEPTED_REACTION);
       const interval = Number(outcome.config.milestone_interval || 0);
       const isMilestone = interval > 0 && outcome.number % BigInt(interval) === 0n;
       if (isMilestone) {
@@ -686,7 +747,7 @@ class CommunityGameService {
       return outcome;
     }
 
-    await reactToCountingMessage(message, outcome.config.failed_reaction_emoji || DEFAULT_COUNTING_FAILED_REACTION);
+    await reactToCountingMessage(message, outcome.config.failed_reaction_emoji, DEFAULT_COUNTING_FAILED_REACTION);
     if (outcome.config.delete_invalid_messages) await message.delete().catch(() => {});
     if (outcome.shouldReset) {
       const next = BigInt(outcome.config.starting_number || 1);

@@ -11,7 +11,7 @@
       "Added counting ignored-role and ignored-user lists, staff reset/correction commands, a public contribution leaderboard, optional milestone XP, and a setting controlling whether accepted counting messages earn normal message XP.",
       "Added button-based Tic-Tac-Toe challenges with accept/decline controls, turn validation, win/draw detection, automatic expiration, and persistent player statistics.",
       "Added button-based Connect Four challenges with a persistent board, column controls, turn validation, win/draw detection, automatic expiration, and persistent player statistics.",
-      "Counting setup now supports configurable accepted-count and failed-count reaction emojis. The defaults use the green-check and no-entry-sign equivalents, and custom emoji strings can be provided through /games counting setup.",
+      "Counting setup now supports configurable accepted-count and failed-count reaction emojis. The defaults use the green-check and no-entry-sign equivalents, custom emoji strings can be provided through /games counting setup, and the accepted-count reaction path now includes alias/custom-emoji fallback resolution.",
       "Tic-Tac-Toe and Connect Four now award configurable Leveling XP when a player wins. Draws award half of the configured win XP to both players.",
       "Added backward-compatible win_xp, accepted_reaction_emoji, and failed_reaction_emoji migrations for Community Games configuration.",
       "Added Community Games permission actions, public play defaults, logging, setup/module status, help entries, diagnostics, and backward-compatible PostgreSQL migrations."
