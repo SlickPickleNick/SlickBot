@@ -1045,6 +1045,7 @@ async function initDatabase() {
       game_key TEXT NOT NULL,
       enabled BOOLEAN NOT NULL DEFAULT false,
       channel_id TEXT,
+      win_xp INTEGER NOT NULL DEFAULT 50,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       UNIQUE(guild_id, game_key)
@@ -1071,14 +1072,19 @@ async function initDatabase() {
       milestone_message TEXT NOT NULL DEFAULT 'The server reached **{number}** in <#{channel}>. New counting record: **{record}**.',
       milestone_xp INTEGER NOT NULL DEFAULT 0,
       normal_message_xp BOOLEAN NOT NULL DEFAULT false,
+      accepted_reaction_emoji TEXT NOT NULL DEFAULT '✅',
+      failed_reaction_emoji TEXT NOT NULL DEFAULT '🚫',
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
 
 
+  await query(`ALTER TABLE community_game_configs ADD COLUMN IF NOT EXISTS win_xp INTEGER NOT NULL DEFAULT 50;`);
   await query(`ALTER TABLE counting_game_configs ADD COLUMN IF NOT EXISTS reset_on_edit BOOLEAN NOT NULL DEFAULT true;`);
   await query(`ALTER TABLE counting_game_configs ADD COLUMN IF NOT EXISTS reset_on_delete BOOLEAN NOT NULL DEFAULT true;`);
+  await query(`ALTER TABLE counting_game_configs ADD COLUMN IF NOT EXISTS accepted_reaction_emoji TEXT NOT NULL DEFAULT '✅';`);
+  await query(`ALTER TABLE counting_game_configs ADD COLUMN IF NOT EXISTS failed_reaction_emoji TEXT NOT NULL DEFAULT '🚫';`);
 
   await query(`
     CREATE TABLE IF NOT EXISTS counting_game_entries (

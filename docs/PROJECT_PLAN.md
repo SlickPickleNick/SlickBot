@@ -45,9 +45,10 @@ SlickBot is being built as a modular all-in-one Discord server management bot fo
 - Counting ignores non-number/text messages by default so unrelated chat does not reset the count.
 - Editing or deleting an accepted counting message resets the active sequence by default; each behavior can be disabled separately in Counting setup.
 - Added optional milestone XP and a separate setting for whether accepted counting messages receive normal Leveling XP.
-- Added button-based Tic-Tac-Toe challenges with player acceptance, turn controls, automatic win/draw detection, expiration, and statistics.
-- Added button-based Connect Four challenges with a persistent 7-column board, player acceptance, turn controls, automatic win/draw detection, expiration, and statistics.
-- Added PostgreSQL persistence for game configurations, counting state/statistics/ignore lists, multiplayer sessions, and player records.
+- Added configurable accepted-count and failed-count reactions for Counting. Defaults use the green-check and no-entry-sign equivalents, with custom emoji strings supported through `/games counting setup`.
+- Added button-based Tic-Tac-Toe challenges with player acceptance, turn controls, automatic win/draw detection, expiration, statistics, and configurable win XP. Draws award half XP to both players.
+- Added button-based Connect Four challenges with a persistent 7-column board, player acceptance, turn controls, automatic win/draw detection, expiration, statistics, and configurable win XP. Draws award half XP to both players.
+- Added PostgreSQL persistence for game configurations, counting state/statistics/ignore lists, counting reaction settings, multiplayer sessions, board-game XP settings, and player records.
 - Added Community Games permission defaults, public play controls, logging events, `/help`, `/setup`, `/modules`, and `/bot test` integration.
 
 ## v0.8.8 Scope

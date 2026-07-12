@@ -303,6 +303,51 @@ class LevelingService {
     return { awarded: true, gained, profile, leveledUp: newLevel > oldLevel };
   }
 
+  async awardBonusXpToUser({ guild, channel = null, userId, amount, logger, reason = 'Bonus XP' }) {
+    if (!guild || !userId) return { awarded: false };
+    const config = await this.getConfig(guild.id);
+    if (!config || config.enabled === false) return { awarded: false };
+
+    const member = await guild.members.fetch(userId).catch(() => null);
+    const user = member?.user || await guild.client.users.fetch(userId).catch(() => null);
+    if (!user || user.bot) return { awarded: false };
+
+    const gained = Math.max(1, Math.floor(Number(amount) || 0));
+    const existing = await this.getProfile(guild.id, userId);
+    const oldLevel = Number(existing?.level || 0);
+    const newXp = Number(existing?.xp || 0) + gained;
+    const newLevel = levelFromXp(newXp);
+    const result = await query(
+      `INSERT INTO leveling_profiles (guild_id, user_id, user_tag, xp, level, message_count)
+       VALUES ($1,$2,$3,$4,$5,0)
+       ON CONFLICT (guild_id, user_id)
+       DO UPDATE SET user_tag = EXCLUDED.user_tag,
+                     xp = EXCLUDED.xp,
+                     level = EXCLUDED.level,
+                     updated_at = NOW()
+       RETURNING *`,
+      [guild.id, userId, user.tag || null, newXp, newLevel]
+    );
+    const profile = result.rows[0];
+    const syntheticMessage = {
+      guild,
+      channel,
+      channelId: channel?.id || null,
+      author: user,
+      member
+    };
+    if (newLevel > oldLevel) await this.handleLevelUp(syntheticMessage, member, profile, oldLevel, config, logger);
+    await logger?.log?.({
+      guildId: guild.id,
+      eventKey: 'leveling-adjustment',
+      title: 'Bonus XP Awarded',
+      body: `User: <@${userId}>\nXP: **${gained}**\nReason: **${reason}**`,
+      actorUserId: userId,
+      metadata: { userId, xp: gained, reason }
+    }).catch(() => {});
+    return { awarded: true, gained, profile, leveledUp: newLevel > oldLevel };
+  }
+
   async handleLevelUp(message, member, profile, oldLevel, config, logger) {
     const rewards = await query(
       `SELECT * FROM leveling_role_rewards WHERE guild_id = $1 AND active = true AND level > $2 AND level <= $3 ORDER BY level ASC`,

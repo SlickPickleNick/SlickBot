@@ -30,6 +30,12 @@ function addBoardGameGroup(builder, name, description) {
           .addBooleanOption((option) => option
             .setName('allow_any_channel')
             .setDescription('Clear the channel restriction and allow games in any text channel.')
+            .setRequired(false))
+          .addIntegerOption((option) => option
+            .setName('win_xp')
+            .setDescription('Leveling XP awarded to the winner. Draws award half to each player. Default: 50.')
+            .setMinValue(0)
+            .setMaxValue(1000000)
             .setRequired(false)))
       .addSubcommand((sub) => sub.setName('enable').setDescription(`Enable ${description.toLowerCase()}.`))
       .addSubcommand((sub) => sub.setName('disable').setDescription(`Disable ${description.toLowerCase()}.`))
@@ -75,7 +81,9 @@ let commandBuilder = new SlashCommandBuilder()
           .addIntegerOption((option) => option.setName('milestone_interval').setDescription('Announce every N numbers. Use 0 to disable.').setMinValue(0).setMaxValue(1000000000).setRequired(false))
           .addStringOption((option) => option.setName('milestone_message').setDescription('Milestone message. Supports {user}, {number}, {record}, {channel}, {server}.').setMaxLength(1000).setRequired(false))
           .addIntegerOption((option) => option.setName('milestone_xp').setDescription('Leveling XP awarded to the member who reaches a milestone. Use 0 to disable.').setMinValue(0).setMaxValue(1000000).setRequired(false))
-          .addBooleanOption((option) => option.setName('normal_message_xp').setDescription('Allow accepted counting messages to earn normal message XP. Default: false.').setRequired(false)))
+          .addBooleanOption((option) => option.setName('normal_message_xp').setDescription('Allow accepted counting messages to earn normal message XP. Default: false.').setRequired(false))
+          .addStringOption((option) => option.setName('accepted_reaction').setDescription('Emoji SlickBot reacts with for accepted counts. Default: :greencheck:.').setMaxLength(100).setRequired(false))
+          .addStringOption((option) => option.setName('failed_reaction').setDescription('Emoji SlickBot reacts with for failed counts. Default: :no_entry_sign:.').setMaxLength(100).setRequired(false)))
       .addSubcommand((sub) => sub.setName('enable').setDescription('Enable the counting game.'))
       .addSubcommand((sub) => sub.setName('disable').setDescription('Disable the counting game.'))
       .addSubcommand((sub) => sub.setName('status').setDescription('View the current counting configuration and number.'))
@@ -156,10 +164,12 @@ module.exports = {
           milestoneInterval: interaction.options.getInteger('milestone_interval') ?? undefined,
           milestoneMessage: interaction.options.getString('milestone_message') ?? undefined,
           milestoneXp: interaction.options.getInteger('milestone_xp') ?? undefined,
-          normalMessageXp: interaction.options.getBoolean('normal_message_xp') ?? undefined
+          normalMessageXp: interaction.options.getBoolean('normal_message_xp') ?? undefined,
+          acceptedReactionEmoji: interaction.options.getString('accepted_reaction') ?? undefined,
+          failedReactionEmoji: interaction.options.getString('failed_reaction') ?? undefined
         });
-        await logConfig(ctx, interaction, 'Counting Configuration Updated', `Channel: ${config.channel_id ? `<#${config.channel_id}>` : 'Not configured'}\nIgnore Non-Counting Messages: **${config.ignore_non_number_messages !== false ? 'Enabled' : 'Disabled'}**`);
-        return replyPrivate(interaction, { embeds: [createSuccessEmbed('Counting Configuration Saved', `Counting channel: ${config.channel_id ? `<#${config.channel_id}>` : '**not configured**'}\nCurrent number: **${config.current_number}**\nNon-counting messages are **${config.ignore_non_number_messages !== false ? 'ignored' : 'treated as invalid'}**.`)] });
+        await logConfig(ctx, interaction, 'Counting Configuration Updated', `Channel: ${config.channel_id ? `<#${config.channel_id}>` : 'Not configured'}\nIgnore Non-Counting Messages: **${config.ignore_non_number_messages !== false ? 'Enabled' : 'Disabled'}**\nAccepted Reaction: **${config.accepted_reaction_emoji}**\nFailed Reaction: **${config.failed_reaction_emoji}**`);
+        return replyPrivate(interaction, { embeds: [createSuccessEmbed('Counting Configuration Saved', `Counting channel: ${config.channel_id ? `<#${config.channel_id}>` : '**not configured**'}\nCurrent number: **${config.current_number}**\nNon-counting messages are **${config.ignore_non_number_messages !== false ? 'ignored' : 'treated as invalid'}**.\nAccepted reaction: **${config.accepted_reaction_emoji}**\nFailed reaction: **${config.failed_reaction_emoji}**`)] });
       }
 
       if (sub === 'enable' || sub === 'disable') {
@@ -219,10 +229,11 @@ module.exports = {
       const allowAny = interaction.options.getBoolean('allow_any_channel');
       if (channel && allowAny) return replyPrivate(interaction, { embeds: [createWarningEmbed('Choose One Channel Setting', 'Provide a channel or set `allow_any_channel` to true, not both.')] });
       const config = await games.updateBoardGameConfig(interaction.guildId, gameKey, {
-        channelId: allowAny ? null : channel?.id
+        channelId: allowAny ? null : channel?.id,
+        winXp: interaction.options.getInteger('win_xp') ?? undefined
       });
-      await logConfig(ctx, interaction, `${label} Configuration Updated`, `Allowed Channel: ${config.channel_id ? `<#${config.channel_id}>` : 'Any text channel'}`);
-      return replyPrivate(interaction, { embeds: [createSuccessEmbed(`${label} Configuration Saved`, `${label} challenges can be started in ${config.channel_id ? `<#${config.channel_id}>` : '**any text channel**'}.`)] });
+      await logConfig(ctx, interaction, `${label} Configuration Updated`, `Allowed Channel: ${config.channel_id ? `<#${config.channel_id}>` : 'Any text channel'}\nWin XP: **${config.win_xp}**\nDraw XP: **${Math.floor(Number(config.win_xp || 0) / 2)}** each`);
+      return replyPrivate(interaction, { embeds: [createSuccessEmbed(`${label} Configuration Saved`, `${label} challenges can be started in ${config.channel_id ? `<#${config.channel_id}>` : '**any text channel**'}.\nWin XP: **${config.win_xp}**\nDraw XP: **${Math.floor(Number(config.win_xp || 0) / 2)}** each.`)] });
     }
 
     if (sub === 'enable' || sub === 'disable') {

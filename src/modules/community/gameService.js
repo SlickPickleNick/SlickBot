@@ -39,6 +39,9 @@ const POSTGRES_BIGINT_MIN = -9223372036854775808n;
 const POSTGRES_BIGINT_MAX = 9223372036854775807n;
 const DEFAULT_RESET_MESSAGE = '{user} reset the count. The next number is **{next}**.';
 const DEFAULT_MILESTONE_MESSAGE = 'The server reached **{number}** in <#{channel}>. New counting record: **{record}**.';
+const DEFAULT_COUNTING_ACCEPTED_REACTION = '✅';
+const DEFAULT_COUNTING_FAILED_REACTION = '🚫';
+const DEFAULT_BOARD_GAME_WIN_XP = 50;
 
 function gameLabel(gameKey) {
   return GAME_LABELS[gameKey] || gameKey;
@@ -67,6 +70,35 @@ function replaceTemplate(template, values) {
     output = output.replaceAll(`{${key}}`, String(value));
   }
   return output.slice(0, 1900);
+}
+
+function normalizeReactionEmoji(value, fallback) {
+  const raw = String(value || '').trim();
+  if (!raw) return fallback;
+  const named = raw.toLowerCase();
+  const aliases = {
+    ':greencheck:': '✅',
+    'greencheck': '✅',
+    ':white_check_mark:': '✅',
+    'white_check_mark': '✅',
+    ':no_entry_sign:': '🚫',
+    'no_entry_sign': '🚫',
+    ':no_entry:': '⛔',
+    'no_entry': '⛔'
+  };
+  return aliases[named] || raw.slice(0, 100);
+}
+
+async function reactToCountingMessage(message, emoji) {
+  const value = String(emoji || '').trim();
+  if (!value || !message || typeof message.react !== 'function') return false;
+  const direct = await message.react(value).then(() => true).catch(() => false);
+  if (direct) return true;
+  const named = value.match(/^:([A-Za-z0-9_~-]{2,32}):$/);
+  if (!named || !message.guild?.emojis?.cache) return false;
+  const guildEmoji = message.guild.emojis.cache.find((emojiObject) => emojiObject.name === named[1]);
+  if (!guildEmoji) return false;
+  return message.react(guildEmoji).then(() => true).catch(() => false);
 }
 
 function parseIntegerOrExpression(content, allowExpressions) {
@@ -302,12 +334,15 @@ class CommunityGameService {
     await this.ensureGameConfigs(guildId);
     const current = await this.getGameConfig(guildId, gameKey);
     const channelId = values.channelId === undefined ? current?.channel_id || null : values.channelId;
+    const winXp = Math.max(0, Math.min(1000000, Number(values.winXp ?? current?.win_xp ?? DEFAULT_BOARD_GAME_WIN_XP)));
     const result = await query(
       `UPDATE community_game_configs
-       SET channel_id = $3, updated_at = NOW()
+       SET channel_id = $3,
+           win_xp = $4,
+           updated_at = NOW()
        WHERE guild_id = $1 AND game_key = $2
        RETURNING *`,
-      [guildId, gameKey, channelId]
+      [guildId, gameKey, channelId, winXp]
     );
     return result.rows[0];
   }
@@ -337,7 +372,9 @@ class CommunityGameService {
       milestoneInterval: Math.max(0, Number(values.milestoneInterval ?? current?.milestone_interval ?? 100)),
       milestoneMessage: values.milestoneMessage ?? current?.milestone_message ?? DEFAULT_MILESTONE_MESSAGE,
       milestoneXp: Math.max(0, Number(values.milestoneXp ?? current?.milestone_xp ?? 0)),
-      normalMessageXp: values.normalMessageXp ?? current?.normal_message_xp ?? false
+      normalMessageXp: values.normalMessageXp ?? current?.normal_message_xp ?? false,
+      acceptedReactionEmoji: normalizeReactionEmoji(values.acceptedReactionEmoji ?? current?.accepted_reaction_emoji, DEFAULT_COUNTING_ACCEPTED_REACTION),
+      failedReactionEmoji: normalizeReactionEmoji(values.failedReactionEmoji ?? current?.failed_reaction_emoji, DEFAULT_COUNTING_FAILED_REACTION)
     };
 
     const channelChanged = values.channelId !== undefined && values.channelId !== (current?.channel_id || null);
@@ -359,6 +396,8 @@ class CommunityGameService {
            milestone_message = $14,
            milestone_xp = $15,
            normal_message_xp = $16,
+           accepted_reaction_emoji = $17,
+           failed_reaction_emoji = $18,
            updated_at = NOW()
        WHERE guild_id = $1
        RETURNING *`,
@@ -378,7 +417,9 @@ class CommunityGameService {
         config.milestoneInterval,
         config.milestoneMessage,
         config.milestoneXp,
-        config.normalMessageXp
+        config.normalMessageXp,
+        config.acceptedReactionEmoji,
+        config.failedReactionEmoji
       ]
     );
     if (channelChanged) await query(`DELETE FROM counting_game_entries WHERE guild_id = $1`, [guildId]);
@@ -616,6 +657,7 @@ class CommunityGameService {
     }
 
     if (outcome.correct) {
+      await reactToCountingMessage(message, outcome.config.accepted_reaction_emoji || DEFAULT_COUNTING_ACCEPTED_REACTION);
       const interval = Number(outcome.config.milestone_interval || 0);
       const isMilestone = interval > 0 && outcome.number % BigInt(interval) === 0n;
       if (isMilestone) {
@@ -644,6 +686,7 @@ class CommunityGameService {
       return outcome;
     }
 
+    await reactToCountingMessage(message, outcome.config.failed_reaction_emoji || DEFAULT_COUNTING_FAILED_REACTION);
     if (outcome.config.delete_invalid_messages) await message.delete().catch(() => {});
     if (outcome.shouldReset) {
       const next = BigInt(outcome.config.starting_number || 1);
@@ -972,6 +1015,43 @@ Next Number: **${outcome.next.toString()}**`,
     }
   }
 
+  async awardBoardGameCompletionXp({ guild, channel, session, draw, logger }) {
+    if (!guild || !session || ![GAME_KEYS.TIC_TAC_TOE, GAME_KEYS.CONNECT_FOUR].includes(session.game_key)) return [];
+    const config = await this.getGameConfig(session.guild_id || guild.id, session.game_key).catch(() => null);
+    const winXp = Math.max(0, Number(config?.win_xp ?? DEFAULT_BOARD_GAME_WIN_XP));
+    if (!winXp) return [];
+
+    const awards = [];
+    if (draw) {
+      const drawXp = Math.floor(winXp / 2);
+      if (drawXp <= 0) return [];
+      for (const userId of [session.player_one_id, session.player_two_id]) {
+        const result = await this.leveling.awardBonusXpToUser({
+          guild,
+          channel,
+          userId,
+          amount: drawXp,
+          logger,
+          reason: `${gameLabel(session.game_key)} draw`
+        }).catch(() => null);
+        awards.push({ userId, amount: drawXp, awarded: Boolean(result?.awarded), leveledUp: Boolean(result?.leveledUp) });
+      }
+      return awards;
+    }
+
+    if (!session.winner_user_id) return [];
+    const result = await this.leveling.awardBonusXpToUser({
+      guild,
+      channel,
+      userId: session.winner_user_id,
+      amount: winXp,
+      logger,
+      reason: `${gameLabel(session.game_key)} win`
+    }).catch(() => null);
+    awards.push({ userId: session.winner_user_id, amount: winXp, awarded: Boolean(result?.awarded), leveledUp: Boolean(result?.leveledUp) });
+    return awards;
+  }
+
   buildChallengePayload(session) {
     const expires = Math.floor(new Date(session.expires_at).getTime() / 1000);
     const embed = createBaseEmbed({
@@ -1127,8 +1207,8 @@ Next Number: **${outcome.next.toString()}**`,
     const playedByKey = new Map(sessions.rows.map((row) => [row.game_key, Number(row.completed_count || 0)]));
     const lines = [
       gameSummaryLine(byKey.get(GAME_KEYS.COUNTING), `Channel: ${countingChannelLabel(counting?.channel_id)} · Current: **${counting?.current_number || 0}** · Record: **${counting?.record_number || 0}**`),
-      gameSummaryLine(byKey.get(GAME_KEYS.TIC_TAC_TOE), `Channel: ${channelLabel(byKey.get(GAME_KEYS.TIC_TAC_TOE)?.channel_id)} · Active: **${activeByKey.get(GAME_KEYS.TIC_TAC_TOE) || 0}** · Played: **${playedByKey.get(GAME_KEYS.TIC_TAC_TOE) || 0}**`),
-      gameSummaryLine(byKey.get(GAME_KEYS.CONNECT_FOUR), `Channel: ${channelLabel(byKey.get(GAME_KEYS.CONNECT_FOUR)?.channel_id)} · Active: **${activeByKey.get(GAME_KEYS.CONNECT_FOUR) || 0}** · Played: **${playedByKey.get(GAME_KEYS.CONNECT_FOUR) || 0}**`)
+      gameSummaryLine(byKey.get(GAME_KEYS.TIC_TAC_TOE), `Channel: ${channelLabel(byKey.get(GAME_KEYS.TIC_TAC_TOE)?.channel_id)} · Active: **${activeByKey.get(GAME_KEYS.TIC_TAC_TOE) || 0}** · Played: **${playedByKey.get(GAME_KEYS.TIC_TAC_TOE) || 0}** · Win XP: **${Number(byKey.get(GAME_KEYS.TIC_TAC_TOE)?.win_xp ?? DEFAULT_BOARD_GAME_WIN_XP)}**`),
+      gameSummaryLine(byKey.get(GAME_KEYS.CONNECT_FOUR), `Channel: ${channelLabel(byKey.get(GAME_KEYS.CONNECT_FOUR)?.channel_id)} · Active: **${activeByKey.get(GAME_KEYS.CONNECT_FOUR) || 0}** · Played: **${playedByKey.get(GAME_KEYS.CONNECT_FOUR) || 0}** · Win XP: **${Number(byKey.get(GAME_KEYS.CONNECT_FOUR)?.win_xp ?? DEFAULT_BOARD_GAME_WIN_XP)}**`)
     ];
     const embed = createBaseEmbed({
       title: 'SlickBot Community Center',
@@ -1179,6 +1259,8 @@ Next Number: **${outcome.next.toString()}**`,
         `Ignore Non-Counting Messages: **${boolLabel(config?.ignore_non_number_messages !== false)}**`,
         `Allow Math Expressions: **${boolLabel(Boolean(config?.allow_expressions))}**`,
         `Delete Invalid Messages: **${boolLabel(Boolean(config?.delete_invalid_messages))}**`,
+        `Accepted Count Reaction: **${config?.accepted_reaction_emoji || DEFAULT_COUNTING_ACCEPTED_REACTION}**`,
+        `Failed Count Reaction: **${config?.failed_reaction_emoji || DEFAULT_COUNTING_FAILED_REACTION}**`,
         `Normal Message XP: **${boolLabel(Boolean(config?.normal_message_xp))}**`,
         '',
         '**Milestones and Participation**',
@@ -1214,6 +1296,8 @@ Next Number: **${outcome.next.toString()}**`,
         `Total Player Results: **${totals.rows[0]?.games || 0}**`,
         `Recorded Wins: **${totals.rows[0]?.wins || 0}**`,
         `Recorded Draws: **${totals.rows[0]?.draws || 0}**`,
+        `Win XP: **${Number(config?.win_xp ?? DEFAULT_BOARD_GAME_WIN_XP)}**`,
+        `Draw XP: **${Math.floor(Number(config?.win_xp ?? DEFAULT_BOARD_GAME_WIN_XP) / 2)}** each`,
         '',
         `Members start a challenge with \`/games ${commandGroup} challenge\`.`,
         `Primary setup: \`/games ${commandGroup} setup\``
@@ -1305,6 +1389,8 @@ function buildCountingStatusEmbed(config) {
       `Prevent Consecutive Turns: **${boolLabel(config?.prevent_consecutive !== false)}**`,
       `Reset on Accepted-Message Edit: **${boolLabel(config?.reset_on_edit !== false)}**`,
       `Reset on Accepted-Message Delete: **${boolLabel(config?.reset_on_delete !== false)}**`,
+      `Accepted Count Reaction: **${config?.accepted_reaction_emoji || DEFAULT_COUNTING_ACCEPTED_REACTION}**`,
+      `Failed Count Reaction: **${config?.failed_reaction_emoji || DEFAULT_COUNTING_FAILED_REACTION}**`,
       `Allow Math Expressions: **${boolLabel(Boolean(config?.allow_expressions))}**`
     ].join('\n'),
     color: config?.enabled ? SlickBotColors.SUCCESS : SlickBotColors.MUTED,

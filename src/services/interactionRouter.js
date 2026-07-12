@@ -119,7 +119,10 @@ async function handleButton(interaction, ctx) {
     try {
       const result = await communityGames.makeTicTacToeMove({ sessionId, userId: interaction.user.id, cell });
       await updatePanel(interaction, communityGames.buildSessionPayload(result.session));
-      if (result.won || result.draw) await logCompletedCommunityGame(ctx, interaction, result.session, result.draw);
+      if (result.won || result.draw) {
+        const xpAwards = await communityGames.awardBoardGameCompletionXp({ guild: interaction.guild, channel: interaction.channel, session: result.session, draw: result.draw, logger: ctx.logger });
+        await logCompletedCommunityGame(ctx, interaction, result.session, result.draw, xpAwards);
+      }
     } catch (error) {
       await replyPrivate(interaction, { embeds: [createWarningEmbed('Tic-Tac-Toe Move Not Accepted', error instanceof Error ? error.message : String(error))], deleteAfterSeconds: 10 });
     }
@@ -135,7 +138,10 @@ async function handleButton(interaction, ctx) {
     try {
       const result = await communityGames.makeConnectFourMove({ sessionId, userId: interaction.user.id, column });
       await updatePanel(interaction, communityGames.buildSessionPayload(result.session));
-      if (result.won || result.draw) await logCompletedCommunityGame(ctx, interaction, result.session, result.draw);
+      if (result.won || result.draw) {
+        const xpAwards = await communityGames.awardBoardGameCompletionXp({ guild: interaction.guild, channel: interaction.channel, session: result.session, draw: result.draw, logger: ctx.logger });
+        await logCompletedCommunityGame(ctx, interaction, result.session, result.draw, xpAwards);
+      }
     } catch (error) {
       await replyPrivate(interaction, { embeds: [createWarningEmbed('Connect Four Move Not Accepted', error instanceof Error ? error.message : String(error))], deleteAfterSeconds: 10 });
     }
@@ -1234,17 +1240,21 @@ async function handleModal(interaction, ctx) {
   return false;
 }
 
-async function logCompletedCommunityGame(ctx, interaction, session, draw) {
+async function logCompletedCommunityGame(ctx, interaction, session, draw, xpAwards = []) {
   const label = session.game_key === GAME_KEYS.TIC_TAC_TOE ? 'Tic-Tac-Toe' : 'Connect Four';
+  const xpLines = (xpAwards || [])
+    .filter((award) => award?.amount > 0)
+    .map((award) => `<@${award.userId}>: **${award.amount} XP**${award.awarded ? '' : ' (not awarded)'}`);
+  const baseBody = draw
+    ? `Players: <@${session.player_one_id}> vs. <@${session.player_two_id}>\nResult: **Draw**`
+    : `Players: <@${session.player_one_id}> vs. <@${session.player_two_id}>\nWinner: <@${session.winner_user_id}>`;
   await ctx.logger.log({
     guildId: interaction.guildId,
     eventKey: 'community-game-completed',
     title: `${label} Completed`,
-    body: draw
-      ? `Players: <@${session.player_one_id}> vs. <@${session.player_two_id}>\nResult: **Draw**`
-      : `Players: <@${session.player_one_id}> vs. <@${session.player_two_id}>\nWinner: <@${session.winner_user_id}>`,
+    body: xpLines.length ? `${baseBody}\nXP Awards:\n${xpLines.join('\n')}` : baseBody,
     actorUserId: interaction.user.id,
-    metadata: { game: session.game_key, sessionId: session.id, draw: Boolean(draw), winnerUserId: session.winner_user_id || null }
+    metadata: { game: session.game_key, sessionId: session.id, draw: Boolean(draw), winnerUserId: session.winner_user_id || null, xpAwards }
   }).catch(() => {});
 }
 
