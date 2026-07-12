@@ -1,6 +1,7 @@
-const { ChannelType, PermissionsBitField } = require('discord.js');
+const { ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, PermissionsBitField } = require('discord.js');
 const { query } = require('../../services/db');
 const { createBaseEmbed, SlickBotColors } = require('../ui/uiService');
+const { CustomIds } = require('../ui/customIds');
 
 function clampInt(value, min, max, fallback) {
   const number = Number(value);
@@ -329,6 +330,8 @@ class JoinCreateService {
       throw new Error('Temporary channel was created, but SlickBot could not move the user into it. Check Move Members permissions.');
     });
 
+    await this.postControlPanel(guild, result.rows[0], logger).catch(() => null);
+
     await logger?.log({
       guildId: guild.id,
       eventKey: 'join-create-created',
@@ -460,6 +463,7 @@ class JoinCreateService {
     if (!name) throw new Error('Provide a valid channel name.');
     await channel.setName(name, `SlickBot temp voice renamed by ${member.user.tag}`);
     const result = await query(`UPDATE join_create_temp_channels SET name = $2, updated_at = NOW() WHERE channel_id = $1 RETURNING *`, [channel.id, name]);
+    await this.refreshControlPanel(member.guild, channel.id).catch(() => null);
     return { channel, temp: result.rows[0] || temp };
   }
 
@@ -472,6 +476,7 @@ class JoinCreateService {
     const userLimit = clampInt(limit, 0, 99, 0);
     await channel.setUserLimit(userLimit, `SlickBot temp voice limit set by ${member.user.tag}`);
     const result = await query(`UPDATE join_create_temp_channels SET user_limit = $2, updated_at = NOW() WHERE channel_id = $1 RETURNING *`, [channel.id, userLimit]);
+    await this.refreshControlPanel(member.guild, channel.id).catch(() => null);
     return { channel, temp: result.rows[0] || temp };
   }
 
@@ -485,6 +490,22 @@ class JoinCreateService {
       Connect: locked ? false : null
     }, { reason: `SlickBot temp voice ${locked ? 'locked' : 'unlocked'} by ${member.user.tag}` });
     const result = await query(`UPDATE join_create_temp_channels SET locked = $2, updated_at = NOW() WHERE channel_id = $1 RETURNING *`, [channel.id, locked]);
+    await this.refreshControlPanel(member.guild, channel.id).catch(() => null);
+    return { channel, temp: result.rows[0] || temp };
+  }
+
+
+  async setLockedFromControl(member, channelId, locked) {
+    const temp = await this.findActiveTempByChannel(member.guild.id, channelId);
+    if (!temp) throw new Error('This temporary voice channel is no longer active.');
+    if (!this.canManageTemp(member, temp)) throw new Error('You can only manage your own temporary voice channel.');
+    const channel = await member.guild.channels.fetch(temp.channel_id).catch(() => null);
+    if (!channel) throw new Error('The temporary voice channel no longer exists.');
+    await channel.permissionOverwrites.edit(member.guild.roles.everyone.id, {
+      Connect: locked ? false : null
+    }, { reason: `SlickBot temp voice ${locked ? 'locked' : 'unlocked'} from control panel by ${member.user.tag}` });
+    const result = await query(`UPDATE join_create_temp_channels SET locked = $2, updated_at = NOW() WHERE channel_id = $1 RETURNING *`, [channel.id, locked]);
+    await this.refreshControlPanel(member.guild, channel.id).catch(() => null);
     return { channel, temp: result.rows[0] || temp };
   }
 
@@ -498,6 +519,7 @@ class JoinCreateService {
       ViewChannel: true,
       Connect: true
     }, { reason: `SlickBot temp voice permit by ${member.user.tag}` });
+    await this.refreshControlPanel(member.guild, channel.id).catch(() => null);
     return { channel, temp, targetMember };
   }
 
@@ -513,6 +535,7 @@ class JoinCreateService {
     if (targetMember.voice?.channelId === channel.id) {
       await targetMember.voice.disconnect(`Removed from temp voice by ${member.user.tag}`).catch(() => null);
     }
+    await this.refreshControlPanel(member.guild, channel.id).catch(() => null);
     return { channel, temp, targetMember };
   }
 
@@ -531,6 +554,7 @@ class JoinCreateService {
       MoveMembers: null
     }, { reason: 'SlickBot temp voice ownership transferred' }).catch(() => null);
     const result = await query(`UPDATE join_create_temp_channels SET owner_user_id = $2, updated_at = NOW() WHERE channel_id = $1 RETURNING *`, [channel.id, targetMember.id]);
+    await this.refreshControlPanel(member.guild, channel.id).catch(() => null);
     return { channel, temp: result.rows[0] || temp, targetMember };
   }
 
@@ -549,7 +573,141 @@ class JoinCreateService {
       Connect: true,
     }, { reason: `SlickBot temp voice claimed by ${member.user.tag}` });
     const result = await query(`UPDATE join_create_temp_channels SET owner_user_id = $2, updated_at = NOW() WHERE channel_id = $1 RETURNING *`, [channel.id, member.id]);
+    await this.refreshControlPanel(member.guild, channel.id).catch(() => null);
     return { channel, temp: result.rows[0] || temp };
+  }
+
+
+  buildTempControlPayload(temp, channel = null) {
+    const channelName = channel?.name || temp?.name || 'Temporary Voice Channel';
+    const locked = Boolean(temp?.locked);
+    const limit = Number(temp?.user_limit || 0);
+    const ownerId = temp?.owner_user_id;
+    const deleteDelay = clampInt(temp?.empty_delete_delay_seconds, 5, 3600, 30);
+    const embed = createBaseEmbed({
+      title: 'Temporary Voice Controls',
+      description: [
+        `This panel controls **${channelName}**.`,
+        'Use the buttons below for common actions. For more specific changes, use the commands listed here.'
+      ].join('\n'),
+      color: locked ? SlickBotColors.WARNING : SlickBotColors.INFO,
+      footer: 'SlickBot temporary voice control panel'
+    }).addFields(
+      { name: 'Owner', value: ownerId ? `<@${ownerId}>` : 'No owner set', inline: true },
+      { name: 'Status', value: locked ? 'Locked' : 'Unlocked', inline: true },
+      { name: 'User Limit', value: limit ? String(limit) : 'No limit', inline: true },
+      {
+        name: 'Commands',
+        value: [
+          '`/join-create rename` — rename this channel',
+          '`/join-create limit` — set a user limit',
+          '`/join-create permit` — allow a user to join',
+          '`/join-create remove` — remove or block a user',
+          '`/join-create transfer` — transfer ownership'
+        ].join('\n'),
+        inline: false
+      },
+      {
+        name: 'Auto Cleanup',
+        value: temp?.delete_when_empty === false ? 'This channel is not set to auto-delete when empty.' : `This channel deletes about **${deleteDelay} seconds** after it becomes empty.`,
+        inline: false
+      }
+    );
+    const channelId = temp?.channel_id || channel?.id;
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`${CustomIds.JoinCreateLockPrefix}${channelId}`).setLabel('Lock').setStyle(ButtonStyle.Secondary).setDisabled(locked),
+      new ButtonBuilder().setCustomId(`${CustomIds.JoinCreateUnlockPrefix}${channelId}`).setLabel('Unlock').setStyle(ButtonStyle.Secondary).setDisabled(!locked),
+      new ButtonBuilder().setCustomId(`${CustomIds.JoinCreateClaimPrefix}${channelId}`).setLabel('Claim').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId(`${CustomIds.JoinCreateDeletePrefix}${channelId}`).setLabel('Delete Channel').setStyle(ButtonStyle.Danger)
+    );
+    return { content: ownerId ? `<@${ownerId}>` : undefined, embeds: [embed], components: [row], allowedMentions: ownerId ? { users: [ownerId], roles: [] } : { parse: [] } };
+  }
+
+  async postControlPanel(guild, temp, logger = null) {
+    const channel = await guild.channels.fetch(temp.channel_id).catch(() => null);
+    if (!channel || typeof channel.send !== 'function') {
+      const reason = 'SlickBot could not post the temporary voice control panel because the channel does not support messages or the bot lacks access.';
+      await query(`UPDATE join_create_temp_channels SET control_message_error = $2, updated_at = NOW() WHERE channel_id = $1`, [temp.channel_id, reason]).catch(() => {});
+      await logger?.log({
+        guildId: guild.id,
+        eventKey: 'join-create-error',
+        title: 'Temp Voice Control Panel Not Posted',
+        body: [`Channel: <#${temp.channel_id}>`, reason].join('\n'),
+        metadata: { channelId: temp.channel_id }
+      }).catch(() => {});
+      return { ok: false, reason };
+    }
+    const fullTemp = await this.findActiveTempByChannel(guild.id, temp.channel_id).catch(() => temp);
+    const payload = this.buildTempControlPayload(fullTemp || temp, channel);
+    const message = await channel.send(payload).catch(async (error) => {
+      const reason = error instanceof Error ? error.message : String(error);
+      await query(`UPDATE join_create_temp_channels SET control_message_error = $2, updated_at = NOW() WHERE channel_id = $1`, [temp.channel_id, reason]).catch(() => {});
+      await logger?.log({
+        guildId: guild.id,
+        eventKey: 'join-create-error',
+        title: 'Temp Voice Control Panel Not Posted',
+        body: [`Channel: <#${temp.channel_id}>`, `Reason: ${reason}`].join('\n'),
+        metadata: { channelId: temp.channel_id, reason }
+      }).catch(() => {});
+      return null;
+    });
+    if (!message) return { ok: false, reason: 'Message send failed.' };
+    await query(`UPDATE join_create_temp_channels SET control_message_id = $2, control_message_error = NULL, updated_at = NOW() WHERE channel_id = $1`, [temp.channel_id, message.id]).catch(() => {});
+    return { ok: true, message };
+  }
+
+  async refreshControlPanel(guild, channelId, logger = null) {
+    const temp = await this.findActiveTempByChannel(guild.id, channelId).catch(() => null);
+    if (!temp) return { ok: false, reason: 'Temporary channel not found.' };
+    const channel = await guild.channels.fetch(channelId).catch(() => null);
+    if (!channel || typeof channel.send !== 'function') return { ok: false, reason: 'Temporary channel message chat is unavailable.' };
+    const payload = this.buildTempControlPayload(temp, channel);
+    if (temp.control_message_id && typeof channel.messages?.fetch === 'function') {
+      const message = await channel.messages.fetch(temp.control_message_id).catch(() => null);
+      if (message) {
+        await message.edit(payload).catch(async () => {
+          await this.postControlPanel(guild, temp, logger).catch(() => null);
+        });
+        return { ok: true, updated: true };
+      }
+    }
+    return this.postControlPanel(guild, temp, logger);
+  }
+
+
+  async claimFromControl(member, channelId) {
+    const temp = await this.findActiveTempByChannel(member.guild.id, channelId);
+    if (!temp) throw new Error('This temporary voice channel is no longer active.');
+    if (member.voice?.channelId !== channelId) throw new Error('Join this temporary voice channel before claiming it.');
+    const channel = await member.guild.channels.fetch(temp.channel_id).catch(() => null);
+    if (!channel) throw new Error('The temporary voice channel no longer exists.');
+    if (temp.owner_user_id) {
+      const owner = await member.guild.members.fetch(temp.owner_user_id).catch(() => null);
+      if (owner?.voice?.channelId === channel.id) throw new Error('The current owner is still in this channel.');
+    }
+    await channel.permissionOverwrites.edit(member.id, {
+      ViewChannel: true,
+      Connect: true,
+    }, { reason: `SlickBot temp voice claimed from control panel by ${member.user.tag}` });
+    const result = await query(`UPDATE join_create_temp_channels SET owner_user_id = $2, updated_at = NOW() WHERE channel_id = $1 RETURNING *`, [channel.id, member.id]);
+    await this.refreshControlPanel(member.guild, channel.id).catch(() => null);
+    return { channel, temp: result.rows[0] || temp };
+  }
+
+  async deleteTempByMember(member, logger = null, reason = 'owner deleted temporary voice channel') {
+    const temp = await this.findUserTempChannel(member);
+    if (!temp) throw new Error('You do not currently own or manage an active temporary voice channel.');
+    if (!this.canManageTemp(member, temp)) throw new Error('You can only manage your own temporary voice channel.');
+    await this.deleteTempChannel(member.guild, temp, logger, reason);
+    return temp;
+  }
+
+  async deleteTempFromControl(member, channelId, logger = null) {
+    const temp = await this.findActiveTempByChannel(member.guild.id, channelId);
+    if (!temp) throw new Error('This temporary voice channel is no longer active.');
+    if (!this.canManageTemp(member, temp)) throw new Error('You can only manage your own temporary voice channel.');
+    await this.deleteTempChannel(member.guild, temp, logger, `deleted from control panel by ${member.user.tag}`);
+    return temp;
   }
 
   async buildManagerPanel(guild) {

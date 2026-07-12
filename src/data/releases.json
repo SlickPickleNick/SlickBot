@@ -1,4 +1,26 @@
 {
+  "0.8.1": {
+    "title": "SlickBot v0.8.1",
+    "summary": "Adds automatic temporary voice control panels with owner pings and quick buttons for Join-to-Create rooms.",
+    "notes": [
+      "Temporary voice channels now receive an automatic control panel message in the voice channel chat when created.",
+      "The control panel pings the temporary channel owner so they can quickly find the controls.",
+      "Added quick buttons for Lock, Unlock, Claim, and Delete Channel.",
+      "The control panel shows owner, lock status, user limit, available slash commands, and auto-cleanup behavior.",
+      "The control panel updates after owner actions such as rename, limit changes, locking, unlocking, ownership transfer, and claiming.",
+      "SlickBot records control panel message IDs and logs a clear error when it cannot post the panel due to channel or permission limitations."
+    ],
+    "commands": [
+      "/join-create rename",
+      "/join-create limit",
+      "/join-create lock",
+      "/join-create unlock",
+      "/join-create permit",
+      "/join-create remove",
+      "/join-create transfer",
+      "/join-create claim"
+    ]
+  },
   "0.8.0": {
     "title": "SlickBot v0.8.0",
     "summary": "Adds the Join-to-Create Voice module for temporary voice rooms with owner controls and automatic cleanup.",

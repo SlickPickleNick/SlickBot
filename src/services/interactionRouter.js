@@ -19,6 +19,7 @@ const { ScheduledMessageService } = require('../modules/automation/scheduledMess
 const { ServerStatsService } = require('../modules/community/serverStatsService');
 const { LevelingService } = require('../modules/community/levelingService');
 const { buildRoleManagerPanel, toggleRole } = require('../modules/community/rolePanelService');
+const { JoinCreateService } = require('../modules/voice/joinCreateService');
 const {
   TicketService,
   ReportService,
@@ -42,6 +43,7 @@ const birthdays = new BirthdayService();
 const scheduledMessages = new ScheduledMessageService();
 const serverStats = new ServerStatsService();
 const leveling = new LevelingService();
+const joinCreate = new JoinCreateService();
 
 async function handleComponentInteraction(interaction, ctx) {
   if (!interaction.guildId) {
@@ -471,6 +473,45 @@ async function handleButton(interaction, ctx) {
     await ctx.status.savePresence(interaction.guildId, { ...next, status });
     await updatePanel(interaction, await buildStatusPanel(interaction.guildId, ctx, `Status set to ${status}.`));
     return true;
+  }
+
+
+  if (id.startsWith(CustomIds.JoinCreateLockPrefix) || id.startsWith(CustomIds.JoinCreateUnlockPrefix) || id.startsWith(CustomIds.JoinCreateClaimPrefix) || id.startsWith(CustomIds.JoinCreateDeletePrefix)) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.TempVoiceManage, ModuleKeys.JOIN_TO_CREATE))) return true;
+    const member = await interaction.guild.members.fetch(interaction.user.id).catch(() => interaction.member);
+    try {
+      if (id.startsWith(CustomIds.JoinCreateLockPrefix)) {
+        const channelId = id.slice(CustomIds.JoinCreateLockPrefix.length);
+        const result = await joinCreate.setLockedFromControl(member, channelId, true);
+        await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'join-create-control', title: 'Temporary Voice Locked', body: `Channel: <#${result.channel.id}>`, actorUserId: interaction.user.id, metadata: { channelId: result.channel.id, locked: true } }).catch(() => {});
+        await replyPrivate(interaction, { embeds: [createSuccessEmbed('Channel Locked', `<#${result.channel.id}> is now locked.`)], deleteAfterSeconds: 8 });
+        return true;
+      }
+      if (id.startsWith(CustomIds.JoinCreateUnlockPrefix)) {
+        const channelId = id.slice(CustomIds.JoinCreateUnlockPrefix.length);
+        const result = await joinCreate.setLockedFromControl(member, channelId, false);
+        await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'join-create-control', title: 'Temporary Voice Unlocked', body: `Channel: <#${result.channel.id}>`, actorUserId: interaction.user.id, metadata: { channelId: result.channel.id, locked: false } }).catch(() => {});
+        await replyPrivate(interaction, { embeds: [createSuccessEmbed('Channel Unlocked', `<#${result.channel.id}> is now unlocked.`)], deleteAfterSeconds: 8 });
+        return true;
+      }
+      if (id.startsWith(CustomIds.JoinCreateClaimPrefix)) {
+        const channelId = id.slice(CustomIds.JoinCreateClaimPrefix.length);
+        const result = await joinCreate.claimFromControl(member, channelId);
+        await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'join-create-control', title: 'Temporary Voice Claimed', body: `Channel: <#${result.channel.id}>`, actorUserId: interaction.user.id, metadata: { channelId: result.channel.id } }).catch(() => {});
+        await replyPrivate(interaction, { embeds: [createSuccessEmbed('Channel Claimed', `You now own <#${result.channel.id}>.`)], deleteAfterSeconds: 8 });
+        return true;
+      }
+      if (id.startsWith(CustomIds.JoinCreateDeletePrefix)) {
+        const channelId = id.slice(CustomIds.JoinCreateDeletePrefix.length);
+        const temp = await joinCreate.deleteTempFromControl(member, channelId, ctx.logger);
+        await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'join-create-control', title: 'Temporary Voice Deleted From Control Panel', body: `Channel ID: ${temp.channel_id}`, actorUserId: interaction.user.id, metadata: { channelId: temp.channel_id } }).catch(() => {});
+        await replyPrivate(interaction, { embeds: [createSuccessEmbed('Channel Deleted', 'Your temporary voice channel was deleted.')], deleteAfterSeconds: 8 });
+        return true;
+      }
+    } catch (error) {
+      await replyPrivate(interaction, { embeds: [createWarningEmbed('Temporary Voice Control Blocked', error instanceof Error ? error.message : String(error))], deleteAfterSeconds: 10 });
+      return true;
+    }
   }
 
   return false;

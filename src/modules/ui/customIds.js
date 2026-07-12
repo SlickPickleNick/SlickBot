@@ -97,7 +97,12 @@ const CustomIds = Object.freeze({
   BirthdayTimezonePrefix: 'slickbot:birthday:timezone:',
   BirthdayTimezoneCustomPrefix: 'slickbot:birthday:timezone-custom:',
   BirthdayTimezoneModalPrefix: 'slickbot:modal:birthday-timezone:',
-  BirthdayListSelect: 'slickbot:birthday:list-select'
+  BirthdayListSelect: 'slickbot:birthday:list-select',
+
+  JoinCreateLockPrefix: 'slickbot:join-create:lock:',
+  JoinCreateUnlockPrefix: 'slickbot:join-create:unlock:',
+  JoinCreateClaimPrefix: 'slickbot:join-create:claim:',
+  JoinCreateDeletePrefix: 'slickbot:join-create:delete:'
 });
 
 module.exports = { CustomIds };

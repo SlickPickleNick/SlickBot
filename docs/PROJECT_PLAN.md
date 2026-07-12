@@ -1,6 +1,6 @@
 # SlickBot Project Plan
 
-## Current Version: 0.8.0
+## Current Version: 0.8.1
 
 SlickBot is being built as a modular all-in-one Discord server management bot for the SlickPickleNick community.
 
@@ -31,6 +31,18 @@ SlickBot is being built as a modular all-in-one Discord server management bot fo
 - Custom commands
 - Join-to-create voice channels
 - Leveling / XP
+
+
+## v0.8.1 Scope
+
+### Join-to-Create Control Panels
+
+- Added automatic temporary voice channel control panels posted in the created voice channel chat.
+- Control panels ping the temporary channel owner and provide quick buttons for Lock, Unlock, Claim, and Delete Channel.
+- Control panels show owner, status, user limit, command help, and auto-cleanup details.
+- Temporary voice control panels are refreshed after channel owner actions so the displayed status remains accurate.
+- Added `control_message_id` and `control_message_error` tracking to `join_create_temp_channels`.
+- Added graceful logging when a control panel cannot be posted because the voice channel chat is unavailable or SlickBot lacks permissions.
 
 
 ## v0.8.0 Scope

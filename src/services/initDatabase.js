@@ -785,6 +785,8 @@ async function initDatabase() {
       name TEXT,
       locked BOOLEAN NOT NULL DEFAULT false,
       user_limit INTEGER NOT NULL DEFAULT 0,
+      control_message_id TEXT,
+      control_message_error TEXT,
       last_empty_at TIMESTAMPTZ,
       deleted_at TIMESTAMPTZ,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -805,6 +807,8 @@ async function initDatabase() {
   await query(`ALTER TABLE join_create_hubs ADD COLUMN IF NOT EXISTS staff_role_id TEXT;`).catch(() => {});
   await query(`ALTER TABLE join_create_temp_channels ADD COLUMN IF NOT EXISTS locked BOOLEAN NOT NULL DEFAULT false;`).catch(() => {});
   await query(`ALTER TABLE join_create_temp_channels ADD COLUMN IF NOT EXISTS user_limit INTEGER NOT NULL DEFAULT 0;`).catch(() => {});
+  await query(`ALTER TABLE join_create_temp_channels ADD COLUMN IF NOT EXISTS control_message_id TEXT;`).catch(() => {});
+  await query(`ALTER TABLE join_create_temp_channels ADD COLUMN IF NOT EXISTS control_message_error TEXT;`).catch(() => {});
   await query(`ALTER TABLE join_create_temp_channels ADD COLUMN IF NOT EXISTS last_empty_at TIMESTAMPTZ;`).catch(() => {});
 
 
