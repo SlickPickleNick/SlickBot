@@ -17,6 +17,9 @@ Current package: **v0.8.8**
 - Application and appeal review embeds now use consistent pending/approved/denied status labels and colors.
 - Appeal denials now use red/error styling instead of warning/orange styling in both review embeds and decision DMs.
 - Added a backward-compatible `reports.decision_reason` database field.
+- Added confirmed support-module reset commands for testing and rebuilding individual support workflows without using the full server reset.
+- New reset commands: `/ticket reset`, `/report reset`, `/application reset`, and `/appeal reset`.
+- Each support reset shows a private confirmation message with record counts before anything is cleared.
 
 Updated systems:
 
@@ -26,6 +29,7 @@ Reports
 Applications
 Appeals
 Support review controls
+Support module reset tools
 ```
 
 ## v0.8.7 Updates

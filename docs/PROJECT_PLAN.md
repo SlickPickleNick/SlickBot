@@ -42,6 +42,8 @@ SlickBot is being built as a modular all-in-one Discord server management bot fo
 - Updated ticket control embeds so closed tickets show closed status, close reason, closed-by metadata, and transcript status if the channel remains visible.
 - Standardized support status labels/colors across review embeds: open/pending items use orange, approved/resolved items use green, denied items use red, and dismissed/closed items use muted styling.
 - Added a backward-compatible `reports.decision_reason` migration.
+- Added confirmed support-module reset commands for testing/rebuilding individual support modules: `/ticket reset`, `/report reset`, `/application reset`, and `/appeal reset`.
+- Reset commands show a private confirmation prompt with affected record counts before clearing module data.
 - No command groups were renamed.
 
 Deferred larger work:

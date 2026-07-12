@@ -36,6 +36,7 @@ const {
   buildApplicationReviewReasonModal,
   buildReportReviewPayload
 } = require('../modules/support/supportService');
+const { getSupportResetModule, resetSupportModule, buildSupportResetCompletePayload } = require('../modules/support/supportResetService');
 
 const tickets = new TicketService();
 const reports = new ReportService();
@@ -90,6 +91,52 @@ async function handleButton(interaction, ctx) {
   if (id === CustomIds.HelpDisabled) {
     if (!(await requireAction(interaction, ctx, ActionKeys.Help, ModuleKeys.PERMISSIONS))) return true;
     await updatePanel(interaction, await buildHelpPayload(interaction, ctx, { mode: 'disabled' }));
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.SupportResetCancelPrefix)) {
+    const payload = parseSupportResetId(id, CustomIds.SupportResetCancelPrefix);
+    if (!payload || payload.requestedByUserId !== interaction.user.id) {
+      await replyPrivate(interaction, { embeds: [createWarningEmbed('Confirmation Not Yours', 'Only the user who opened this reset confirmation can cancel it.')] });
+      return true;
+    }
+    const mod = getSupportResetModule(payload.moduleKey);
+    await updatePanel(interaction, { embeds: [createSuccessEmbed('Support Reset Cancelled', `No ${mod?.label || 'support module'} data was changed.`)], components: [] });
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.SupportResetConfirmPrefix)) {
+    const payload = parseSupportResetId(id, CustomIds.SupportResetConfirmPrefix);
+    if (!payload || payload.requestedByUserId !== interaction.user.id) {
+      await replyPrivate(interaction, { embeds: [createWarningEmbed('Confirmation Not Yours', 'Only the user who opened this reset confirmation can confirm it.')] });
+      return true;
+    }
+
+    const mod = getSupportResetModule(payload.moduleKey);
+    if (!mod) {
+      await replyPrivate(interaction, { embeds: [createWarningEmbed('Reset Not Available', 'That support module reset is not recognized.')] });
+      return true;
+    }
+
+    const actionMap = {
+      tickets: [ActionKeys.TicketsReset, ModuleKeys.TICKETS],
+      reports: [ActionKeys.ReportsReset, ModuleKeys.REPORTS],
+      applications: [ActionKeys.ApplicationsReset, ModuleKeys.APPLICATIONS],
+      appeals: [ActionKeys.AppealsReset, ModuleKeys.APPEALS]
+    };
+    const [actionKey, moduleKey] = actionMap[mod.key] || [];
+    if (!actionKey || !(await requireAction(interaction, ctx, actionKey, moduleKey))) return true;
+
+    const result = await resetSupportModule(interaction.guildId, mod.key);
+    await ctx.logger.log({
+      guildId: interaction.guildId,
+      eventKey: 'setup',
+      title: `${result.mod.label} Module Reset`,
+      body: `${result.mod.label} support module data was reset by ${interaction.user.tag}.`,
+      actorUserId: interaction.user.id,
+      metadata: { module: result.mod.key, before: result.before }
+    }).catch(() => {});
+    await updatePanel(interaction, buildSupportResetCompletePayload(result));
     return true;
   }
 
@@ -1025,6 +1072,13 @@ async function handleModal(interaction, ctx) {
   }
 
   return false;
+}
+
+function parseSupportResetId(customId, prefix) {
+  const rest = String(customId || '').slice(prefix.length);
+  const [moduleKey, requestedByUserId] = rest.split(':');
+  if (!moduleKey || !requestedByUserId) return null;
+  return { moduleKey, requestedByUserId };
 }
 
 function parseQuestions(value) {

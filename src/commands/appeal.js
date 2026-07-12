@@ -3,6 +3,7 @@ const { ModuleKeys } = require('../modules/moduleRegistry');
 const { ActionKeys } = require('../modules/permissions/actionKeys');
 const { replyPrivate } = require('../utils/reply');
 const { AppealService } = require('../modules/support/supportService');
+const { buildSupportResetConfirmationPayload } = require('../modules/support/supportResetService');
 const { buildAppealsPanel, buildPublicAppealPanel } = require('../modules/support/supportUi');
 const { createSuccessEmbed } = require('../modules/ui/uiService');
 const { recordPublishedPanel } = require('../modules/panels/publishedPanelService');
@@ -15,6 +16,7 @@ module.exports = {
     .setName('appeal')
     .setDescription('Appeal system tools.')
     .addSubcommand((subcommand) => subcommand.setName('manager').setDescription('Open the appeal manager panel.'))
+    .addSubcommand((subcommand) => subcommand.setName('reset').setDescription('Reset this support module setup and testing data. Requires confirmation.'))
     .addSubcommand((subcommand) =>
       subcommand
         .setName('setup')
@@ -59,6 +61,7 @@ module.exports = {
   moduleKey: ModuleKeys.APPEALS,
   getActionKey(interaction) {
     const subcommand = interaction.options.getSubcommand();
+    if (subcommand === 'reset') return ActionKeys.AppealsReset;
     if (subcommand === 'setup' || subcommand === 'edit') return ActionKeys.AppealsConfigure;
     if (subcommand === 'manager') return ActionKeys.AppealsManager;
     if (subcommand === 'panel') return ActionKeys.AppealsPostPanel;
@@ -73,6 +76,8 @@ module.exports = {
     await ctx.permissions.ensureGuildConfig(interaction.guildId, interaction.guild ? interaction.guild.name : null);
 
     if (subcommand === 'manager') return replyPrivate(interaction, await buildAppealsPanel(interaction.guildId));
+
+    if (subcommand === 'reset') return replyPrivate(interaction, await buildSupportResetConfirmationPayload({ guildId: interaction.guildId, moduleKey: 'appeals', requestedByUserId: interaction.user.id }));
 
     if (subcommand === 'setup') {
       const channel = interaction.options.getChannel('review_channel', true);

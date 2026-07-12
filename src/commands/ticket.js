@@ -3,6 +3,7 @@ const { ModuleKeys } = require('../modules/moduleRegistry');
 const { ActionKeys } = require('../modules/permissions/actionKeys');
 const { replyPrivate } = require('../utils/reply');
 const { TicketService, buildTicketModal } = require('../modules/support/supportService');
+const { buildSupportResetConfirmationPayload } = require('../modules/support/supportResetService');
 const { buildTicketsPanel, buildPublicTicketPanel } = require('../modules/support/supportUi');
 const { createSuccessEmbed, createWarningEmbed } = require('../modules/ui/uiService');
 const { recordPublishedPanel } = require('../modules/panels/publishedPanelService');
@@ -24,6 +25,7 @@ module.exports = {
     .setName('ticket')
     .setDescription('Ticket system tools.')
     .addSubcommand((subcommand) => subcommand.setName('manager').setDescription('Open the ticket manager panel.'))
+    .addSubcommand((subcommand) => subcommand.setName('reset').setDescription('Reset this support module setup and testing data. Requires confirmation.'))
     .addSubcommand((subcommand) =>
       subcommand
         .setName('setup')
@@ -132,6 +134,7 @@ module.exports = {
   moduleKey: ModuleKeys.TICKETS,
   getActionKey(interaction) {
     const subcommand = interaction.options.getSubcommand();
+    if (subcommand === 'reset') return ActionKeys.TicketsReset;
     if (['setup', 'type-setup', 'type-delete', 'question-add', 'question-clear'].includes(subcommand)) return ActionKeys.TicketsConfigure;
     if (subcommand === 'manager') return ActionKeys.TicketsManager;
     if (subcommand === 'panel') return ActionKeys.TicketsPostPanel;
@@ -149,6 +152,8 @@ module.exports = {
     await ctx.permissions.ensureGuildConfig(interaction.guildId, interaction.guild ? interaction.guild.name : null);
 
     if (subcommand === 'manager') return replyPrivate(interaction, await buildTicketsPanel(interaction.guildId));
+
+    if (subcommand === 'reset') return replyPrivate(interaction, await buildSupportResetConfirmationPayload({ guildId: interaction.guildId, moduleKey: 'tickets', requestedByUserId: interaction.user.id }));
 
     if (subcommand === 'setup') {
       const config = await tickets.updateConfig(interaction.guildId, {

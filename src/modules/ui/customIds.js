@@ -60,6 +60,8 @@ const CustomIds = Object.freeze({
   CasesRefresh: 'slickbot:cases:refresh',
 
   SupportRefresh: 'slickbot:support:refresh',
+  SupportResetConfirmPrefix: 'slickbot:support-reset:confirm:',
+  SupportResetCancelPrefix: 'slickbot:support-reset:cancel:',
   TicketsRefresh: 'slickbot:tickets:refresh',
   TicketOpen: 'slickbot:ticket:open',
   TicketOpenTypePrefix: 'slickbot:ticket:open-type:',

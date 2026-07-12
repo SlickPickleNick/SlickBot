@@ -8,13 +8,19 @@
       "Ticket control embeds now show explicit status, opened/closed metadata, close reason, and transcript status when a ticket is closed but remains visible.",
       "Application and appeal review embeds now use consistent support workflow status labels, with pending/open items in orange, approvals/resolutions in green, denials in red, and closed/dismissed items muted.",
       "Appeal denial DMs now use the same red denial styling as the review channel embed.",
-      "Added a reports.decision_reason migration for clearer final report decision tracking."
+      "Added a reports.decision_reason migration for clearer final report decision tracking.",
+      "Added confirmed support-module reset commands for Tickets, Reports, Applications, and Appeals so admins can restart individual support module setup/testing data without using the full server reset.",
+      "Each support reset shows a private confirmation prompt with affected record counts before any data is cleared."
     ],
     "commands": [
       "/ticket manager",
       "/report manager",
       "/application manager",
-      "/appeal manager"
+      "/appeal manager",
+      "/ticket reset",
+      "/report reset",
+      "/application reset",
+      "/appeal reset"
     ]
   },
   "0.8.7": {

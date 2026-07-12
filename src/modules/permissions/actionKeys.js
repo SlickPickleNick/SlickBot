@@ -37,6 +37,7 @@ const ActionKeys = Object.freeze({
   TicketsManage: 'tickets.manage',
   TicketsClaim: 'tickets.claim',
   TicketsClose: 'tickets.close',
+  TicketsReset: 'tickets.reset',
 
   ReportsSubmit: 'reports.submit',
   ReportsManager: 'reports.manager',
@@ -48,6 +49,7 @@ const ActionKeys = Object.freeze({
   ReportsResolve: 'reports.resolve',
   ReportsDismiss: 'reports.dismiss',
   ReportsOpenTicket: 'reports.open-ticket',
+  ReportsReset: 'reports.reset',
 
   ApplicationsApply: 'applications.apply',
   ApplicationsManager: 'applications.manager',
@@ -57,6 +59,7 @@ const ActionKeys = Object.freeze({
   ApplicationsReview: 'applications.review',
   ApplicationsApprove: 'applications.approve',
   ApplicationsDeny: 'applications.deny',
+  ApplicationsReset: 'applications.reset',
 
   AppealsSubmit: 'appeals.submit',
   AppealsManager: 'appeals.manager',
@@ -66,6 +69,7 @@ const ActionKeys = Object.freeze({
   AppealsReview: 'appeals.review',
   AppealsApprove: 'appeals.approve',
   AppealsDeny: 'appeals.deny',
+  AppealsReset: 'appeals.reset',
 
   WelcomeView: 'welcome.view',
   WelcomeConfigure: 'welcome.configure',
@@ -178,6 +182,7 @@ const defaultActionLevels = Object.freeze({
   [ActionKeys.TicketsManage]: PermissionLevels.MODERATOR,
   [ActionKeys.TicketsClaim]: PermissionLevels.MODERATOR,
   [ActionKeys.TicketsClose]: PermissionLevels.MODERATOR,
+  [ActionKeys.TicketsReset]: PermissionLevels.OWNER,
 
   [ActionKeys.ReportsSubmit]: PermissionLevels.EVERYONE,
   [ActionKeys.ReportsPanel]: PermissionLevels.MODERATOR,
@@ -189,6 +194,7 @@ const defaultActionLevels = Object.freeze({
   [ActionKeys.ReportsResolve]: PermissionLevels.MODERATOR,
   [ActionKeys.ReportsDismiss]: PermissionLevels.MODERATOR,
   [ActionKeys.ReportsOpenTicket]: PermissionLevels.MODERATOR,
+  [ActionKeys.ReportsReset]: PermissionLevels.OWNER,
 
   [ActionKeys.ApplicationsApply]: PermissionLevels.EVERYONE,
   [ActionKeys.ApplicationsPanel]: PermissionLevels.MODERATOR,
@@ -198,6 +204,7 @@ const defaultActionLevels = Object.freeze({
   [ActionKeys.ApplicationsReview]: PermissionLevels.MODERATOR,
   [ActionKeys.ApplicationsApprove]: PermissionLevels.SENIOR_MODERATOR,
   [ActionKeys.ApplicationsDeny]: PermissionLevels.SENIOR_MODERATOR,
+  [ActionKeys.ApplicationsReset]: PermissionLevels.OWNER,
 
   [ActionKeys.AppealsSubmit]: PermissionLevels.EVERYONE,
   [ActionKeys.AppealsPanel]: PermissionLevels.MODERATOR,
@@ -207,6 +214,7 @@ const defaultActionLevels = Object.freeze({
   [ActionKeys.AppealsReview]: PermissionLevels.MODERATOR,
   [ActionKeys.AppealsApprove]: PermissionLevels.SENIOR_MODERATOR,
   [ActionKeys.AppealsDeny]: PermissionLevels.SENIOR_MODERATOR,
+  [ActionKeys.AppealsReset]: PermissionLevels.OWNER,
 
   [ActionKeys.WelcomeView]: PermissionLevels.MODERATOR,
   [ActionKeys.WelcomeConfigure]: PermissionLevels.SENIOR_MODERATOR,

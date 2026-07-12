@@ -3,6 +3,7 @@ const { ModuleKeys } = require('../modules/moduleRegistry');
 const { ActionKeys } = require('../modules/permissions/actionKeys');
 const { replyPrivate } = require('../utils/reply');
 const { ApplicationService } = require('../modules/support/supportService');
+const { buildSupportResetConfirmationPayload } = require('../modules/support/supportResetService');
 const { buildApplicationsPanel, buildPublicApplicationPanel } = require('../modules/support/supportUi');
 const { createBaseEmbed, createSuccessEmbed, createWarningEmbed, SlickBotColors } = require('../modules/ui/uiService');
 const { recordPublishedPanel } = require('../modules/panels/publishedPanelService');
@@ -15,6 +16,7 @@ module.exports = {
     .setName('application')
     .setDescription('Application system tools.')
     .addSubcommand((subcommand) => subcommand.setName('manager').setDescription('Open the application manager panel.'))
+    .addSubcommand((subcommand) => subcommand.setName('reset').setDescription('Reset this support module setup and testing data. Requires confirmation.'))
     .addSubcommand((subcommand) =>
       subcommand
         .setName('setup')
@@ -78,6 +80,7 @@ module.exports = {
   moduleKey: ModuleKeys.APPLICATIONS,
   getActionKey(interaction) {
     const subcommand = interaction.options.getSubcommand();
+    if (subcommand === 'reset') return ActionKeys.ApplicationsReset;
     if (['setup', 'delete', 'question-add', 'question-clear'].includes(subcommand)) return ActionKeys.ApplicationsConfigure;
     if (subcommand === 'manager' || subcommand === 'question-list') return ActionKeys.ApplicationsManager;
     if (subcommand === 'panel') return ActionKeys.ApplicationsPostPanel;
@@ -92,6 +95,8 @@ module.exports = {
     await ctx.permissions.ensureGuildConfig(interaction.guildId, interaction.guild ? interaction.guild.name : null);
 
     if (subcommand === 'manager') return replyPrivate(interaction, await buildApplicationsPanel(interaction.guildId));
+
+    if (subcommand === 'reset') return replyPrivate(interaction, await buildSupportResetConfirmationPayload({ guildId: interaction.guildId, moduleKey: 'applications', requestedByUserId: interaction.user.id }));
 
     if (subcommand === 'setup') {
       const type = await applications.setupType(interaction.guildId, {
