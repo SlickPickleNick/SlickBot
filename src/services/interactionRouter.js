@@ -133,9 +133,7 @@ async function handleButton(interaction, ctx) {
     if (!(await requireAction(interaction, ctx, ActionKeys.SuggestionsReview, ModuleKeys.SUGGESTIONS))) return true;
     const rest = id.slice(CustomIds.SuggestionReviewStatusPrefix.length);
     const [suggestionId, status] = rest.split(':');
-    await interaction.deferUpdate().catch(() => {});
-    const result = await suggestions.updateStatus({ guild: interaction.guild, suggestionNumber: suggestionId, status, actorUser: interaction.user, logger: ctx.logger }).catch((error) => ({ ok: false, reason: error instanceof Error ? error.message : String(error) }));
-    if (!result.ok) await interaction.followUp({ embeds: [createWarningEmbed('Suggestion Not Updated', result.reason || 'SlickBot could not update this suggestion.')], flags: MessageFlags.Ephemeral }).catch(() => {});
+    await interaction.showModal(suggestions.buildDetailsModal(suggestionId, status));
     return true;
   }
 
@@ -1391,8 +1389,14 @@ async function handleModal(interaction, ctx) {
 
   if (id.startsWith(CustomIds.SuggestionReviewDetailsModalPrefix)) {
     if (!(await requireAction(interaction, ctx, ActionKeys.SuggestionsReview, ModuleKeys.SUGGESTIONS))) return true;
-    const suggestionId = id.slice(CustomIds.SuggestionReviewDetailsModalPrefix.length);
-    const details = interaction.fields.getTextInputValue('details');
+    const rest = id.slice(CustomIds.SuggestionReviewDetailsModalPrefix.length);
+    const [suggestionId, status] = rest.split(':');
+    const details = interaction.fields.getTextInputValue('details')?.trim();
+    if (status) {
+      const result = await suggestions.updateStatus({ guild: interaction.guild, suggestionNumber: suggestionId, status, response: details || undefined, actorUser: interaction.user, logger: ctx.logger }).catch((error) => ({ ok: false, reason: error instanceof Error ? error.message : String(error) }));
+      if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Suggestion Not Updated', result.reason || 'SlickBot could not update this suggestion.')] });
+      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Suggestion Updated', `Suggestion **#${result.suggestion.suggestion_number}** is now **${status.replace(/_/g, ' ')}**.`)], deleteAfterSeconds: 8 });
+    }
     const result = await suggestions.addDetails({ guild: interaction.guild, suggestionNumber: suggestionId, details, actorUser: interaction.user, logger: ctx.logger }).catch((error) => ({ ok: false, reason: error instanceof Error ? error.message : String(error) }));
     if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Details Not Added', result.reason || 'SlickBot could not add these details.')] });
     return replyPrivate(interaction, { embeds: [createSuccessEmbed('Suggestion Details Added', `Added details to suggestion **#${result.suggestion.suggestion_number}**.`)], deleteAfterSeconds: 8 });

@@ -201,17 +201,17 @@ function buildPanelPayload(config) {
 function buildReviewComponents(suggestion) {
   const id = suggestion.id;
   const status = normalizeStatus(suggestion.status) || SUGGESTION_STATUSES.PENDING;
-  const statusButton = (target, label, style = ButtonStyle.Secondary) => new ButtonBuilder()
+  const statusButton = (target, label) => new ButtonBuilder()
     .setCustomId(`${CustomIds.SuggestionReviewStatusPrefix}${id}:${target}`)
     .setLabel(label)
-    .setStyle(status === target ? ButtonStyle.Success : style);
+    .setStyle(status === target ? ButtonStyle.Success : ButtonStyle.Secondary);
 
   const rows = [
     new ActionRowBuilder().addComponents(
       statusButton('PENDING', 'Pending'),
       statusButton('PLANNED', 'Planned'),
       statusButton('ACCEPTED', 'Accepted'),
-      statusButton('DENIED', 'Denied', ButtonStyle.Danger),
+      statusButton('DENIED', 'Denied'),
       statusButton('IMPLEMENTED', 'Implemented')
     ),
     new ActionRowBuilder().addComponents(
@@ -571,12 +571,21 @@ class SuggestionService {
       );
   }
 
-  buildDetailsModal(suggestionId) {
+  buildDetailsModal(suggestionId, status = null) {
+    const normalizedStatus = status ? normalizeStatus(status) : null;
     return new ModalBuilder()
-      .setCustomId(`${CustomIds.SuggestionReviewDetailsModalPrefix}${suggestionId}`)
-      .setTitle('Add Suggestion Details')
+      .setCustomId(`${CustomIds.SuggestionReviewDetailsModalPrefix}${suggestionId}${normalizedStatus ? `:${normalizedStatus}` : ''}`)
+      .setTitle(normalizedStatus ? `Set ${STATUS_LABELS[normalizedStatus] || normalizedStatus}` : 'Add Suggestion Details')
       .addComponents(
-        new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('details').setLabel('Review details').setStyle(TextInputStyle.Paragraph).setRequired(true).setMaxLength(1000))
+        new ActionRowBuilder().addComponents(
+          new TextInputBuilder()
+            .setCustomId('details')
+            .setLabel(normalizedStatus ? 'Optional review details' : 'Review details')
+            .setStyle(TextInputStyle.Paragraph)
+            .setRequired(!normalizedStatus)
+            .setMaxLength(1000)
+            .setPlaceholder(normalizedStatus ? 'Optional. This will be added to the suggestion revision history.' : 'Add the staff note or revision details.')
+        )
       );
   }
 

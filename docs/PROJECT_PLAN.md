@@ -52,10 +52,10 @@ SlickBot is being built as a modular all-in-one Discord server management bot fo
 - Visible suggestions use the submitter's Discord profile image as the embed thumbnail.
 - Added starter categories: Server, Discord, Stream, Events, Bot, and Other. Staff can add or remove active categories with `/suggestion category add` and `/suggestion category remove`.
 - Added staff review states: Pending, Planned, Accepted, Denied, and Implemented.
-- Added `/suggestion review status` for status changes and staff responses. Status changes update the original suggestion embed color and add one separate revision-history embed below the public suggestion. Revision entries render oldest-to-newest.
+- Added `/suggestion review status` for command-based status changes and staff responses. Review-channel status buttons open an optional details modal before applying the status change, with the active status button shown in green and inactive statuses shown in gray. Status changes update the original suggestion embed color and add one separate revision-history embed below the public suggestion. Revision entries render oldest-to-newest.
 - Added `/suggestion review add-details` for staff notes below the suggestion, plus review-channel buttons for status changes, Add Details, Reveal Submitter, and Open Public Suggestion.
 - Each submitted suggestion attempts to create an automatic discussion thread under the suggestion post only when the auto-create thread setting is enabled.
-- Added suggestion logs, `/suggestion review-index` with status filters, `/suggestion reset` with confirmation, permission defaults, public voting permissions, `/help`, `/setup`, `/modules`, and `/bot test` integration.
+- Added suggestion logs, `/suggestion review-index` with Pending, Planned, Accepted, Denied, Implemented, and All filters, `/suggestion reset` with confirmation, permission defaults, public voting permissions, `/help`, `/setup`, `/modules`, and `/bot test` integration.
 
 ### FAQ Patch
 
