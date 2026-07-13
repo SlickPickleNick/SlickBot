@@ -25,7 +25,10 @@
       "Revision history is rendered oldest-to-newest so staff changes are readable chronologically.",
       "Voting buttons are automatically removed when a suggestion is Accepted, Denied, or Implemented. Pending Review and Planned suggestions remain open for voting.",
       "Added /suggestion reset with private confirmation to clear Suggestions setup/testing data for a server without deleting existing Discord messages.",
-      "Suggestion review status buttons render the active status in green and inactive statuses in gray for clearer staff review state."
+      "Suggestion review status buttons render the active status in green and inactive statuses in gray for clearer staff review state.",
+      "Public suggestion footers now use SlickBot Suggestions branding instead of showing the submitter mention.",
+      "Suggestion Review Updates now stay muted gray so status color changes affect only the main suggestion embed.",
+      "The public Suggestions panel now only shows the configured title, description, SlickBot Suggestions footer, and Submit Suggestion button; internal setup details are kept out of the public panel."
     ],
     "commands": [
       "/suggestion setup",

@@ -109,7 +109,6 @@ function buildSuggestionEmbed({ suggestion, votes, submitter = null }) {
   const total = up + down;
   const anonymous = isAnonymousValue(suggestion.anonymous);
   const status = normalizeStatus(suggestion.status) || SUGGESTION_STATUSES.PENDING;
-  const publicAuthor = anonymous ? '@anonymous' : `<@${suggestion.submitter_user_id}>`;
   const authorName = anonymous ? 'Anonymous Suggested' : `${submitter?.globalName || submitter?.username || 'Member'} Suggested`;
   const thumbnail = anonymous ? ANONYMOUS_AVATAR_URL : defaultAvatarForUser(submitter);
 
@@ -117,7 +116,7 @@ function buildSuggestionEmbed({ suggestion, votes, submitter = null }) {
     title: truncate(suggestion.title || 'Suggestion', 256),
     description: truncate(suggestion.description || 'No description provided.', 4000),
     color: STATUS_COLORS[status] || SlickBotColors.INFO,
-    footer: `${publicAuthor} • Suggestion #${suggestion.suggestion_number || '—'}`
+    footer: `SlickBot Suggestions • Suggestion #${suggestion.suggestion_number || '—'}`
   });
 
   embed.setAuthor({ name: authorName });
@@ -133,7 +132,6 @@ function buildSuggestionEmbed({ suggestion, votes, submitter = null }) {
 }
 
 function buildSuggestionRevisionEmbed({ suggestion, notes = [] }) {
-  const status = normalizeStatus(suggestion.status) || SUGGESTION_STATUSES.PENDING;
   const lines = notes
     .slice(0, 15)
     .map((note) => {
@@ -152,7 +150,7 @@ function buildSuggestionRevisionEmbed({ suggestion, notes = [] }) {
   return createBaseEmbed({
     title: 'Suggestion Review Updates',
     description: truncate(description, 4000),
-    color: STATUS_COLORS[status] || SlickBotColors.INFO,
+    color: SlickBotColors.MUTED,
     footer: 'SlickBot Suggestions'
   });
 }
@@ -181,13 +179,7 @@ function buildSuggestionPayload({ suggestion, votes, submitter, notes }) {
 function buildPanelPayload(config) {
   const embed = createBaseEmbed({
     title: config?.panel_title || DEFAULT_PANEL_TITLE,
-    description: [
-      config?.panel_description || DEFAULT_PANEL_DESCRIPTION,
-      '',
-      config?.channel_id ? `Suggestions are posted in <#${config.channel_id}>.` : 'Suggestion channel is not configured yet.',
-      config?.review_channel_id ? `Staff reviews are sent to <#${config.review_channel_id}>.` : 'Review channel is not configured yet.',
-      `Default anonymity: **${config?.default_anonymous === false ? 'Public' : 'Anonymous'}**`
-    ].join('\n'),
+    description: config?.panel_description || DEFAULT_PANEL_DESCRIPTION,
     color: SlickBotColors.PRIMARY,
     footer: 'SlickBot Suggestions'
   });
