@@ -22,6 +22,7 @@ const { ServerStatsService } = require('../modules/community/serverStatsService'
 const { LevelingService } = require('../modules/community/levelingService');
 const { CommunityGameService, GAME_KEYS } = require('../modules/community/gameService');
 const { FaqService } = require('../modules/community/faqService');
+const { SuggestionService } = require('../modules/community/suggestionService');
 const { buildRoleManagerPanel, toggleRole } = require('../modules/community/rolePanelService');
 const { JoinCreateService } = require('../modules/voice/joinCreateService');
 const { CustomCommandService } = require('../modules/custom/customCommandService');
@@ -55,6 +56,7 @@ const joinCreate = new JoinCreateService();
 const customCommands = new CustomCommandService();
 const communityGames = new CommunityGameService();
 const faq = new FaqService();
+const suggestions = new SuggestionService();
 
 async function handleComponentInteraction(interaction, ctx) {
   if (!interaction.guildId) {
@@ -107,6 +109,23 @@ async function handleButton(interaction, ctx) {
       })],
       components: [row]
     });
+    return true;
+  }
+
+
+  if (id === CustomIds.SuggestionSubmitOpen) {
+    if (!(await requirePublicAction(interaction, ctx, ActionKeys.SuggestionsSubmit, ModuleKeys.SUGGESTIONS))) return true;
+    await interaction.showModal(suggestions.buildSubmitModal(interaction.guildId));
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.SuggestionVoteUpPrefix) || id.startsWith(CustomIds.SuggestionVoteDownPrefix)) {
+    if (!(await requirePublicAction(interaction, ctx, ActionKeys.SuggestionsVote, ModuleKeys.SUGGESTIONS))) return true;
+    const isUp = id.startsWith(CustomIds.SuggestionVoteUpPrefix);
+    const suggestionId = id.slice((isUp ? CustomIds.SuggestionVoteUpPrefix : CustomIds.SuggestionVoteDownPrefix).length);
+    const result = await suggestions.vote({ guild: interaction.guild, suggestionId, user: interaction.user, voteType: isUp ? 'UP' : 'DOWN' }).catch((error) => ({ ok: false, reason: error instanceof Error ? error.message : String(error) }));
+    if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Vote Not Counted', result.reason || 'SlickBot could not update this vote.')], deleteAfterSeconds: 10 });
+    await acknowledgeQuietly(interaction);
     return true;
   }
 
@@ -374,6 +393,12 @@ async function handleButton(interaction, ctx) {
   if (id === CustomIds.FaqRefresh) {
     if (!(await requireAction(interaction, ctx, ActionKeys.FaqView, ModuleKeys.FAQ))) return true;
     await updatePanel(interaction, await faq.buildManagerPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id === CustomIds.SuggestionsRefresh) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.SuggestionsView, ModuleKeys.SUGGESTIONS))) return true;
+    await updatePanel(interaction, await suggestions.buildManagerPanel(interaction.guildId));
     return true;
   }
 
@@ -1282,6 +1307,25 @@ async function handleModal(interaction, ctx) {
     }
   }
 
+
+  if (id.startsWith(CustomIds.SuggestionSubmitModalPrefix)) {
+    if (!(await requirePublicAction(interaction, ctx, ActionKeys.SuggestionsSubmit, ModuleKeys.SUGGESTIONS))) return true;
+    const config = await suggestions.getConfig(interaction.guildId).catch(() => null);
+    const anonymous = suggestions.parseAnonymousInput(interaction.fields.getTextInputValue('anonymous'), config?.default_anonymous !== false);
+    const result = await suggestions.submitSuggestion({
+      guild: interaction.guild,
+      user: interaction.user,
+      title: interaction.fields.getTextInputValue('title'),
+      description: interaction.fields.getTextInputValue('description'),
+      categoryName: interaction.fields.getTextInputValue('category') || 'Other',
+      anonymous,
+      client: ctx.client,
+      logger: ctx.logger
+    }).catch((error) => ({ ok: false, reason: error instanceof Error ? error.message : String(error) }));
+    if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Suggestion Not Submitted', result.reason || 'SlickBot could not submit your suggestion.')] });
+    return replyPrivate(interaction, { embeds: [createSuccessEmbed('Suggestion Submitted', `Suggestion **#${result.suggestion.suggestion_number}** was posted.\n${result.message?.url || ''}`)], deleteAfterSeconds: 12 });
+  }
+
   if (id.startsWith(CustomIds.FaqAnswerModalPrefix)) {
     if (!(await requireAction(interaction, ctx, ActionKeys.FaqAnswer, ModuleKeys.FAQ))) return true;
     const rest = id.slice(CustomIds.FaqAnswerModalPrefix.length);
@@ -1385,7 +1429,7 @@ async function requireAnySupportAction(interaction, ctx) {
 
 
 async function requireAnyCommunityAction(interaction, ctx) {
-  const checks = [[ActionKeys.WelcomeView, ModuleKeys.WELCOME], [ActionKeys.RolePanelsView, ModuleKeys.REACTION_ROLES], [ActionKeys.GiveawaysView, ModuleKeys.GIVEAWAYS], [ActionKeys.BirthdaysView, ModuleKeys.BIRTHDAYS], [ActionKeys.LevelingView, ModuleKeys.LEVELING], [ActionKeys.GamesView, ModuleKeys.COMMUNITY_GAMES], [ActionKeys.FaqView, ModuleKeys.FAQ], [ActionKeys.ScheduledMessagesView, ModuleKeys.SCHEDULED_MESSAGES], [ActionKeys.ServerStatsView, ModuleKeys.SERVER_STATS], [ActionKeys.CustomCommandsView, ModuleKeys.CUSTOM_COMMANDS], [ActionKeys.JoinCreateView, ModuleKeys.JOIN_TO_CREATE]];
+  const checks = [[ActionKeys.WelcomeView, ModuleKeys.WELCOME], [ActionKeys.RolePanelsView, ModuleKeys.REACTION_ROLES], [ActionKeys.GiveawaysView, ModuleKeys.GIVEAWAYS], [ActionKeys.BirthdaysView, ModuleKeys.BIRTHDAYS], [ActionKeys.LevelingView, ModuleKeys.LEVELING], [ActionKeys.GamesView, ModuleKeys.COMMUNITY_GAMES], [ActionKeys.FaqView, ModuleKeys.FAQ], [ActionKeys.SuggestionsView, ModuleKeys.SUGGESTIONS], [ActionKeys.ScheduledMessagesView, ModuleKeys.SCHEDULED_MESSAGES], [ActionKeys.ServerStatsView, ModuleKeys.SERVER_STATS], [ActionKeys.CustomCommandsView, ModuleKeys.CUSTOM_COMMANDS], [ActionKeys.JoinCreateView, ModuleKeys.JOIN_TO_CREATE]];
   for (const [action, moduleKey] of checks) {
     const result = await ctx.permissions.checkInteraction(interaction, action, moduleKey);
     if (result.allowed) return true;

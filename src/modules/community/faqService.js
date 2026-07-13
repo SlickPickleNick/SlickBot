@@ -365,12 +365,12 @@ class FaqService {
     return Boolean(config?.forum_channel_id === parentId && thread.id !== config.master_thread_id);
   }
 
-  async postFaqThreadNavigation({ guild, thread, config, client = null, logger = null }) {
+  async postFaqThreadNavigation({ guild, thread, config, client = null, logger = null, force = false }) {
     if (!guild || !thread || !config?.forum_channel_id) return { ok: false, reason: 'Missing FAQ forum post context.' };
     if (thread.id === config.master_thread_id) return { ok: false, ignored: true, reason: 'Master post skipped.' };
     if ((thread.parentId || thread.parent?.id) !== config.forum_channel_id) return { ok: false, ignored: true, reason: 'Not in configured FAQ forum.' };
     const botUserId = client?.user?.id || guild.client?.user?.id || null;
-    if (await hasExistingNavigationMessage(thread, botUserId)) return { ok: true, skipped: true, reason: 'Navigation message already exists.' };
+    if (!force && await hasExistingNavigationMessage(thread, botUserId)) return { ok: true, skipped: true, reason: 'Navigation message already exists.' };
 
     const payload = buildFaqPostNavigationPayload({ guildId: guild.id, config, faqThread: thread });
     const message = await thread.send(payload);
@@ -419,7 +419,7 @@ class FaqService {
         'Create FAQ items manually as posts in the configured forum. SlickBot maintains the master index, groups posts by forum tag, and adds navigation buttons to new FAQ posts.',
         '',
         '**Primary Commands**',
-        '`/faq setup` · `/faq refresh` · `/faq answer` · `/faq status`'
+        '`/faq setup` · `/faq refresh` · `/faq resend-navigation` · `/faq answer` · `/faq status`'
       ].join('\n'),
       color: config?.forum_channel_id && config?.master_thread_id ? SlickBotColors.SUCCESS : SlickBotColors.WARNING,
       footer: 'SlickBot Knowledge Base'

@@ -1213,6 +1213,104 @@ async function initDatabase() {
   await query(`ALTER TABLE faq_configs ADD COLUMN IF NOT EXISTS master_description TEXT NOT NULL DEFAULT 'Browse the FAQ posts below by category. Categories are based on this forum channel''s post tags.';`);
   await query(`CREATE INDEX IF NOT EXISTS idx_faq_configs_forum ON faq_configs(guild_id, forum_channel_id);`);
 
+
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS suggestion_configs (
+      guild_id TEXT PRIMARY KEY REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      channel_id TEXT,
+      log_channel_id TEXT,
+      default_anonymous BOOLEAN NOT NULL DEFAULT true,
+      next_suggestion_number INTEGER NOT NULL DEFAULT 1,
+      panel_channel_id TEXT,
+      panel_message_id TEXT,
+      panel_title TEXT NOT NULL DEFAULT 'Server Suggestions',
+      panel_description TEXT NOT NULL DEFAULT 'Have an idea for the server? Submit a suggestion below. Staff will review suggestions and update their status when a decision is made.',
+      panel_header_image_url TEXT,
+      panel_active BOOLEAN NOT NULL DEFAULT false,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+  await query(`ALTER TABLE suggestion_configs ADD COLUMN IF NOT EXISTS log_channel_id TEXT;`);
+  await query(`ALTER TABLE suggestion_configs ADD COLUMN IF NOT EXISTS default_anonymous BOOLEAN NOT NULL DEFAULT true;`);
+  await query(`ALTER TABLE suggestion_configs ADD COLUMN IF NOT EXISTS next_suggestion_number INTEGER NOT NULL DEFAULT 1;`);
+  await query(`ALTER TABLE suggestion_configs ADD COLUMN IF NOT EXISTS panel_channel_id TEXT;`);
+  await query(`ALTER TABLE suggestion_configs ADD COLUMN IF NOT EXISTS panel_message_id TEXT;`);
+  await query(`ALTER TABLE suggestion_configs ADD COLUMN IF NOT EXISTS panel_title TEXT NOT NULL DEFAULT 'Server Suggestions';`);
+  await query(`ALTER TABLE suggestion_configs ADD COLUMN IF NOT EXISTS panel_description TEXT NOT NULL DEFAULT 'Have an idea for the server? Submit a suggestion below. Staff will review suggestions and update their status when a decision is made.';`);
+  await query(`ALTER TABLE suggestion_configs ADD COLUMN IF NOT EXISTS panel_header_image_url TEXT;`);
+  await query(`ALTER TABLE suggestion_configs ADD COLUMN IF NOT EXISTS panel_active BOOLEAN NOT NULL DEFAULT false;`);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS suggestion_categories (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      description TEXT,
+      sort_order INTEGER NOT NULL DEFAULT 100,
+      active BOOLEAN NOT NULL DEFAULT true,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(guild_id, name)
+    );
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS suggestions (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      suggestion_number INTEGER NOT NULL,
+      submitter_user_id TEXT NOT NULL,
+      anonymous BOOLEAN NOT NULL DEFAULT true,
+      title TEXT NOT NULL,
+      description TEXT NOT NULL,
+      category_id TEXT,
+      category_name TEXT NOT NULL DEFAULT 'Other',
+      status TEXT NOT NULL DEFAULT 'PENDING',
+      staff_response TEXT,
+      reviewed_by_user_id TEXT,
+      reviewed_at TIMESTAMPTZ,
+      message_channel_id TEXT,
+      message_id TEXT,
+      thread_id TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(guild_id, suggestion_number)
+    );
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS suggestion_votes (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      suggestion_id TEXT NOT NULL REFERENCES suggestions(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL,
+      vote_type TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(suggestion_id, user_id)
+    );
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS suggestion_notes (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      suggestion_id TEXT NOT NULL REFERENCES suggestions(id) ON DELETE CASCADE,
+      author_user_id TEXT NOT NULL,
+      status TEXT,
+      note_text TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await query(`CREATE INDEX IF NOT EXISTS idx_suggestion_configs_guild ON suggestion_configs(guild_id);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_suggestions_guild_status ON suggestions(guild_id, status, created_at DESC);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_suggestions_message ON suggestions(guild_id, message_channel_id, message_id);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_suggestion_votes_suggestion ON suggestion_votes(suggestion_id);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_suggestion_notes_suggestion ON suggestion_notes(suggestion_id, created_at DESC);`);
+
   await query(`
     CREATE TABLE IF NOT EXISTS role_permission_levels (
       id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,

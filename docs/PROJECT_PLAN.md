@@ -1,6 +1,6 @@
 # SlickBot Project Plan
 
-## Current Version: 0.9.0
+## Current Version: 0.9.1
 
 SlickBot is being built as a modular all-in-one Discord server management bot for the SlickPickleNick community.
 
@@ -33,7 +33,33 @@ SlickBot is being built as a modular all-in-one Discord server management bot fo
 - Leveling / XP
 - Community Games: Counting, Tic-Tac-Toe, and Connect Four
 - Knowledge Base / FAQ
+- Suggestions
 
+
+
+## v0.9.1 Scope
+
+### Suggestions
+
+- Implemented the `SUGGESTIONS` module under the Community setup category.
+- Added `/suggestion setup` to configure the suggestions text channel, optional suggestion log channel, and default anonymous behavior.
+- Members can submit suggestions from any channel with `/suggestion submit`; SlickBot forwards every suggestion to the configured suggestions channel.
+- Added public Suggestions panels with `/suggestion panel post`, `/suggestion panel edit`, and `/suggestion panel refresh`. The submit button opens a modal for title, description, category, and anonymous/public preference.
+- Public suggestion panels are tracked and can be edited/refreshed later. When a new suggestion is submitted, SlickBot reposts the panel at the bottom of the panel channel so the submit button remains easy to access.
+- Suggestion posts include a disabled total-vote button plus upvote and downvote buttons. Vote totals and upvote/downvote percentages are shown in the suggestion embed.
+- Vote handling supports one vote per user, vote switching, and vote removal by pressing the active vote button again.
+- Added anonymous suggestions. Anonymous submissions hide the submitter publicly and use the default Discord avatar thumbnail. Senior Moderator+ users can reveal submitters privately through `/suggestion review reveal`.
+- Visible suggestions use the submitter's Discord profile image as the embed thumbnail.
+- Added starter categories: Server, Discord, Stream, Events, Bot, and Other. Staff can add or remove active categories with `/suggestion category add` and `/suggestion category remove`.
+- Added staff review states: Pending, Planned, Accepted, Denied, and Implemented.
+- Added `/suggestion review status` for status changes and staff responses. Status changes update the original suggestion embed color and add revision notes.
+- Added `/suggestion review add-details` for staff notes below the suggestion.
+- Each submitted suggestion attempts to create an automatic discussion thread under the suggestion post.
+- Added suggestion logs, permission defaults, public voting permissions, `/help`, `/setup`, `/modules`, and `/bot test` integration.
+
+### FAQ Patch
+
+- Added `/faq resend-navigation`, which staff can run from inside a normal FAQ forum post to resend the FAQ Navigation helper embed and buttons.
 
 
 ## v0.9.0 Scope

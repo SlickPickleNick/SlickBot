@@ -38,6 +38,7 @@ module.exports = {
         .setRequired(false))
       .addBooleanOption((option) => option.setName('clear_ticket_channel').setDescription('Remove the saved ticket channel.').setRequired(false)))
     .addSubcommand((sub) => sub.setName('refresh').setDescription('Refresh the master FAQ post from the forum posts and tags.'))
+    .addSubcommand((sub) => sub.setName('resend-navigation').setDescription('Resend the FAQ Navigation panel in the current FAQ forum post.'))
     .addSubcommand((sub) => sub.setName('status').setDescription('View FAQ configuration and master post status.'))
     .addSubcommand((sub) => sub
       .setName('answer')
@@ -50,6 +51,7 @@ module.exports = {
   getActionKey(interaction) {
     const sub = interaction.options.getSubcommand();
     if (sub === 'answer') return ActionKeys.FaqAnswer;
+    if (sub === 'resend-navigation') return ActionKeys.FaqConfigure;
     if (sub === 'status' || sub === 'panel') return ActionKeys.FaqView;
     return ActionKeys.FaqConfigure;
   },
@@ -100,6 +102,19 @@ module.exports = {
       const result = await faq.refreshMasterPost({ guild: interaction.guild, client: ctx.client, logger: ctx.logger, actorUserId: interaction.user.id });
       if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('FAQ Not Refreshed', result.reason)] });
       return replyPrivate(interaction, { embeds: [createSuccessEmbed('FAQ Refreshed', `The master FAQ post was refreshed with **${result.posts.length}** indexed post(s).\nMaster post: <#${result.config.master_thread_id}>`)] });
+    }
+
+
+    if (sub === 'resend-navigation') {
+      const config = await faq.getConfig(interaction.guildId);
+      if (!config?.forum_channel_id) return replyPrivate(interaction, { embeds: [createWarningEmbed('FAQ Not Configured', 'Run `/faq setup` first.')] });
+      const channel = interaction.channel;
+      if (!channel?.isThread?.() || (channel.parentId || channel.parent?.id) !== config.forum_channel_id || channel.id === config.master_thread_id) {
+        return replyPrivate(interaction, { embeds: [createWarningEmbed('Not an FAQ Post', 'Run this command inside a normal FAQ forum post, not the master FAQ post.')] });
+      }
+      const result = await faq.postFaqThreadNavigation({ guild: interaction.guild, thread: channel, config, client: ctx.client, logger: ctx.logger, force: true });
+      if (!result.ok && !result.skipped) return replyPrivate(interaction, { embeds: [createWarningEmbed('Navigation Not Sent', result.reason || 'SlickBot could not resend the FAQ Navigation panel.')] });
+      return replyPrivate(interaction, { embeds: [createSuccessEmbed('FAQ Navigation Sent', 'The FAQ Navigation panel was posted in this FAQ post.')], deleteAfterSeconds: 10 });
     }
 
     if (sub === 'status' || sub === 'panel') return replyPrivate(interaction, await faq.buildManagerPanel(interaction.guildId));

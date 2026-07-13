@@ -24,6 +24,7 @@ const { CustomCommandService } = require('../custom/customCommandService');
 const { JoinCreateService } = require('../voice/joinCreateService');
 const { CommunityGameService } = require('../community/gameService');
 const { FaqService } = require('../community/faqService');
+const { SuggestionService } = require('../community/suggestionService');
 const giveaways = new GiveawayService();
 const birthdays = new BirthdayService();
 const scheduledMessages = new ScheduledMessageService();
@@ -33,6 +34,7 @@ const customCommands = new CustomCommandService();
 const joinCreate = new JoinCreateService();
 const communityGames = new CommunityGameService();
 const faq = new FaqService();
+const suggestions = new SuggestionService();
 
 const STATUS_META = Object.freeze({
   READY: { emoji: '✅', label: 'Ready', color: SlickBotColors.SUCCESS },
@@ -47,7 +49,7 @@ const STATUS_META = Object.freeze({
 const MODULE_CATEGORIES = Object.freeze([
   { key: 'CORE', label: 'Core Setup', modules: [ModuleKeys.PERMISSIONS, ModuleKeys.LOGGING, ModuleKeys.STATUS, ModuleKeys.MODERATION] },
   { key: 'SUPPORT', label: 'Support Systems', modules: [ModuleKeys.TICKETS, ModuleKeys.REPORTS, ModuleKeys.APPLICATIONS, ModuleKeys.APPEALS] },
-  { key: 'COMMUNITY', label: 'Community Systems', modules: [ModuleKeys.WELCOME, ModuleKeys.REACTION_ROLES, ModuleKeys.GIVEAWAYS, ModuleKeys.BIRTHDAYS, ModuleKeys.LEVELING, ModuleKeys.COMMUNITY_GAMES, ModuleKeys.FAQ, ModuleKeys.SERVER_STATS, ModuleKeys.CUSTOM_COMMANDS, ModuleKeys.JOIN_TO_CREATE] },
+  { key: 'COMMUNITY', label: 'Community Systems', modules: [ModuleKeys.WELCOME, ModuleKeys.REACTION_ROLES, ModuleKeys.GIVEAWAYS, ModuleKeys.BIRTHDAYS, ModuleKeys.LEVELING, ModuleKeys.COMMUNITY_GAMES, ModuleKeys.FAQ, ModuleKeys.SUGGESTIONS, ModuleKeys.SERVER_STATS, ModuleKeys.CUSTOM_COMMANDS, ModuleKeys.JOIN_TO_CREATE] },
   { key: 'AUTOMATION', label: 'Automation Systems', modules: [ModuleKeys.SCHEDULED_MESSAGES, ModuleKeys.BOT_UPDATES] },
   { key: 'BACKLOG', label: 'Coming Soon', modules: [ModuleKeys.UTILITY] }
 ]);
@@ -154,6 +156,12 @@ const MODULE_SETUP_CATALOG = Object.freeze({
     managerCommand: '/faq panel', setupCommand: '/faq setup',
     nextSteps: ['Run `/faq setup` with a forum channel.', 'Create FAQ posts manually in that forum and assign forum tags for categories.', 'Use `/faq refresh` after major changes or let SlickBot update the master index from forum events.', 'Use `/faq answer` or the FAQ Reply message context command to send FAQ links to members.'],
     usefulCommands: ['/faq setup', '/faq refresh', '/faq answer', '/faq status', 'FAQ Reply message command']
+  },
+  [ModuleKeys.SUGGESTIONS]: {
+    name: 'Suggestions', category: 'Community Systems', description: 'Collects member suggestions through a public panel or command, tracks votes, review states, staff responses, anonymous submitters, and discussion threads.',
+    managerCommand: '/suggestion manager', setupCommand: '/suggestion setup',
+    nextSteps: ['Run `/suggestion setup` with a suggestions text channel.', 'Review or adjust categories with `/suggestion category list` and `/suggestion category add`.', 'Post a public launcher with `/suggestion panel post`.', 'Use `/suggestion review status` and `/suggestion review add-details` to update suggestions.'],
+    usefulCommands: ['/suggestion setup', '/suggestion panel post', '/suggestion submit', '/suggestion review status', '/suggestion category list']
   },
   [ModuleKeys.JOIN_TO_CREATE]: {
     name: 'Join-to-Create Voice', category: 'Community Systems', description: 'Creates temporary voice rooms when members join configured hub channels.',
@@ -587,6 +595,17 @@ async function getModuleStatus(guildId, row) {
     return { moduleKey: row.module_key, core: false, state: 'READY', emoji: '✅', label: 'Ready', note: `${enabled.length}/3 enabled · ${active.rows[0]?.count || 0} active` };
   }
 
+  if (row.module_key === 'SUGGESTIONS') {
+    const [cfg, count] = await Promise.all([
+      query(`SELECT channel_id, panel_active FROM suggestion_configs WHERE guild_id = $1 LIMIT 1`, [guildId]).catch(() => ({ rows: [] })),
+      query(`SELECT COUNT(*)::int AS count FROM suggestions WHERE guild_id = $1`, [guildId]).catch(() => ({ rows: [{ count: 0 }] }))
+    ]);
+    const config = cfg.rows[0] || {};
+    if (config.channel_id && config.panel_active) return { moduleKey: row.module_key, core: false, state: 'READY', emoji: '✅', label: 'Ready', note: `${count.rows[0]?.count || 0} suggestion(s)` };
+    if (config.channel_id) return { moduleKey: row.module_key, core: false, state: 'PARTIAL', emoji: '🟠', label: 'Partially Configured', note: 'Channel set; panel not posted' };
+    return { moduleKey: row.module_key, core: false, state: 'NEEDS_CONFIG', emoji: '🟣', label: 'Needs Setup', note: 'Run /suggestion setup' };
+  }
+
   if (row.module_key === 'FAQ') {
     const cfg = await query(`SELECT forum_channel_id, master_thread_id, ticket_channel_id FROM faq_configs WHERE guild_id = $1 LIMIT 1`, [guildId]).catch(() => ({ rows: [] }));
     const config = cfg.rows[0] || {};
@@ -899,6 +918,7 @@ async function buildCommunityPanel(guildId) {
   const birthdayPayload = await birthdays.buildManagerPanel(guildId);
   const gamesPayload = await communityGames.buildManagerPanel(guildId).catch(() => ({ embeds: [{ data: { description: 'Community games not configured.' } }] }));
   const faqPayload = await faq.buildManagerPanel(guildId).catch(() => ({ embeds: [{ data: { description: 'FAQ not configured.' } }] }));
+  const suggestionPayload = await suggestions.buildManagerPanel(guildId).catch(() => ({ embeds: [{ data: { description: 'Suggestions not configured.' } }] }));
   const statsPayload = await serverStats.buildManagerPanel({ id: guildId, memberCount: 0, members: { fetch: async () => null, cache: { size: 0, filter: () => ({ size: 0 }) } }, channels: { cache: { filter: () => ({ reduce: () => 0 }) } } }).catch(() => ({ embeds: [{ data: { description: 'Server stats not configured.' } }] }));
   const levelingPayload = await leveling.buildManagerPanel(guildId).catch(() => ({ embeds: [{ data: { description: 'Leveling not configured.' } }] }));
   const customPayload = await customCommands.buildManagerPanel(guildId).catch(() => ({ embeds: [{ data: { description: 'Custom commands not configured.' } }] }));
@@ -929,6 +949,9 @@ async function buildCommunityPanel(guildId) {
       '**Knowledge Base / FAQ**',
       compactCommunityText(faqPayload, 'No FAQ status available.'),
       '',
+      '**Suggestions**',
+      compactCommunityText(suggestionPayload, 'No suggestion status available.'),
+      '',
       '**Server Stats**',
       compactCommunityText(statsPayload, 'No server stats status available.'),
       '',
@@ -957,6 +980,7 @@ async function buildCommunityPanel(guildId) {
     createPanelButton(CustomIds.FaqRefresh, 'FAQ', ButtonStyle.Secondary)
   ]);
   const rowThree = createButtonRow([
+    createPanelButton(CustomIds.SuggestionsRefresh, 'Suggestions', ButtonStyle.Secondary),
     createPanelButton(CustomIds.SetupRefresh, 'Back to Setup', ButtonStyle.Primary, '↩️')
   ]);
   return { embeds: [embed], components: [rowOne, rowTwo, rowThree] };

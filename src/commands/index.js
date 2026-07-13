@@ -29,6 +29,7 @@ const joinCreateCommand = require('./joinCreate');
 const gamesCommand = require('./games');
 const faqCommand = require('./faq');
 const faqReplyCommand = require('./faqReply');
+const suggestionCommand = require('./suggestion');
 
 const commands = [
   pingCommand,
@@ -61,7 +62,8 @@ const commands = [
   joinCreateCommand,
   gamesCommand,
   faqCommand,
-  faqReplyCommand
+  faqReplyCommand,
+  suggestionCommand
 ];
 
 const commandMap = new Map(commands.map((command) => [command.data.name, command]));

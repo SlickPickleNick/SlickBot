@@ -133,6 +133,13 @@ const ActionKeys = Object.freeze({
   FaqView: 'faq.view',
   FaqConfigure: 'faq.configure',
 
+  SuggestionsSubmit: 'suggestions.submit',
+  SuggestionsVote: 'suggestions.vote',
+  SuggestionsView: 'suggestions.view',
+  SuggestionsReview: 'suggestions.review',
+  SuggestionsConfigure: 'suggestions.configure',
+  SuggestionsReveal: 'suggestions.reveal',
+
   PanelsConfigure: 'panels.configure',
 
   ServerReset: 'server.reset'
@@ -288,6 +295,13 @@ const defaultActionLevels = Object.freeze({
   [ActionKeys.FaqView]: PermissionLevels.MODERATOR,
   [ActionKeys.FaqConfigure]: PermissionLevels.SENIOR_MODERATOR,
 
+  [ActionKeys.SuggestionsSubmit]: PermissionLevels.EVERYONE,
+  [ActionKeys.SuggestionsVote]: PermissionLevels.EVERYONE,
+  [ActionKeys.SuggestionsView]: PermissionLevels.MODERATOR,
+  [ActionKeys.SuggestionsReview]: PermissionLevels.MODERATOR,
+  [ActionKeys.SuggestionsConfigure]: PermissionLevels.SENIOR_MODERATOR,
+  [ActionKeys.SuggestionsReveal]: PermissionLevels.SENIOR_MODERATOR,
+
   [ActionKeys.ServerReset]: PermissionLevels.OWNER
 });
 
@@ -312,6 +326,7 @@ const defaultModuleLevels = Object.freeze({
   [ModuleKeys.JOIN_TO_CREATE]: PermissionLevels.EVERYONE,
   [ModuleKeys.COMMUNITY_GAMES]: PermissionLevels.EVERYONE,
   [ModuleKeys.FAQ]: PermissionLevels.MODERATOR,
+  [ModuleKeys.SUGGESTIONS]: PermissionLevels.EVERYONE,
   [ModuleKeys.UTILITY]: PermissionLevels.EVERYONE
 });
 
@@ -329,12 +344,14 @@ const defaultPublicActions = Object.freeze([
   ActionKeys.LevelingUse,
   ActionKeys.CustomCommandsUse,
   ActionKeys.TempVoiceManage,
-  ActionKeys.GamesPlay
+  ActionKeys.GamesPlay,
+  ActionKeys.SuggestionsSubmit,
+  ActionKeys.SuggestionsVote
 ]);
 
 const defaultTeamPermissions = Object.freeze(Object.values(ActionKeys));
 
-const PERMISSION_DEFAULTS_VERSION = '0.9.0';
+const PERMISSION_DEFAULTS_VERSION = '0.9.1';
 
 module.exports = {
   ActionKeys,

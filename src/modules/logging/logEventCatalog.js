@@ -102,6 +102,12 @@ const LogModuleCatalog = Object.freeze([
     defaultDelivery: 'IMMEDIATE'
   },
   {
+    key: 'suggestions',
+    label: 'Suggestions',
+    description: 'Suggestion submissions, votes, status changes, staff notes, and errors.',
+    defaultDelivery: 'IMMEDIATE'
+  },
+  {
     key: 'server-stats',
     label: 'Server Stats',
     description: 'Member, human, bot, and voice counter channel updates.',
@@ -206,6 +212,13 @@ const LogEventCatalog = Object.freeze([
   { key: 'faq-index', moduleKey: 'faq', label: 'FAQ Index', description: 'The FAQ master forum post was created or refreshed.', defaultDelivery: 'IMMEDIATE' },
   { key: 'faq-answer', moduleKey: 'faq', label: 'FAQ Answer', description: 'A staff member sent an FAQ response link.', defaultDelivery: 'IMMEDIATE' },
   { key: 'faq-error', moduleKey: 'faq', label: 'FAQ Error', description: 'FAQ forum processing failed.', defaultDelivery: 'IMMEDIATE' },
+
+  { key: 'suggestion-config', moduleKey: 'suggestions', label: 'Suggestion Config', description: 'Suggestion settings, categories, or panel settings changed.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'suggestion-submit', moduleKey: 'suggestions', label: 'Suggestion Submitted', description: 'A member submitted a suggestion.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'suggestion-vote', moduleKey: 'suggestions', label: 'Suggestion Vote', description: 'Suggestion vote totals changed.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'suggestion-review', moduleKey: 'suggestions', label: 'Suggestion Reviewed', description: 'Staff changed a suggestion review status.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'suggestion-note', moduleKey: 'suggestions', label: 'Suggestion Details Added', description: 'Staff added details to a suggestion.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'suggestion-error', moduleKey: 'suggestions', label: 'Suggestion Error', description: 'Suggestion processing failed.', defaultDelivery: 'IMMEDIATE' },
 
   { key: 'server-stats-config', moduleKey: 'server-stats', label: 'Server Stats Config', description: 'Server stats configuration changed.', defaultDelivery: 'IMMEDIATE' },
   { key: 'server-stats-update', moduleKey: 'server-stats', label: 'Server Stats Updated', description: 'Server stat counter channels were refreshed.', defaultDelivery: 'IMMEDIATE' },

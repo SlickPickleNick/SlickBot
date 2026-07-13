@@ -110,6 +110,12 @@ const MODULE_CHECKS = {
   ],
   [ModuleKeys.FAQ]: [
     { name: 'FAQ config', sql: 'SELECT COUNT(*)::int AS count FROM faq_configs WHERE guild_id = $1' }
+  ],
+  [ModuleKeys.SUGGESTIONS]: [
+    { name: 'Suggestion config', sql: 'SELECT COUNT(*)::int AS count FROM suggestion_configs WHERE guild_id = $1' },
+    { name: 'Suggestion categories', sql: 'SELECT COUNT(*)::int AS count FROM suggestion_categories WHERE guild_id = $1' },
+    { name: 'Suggestions', sql: 'SELECT COUNT(*)::int AS count FROM suggestions WHERE guild_id = $1' },
+    { name: 'Suggestion votes', sql: 'SELECT COUNT(*)::int AS count FROM suggestion_votes WHERE guild_id = $1' }
   ]
 };
 
@@ -130,7 +136,8 @@ const MODULE_FIXES = Object.freeze({
   [ModuleKeys.CUSTOM_COMMANDS]: 'Run `/custom-command create` to add your first command.',
   [ModuleKeys.JOIN_TO_CREATE]: 'Run `/join-create create-hub` or `/join-create setup` to configure a hub channel.',
   [ModuleKeys.COMMUNITY_GAMES]: 'Run `/games manager`, configure games, enable each game separately, then post a launcher with `/games panel post` if desired.',
-  [ModuleKeys.FAQ]: 'Run `/faq setup` with a forum channel, create FAQ posts in that forum, then run `/faq refresh`.'
+  [ModuleKeys.FAQ]: 'Run `/faq setup` with a forum channel, create FAQ posts in that forum, then run `/faq refresh`.',
+  [ModuleKeys.SUGGESTIONS]: 'Run `/suggestion setup`, add or review categories, then post a launcher with `/suggestion panel post`.'
 });
 
 function statusIcon(status) {
