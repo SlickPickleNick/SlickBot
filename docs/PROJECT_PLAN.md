@@ -42,20 +42,20 @@ SlickBot is being built as a modular all-in-one Discord server management bot fo
 ### Suggestions
 
 - Implemented the `SUGGESTIONS` module under the Community setup category.
-- Added `/suggestion setup` to configure the suggestions text channel, optional suggestion log channel, and default anonymous behavior.
-- Members can submit suggestions from any channel with `/suggestion submit`; SlickBot forwards every suggestion to the configured suggestions channel.
+- Added `/suggestion setup` to configure the public suggestion voting channel, optional staff review channel, optional suggestion log channel, default anonymous behavior, and the auto-create discussion thread setting.
+- Members can submit suggestions from any channel with `/suggestion submit`; SlickBot forwards every suggestion to the configured public voting channel and sends a separate review embed to the configured staff review channel.
 - Added public Suggestions panels with `/suggestion panel post`, `/suggestion panel edit`, and `/suggestion panel refresh`. The submit button opens a modal for title, description, category, and anonymous/public preference.
 - Public suggestion panels are tracked and can be edited/refreshed later. When a new suggestion is submitted, SlickBot reposts the panel at the bottom of the panel channel so the submit button remains easy to access.
-- Suggestion posts include a disabled total-vote button plus upvote and downvote buttons. Vote totals and upvote/downvote percentages are shown in the suggestion embed.
+- Public suggestion posts include a disabled total-vote button plus upvote and downvote buttons. Vote totals and upvote/downvote percentages are shown in the suggestion embed. Voting controls are removed when suggestions are Accepted, Denied, or Implemented, while Pending and Planned suggestions stay open for voting.
 - Vote handling supports one vote per user, vote switching, and vote removal by pressing the active vote button again.
 - Added anonymous suggestions. Anonymous submissions hide the submitter publicly and use the default Discord avatar thumbnail. Senior Moderator+ users can reveal submitters privately through `/suggestion review reveal`.
 - Visible suggestions use the submitter's Discord profile image as the embed thumbnail.
 - Added starter categories: Server, Discord, Stream, Events, Bot, and Other. Staff can add or remove active categories with `/suggestion category add` and `/suggestion category remove`.
 - Added staff review states: Pending, Planned, Accepted, Denied, and Implemented.
-- Added `/suggestion review status` for status changes and staff responses. Status changes update the original suggestion embed color and add revision notes.
-- Added `/suggestion review add-details` for staff notes below the suggestion.
-- Each submitted suggestion attempts to create an automatic discussion thread under the suggestion post.
-- Added suggestion logs, permission defaults, public voting permissions, `/help`, `/setup`, `/modules`, and `/bot test` integration.
+- Added `/suggestion review status` for status changes and staff responses. Status changes update the original suggestion embed color and add one separate revision-history embed below the public suggestion. Revision entries render oldest-to-newest.
+- Added `/suggestion review add-details` for staff notes below the suggestion, plus review-channel buttons for status changes, Add Details, Reveal Submitter, and Open Public Suggestion.
+- Each submitted suggestion attempts to create an automatic discussion thread under the suggestion post only when the auto-create thread setting is enabled.
+- Added suggestion logs, `/suggestion review-index` with status filters, `/suggestion reset` with confirmation, permission defaults, public voting permissions, `/help`, `/setup`, `/modules`, and `/bot test` integration.
 
 ### FAQ Patch
 

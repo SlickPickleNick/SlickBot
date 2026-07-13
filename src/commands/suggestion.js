@@ -8,6 +8,7 @@ const { SuggestionService, STATUS_LABELS, messageUrl } = require('../modules/com
 const suggestions = new SuggestionService();
 
 const statusChoices = Object.entries(STATUS_LABELS).map(([value, name]) => ({ name, value }));
+const reviewIndexChoices = [...statusChoices, { name: 'All', value: 'ALL' }];
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -15,10 +16,12 @@ module.exports = {
     .setDescription('Submit and manage server suggestions.')
     .addSubcommand((sub) => sub
       .setName('setup')
-      .setDescription('Configure the suggestions channel and defaults.')
-      .addChannelOption((option) => option.setName('channel').setDescription('Channel where all suggestions should be posted.').addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement).setRequired(true))
+      .setDescription('Configure suggestion channels and defaults.')
+      .addChannelOption((option) => option.setName('channel').setDescription('Public channel where suggestion voting posts are sent.').addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement).setRequired(true))
+      .addChannelOption((option) => option.setName('review_channel').setDescription('Staff review channel for suggestion review embeds.').addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement).setRequired(false))
       .addChannelOption((option) => option.setName('log_channel').setDescription('Optional staff log channel for suggestion activity.').addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement).setRequired(false))
-      .addBooleanOption((option) => option.setName('default_anonymous').setDescription('Default new suggestions to anonymous. Default: true.').setRequired(false)))
+      .addBooleanOption((option) => option.setName('default_anonymous').setDescription('Default new suggestions to anonymous. Default: true.').setRequired(false))
+      .addBooleanOption((option) => option.setName('auto_create_threads').setDescription('Automatically create discussion threads under suggestion posts. Default: true.').setRequired(false)))
     .addSubcommand((sub) => sub
       .setName('submit')
       .setDescription('Submit a server suggestion.')
@@ -28,6 +31,12 @@ module.exports = {
       .addBooleanOption((option) => option.setName('anonymous').setDescription('Hide your name publicly. Uses the server default when blank.').setRequired(false)))
     .addSubcommand((sub) => sub.setName('manager').setDescription('Open the Suggestions manager.'))
     .addSubcommand((sub) => sub.setName('status').setDescription('View the Suggestions configuration.'))
+    .addSubcommand((sub) => sub
+      .setName('review-index')
+      .setDescription('Post or refresh a staff suggestion review index.')
+      .addChannelOption((option) => option.setName('channel').setDescription('Channel for the review index. Defaults to the configured review channel.').addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement).setRequired(false))
+      .addStringOption((option) => option.setName('filter').setDescription('Initial review index filter.').addChoices(...reviewIndexChoices).setRequired(false)))
+    .addSubcommand((sub) => sub.setName('reset').setDescription('Reset suggestion setup and testing data. Requires confirmation.'))
     .addSubcommandGroup((group) => group
       .setName('panel')
       .setDescription('Post and edit the public suggestions panel.')
@@ -82,6 +91,8 @@ module.exports = {
     const group = interaction.options.getSubcommandGroup(false);
     const sub = interaction.options.getSubcommand(false);
     if (sub === 'submit') return ActionKeys.SuggestionsSubmit;
+    if (sub === 'reset') return ActionKeys.SuggestionsReset;
+    if (sub === 'review-index') return ActionKeys.SuggestionsReview;
     if (group === 'panel') return ActionKeys.SuggestionsConfigure;
     if (group === 'category') return ActionKeys.SuggestionsConfigure;
     if (group === 'review') {
@@ -102,10 +113,18 @@ module.exports = {
 
     if (!group && sub === 'setup') {
       const channel = interaction.options.getChannel('channel', true);
+      const reviewChannel = interaction.options.getChannel('review_channel');
       const logChannel = interaction.options.getChannel('log_channel');
-      const config = await suggestions.setup({ guildId: interaction.guildId, channelId: channel.id, logChannelId: logChannel?.id, defaultAnonymous: interaction.options.getBoolean('default_anonymous') ?? undefined });
-      await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'suggestion-config', title: 'Suggestions Configured', body: `Suggestions Channel: <#${config.channel_id}>${config.log_channel_id ? `\nLog Channel: <#${config.log_channel_id}>` : ''}`, actorUserId: interaction.user.id }).catch(() => {});
-      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Suggestions Configured', `Suggestions will post in <#${config.channel_id}>.\nDefault anonymous: **${config.default_anonymous === false ? 'No' : 'Yes'}**.`)] });
+      const config = await suggestions.setup({
+        guildId: interaction.guildId,
+        channelId: channel.id,
+        reviewChannelId: reviewChannel?.id,
+        logChannelId: logChannel?.id,
+        defaultAnonymous: interaction.options.getBoolean('default_anonymous') ?? undefined,
+        autoCreateThreads: interaction.options.getBoolean('auto_create_threads') ?? undefined
+      });
+      await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'suggestion-config', title: 'Suggestions Configured', body: `Public Channel: <#${config.channel_id}>${config.review_channel_id ? `\nReview Channel: <#${config.review_channel_id}>` : ''}${config.log_channel_id ? `\nLog Channel: <#${config.log_channel_id}>` : ''}`, actorUserId: interaction.user.id }).catch(() => {});
+      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Suggestions Configured', [`Suggestions will post in <#${config.channel_id}>.`, config.review_channel_id ? `Review embeds will post in <#${config.review_channel_id}>.` : 'No review channel is configured yet.', `Default anonymous: **${config.default_anonymous === false ? 'No' : 'Yes'}**.`, `Auto discussion threads: **${config.auto_create_threads === false ? 'Disabled' : 'Enabled'}**.`].join('\n'))] });
     }
 
     if (!group && sub === 'submit') {
@@ -126,6 +145,18 @@ module.exports = {
 
     if (!group && (sub === 'manager' || sub === 'status')) {
       return replyPrivate(interaction, await suggestions.buildManagerPanel(interaction.guildId));
+    }
+
+    if (!group && sub === 'review-index') {
+      const config = await suggestions.getConfig(interaction.guildId);
+      const channel = interaction.options.getChannel('channel') || (config?.review_channel_id ? await interaction.guild.channels.fetch(config.review_channel_id).catch(() => null) : null) || interaction.channel;
+      if (!channel?.send) return replyPrivate(interaction, { embeds: [createWarningEmbed('Review Index Not Posted', 'Select a text channel or configure a suggestion review channel first.')] });
+      const index = await suggestions.createReviewIndex({ guildId: interaction.guildId, channelId: channel.id, statusFilter: interaction.options.getString('filter') || 'PENDING', createdByUserId: interaction.user.id, client: ctx.client });
+      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Suggestion Review Index Posted', `Review index is active in <#${channel.id}> with filter **${index.status_filter}**.`)] });
+    }
+
+    if (!group && sub === 'reset') {
+      return replyPrivate(interaction, await suggestions.buildResetConfirmationPayload({ guildId: interaction.guildId, requestedByUserId: interaction.user.id }));
     }
 
     if (group === 'panel') {

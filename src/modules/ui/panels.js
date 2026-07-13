@@ -158,10 +158,10 @@ const MODULE_SETUP_CATALOG = Object.freeze({
     usefulCommands: ['/faq setup', '/faq refresh', '/faq answer', '/faq status', 'FAQ Reply message command']
   },
   [ModuleKeys.SUGGESTIONS]: {
-    name: 'Suggestions', category: 'Community Systems', description: 'Collects member suggestions through a public panel or command, tracks votes, review states, staff responses, anonymous submitters, and discussion threads.',
+    name: 'Suggestions', category: 'Community Systems', description: 'Collects member suggestions through a public panel or command, tracks public votes, sends staff review embeds, manages review indexes, stores anonymous submitters privately, and optionally creates discussion threads.',
     managerCommand: '/suggestion manager', setupCommand: '/suggestion setup',
-    nextSteps: ['Run `/suggestion setup` with a suggestions text channel.', 'Review or adjust categories with `/suggestion category list` and `/suggestion category add`.', 'Post a public launcher with `/suggestion panel post`.', 'Use `/suggestion review status` and `/suggestion review add-details` to update suggestions.'],
-    usefulCommands: ['/suggestion setup', '/suggestion panel post', '/suggestion submit', '/suggestion review status', '/suggestion category list']
+    nextSteps: ['Run `/suggestion setup` with a public voting channel and staff review channel.', 'Review or adjust categories with `/suggestion category list` and `/suggestion category add`.', 'Post a public launcher with `/suggestion panel post`.', 'Create a staff index with `/suggestion review-index`.', 'Use review buttons, `/suggestion review status`, and `/suggestion review add-details` to update suggestions.'],
+    usefulCommands: ['/suggestion setup', '/suggestion panel post', '/suggestion review-index', '/suggestion submit', '/suggestion review status', '/suggestion reset']
   },
   [ModuleKeys.JOIN_TO_CREATE]: {
     name: 'Join-to-Create Voice', category: 'Community Systems', description: 'Creates temporary voice rooms when members join configured hub channels.',
@@ -597,12 +597,12 @@ async function getModuleStatus(guildId, row) {
 
   if (row.module_key === 'SUGGESTIONS') {
     const [cfg, count] = await Promise.all([
-      query(`SELECT channel_id, panel_active FROM suggestion_configs WHERE guild_id = $1 LIMIT 1`, [guildId]).catch(() => ({ rows: [] })),
+      query(`SELECT channel_id, review_channel_id, panel_active, auto_create_threads FROM suggestion_configs WHERE guild_id = $1 LIMIT 1`, [guildId]).catch(() => ({ rows: [] })),
       query(`SELECT COUNT(*)::int AS count FROM suggestions WHERE guild_id = $1`, [guildId]).catch(() => ({ rows: [{ count: 0 }] }))
     ]);
     const config = cfg.rows[0] || {};
-    if (config.channel_id && config.panel_active) return { moduleKey: row.module_key, core: false, state: 'READY', emoji: '✅', label: 'Ready', note: `${count.rows[0]?.count || 0} suggestion(s)` };
-    if (config.channel_id) return { moduleKey: row.module_key, core: false, state: 'PARTIAL', emoji: '🟠', label: 'Partially Configured', note: 'Channel set; panel not posted' };
+    if (config.channel_id && config.review_channel_id && config.panel_active) return { moduleKey: row.module_key, core: false, state: 'READY', emoji: '✅', label: 'Ready', note: `${count.rows[0]?.count || 0} suggestion(s)` };
+    if (config.channel_id || config.review_channel_id) return { moduleKey: row.module_key, core: false, state: 'PARTIAL', emoji: '🟠', label: 'Partially Configured', note: 'Complete public/review channels and panel' };
     return { moduleKey: row.module_key, core: false, state: 'NEEDS_CONFIG', emoji: '🟣', label: 'Needs Setup', note: 'Run /suggestion setup' };
   }
 

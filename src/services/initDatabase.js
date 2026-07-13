@@ -1219,8 +1219,10 @@ async function initDatabase() {
     CREATE TABLE IF NOT EXISTS suggestion_configs (
       guild_id TEXT PRIMARY KEY REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
       channel_id TEXT,
+      review_channel_id TEXT,
       log_channel_id TEXT,
       default_anonymous BOOLEAN NOT NULL DEFAULT true,
+      auto_create_threads BOOLEAN NOT NULL DEFAULT true,
       next_suggestion_number INTEGER NOT NULL DEFAULT 1,
       panel_channel_id TEXT,
       panel_message_id TEXT,
@@ -1232,8 +1234,10 @@ async function initDatabase() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
+  await query(`ALTER TABLE suggestion_configs ADD COLUMN IF NOT EXISTS review_channel_id TEXT;`);
   await query(`ALTER TABLE suggestion_configs ADD COLUMN IF NOT EXISTS log_channel_id TEXT;`);
   await query(`ALTER TABLE suggestion_configs ADD COLUMN IF NOT EXISTS default_anonymous BOOLEAN NOT NULL DEFAULT true;`);
+  await query(`ALTER TABLE suggestion_configs ADD COLUMN IF NOT EXISTS auto_create_threads BOOLEAN NOT NULL DEFAULT true;`);
   await query(`ALTER TABLE suggestion_configs ADD COLUMN IF NOT EXISTS next_suggestion_number INTEGER NOT NULL DEFAULT 1;`);
   await query(`ALTER TABLE suggestion_configs ADD COLUMN IF NOT EXISTS panel_channel_id TEXT;`);
   await query(`ALTER TABLE suggestion_configs ADD COLUMN IF NOT EXISTS panel_message_id TEXT;`);
@@ -1273,6 +1277,8 @@ async function initDatabase() {
       reviewed_at TIMESTAMPTZ,
       message_channel_id TEXT,
       message_id TEXT,
+      review_channel_id TEXT,
+      review_message_id TEXT,
       thread_id TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -1305,11 +1311,29 @@ async function initDatabase() {
     );
   `);
 
+  await query(`ALTER TABLE suggestions ADD COLUMN IF NOT EXISTS review_channel_id TEXT;`);
+  await query(`ALTER TABLE suggestions ADD COLUMN IF NOT EXISTS review_message_id TEXT;`);
+
   await query(`CREATE INDEX IF NOT EXISTS idx_suggestion_configs_guild ON suggestion_configs(guild_id);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_suggestions_guild_status ON suggestions(guild_id, status, created_at DESC);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_suggestions_message ON suggestions(guild_id, message_channel_id, message_id);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_suggestion_votes_suggestion ON suggestion_votes(suggestion_id);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_suggestion_notes_suggestion ON suggestion_notes(suggestion_id, created_at DESC);`);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS suggestion_review_indexes (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      channel_id TEXT NOT NULL,
+      message_id TEXT,
+      status_filter TEXT NOT NULL DEFAULT 'PENDING',
+      created_by_user_id TEXT,
+      active BOOLEAN NOT NULL DEFAULT true,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS idx_suggestion_review_indexes_guild_active ON suggestion_review_indexes(guild_id, active);`);
 
   await query(`
     CREATE TABLE IF NOT EXISTS role_permission_levels (

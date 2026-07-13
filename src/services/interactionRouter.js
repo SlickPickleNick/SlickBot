@@ -129,6 +129,46 @@ async function handleButton(interaction, ctx) {
     return true;
   }
 
+  if (id.startsWith(CustomIds.SuggestionReviewStatusPrefix)) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.SuggestionsReview, ModuleKeys.SUGGESTIONS))) return true;
+    const rest = id.slice(CustomIds.SuggestionReviewStatusPrefix.length);
+    const [suggestionId, status] = rest.split(':');
+    await interaction.deferUpdate().catch(() => {});
+    const result = await suggestions.updateStatus({ guild: interaction.guild, suggestionNumber: suggestionId, status, actorUser: interaction.user, logger: ctx.logger }).catch((error) => ({ ok: false, reason: error instanceof Error ? error.message : String(error) }));
+    if (!result.ok) await interaction.followUp({ embeds: [createWarningEmbed('Suggestion Not Updated', result.reason || 'SlickBot could not update this suggestion.')], flags: MessageFlags.Ephemeral }).catch(() => {});
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.SuggestionReviewAddDetailsPrefix)) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.SuggestionsReview, ModuleKeys.SUGGESTIONS))) return true;
+    const suggestionId = id.slice(CustomIds.SuggestionReviewAddDetailsPrefix.length);
+    await interaction.showModal(suggestions.buildDetailsModal(suggestionId));
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.SuggestionReviewRevealPrefix)) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.SuggestionsReveal, ModuleKeys.SUGGESTIONS))) return true;
+    const suggestionId = id.slice(CustomIds.SuggestionReviewRevealPrefix.length);
+    const result = await suggestions.buildRevealPayload(interaction.guild, suggestionId);
+    if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Suggestion Not Found', result.reason || 'This suggestion could not be found.')] });
+    await replyPrivate(interaction, result.payload);
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.SuggestionReviewIndexFilterPrefix)) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.SuggestionsReview, ModuleKeys.SUGGESTIONS))) return true;
+    const rest = id.slice(CustomIds.SuggestionReviewIndexFilterPrefix.length);
+    const [indexId, statusFilter] = rest.split(':');
+    await interaction.deferUpdate().catch(() => {});
+    const index = await suggestions.updateReviewIndexFilter({ guildId: interaction.guildId, indexId, statusFilter });
+    if (!index) {
+      await interaction.followUp({ embeds: [createWarningEmbed('Review Index Not Found', 'This suggestion review index could not be found.')], flags: MessageFlags.Ephemeral }).catch(() => {});
+      return true;
+    }
+    await suggestions.refreshReviewIndex({ client: ctx.client, index }).catch(() => {});
+    return true;
+  }
+
   if (id.startsWith(CustomIds.GameChallengeAcceptPrefix) || id.startsWith(CustomIds.GameChallengeDeclinePrefix)) {
     if (!(await requirePublicAction(interaction, ctx, ActionKeys.GamesPlay, ModuleKeys.COMMUNITY_GAMES))) return true;
     const accepting = id.startsWith(CustomIds.GameChallengeAcceptPrefix);
@@ -244,6 +284,29 @@ async function handleButton(interaction, ctx) {
   if (id === CustomIds.HelpDisabled) {
     if (!(await requireAction(interaction, ctx, ActionKeys.Help, ModuleKeys.PERMISSIONS))) return true;
     await updatePanel(interaction, await buildHelpPayload(interaction, ctx, { mode: 'disabled' }));
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.SuggestionResetCancelPrefix)) {
+    const requestedByUserId = id.slice(CustomIds.SuggestionResetCancelPrefix.length);
+    if (requestedByUserId !== interaction.user.id) {
+      await replyPrivate(interaction, { embeds: [createWarningEmbed('Confirmation Not Yours', 'Only the user who opened this reset confirmation can cancel it.')] });
+      return true;
+    }
+    await updatePanel(interaction, { embeds: [createSuccessEmbed('Suggestions Reset Cancelled', 'No Suggestions data was changed.')], components: [] });
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.SuggestionResetConfirmPrefix)) {
+    const requestedByUserId = id.slice(CustomIds.SuggestionResetConfirmPrefix.length);
+    if (requestedByUserId !== interaction.user.id) {
+      await replyPrivate(interaction, { embeds: [createWarningEmbed('Confirmation Not Yours', 'Only the user who opened this reset confirmation can confirm it.')] });
+      return true;
+    }
+    if (!(await requireAction(interaction, ctx, ActionKeys.SuggestionsReset, ModuleKeys.SUGGESTIONS))) return true;
+    const result = await suggestions.resetModule(interaction.guildId);
+    await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'setup', title: 'Suggestions Module Reset', body: `Suggestions module data was reset by ${interaction.user.tag}.`, actorUserId: interaction.user.id, metadata: { before: result.before } }).catch(() => {});
+    await updatePanel(interaction, suggestions.buildResetCompletePayload(result));
     return true;
   }
 
@@ -1324,6 +1387,15 @@ async function handleModal(interaction, ctx) {
     }).catch((error) => ({ ok: false, reason: error instanceof Error ? error.message : String(error) }));
     if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Suggestion Not Submitted', result.reason || 'SlickBot could not submit your suggestion.')] });
     return replyPrivate(interaction, { embeds: [createSuccessEmbed('Suggestion Submitted', `Suggestion **#${result.suggestion.suggestion_number}** was posted.\n${result.message?.url || ''}`)], deleteAfterSeconds: 12 });
+  }
+
+  if (id.startsWith(CustomIds.SuggestionReviewDetailsModalPrefix)) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.SuggestionsReview, ModuleKeys.SUGGESTIONS))) return true;
+    const suggestionId = id.slice(CustomIds.SuggestionReviewDetailsModalPrefix.length);
+    const details = interaction.fields.getTextInputValue('details');
+    const result = await suggestions.addDetails({ guild: interaction.guild, suggestionNumber: suggestionId, details, actorUser: interaction.user, logger: ctx.logger }).catch((error) => ({ ok: false, reason: error instanceof Error ? error.message : String(error) }));
+    if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Details Not Added', result.reason || 'SlickBot could not add these details.')] });
+    return replyPrivate(interaction, { embeds: [createSuccessEmbed('Suggestion Details Added', `Added details to suggestion **#${result.suggestion.suggestion_number}**.`)], deleteAfterSeconds: 8 });
   }
 
   if (id.startsWith(CustomIds.FaqAnswerModalPrefix)) {

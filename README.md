@@ -13,14 +13,14 @@ Current package: **v0.9.1**
 
 - Added the **Suggestions** module under Community Systems.
 - Members can submit suggestions through `/suggestion submit` or through a public Suggestions panel button.
-- Suggestions always forward to the configured suggestions text channel, no matter where the command or panel is used.
-- Each suggestion post includes a disabled total-vote button, upvote/downvote buttons, and embed vote percentages. Users can switch votes or press the same vote again to remove it.
+- Suggestions always forward to the configured public voting text channel, no matter where the command or panel is used, and send a separate staff review embed to the configured review channel when one is set.
+- Each public suggestion post includes a disabled total-vote button, upvote/downvote buttons, and embed vote percentages. Users can switch votes or press the same vote again to remove it. Voting buttons are removed once a suggestion is Accepted, Denied, or Implemented; Pending and Planned suggestions remain open for voting.
 - Suggestions support anonymous submissions. Anonymous suggestions hide the submitter publicly, while Senior Moderator+ users can reveal the submitter with `/suggestion review reveal`.
 - Visible suggestions use the submitter profile image. Anonymous suggestions use the default Discord avatar thumbnail.
-- Staff can change review status to Pending, Planned, Accepted, Denied, or Implemented and add staff responses/revision notes. Status changes update the original suggestion embed color and revision notes.
-- Suggestions automatically attempt to create a discussion thread under each suggestion post.
+- Staff can change review status to Pending, Planned, Accepted, Denied, or Implemented and add staff responses/revision notes. Status changes update the original suggestion embed color and one separate revision-history embed that appears only after status/details changes and is ordered oldest-to-newest.
+- Suggestion setup includes an auto-create discussion thread toggle. When enabled, SlickBot attempts to create a discussion thread under each suggestion post.
 - Added configurable categories with starter defaults: Server, Discord, Stream, Events, Bot, and Other.
-- Added a tracked public Suggestions panel with post, edit, and refresh commands. The panel reposts to the bottom of the panel channel when new suggestions are submitted so the submit button remains visible.
+- Added a tracked public Suggestions panel with post, edit, and refresh commands. The panel reposts to the bottom of the panel channel when new suggestions are submitted so the submit button remains visible. Added `/suggestion review-index` for a staff index linking to suggestion review messages.
 - Added `/faq resend-navigation` so staff can resend the FAQ Navigation helper panel from inside an FAQ forum post.
 - Added Suggestions permission actions, logging events, setup/module status, help entries, diagnostics, and PostgreSQL persistence.
 
@@ -31,6 +31,8 @@ Updated commands:
 /suggestion submit
 /suggestion manager
 /suggestion status
+/suggestion review-index
+/suggestion reset
 /suggestion panel post|edit|refresh
 /suggestion category list|add|remove
 /suggestion review status|add-details|reveal|view

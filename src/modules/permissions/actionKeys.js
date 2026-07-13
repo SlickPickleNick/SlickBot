@@ -139,6 +139,7 @@ const ActionKeys = Object.freeze({
   SuggestionsReview: 'suggestions.review',
   SuggestionsConfigure: 'suggestions.configure',
   SuggestionsReveal: 'suggestions.reveal',
+  SuggestionsReset: 'suggestions.reset',
 
   PanelsConfigure: 'panels.configure',
 
@@ -301,6 +302,7 @@ const defaultActionLevels = Object.freeze({
   [ActionKeys.SuggestionsReview]: PermissionLevels.MODERATOR,
   [ActionKeys.SuggestionsConfigure]: PermissionLevels.SENIOR_MODERATOR,
   [ActionKeys.SuggestionsReveal]: PermissionLevels.SENIOR_MODERATOR,
+  [ActionKeys.SuggestionsReset]: PermissionLevels.OWNER,
 
   [ActionKeys.ServerReset]: PermissionLevels.OWNER
 });

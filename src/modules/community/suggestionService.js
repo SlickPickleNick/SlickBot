@@ -8,7 +8,7 @@ const {
   TextInputStyle
 } = require('discord.js');
 const { query, pool } = require('../../services/db');
-const { createBaseEmbed, createButtonRow, createPanelButton, SlickBotColors, withPanelHeaderImage } = require('../ui/uiService');
+const { createBaseEmbed, createButtonRow, createPanelButton, createLinkButton, SlickBotColors, withPanelHeaderImage } = require('../ui/uiService');
 const { CustomIds } = require('../ui/customIds');
 
 const DEFAULT_PANEL_TITLE = 'Server Suggestions';
@@ -40,6 +40,9 @@ const STATUS_COLORS = Object.freeze({
   IMPLEMENTED: 0x2dd4bf
 });
 
+const FINAL_STATUSES = new Set([SUGGESTION_STATUSES.ACCEPTED, SUGGESTION_STATUSES.DENIED, SUGGESTION_STATUSES.IMPLEMENTED]);
+const INDEX_FILTERS = ['PENDING', 'PLANNED', 'ACCEPTED', 'DENIED', 'IMPLEMENTED', 'ALL'];
+
 function truncate(value, max = 1024) {
   const text = String(value || '').trim();
   return text.length > max ? `${text.slice(0, max - 1)}…` : text;
@@ -54,6 +57,12 @@ function normalizeStatus(value) {
   if (SUGGESTION_STATUSES[raw]) return raw;
   if (raw === 'APPROVED') return SUGGESTION_STATUSES.ACCEPTED;
   return null;
+}
+
+function normalizeIndexFilter(value) {
+  const raw = String(value || '').trim().toUpperCase().replace(/[ -]+/g, '_');
+  if (raw === 'ALL') return 'ALL';
+  return normalizeStatus(raw) || SUGGESTION_STATUSES.PENDING;
 }
 
 function messageUrl(guildId, channelId, messageId) {
@@ -75,43 +84,82 @@ function defaultAvatarForUser(user) {
   return null;
 }
 
-function buildSuggestionEmbed({ suggestion, votes, submitter = null, notes = [] }) {
+function isAnonymousValue(value) {
+  return value === true || value === 'true';
+}
+
+function isVotingOpenStatus(status) {
+  const normalized = normalizeStatus(status) || SUGGESTION_STATUSES.PENDING;
+  return !FINAL_STATUSES.has(normalized);
+}
+
+function formatDate(value) {
+  const timestamp = value ? Math.floor(new Date(value).getTime() / 1000) : null;
+  return timestamp ? `<t:${timestamp}:f>` : 'Unknown time';
+}
+
+function statusLine(status) {
+  const normalized = normalizeStatus(status) || SUGGESTION_STATUSES.PENDING;
+  return STATUS_LABELS[normalized] || normalized;
+}
+
+function buildSuggestionEmbed({ suggestion, votes, submitter = null }) {
   const up = Number(votes?.upvotes || 0);
   const down = Number(votes?.downvotes || 0);
   const total = up + down;
-  const anonymous = suggestion.anonymous === true || suggestion.anonymous === 'true';
-  const authorLine = anonymous ? '@anonymous' : `<@${suggestion.submitter_user_id}>`;
+  const anonymous = isAnonymousValue(suggestion.anonymous);
   const status = normalizeStatus(suggestion.status) || SUGGESTION_STATUSES.PENDING;
+  const publicAuthor = anonymous ? '@anonymous' : `<@${suggestion.submitter_user_id}>`;
+  const authorName = anonymous ? 'Anonymous Suggested' : `${submitter?.globalName || submitter?.username || 'Member'} Suggested`;
+  const thumbnail = anonymous ? ANONYMOUS_AVATAR_URL : defaultAvatarForUser(submitter);
+
   const embed = createBaseEmbed({
     title: truncate(suggestion.title || 'Suggestion', 256),
     description: truncate(suggestion.description || 'No description provided.', 4000),
     color: STATUS_COLORS[status] || SlickBotColors.INFO,
-    footer: `Suggestion #${suggestion.suggestion_number || '—'} · ${STATUS_LABELS[status] || status}`
+    footer: `${publicAuthor} • Suggestion #${suggestion.suggestion_number || '—'}`
   });
 
+  embed.setAuthor({ name: authorName });
+  if (thumbnail) embed.setThumbnail(thumbnail);
+
   embed.addFields(
-    { name: 'Status', value: `**${STATUS_LABELS[status] || status}**`, inline: true },
+    { name: 'Status', value: `**${statusLine(status)}**`, inline: true },
     { name: 'Category', value: suggestion.category_name ? `**${suggestion.category_name}**` : '**Other**', inline: true },
-    { name: 'Suggested By', value: authorLine, inline: true },
     { name: 'Votes', value: `✅ **${up}** (${percent(up, total)}%) · ❌ **${down}** (${percent(down, total)}%) · Total: **${total}**`, inline: false }
   );
 
-  if (suggestion.staff_response) {
-    embed.addFields({ name: 'Staff Response', value: truncate(suggestion.staff_response, 1024), inline: false });
-  }
-
-  const renderedNotes = notes
-    .slice(0, 8)
-    .map((note) => `<t:${Math.floor(new Date(note.created_at).getTime() / 1000)}:R> · <@${note.author_user_id}>${note.status ? ` · **${STATUS_LABELS[note.status] || note.status}**` : ''}: ${truncate(note.note_text, 220)}`)
-    .join('\n');
-  if (renderedNotes) embed.addFields({ name: 'Revision Notes', value: truncate(renderedNotes, 1024), inline: false });
-
-  const thumbnail = anonymous ? ANONYMOUS_AVATAR_URL : defaultAvatarForUser(submitter);
-  if (thumbnail) embed.setThumbnail(thumbnail);
   return embed;
 }
 
+function buildSuggestionRevisionEmbed({ suggestion, notes = [] }) {
+  const status = normalizeStatus(suggestion.status) || SUGGESTION_STATUSES.PENDING;
+  const lines = notes
+    .slice(0, 15)
+    .map((note) => {
+      const noteStatus = normalizeStatus(note.status);
+      const label = noteStatus ? `**${STATUS_LABELS[noteStatus] || noteStatus}**` : '**Staff Note**';
+      return `${formatDate(note.created_at)} · <@${note.author_user_id}> · ${label}\n${truncate(note.note_text, 360)}`;
+    });
+
+  if (!lines.length && !suggestion.staff_response) return null;
+
+  const description = [
+    suggestion.staff_response ? `**Latest Staff Response**\n${truncate(suggestion.staff_response, 700)}` : null,
+    lines.length ? `**Revision History**\n${lines.join('\n\n')}` : null
+  ].filter(Boolean).join('\n\n');
+
+  return createBaseEmbed({
+    title: 'Suggestion Review Updates',
+    description: truncate(description, 4000),
+    color: STATUS_COLORS[status] || SlickBotColors.INFO,
+    footer: 'SlickBot Suggestions'
+  });
+}
+
 function buildSuggestionComponents(suggestion, votes) {
+  const status = normalizeStatus(suggestion.status) || SUGGESTION_STATUSES.PENDING;
+  if (!isVotingOpenStatus(status)) return [];
   const up = Number(votes?.upvotes || 0);
   const down = Number(votes?.downvotes || 0);
   const total = up + down;
@@ -124,7 +172,10 @@ function buildSuggestionComponents(suggestion, votes) {
 }
 
 function buildSuggestionPayload({ suggestion, votes, submitter, notes }) {
-  return { embeds: [buildSuggestionEmbed({ suggestion, votes, submitter, notes })], components: buildSuggestionComponents(suggestion, votes) };
+  const embeds = [buildSuggestionEmbed({ suggestion, votes, submitter })];
+  const revision = buildSuggestionRevisionEmbed({ suggestion, notes });
+  if (revision) embeds.push(revision);
+  return { embeds, components: buildSuggestionComponents(suggestion, votes) };
 }
 
 function buildPanelPayload(config) {
@@ -134,6 +185,7 @@ function buildPanelPayload(config) {
       config?.panel_description || DEFAULT_PANEL_DESCRIPTION,
       '',
       config?.channel_id ? `Suggestions are posted in <#${config.channel_id}>.` : 'Suggestion channel is not configured yet.',
+      config?.review_channel_id ? `Staff reviews are sent to <#${config.review_channel_id}>.` : 'Review channel is not configured yet.',
       `Default anonymity: **${config?.default_anonymous === false ? 'Public' : 'Anonymous'}**`
     ].join('\n'),
     color: SlickBotColors.PRIMARY,
@@ -144,6 +196,118 @@ function buildPanelPayload(config) {
     components: [createButtonRow([createPanelButton(CustomIds.SuggestionSubmitOpen, 'Submit Suggestion', ButtonStyle.Primary)])]
   };
   return withPanelHeaderImage(payload, config?.panel_header_image_url || null);
+}
+
+function buildReviewComponents(suggestion) {
+  const id = suggestion.id;
+  const status = normalizeStatus(suggestion.status) || SUGGESTION_STATUSES.PENDING;
+  const statusButton = (target, label, style = ButtonStyle.Secondary) => new ButtonBuilder()
+    .setCustomId(`${CustomIds.SuggestionReviewStatusPrefix}${id}:${target}`)
+    .setLabel(label)
+    .setStyle(status === target ? ButtonStyle.Success : style);
+
+  const rows = [
+    new ActionRowBuilder().addComponents(
+      statusButton('PENDING', 'Pending'),
+      statusButton('PLANNED', 'Planned'),
+      statusButton('ACCEPTED', 'Accepted'),
+      statusButton('DENIED', 'Denied', ButtonStyle.Danger),
+      statusButton('IMPLEMENTED', 'Implemented')
+    ),
+    new ActionRowBuilder().addComponents(
+      createPanelButton(`${CustomIds.SuggestionReviewAddDetailsPrefix}${id}`, 'Add Details', ButtonStyle.Primary),
+      createPanelButton(`${CustomIds.SuggestionReviewRevealPrefix}${id}`, 'Reveal Submitter', ButtonStyle.Secondary)
+    )
+  ];
+
+  if (suggestion.message_channel_id && suggestion.message_id) {
+    rows[1].addComponents(createLinkButton(messageUrl(suggestion.guild_id, suggestion.message_channel_id, suggestion.message_id), 'Open Public Suggestion'));
+  }
+
+  return rows;
+}
+
+function buildReviewPayload({ suggestion, votes, notes }) {
+  const up = Number(votes?.upvotes || 0);
+  const down = Number(votes?.downvotes || 0);
+  const total = up + down;
+  const publicUrl = suggestion.message_channel_id && suggestion.message_id ? messageUrl(suggestion.guild_id, suggestion.message_channel_id, suggestion.message_id) : null;
+  const reviewStatus = statusLine(suggestion.status);
+  const latestNote = notes[notes.length - 1];
+
+  const embed = createBaseEmbed({
+    title: `Suggestion #${suggestion.suggestion_number} Review`,
+    description: [
+      `**${truncate(suggestion.title, 240)}**`,
+      '',
+      truncate(suggestion.description, 1400),
+      '',
+      `Status: **${reviewStatus}**`,
+      `Category: **${suggestion.category_name || 'Other'}**`,
+      `Submitter: <@${suggestion.submitter_user_id}>${suggestion.anonymous ? ' · Publicly anonymous' : ''}`,
+      `Votes: ✅ **${up}** (${percent(up, total)}%) · ❌ **${down}** (${percent(down, total)}%) · Total: **${total}**`,
+      suggestion.thread_id ? `Discussion Thread: <#${suggestion.thread_id}>` : null,
+      publicUrl ? `[Open Public Suggestion](${publicUrl})` : null,
+      latestNote ? `\n**Latest Review Note**\n${formatDate(latestNote.created_at)} · <@${latestNote.author_user_id}>: ${truncate(latestNote.note_text, 500)}` : null
+    ].filter(Boolean).join('\n'),
+    color: STATUS_COLORS[normalizeStatus(suggestion.status) || 'PENDING'] || SlickBotColors.INFO,
+    footer: 'SlickBot Suggestions Review'
+  });
+
+  return { embeds: [embed], components: buildReviewComponents(suggestion) };
+}
+
+function buildReviewIndexPayload(index, suggestions = []) {
+  const filter = normalizeIndexFilter(index?.status_filter || 'PENDING');
+  const visible = suggestions.slice(0, 20);
+  const lines = visible.length ? visible.map((suggestion) => {
+    const reviewUrl = suggestion.review_channel_id && suggestion.review_message_id ? messageUrl(suggestion.guild_id, suggestion.review_channel_id, suggestion.review_message_id) : null;
+    const publicUrl = suggestion.message_channel_id && suggestion.message_id ? messageUrl(suggestion.guild_id, suggestion.message_channel_id, suggestion.message_id) : null;
+    const status = statusLine(suggestion.status);
+    const author = suggestion.anonymous ? 'Anonymous' : `<@${suggestion.submitter_user_id}>`;
+    return `• **#${suggestion.suggestion_number}** · ${status} · ${suggestion.category_name || 'Other'} · ${author} · ${formatDate(suggestion.created_at)}\n  ${reviewUrl ? `[Open Review](${reviewUrl})` : 'Review message unavailable'}${publicUrl ? ` · [Public Post](${publicUrl})` : ''}`;
+  }).join('\n') : `No ${filter === 'ALL' ? 'suggestions' : statusLine(filter).toLowerCase()} found for this index.`;
+
+  const embed = createBaseEmbed({
+    title: 'Server Suggestions - Review Filter',
+    description: [
+      `**Current Filter:** ${filter === 'ALL' ? 'All Suggestions' : `${statusLine(filter)} Suggestions`}`,
+      '',
+      lines,
+      suggestions.length > visible.length ? `\nShowing **${visible.length}/${suggestions.length}** suggestions. Use the review channel search or change filters for more.` : null,
+      '',
+      'This index refreshes when suggestions are submitted, reviewed, updated, or filtered.'
+    ].filter(Boolean).join('\n'),
+    color: filter === 'ALL' ? SlickBotColors.INFO : STATUS_COLORS[filter] || SlickBotColors.INFO,
+    footer: 'SlickBot Suggestions'
+  });
+
+  const makeButton = (status, label) => new ButtonBuilder()
+    .setCustomId(`${CustomIds.SuggestionReviewIndexFilterPrefix}${index.id}:${status}`)
+    .setLabel(label)
+    .setStyle(filter === status ? ButtonStyle.Success : ButtonStyle.Secondary);
+
+  return {
+    embeds: [embed],
+    components: [
+      new ActionRowBuilder().addComponents(
+        makeButton('PENDING', 'Pending'),
+        makeButton('PLANNED', 'Planned'),
+        makeButton('ACCEPTED', 'Accepted'),
+        makeButton('DENIED', 'Denied')
+      ),
+      new ActionRowBuilder().addComponents(
+        makeButton('IMPLEMENTED', 'Implemented'),
+        makeButton('ALL', 'All')
+      )
+    ]
+  };
+}
+
+function formatCounts(counts) {
+  return Object.entries(counts)
+    .map(([key, value]) => `• ${key.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase())}: **${value}**`)
+    .join('\n');
 }
 
 class SuggestionService {
@@ -176,18 +340,27 @@ class SuggestionService {
     }
   }
 
-  async setup({ guildId, channelId, logChannelId = undefined, defaultAnonymous = undefined }) {
+  async setup({ guildId, channelId, reviewChannelId = undefined, logChannelId = undefined, defaultAnonymous = undefined, autoCreateThreads = undefined }) {
     const current = await this.ensureConfig(guildId);
     const result = await query(
-      `INSERT INTO suggestion_configs (guild_id, channel_id, log_channel_id, default_anonymous)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO suggestion_configs (guild_id, channel_id, review_channel_id, log_channel_id, default_anonymous, auto_create_threads)
+       VALUES ($1, $2, $3, $4, $5, $6)
        ON CONFLICT (guild_id) DO UPDATE SET
          channel_id = COALESCE(EXCLUDED.channel_id, suggestion_configs.channel_id),
-         log_channel_id = CASE WHEN $3::text IS NULL THEN suggestion_configs.log_channel_id ELSE EXCLUDED.log_channel_id END,
+         review_channel_id = CASE WHEN $3::text IS NULL THEN suggestion_configs.review_channel_id ELSE EXCLUDED.review_channel_id END,
+         log_channel_id = CASE WHEN $4::text IS NULL THEN suggestion_configs.log_channel_id ELSE EXCLUDED.log_channel_id END,
          default_anonymous = COALESCE(EXCLUDED.default_anonymous, suggestion_configs.default_anonymous),
+         auto_create_threads = COALESCE(EXCLUDED.auto_create_threads, suggestion_configs.auto_create_threads),
          updated_at = NOW()
        RETURNING *`,
-      [guildId, channelId || current?.channel_id || null, logChannelId === undefined ? null : logChannelId, defaultAnonymous === undefined ? null : defaultAnonymous]
+      [
+        guildId,
+        channelId || current?.channel_id || null,
+        reviewChannelId === undefined ? null : reviewChannelId,
+        logChannelId === undefined ? null : logChannelId,
+        defaultAnonymous === undefined ? null : defaultAnonymous,
+        autoCreateThreads === undefined ? null : autoCreateThreads
+      ]
     );
     await this.ensureDefaultCategories(guildId);
     return result.rows[0];
@@ -275,8 +448,9 @@ class SuggestionService {
     return result.rows[0] || { upvotes: 0, downvotes: 0 };
   }
 
-  async getNotes(suggestionId) {
-    const result = await query(`SELECT * FROM suggestion_notes WHERE suggestion_id = $1 ORDER BY created_at DESC LIMIT 10`, [suggestionId]);
+  async getNotes(suggestionId, order = 'ASC') {
+    const direction = String(order).toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
+    const result = await query(`SELECT * FROM suggestion_notes WHERE suggestion_id = $1 ORDER BY created_at ${direction}, id ${direction} LIMIT 15`, [suggestionId]);
     return result.rows;
   }
 
@@ -298,7 +472,7 @@ class SuggestionService {
     const notes = await this.getNotes(suggestion.id);
     const message = await channel.send(buildSuggestionPayload({ suggestion, votes, submitter, notes }));
     let thread = null;
-    if (typeof message.startThread === 'function') {
+    if (config.auto_create_threads !== false && typeof message.startThread === 'function') {
       thread = await message.startThread({ name: `Suggestion #${suggestion.suggestion_number} - ${truncate(suggestion.title, 60)}`, reason: 'SlickBot suggestion discussion thread' }).catch(() => null);
     }
     const updated = await query(
@@ -306,6 +480,40 @@ class SuggestionService {
       [suggestion.id, message.channelId, message.id, thread?.id || null]
     );
     return { suggestion: updated.rows[0], message, thread };
+  }
+
+  async postReviewMessage({ guild, suggestion }) {
+    const config = await this.getConfig(guild.id);
+    if (!config?.review_channel_id) return { ok: false, reason: 'Suggestion review channel is not configured.' };
+    const channel = await guild.channels.fetch(config.review_channel_id).catch(() => null);
+    if (!channel?.send) return { ok: false, reason: 'Configured suggestion review channel could not be found.' };
+    const votes = await this.getVotes(suggestion.id);
+    const notes = await this.getNotes(suggestion.id);
+    const sent = await channel.send(buildReviewPayload({ suggestion, votes, notes })).catch(() => null);
+    if (!sent) return { ok: false, reason: 'Could not send review message.' };
+    const updated = await query(`UPDATE suggestions SET review_channel_id = $2, review_message_id = $3, updated_at = NOW() WHERE id = $1 RETURNING *`, [suggestion.id, channel.id, sent.id]);
+    return { ok: true, suggestion: updated.rows[0], message: sent };
+  }
+
+  async refreshReviewMessage(guild, suggestion, { createIfMissing = false } = {}) {
+    let current = suggestion;
+    if (!current?.id) return false;
+    if (!current.review_channel_id || !current.review_message_id) {
+      if (!createIfMissing) return false;
+      const posted = await this.postReviewMessage({ guild, suggestion: current });
+      return posted.ok;
+    }
+    const channel = await guild.channels.fetch(current.review_channel_id).catch(() => null);
+    const message = channel?.messages?.fetch ? await channel.messages.fetch(current.review_message_id).catch(() => null) : null;
+    if (!message) {
+      if (!createIfMissing) return false;
+      const posted = await this.postReviewMessage({ guild, suggestion: current });
+      return posted.ok;
+    }
+    const votes = await this.getVotes(current.id);
+    const notes = await this.getNotes(current.id);
+    await message.edit(buildReviewPayload({ suggestion: current, votes, notes })).catch(() => {});
+    return true;
   }
 
   async submitSuggestion({ guild, user, title, description, categoryName, anonymous = undefined, client = null, logger = null }) {
@@ -335,8 +543,11 @@ class SuggestionService {
     }
 
     const posted = await this.postSuggestionMessage({ guild, suggestion, submitter: user });
+    await this.postReviewMessage({ guild, suggestion: posted.suggestion }).catch(() => {});
+    const refreshed = await this.getSuggestionByNumber(guild.id, posted.suggestion.id).catch(() => posted.suggestion);
     await this.repostPanel(client || guild.client, guild.id).catch(() => {});
-    await this.sendSuggestionLog({ guild, config, suggestion: posted.suggestion, action: 'New Suggestion Submitted', actorUserId: user.id, logger }).catch(() => {});
+    await this.refreshReviewIndexes({ client: client || guild.client, guildId: guild.id }).catch(() => {});
+    await this.sendSuggestionLog({ guild, config, suggestion: refreshed || posted.suggestion, action: 'New Suggestion Submitted', actorUserId: user.id, logger }).catch(() => {});
     await logger?.log?.({
       guildId: guild.id,
       eventKey: 'suggestion-submit',
@@ -345,7 +556,7 @@ class SuggestionService {
       actorUserId: user.id,
       metadata: { suggestionId: posted.suggestion.id, suggestionNumber: posted.suggestion.suggestion_number }
     }).catch(() => {});
-    return { ok: true, suggestion: posted.suggestion, message: posted.message, thread: posted.thread };
+    return { ok: true, suggestion: refreshed || posted.suggestion, message: posted.message, thread: posted.thread };
   }
 
   buildSubmitModal(guildId) {
@@ -357,6 +568,15 @@ class SuggestionService {
         new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('description').setLabel('Suggestion Description').setStyle(TextInputStyle.Paragraph).setRequired(true).setMaxLength(4000)),
         new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('category').setLabel('Category').setStyle(TextInputStyle.Short).setRequired(false).setMaxLength(80).setPlaceholder('Server, Discord, Stream, Events, Bot, Other')),
         new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('anonymous').setLabel('Anonymous? yes/no, blank = server default').setStyle(TextInputStyle.Short).setRequired(false).setMaxLength(10).setPlaceholder('yes'))
+      );
+  }
+
+  buildDetailsModal(suggestionId) {
+    return new ModalBuilder()
+      .setCustomId(`${CustomIds.SuggestionReviewDetailsModalPrefix}${suggestionId}`)
+      .setTitle('Add Suggestion Details')
+      .addComponents(
+        new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('details').setLabel('Review details').setStyle(TextInputStyle.Paragraph).setRequired(true).setMaxLength(1000))
       );
   }
 
@@ -376,13 +596,14 @@ class SuggestionService {
     const submitter = suggestion.anonymous ? null : await guild.client.users.fetch(suggestion.submitter_user_id).catch(() => null);
     const votes = await this.getVotes(suggestion.id);
     const notes = await this.getNotes(suggestion.id);
-    await message.edit(buildSuggestionPayload({ suggestion, votes, submitter, notes }));
+    await message.edit(buildSuggestionPayload({ suggestion, votes, submitter, notes })).catch(() => {});
     return true;
   }
 
   async vote({ guild, suggestionId, user, voteType }) {
     const suggestion = await query(`SELECT * FROM suggestions WHERE id = $1 AND guild_id = $2 LIMIT 1`, [suggestionId, guild.id]).then((r) => r.rows[0] || null);
     if (!suggestion) return { ok: false, reason: 'Suggestion not found.' };
+    if (!isVotingOpenStatus(suggestion.status)) return { ok: false, reason: `Voting is closed because this suggestion is ${statusLine(suggestion.status).toLowerCase()}.` };
     const current = await query(`SELECT vote_type FROM suggestion_votes WHERE suggestion_id = $1 AND user_id = $2 LIMIT 1`, [suggestionId, user.id]);
     const existing = current.rows[0]?.vote_type || null;
     if (existing === voteType) {
@@ -396,6 +617,7 @@ class SuggestionService {
       );
     }
     await this.refreshSuggestionMessage(guild, suggestion);
+    await this.refreshReviewMessage(guild, suggestion).catch(() => {});
     return { ok: true, removed: existing === voteType, suggestion };
   }
 
@@ -416,6 +638,8 @@ class SuggestionService {
       [guild.id, suggestion.id, actorUser.id, normalized, response || `Status changed to ${STATUS_LABELS[normalized] || normalized}.`]
     );
     await this.refreshSuggestionMessage(guild, updated);
+    await this.refreshReviewMessage(guild, updated, { createIfMissing: true }).catch(() => {});
+    await this.refreshReviewIndexes({ client: guild.client, guildId: guild.id }).catch(() => {});
     await this.sendSuggestionLog({ guild, suggestion: updated, action: `Suggestion ${STATUS_LABELS[normalized] || normalized}`, actorUserId: actorUser.id, logger }).catch(() => {});
     await logger?.log?.({ guildId: guild.id, eventKey: 'suggestion-review', title: `Suggestion ${STATUS_LABELS[normalized] || normalized}`, body: `Suggestion #${updated.suggestion_number}: ${updated.title}`, actorUserId: actorUser.id, metadata: { suggestionId: updated.id, status: normalized } }).catch(() => {});
     return { ok: true, suggestion: updated };
@@ -425,10 +649,13 @@ class SuggestionService {
     const suggestion = await this.getSuggestionByNumber(guild.id, suggestionNumber);
     if (!suggestion) return { ok: false, reason: 'Suggestion not found.' };
     await query(`INSERT INTO suggestion_notes (guild_id, suggestion_id, author_user_id, status, note_text) VALUES ($1, $2, $3, $4, $5)`, [guild.id, suggestion.id, actorUser.id, suggestion.status, truncate(details, 1000)]);
-    await query(`UPDATE suggestions SET updated_at = NOW() WHERE id = $1`, [suggestion.id]);
-    await this.refreshSuggestionMessage(guild, suggestion);
+    const result = await query(`UPDATE suggestions SET updated_at = NOW() WHERE id = $1 RETURNING *`, [suggestion.id]);
+    const updated = result.rows[0] || suggestion;
+    await this.refreshSuggestionMessage(guild, updated);
+    await this.refreshReviewMessage(guild, updated, { createIfMissing: true }).catch(() => {});
+    await this.refreshReviewIndexes({ client: guild.client, guildId: guild.id }).catch(() => {});
     await logger?.log?.({ guildId: guild.id, eventKey: 'suggestion-note', title: 'Suggestion Details Added', body: `Suggestion #${suggestion.suggestion_number}: ${suggestion.title}`, actorUserId: actorUser.id, metadata: { suggestionId: suggestion.id } }).catch(() => {});
-    return { ok: true, suggestion };
+    return { ok: true, suggestion: updated };
   }
 
   async postPanel({ guild, channel, title, description, headerImageUrl }) {
@@ -480,6 +707,7 @@ class SuggestionService {
       description: [
         `Suggestion: **#${suggestion.suggestion_number}** — ${suggestion.title}`,
         suggestion.message_id ? `[Open Suggestion](${messageUrl(guild.id, suggestion.message_channel_id, suggestion.message_id)})` : null,
+        suggestion.review_message_id ? `[Open Review](${messageUrl(guild.id, suggestion.review_channel_id, suggestion.review_message_id)})` : null,
         `Submitter: <@${suggestion.submitter_user_id}>`,
         `Public Author: **${suggestion.anonymous ? 'Anonymous' : 'Visible'}**`,
         actorUserId ? `Actor: <@${actorUserId}>` : null
@@ -490,11 +718,134 @@ class SuggestionService {
     return channel.send({ embeds: [embed] }).catch(() => null);
   }
 
+  async createReviewIndex({ guildId, channelId, statusFilter = 'PENDING', createdByUserId = null, client = null }) {
+    const normalizedFilter = INDEX_FILTERS.includes(normalizeIndexFilter(statusFilter)) ? normalizeIndexFilter(statusFilter) : 'PENDING';
+    const existing = await query(`SELECT * FROM suggestion_review_indexes WHERE guild_id = $1 AND channel_id = $2 LIMIT 1`, [guildId, channelId]).catch(() => ({ rows: [] }));
+    const result = existing.rows[0]
+      ? await query(`UPDATE suggestion_review_indexes SET status_filter = $1, active = true, updated_at = NOW() WHERE id = $2 RETURNING *`, [normalizedFilter, existing.rows[0].id])
+      : await query(`INSERT INTO suggestion_review_indexes (guild_id, channel_id, status_filter, created_by_user_id, active) VALUES ($1, $2, $3, $4, true) RETURNING *`, [guildId, channelId, normalizedFilter, createdByUserId || null]);
+    const index = result.rows[0];
+    if (client) await this.refreshReviewIndex({ client, index }).catch(() => {});
+    return index;
+  }
+
+  async updateReviewIndexFilter({ guildId, indexId, statusFilter }) {
+    const normalizedFilter = INDEX_FILTERS.includes(normalizeIndexFilter(statusFilter)) ? normalizeIndexFilter(statusFilter) : 'PENDING';
+    const result = await query(`UPDATE suggestion_review_indexes SET status_filter = $1, updated_at = NOW() WHERE guild_id = $2 AND id = $3 AND active = true RETURNING *`, [normalizedFilter, guildId, indexId]).catch(() => ({ rows: [] }));
+    return result.rows[0] || null;
+  }
+
+  async getReviewIndexSuggestions(index) {
+    const filter = normalizeIndexFilter(index.status_filter || 'PENDING');
+    const params = [index.guild_id];
+    const clauses = ['guild_id = $1'];
+    if (filter !== 'ALL') {
+      params.push(filter);
+      clauses.push(`status = $${params.length}`);
+    }
+    const result = await query(`SELECT * FROM suggestions WHERE ${clauses.join(' AND ')} ORDER BY created_at DESC LIMIT 50`, params).catch(() => ({ rows: [] }));
+    return result.rows;
+  }
+
+  async refreshReviewIndex({ client, index }) {
+    if (!index?.channel_id) return false;
+    const guild = await client.guilds.fetch(index.guild_id).catch(() => null);
+    const channel = guild ? await guild.channels.fetch(index.channel_id).catch(() => null) : null;
+    if (!channel?.send) return false;
+    if (index.message_id && channel.messages?.fetch) {
+      const oldMessage = await channel.messages.fetch(index.message_id).catch(() => null);
+      if (oldMessage?.delete) await oldMessage.delete().catch(() => {});
+    }
+    const rows = await this.getReviewIndexSuggestions(index);
+    const sent = await channel.send(buildReviewIndexPayload(index, rows)).catch(() => null);
+    if (!sent) return false;
+    await query(`UPDATE suggestion_review_indexes SET message_id = $1, updated_at = NOW() WHERE id = $2`, [sent.id, index.id]).catch(() => {});
+    return true;
+  }
+
+  async refreshReviewIndexes({ client, guildId }) {
+    const result = await query(`SELECT * FROM suggestion_review_indexes WHERE guild_id = $1 AND active = true`, [guildId]).catch(() => ({ rows: [] }));
+    let refreshed = 0;
+    for (const index of result.rows) {
+      if (await this.refreshReviewIndex({ client, index }).catch(() => false)) refreshed += 1;
+    }
+    return refreshed;
+  }
+
+  async getResetSummary(guildId) {
+    const countRows = async (sql, params) => Number((await query(sql, params).catch(() => ({ rows: [{ count: 0 }] }))).rows[0]?.count || 0);
+    const [configs, categories, suggestions, votes, notes, reviewIndexes, panelActive] = await Promise.all([
+      countRows(`SELECT COUNT(*) FROM suggestion_configs WHERE guild_id = $1`, [guildId]),
+      countRows(`SELECT COUNT(*) FROM suggestion_categories WHERE guild_id = $1`, [guildId]),
+      countRows(`SELECT COUNT(*) FROM suggestions WHERE guild_id = $1`, [guildId]),
+      countRows(`SELECT COUNT(*) FROM suggestion_votes WHERE guild_id = $1`, [guildId]),
+      countRows(`SELECT COUNT(*) FROM suggestion_notes WHERE guild_id = $1`, [guildId]),
+      countRows(`SELECT COUNT(*) FROM suggestion_review_indexes WHERE guild_id = $1 AND active = true`, [guildId]),
+      countRows(`SELECT COUNT(*) FROM suggestion_configs WHERE guild_id = $1 AND panel_active = true`, [guildId])
+    ]);
+    return { configs, categories, suggestions, votes, notes, reviewIndexes, panelActive };
+  }
+
+  async buildResetConfirmationPayload({ guildId, requestedByUserId }) {
+    const counts = await this.getResetSummary(guildId);
+    return {
+      embeds: [createBaseEmbed({
+        title: 'Confirm Suggestions Reset',
+        description: [
+          'This will reset only the **Suggestions** module for this server.',
+          '',
+          '**What will be cleared**',
+          'Suggestion setup, categories, suggestions, votes, staff revision notes, review indexes, and the tracked public panel reference. Existing Discord suggestion/review messages will not be deleted.',
+          '',
+          '**Current records found**',
+          formatCounts(counts),
+          '',
+          'This action cannot be undone from SlickBot.'
+        ].join('\n'),
+        color: SlickBotColors.ERROR,
+        footer: 'SlickBot Suggestions Reset'
+      })],
+      components: [new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`${CustomIds.SuggestionResetConfirmPrefix}${requestedByUserId}`).setLabel('Confirm Suggestions Reset').setStyle(ButtonStyle.Danger).setEmoji('⚠️'),
+        new ButtonBuilder().setCustomId(`${CustomIds.SuggestionResetCancelPrefix}${requestedByUserId}`).setLabel('Cancel').setStyle(ButtonStyle.Secondary)
+      )]
+    };
+  }
+
+  async resetModule(guildId) {
+    const before = await this.getResetSummary(guildId);
+    await query(`DELETE FROM suggestion_review_indexes WHERE guild_id = $1`, [guildId]).catch(() => {});
+    await query(`DELETE FROM suggestions WHERE guild_id = $1`, [guildId]);
+    await query(`DELETE FROM suggestion_categories WHERE guild_id = $1`, [guildId]);
+    await query(`DELETE FROM suggestion_configs WHERE guild_id = $1`, [guildId]);
+    return { before };
+  }
+
+  buildResetCompletePayload(result) {
+    return {
+      embeds: [createBaseEmbed({
+        title: 'Suggestions Reset Complete',
+        description: [
+          'The **Suggestions** module was reset for this server.',
+          '',
+          '**Cleared records**',
+          formatCounts(result.before),
+          '',
+          'Run `/suggestion setup` when you are ready to rebuild it.'
+        ].join('\n'),
+        color: SlickBotColors.SUCCESS,
+        footer: 'SlickBot Suggestions Reset'
+      })],
+      components: []
+    };
+  }
+
   async buildManagerPanel(guildId) {
     const config = await this.ensureConfig(guildId);
-    const [categoryCount, suggestionCount] = await Promise.all([
+    const [categoryCount, suggestionCount, indexCount] = await Promise.all([
       query(`SELECT COUNT(*)::int AS count FROM suggestion_categories WHERE guild_id = $1 AND active = true`, [guildId]).catch(() => ({ rows: [{ count: 0 }] })),
-      query(`SELECT COUNT(*)::int AS count FROM suggestions WHERE guild_id = $1`, [guildId]).catch(() => ({ rows: [{ count: 0 }] }))
+      query(`SELECT COUNT(*)::int AS count FROM suggestions WHERE guild_id = $1`, [guildId]).catch(() => ({ rows: [{ count: 0 }] })),
+      query(`SELECT COUNT(*)::int AS count FROM suggestion_review_indexes WHERE guild_id = $1 AND active = true`, [guildId]).catch(() => ({ rows: [{ count: 0 }] }))
     ]);
     const embed = createBaseEmbed({
       title: 'SlickBot Community Center',
@@ -502,15 +853,18 @@ class SuggestionService {
         '**Viewing:** Suggestions',
         '',
         `Status: **${config.channel_id ? 'Configured' : 'Needs Setup'}**`,
-        `Suggestions Channel: ${config.channel_id ? `<#${config.channel_id}>` : '**Not configured**'}`,
+        `Public Voting Channel: ${config.channel_id ? `<#${config.channel_id}>` : '**Not configured**'}`,
+        `Review Channel: ${config.review_channel_id ? `<#${config.review_channel_id}>` : '**Not configured**'}`,
         `Suggestion Logs: ${config.log_channel_id ? `<#${config.log_channel_id}>` : 'Not set'}`,
+        `Auto Discussion Threads: **${config.auto_create_threads === false ? 'Disabled' : 'Enabled'}**`,
         `Default Anonymous: **${config.default_anonymous === false ? 'No' : 'Yes'}**`,
         `Categories: **${categoryCount.rows[0]?.count || 0}**`,
         `Suggestions Submitted: **${suggestionCount.rows[0]?.count || 0}**`,
+        `Review Indexes: **${indexCount.rows[0]?.count || 0}**`,
         `Public Panel: ${config.panel_active && config.panel_channel_id ? `<#${config.panel_channel_id}>` : 'Not posted'}`,
         '',
         '**Primary Commands**',
-        '`/suggestion setup` · `/suggestion panel post` · `/suggestion submit` · `/suggestion review status` · `/suggestion categories`'
+        '`/suggestion setup` · `/suggestion panel post` · `/suggestion review-index` · `/suggestion submit` · `/suggestion review status` · `/suggestion reset`'
       ].join('\n'),
       color: config.channel_id ? SlickBotColors.SUCCESS : SlickBotColors.WARNING,
       footer: 'SlickBot Suggestions'
@@ -524,7 +878,6 @@ class SuggestionService {
       ])]
     };
   }
-
 
   async buildViewPayload(guild, suggestionNumber) {
     const suggestion = await this.getSuggestionByNumber(guild.id, suggestionNumber);
@@ -558,5 +911,8 @@ module.exports = {
   STATUS_LABELS,
   normalizeStatus,
   messageUrl,
-  buildPanelPayload
+  channelUrl,
+  buildPanelPayload,
+  buildReviewIndexPayload,
+  isVotingOpenStatus
 };

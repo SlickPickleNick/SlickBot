@@ -1,7 +1,7 @@
 {
   "0.9.1": {
     "title": "SlickBot v0.9.1",
-    "summary": "Adds the Suggestions module with anonymous submissions, public voting, staff review states, discussion threads, and tracked launcher panels.",
+    "summary": "Adds and expands the Suggestions module with anonymous submissions, public voting posts, separate staff review embeds, review indexes, configurable discussion threads, and tracked launcher panels.",
     "notes": [
       "Added the SUGGESTIONS module under Community Systems.",
       "Members can submit suggestions through /suggestion submit or through a public Suggestions panel button.",
@@ -16,7 +16,15 @@
       "Added configurable suggestion categories with starter defaults: Server, Discord, Stream, Events, Bot, and Other.",
       "The Suggestions panel can be posted, edited, and refreshed; it reposts at the bottom of the panel channel whenever a new suggestion is submitted so the button remains easy to find.",
       "Added /faq resend-navigation to resend the FAQ Navigation helper panel from inside an FAQ forum post.",
-      "Added suggestion permission actions, logging events, setup/module status, help entries, diagnostics, and backward-compatible PostgreSQL migrations."
+      "Added suggestion permission actions, logging events, setup/module status, help entries, diagnostics, and backward-compatible PostgreSQL migrations.",
+      "Suggestion setup now supports a separate public voting channel, staff review channel, and an auto_create_threads toggle so discussion threads can be enabled or disabled from setup.",
+      "Suggestions now send a public voting embed to the configured suggestion channel and a separate staff review embed to the configured review channel.",
+      "Staff review embeds include status buttons, Add Details, Reveal Submitter, and an Open Public Suggestion link so moderators can manage suggestions without memorizing commands.",
+      "Added /suggestion review-index with Pending, Planned, Accepted, Denied, Implemented, and All filters; the index links to review messages and refreshes when suggestions are submitted or updated.",
+      "Public suggestion posts now use a more compact screenshot-style layout and show revision history in a second embed that appears only after a status change or staff details are added.",
+      "Revision history is rendered oldest-to-newest so staff changes are readable chronologically.",
+      "Voting buttons are automatically removed when a suggestion is Accepted, Denied, or Implemented. Pending Review and Planned suggestions remain open for voting.",
+      "Added /suggestion reset with private confirmation to clear Suggestions setup/testing data for a server without deleting existing Discord messages."
     ],
     "commands": [
       "/suggestion setup",
@@ -33,6 +41,8 @@
       "/suggestion review add-details",
       "/suggestion review reveal",
       "/suggestion review view",
+      "/suggestion review-index",
+      "/suggestion reset",
       "/faq resend-navigation"
     ]
   },
