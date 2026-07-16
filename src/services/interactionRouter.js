@@ -23,6 +23,7 @@ const { LevelingService } = require('../modules/community/levelingService');
 const { CommunityGameService, GAME_KEYS } = require('../modules/community/gameService');
 const { FaqService } = require('../modules/community/faqService');
 const { SuggestionService } = require('../modules/community/suggestionService');
+const { LockdownService } = require('../modules/safety/lockdownService');
 const { buildRoleManagerPanel, toggleRole } = require('../modules/community/rolePanelService');
 const { JoinCreateService } = require('../modules/voice/joinCreateService');
 const { CustomCommandService } = require('../modules/custom/customCommandService');
@@ -57,6 +58,7 @@ const customCommands = new CustomCommandService();
 const communityGames = new CommunityGameService();
 const faq = new FaqService();
 const suggestions = new SuggestionService();
+const lockdown = new LockdownService();
 
 async function handleComponentInteraction(interaction, ctx) {
   if (!interaction.guildId) {
@@ -282,6 +284,37 @@ async function handleButton(interaction, ctx) {
   if (id === CustomIds.HelpDisabled) {
     if (!(await requireAction(interaction, ctx, ActionKeys.Help, ModuleKeys.PERMISSIONS))) return true;
     await updatePanel(interaction, await buildHelpPayload(interaction, ctx, { mode: 'disabled' }));
+    return true;
+  }
+
+
+  if (id === CustomIds.LockdownRefresh) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.LockdownView, ModuleKeys.LOCKDOWN))) return true;
+    await updatePanel(interaction, await lockdown.buildManagerPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.LockdownResetCancelPrefix)) {
+    const requestedByUserId = id.slice(CustomIds.LockdownResetCancelPrefix.length);
+    if (requestedByUserId !== interaction.user.id) {
+      await replyPrivate(interaction, { embeds: [createWarningEmbed('Confirmation Not Yours', 'Only the user who opened this reset confirmation can cancel it.')] });
+      return true;
+    }
+    await updatePanel(interaction, { embeds: [createSuccessEmbed('Lockdown Reset Cancelled', 'No Lockdown setup was changed.')], components: [] });
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.LockdownResetConfirmPrefix)) {
+    const requestedByUserId = id.slice(CustomIds.LockdownResetConfirmPrefix.length);
+    if (requestedByUserId !== interaction.user.id) {
+      await replyPrivate(interaction, { embeds: [createWarningEmbed('Confirmation Not Yours', 'Only the user who opened this reset confirmation can confirm it.')] });
+      return true;
+    }
+    if (!(await requireAction(interaction, ctx, ActionKeys.LockdownReset, ModuleKeys.LOCKDOWN))) return true;
+    const result = await lockdown.resetModule(interaction.guildId);
+    if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Lockdown Reset Blocked', result.reason)] });
+    await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'lockdown-config', title: 'Lockdown Module Reset', body: `Lockdown setup was reset by ${interaction.user.tag}.`, actorUserId: interaction.user.id, metadata: { before: result.before } }).catch(() => {});
+    await updatePanel(interaction, lockdown.buildResetCompletePayload(result));
     return true;
   }
 

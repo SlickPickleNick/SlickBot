@@ -24,6 +24,11 @@ const ActionKeys = Object.freeze({
   ModerationBan: 'moderation.ban',
   ModerationUnban: 'moderation.unban',
   ModerationMassBan: 'moderation.massban',
+  LockdownView: 'lockdown.view',
+  LockdownConfigure: 'lockdown.configure',
+  LockdownStart: 'lockdown.start',
+  LockdownEnd: 'lockdown.end',
+  LockdownReset: 'lockdown.reset',
   CasesView: 'cases.view',
   CasesManage: 'cases.manage',
   UserNotesView: 'user-notes.view',
@@ -186,6 +191,11 @@ const defaultActionLevels = Object.freeze({
   [ActionKeys.ModerationBan]: PermissionLevels.SENIOR_MODERATOR,
   [ActionKeys.ModerationUnban]: PermissionLevels.SENIOR_MODERATOR,
   [ActionKeys.ModerationMassBan]: PermissionLevels.OWNER,
+  [ActionKeys.LockdownView]: PermissionLevels.MODERATOR,
+  [ActionKeys.LockdownConfigure]: PermissionLevels.SENIOR_MODERATOR,
+  [ActionKeys.LockdownStart]: PermissionLevels.SENIOR_MODERATOR,
+  [ActionKeys.LockdownEnd]: PermissionLevels.SENIOR_MODERATOR,
+  [ActionKeys.LockdownReset]: PermissionLevels.OWNER,
   [ActionKeys.CasesView]: PermissionLevels.MODERATOR,
   [ActionKeys.CasesManage]: PermissionLevels.SENIOR_MODERATOR,
   [ActionKeys.UserNotesView]: PermissionLevels.MODERATOR,
@@ -312,6 +322,7 @@ const defaultModuleLevels = Object.freeze({
   [ModuleKeys.LOGGING]: PermissionLevels.MODERATOR,
   [ModuleKeys.STATUS]: PermissionLevels.MODERATOR,
   [ModuleKeys.MODERATION]: PermissionLevels.MODERATOR,
+  [ModuleKeys.LOCKDOWN]: PermissionLevels.MODERATOR,
   [ModuleKeys.TICKETS]: PermissionLevels.EVERYONE,
   [ModuleKeys.REPORTS]: PermissionLevels.EVERYONE,
   [ModuleKeys.APPLICATIONS]: PermissionLevels.EVERYONE,
@@ -353,7 +364,7 @@ const defaultPublicActions = Object.freeze([
 
 const defaultTeamPermissions = Object.freeze(Object.values(ActionKeys));
 
-const PERMISSION_DEFAULTS_VERSION = '0.9.1';
+const PERMISSION_DEFAULTS_VERSION = '0.9.2';
 
 module.exports = {
   ActionKeys,

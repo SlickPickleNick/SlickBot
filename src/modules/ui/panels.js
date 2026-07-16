@@ -25,6 +25,7 @@ const { JoinCreateService } = require('../voice/joinCreateService');
 const { CommunityGameService } = require('../community/gameService');
 const { FaqService } = require('../community/faqService');
 const { SuggestionService } = require('../community/suggestionService');
+const { LockdownService } = require('../safety/lockdownService');
 const giveaways = new GiveawayService();
 const birthdays = new BirthdayService();
 const scheduledMessages = new ScheduledMessageService();
@@ -35,6 +36,7 @@ const joinCreate = new JoinCreateService();
 const communityGames = new CommunityGameService();
 const faq = new FaqService();
 const suggestions = new SuggestionService();
+const lockdown = new LockdownService();
 
 const STATUS_META = Object.freeze({
   READY: { emoji: '✅', label: 'Ready', color: SlickBotColors.SUCCESS },
@@ -47,7 +49,7 @@ const STATUS_META = Object.freeze({
 });
 
 const MODULE_CATEGORIES = Object.freeze([
-  { key: 'CORE', label: 'Core Setup', modules: [ModuleKeys.PERMISSIONS, ModuleKeys.LOGGING, ModuleKeys.STATUS, ModuleKeys.MODERATION] },
+  { key: 'CORE', label: 'Core Setup', modules: [ModuleKeys.PERMISSIONS, ModuleKeys.LOGGING, ModuleKeys.STATUS, ModuleKeys.MODERATION, ModuleKeys.LOCKDOWN] },
   { key: 'SUPPORT', label: 'Support Systems', modules: [ModuleKeys.TICKETS, ModuleKeys.REPORTS, ModuleKeys.APPLICATIONS, ModuleKeys.APPEALS] },
   { key: 'COMMUNITY', label: 'Community Systems', modules: [ModuleKeys.WELCOME, ModuleKeys.REACTION_ROLES, ModuleKeys.GIVEAWAYS, ModuleKeys.BIRTHDAYS, ModuleKeys.LEVELING, ModuleKeys.COMMUNITY_GAMES, ModuleKeys.FAQ, ModuleKeys.SUGGESTIONS, ModuleKeys.SERVER_STATS, ModuleKeys.CUSTOM_COMMANDS, ModuleKeys.JOIN_TO_CREATE] },
   { key: 'AUTOMATION', label: 'Automation Systems', modules: [ModuleKeys.SCHEDULED_MESSAGES, ModuleKeys.BOT_UPDATES] },
@@ -78,6 +80,12 @@ const MODULE_SETUP_CATALOG = Object.freeze({
     managerCommand: '/mod panel', setupCommand: '/logging set-channel',
     nextSteps: ['Configure moderation/case log channels in `/logging panel`.', 'Review staff access in `/permissions panel`.', 'Use `/case panel` to review recent cases.'],
     usefulCommands: ['/mod panel', '/mod warn', '/mod timeout', '/case panel', '/note add']
+  },
+  [ModuleKeys.LOCKDOWN]: {
+    name: 'Lockdown / Safety', category: 'Core Setup', description: 'Runs emergency lockdown presets that snapshot and restore @everyone channel overwrites for configured text and voice channels.',
+    managerCommand: '/lockdown manager', setupCommand: '/lockdown setup',
+    nextSteps: ['Create a preset with `/lockdown setup`.', 'Add controlled channels with `/lockdown channel-add`.', 'Review configured channels with `/lockdown channel-list`.', 'Start and end lockdowns with `/lockdown start` and `/lockdown end`.'],
+    usefulCommands: ['/lockdown manager', '/lockdown setup', '/lockdown channel-add', '/lockdown start', '/lockdown end', '/lockdown reset']
   },
   [ModuleKeys.TICKETS]: {
     name: 'Tickets', category: 'Support Systems', description: 'Creates private support channels with ticket types, questions, staff assignment, escalation, transcripts, and panels.',
@@ -515,6 +523,16 @@ async function getModuleStatus(guildId, row) {
   if (row.module_key === 'APPEALS') {
     const cfg = await query(`SELECT review_channel_id FROM appeal_configs WHERE guild_id = $1 LIMIT 1`, [guildId]).catch(() => ({ rows: [] }));
     return cfg.rows[0]?.review_channel_id ? { moduleKey: row.module_key, core: false, state: 'READY', emoji: '✅', label: 'Ready', note: 'Review channel set' } : { moduleKey: row.module_key, core: false, state: 'NEEDS_CONFIG', emoji: '🟣', label: 'Needs Setup', note: 'Run /appeal setup' };
+  }
+
+  if (row.module_key === 'LOCKDOWN') {
+    const [presets, active] = await Promise.all([
+      query(`SELECT COUNT(*)::int AS count FROM lockdown_presets WHERE guild_id = $1 AND active = true`, [guildId]).catch(() => ({ rows: [{ count: 0 }] })),
+      query(`SELECT preset_name, started_at FROM lockdown_sessions WHERE guild_id = $1 AND status = 'ACTIVE' ORDER BY started_at DESC LIMIT 1`, [guildId]).catch(() => ({ rows: [] }))
+    ]);
+    if (active.rows[0]) return { moduleKey: row.module_key, core: false, state: 'WARNING', emoji: '⚠️', label: 'Warning', note: `Active: ${active.rows[0].preset_name}` };
+    if ((presets.rows[0]?.count || 0) > 0) return { moduleKey: row.module_key, core: false, state: 'READY', emoji: '✅', label: 'Ready', note: `${presets.rows[0].count} preset(s)` };
+    return { moduleKey: row.module_key, core: false, state: 'NEEDS_CONFIG', emoji: '🟣', label: 'Needs Setup', note: 'Run /lockdown setup' };
   }
 
   if (row.module_key === 'WELCOME') {

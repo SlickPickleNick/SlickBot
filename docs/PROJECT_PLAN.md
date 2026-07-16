@@ -1,6 +1,6 @@
 # SlickBot Project Plan
 
-## Current Version: 0.9.1
+## Current Version: 0.9.2
 
 SlickBot is being built as a modular all-in-one Discord server management bot for the SlickPickleNick community.
 
@@ -12,6 +12,7 @@ SlickBot is being built as a modular all-in-one Discord server management bot fo
 - Module-based logging
 - Bot presence/status controls
 - Moderation
+- Lockdown / Safety
 - Case management
 - User notes
 - Tickets
@@ -35,6 +36,39 @@ SlickBot is being built as a modular all-in-one Discord server management bot fo
 - Knowledge Base / FAQ
 - Suggestions
 
+
+
+
+## v0.9.2 — Lockdown / Safety
+
+### Added
+
+- Added the **LOCKDOWN** module under Core Setup / Moderation safety controls.
+- Added named lockdown presets for different response types.
+- Added `@everyone`-only permission lockdown handling for configured text, announcement, forum, category, voice, and stage channels.
+- Preset channel actions can deny View Channel, Send Messages/thread creation/thread messages, and/or Connect.
+- Lockdown start snapshots existing `@everyone` overwrites before applying restrictions.
+- Lockdown end restores stored overwrites and remains functional after a bot restart because active sessions are persisted in PostgreSQL.
+- Lockdown announcements are sent to affected channels when possible and reference the configured updates channel.
+- Lockdown end deletes those announcements when possible, otherwise edits them to a Lockdown Ended timestamp message.
+- Added `/lockdown reset` with confirmation and active-lockdown protection.
+- Integrated Lockdown into `/setup`, `/modules`, `/bot test`, logging, permissions, and command registration.
+
+### Commands
+
+```text
+/lockdown manager
+/lockdown setup
+/lockdown preset-list
+/lockdown preset-delete
+/lockdown channel-add
+/lockdown channel-remove
+/lockdown channel-list
+/lockdown start
+/lockdown end
+/lockdown status
+/lockdown reset
+```
 
 
 ## v0.9.1 Scope

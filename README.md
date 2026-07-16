@@ -4,7 +4,39 @@ SlickBot is an all-in-one Discord server management bot built for the SlickPickl
 
 ## Version
 
-Current package: **v0.9.1**
+Current package: **v0.9.2**
+
+
+## v0.9.2 Updates
+
+### Lockdown / Safety
+
+- Added the **Lockdown / Safety** module under Core Setup / Moderation controls.
+- Added named lockdown presets so staff can configure different lockdown types before an emergency.
+- Lockdown only changes the `@everyone` permission overwrite for configured channels.
+- Controlled channels can deny View Channel, Send Messages/thread permissions, and/or Connect depending on the channel type.
+- Starting a lockdown snapshots the previous `@everyone` overwrite for every affected channel, then applies the configured restrictions.
+- Ending a lockdown restores the saved permission overwrites, including after a SlickBot restart.
+- Affected channels receive a lockdown announcement embed when SlickBot can send one. The embed points users to the configured updates channel.
+- When lockdown ends, SlickBot deletes those announcement embeds when possible; if deletion fails, it edits them to say the lockdown ended with a timestamp.
+- Added `/lockdown reset` with confirmation. Reset is blocked while a lockdown is active.
+- Added Lockdown permission actions, logging events, setup/module status, `/bot test` diagnostics, and PostgreSQL persistence.
+
+Updated commands:
+
+```text
+/lockdown manager
+/lockdown setup
+/lockdown preset-list
+/lockdown preset-delete
+/lockdown channel-add
+/lockdown channel-remove
+/lockdown channel-list
+/lockdown start
+/lockdown end
+/lockdown status
+/lockdown reset
+```
 
 
 ## v0.9.1 Updates

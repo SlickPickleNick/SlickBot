@@ -7,6 +7,7 @@ const modulesCommand = require('./modules');
 const loggingCommand = require('./logging');
 const statusCommand = require('./status');
 const modCommand = require('./mod');
+const lockdownCommand = require('./lockdown');
 const caseCommand = require('./case');
 const noteCommand = require('./note');
 const ticketCommand = require('./ticket');
@@ -41,6 +42,7 @@ const commands = [
   loggingCommand,
   statusCommand,
   modCommand,
+  lockdownCommand,
   caseCommand,
   noteCommand,
   ticketCommand,

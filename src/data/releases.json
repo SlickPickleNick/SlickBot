@@ -1,4 +1,33 @@
 {
+  "0.9.2": {
+    "title": "SlickBot v0.9.2",
+    "summary": "Adds the Lockdown / Safety module with named presets, @everyone-only channel permission lockdowns, persisted permission snapshots, restart-safe restoration, announcement embeds, and reset support.",
+    "notes": [
+      "Added the LOCKDOWN module under Core Setup / Moderation safety controls.",
+      "Added named lockdown presets so staff can configure different lockdown types before they are needed.",
+      "Lockdown only changes @everyone permission overwrites in configured channels.",
+      "Preset channels can deny View Channel, Send Messages/thread permissions, and/or Connect depending on text, forum, voice, stage, or category channel needs.",
+      "Starting lockdown snapshots each channel\u2019s existing @everyone overwrite before changing permissions.",
+      "Ending lockdown restores the stored overwrite exactly, including after a bot restart.",
+      "Affected channels receive a lockdown announcement embed when possible, referencing the preset updates channel.",
+      "When lockdown ends, SlickBot deletes announcement embeds when possible and edits them to Lockdown Ended with a timestamp if deletion fails.",
+      "Added /lockdown reset with confirmation; reset is blocked while a lockdown is active.",
+      "Integrated Lockdown with /setup, /modules, /bot test, permissions, logging, command registration, and documentation."
+    ],
+    "commands": [
+      "/lockdown manager",
+      "/lockdown setup",
+      "/lockdown preset-list",
+      "/lockdown preset-delete",
+      "/lockdown channel-add",
+      "/lockdown channel-remove",
+      "/lockdown channel-list",
+      "/lockdown start",
+      "/lockdown end",
+      "/lockdown status",
+      "/lockdown reset"
+    ]
+  },
   "0.9.1": {
     "title": "SlickBot v0.9.1",
     "summary": "Adds and expands the Suggestions module with anonymous submissions, public voting posts, separate staff review embeds, review indexes, configurable discussion threads, and tracked launcher panels.",

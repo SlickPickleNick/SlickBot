@@ -30,6 +30,12 @@ const LogModuleCatalog = Object.freeze([
     defaultDelivery: 'IMMEDIATE'
   },
   {
+    key: 'lockdown',
+    label: 'Lockdown / Safety',
+    description: 'Server lockdown setup, emergency starts, restores, and permission errors.',
+    defaultDelivery: 'IMMEDIATE'
+  },
+  {
     key: 'tickets',
     label: 'Tickets',
     description: 'Ticket opens, claims, priority changes, closes, and transcript activity.',
@@ -176,6 +182,12 @@ const LogEventCatalog = Object.freeze([
 
   { key: 'appeal-submit', moduleKey: 'appeals', label: 'Appeal Submitted', description: 'A user submitted an appeal.', defaultDelivery: 'IMMEDIATE' },
   { key: 'appeal-review', moduleKey: 'appeals', label: 'Appeal Reviewed', description: 'Staff reviewed an appeal.', defaultDelivery: 'IMMEDIATE' },
+
+  { key: 'lockdown-config', moduleKey: 'lockdown', label: 'Lockdown Config', description: 'Lockdown presets or controlled channels changed.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'lockdown-start', moduleKey: 'lockdown', label: 'Lockdown Started', description: 'A server lockdown preset was started.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'lockdown-end', moduleKey: 'lockdown', label: 'Lockdown Ended', description: 'An active server lockdown was ended and restored.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'lockdown-error', moduleKey: 'lockdown', label: 'Lockdown Error', description: 'A lockdown start had channel or permission failures.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'lockdown-restore-error', moduleKey: 'lockdown', label: 'Lockdown Restore Error', description: 'A lockdown restore had channel or permission failures.', defaultDelivery: 'IMMEDIATE' },
 
   { key: 'scheduled-messages', moduleKey: 'scheduled-messages', label: 'Scheduled Messages', description: 'Scheduled announcement activity.', defaultDelivery: 'IMMEDIATE' },
 

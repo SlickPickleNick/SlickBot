@@ -1347,6 +1347,89 @@ async function initDatabase() {
     );
   `);
 
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS lockdown_presets (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      updates_channel_id TEXT,
+      announcement_title TEXT NOT NULL DEFAULT 'Server Lockdown Active',
+      announcement_body TEXT NOT NULL DEFAULT 'This server is currently in lockdown while staff respond to an active situation. Some channels may be temporarily restricted. Please avoid pinging staff unless it is urgent.',
+      ping_role_id TEXT,
+      active BOOLEAN NOT NULL DEFAULT true,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(guild_id, name)
+    );
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS lockdown_preset_channels (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      preset_id TEXT NOT NULL REFERENCES lockdown_presets(id) ON DELETE CASCADE,
+      channel_id TEXT NOT NULL,
+      deny_view BOOLEAN NOT NULL DEFAULT false,
+      deny_send BOOLEAN NOT NULL DEFAULT false,
+      deny_connect BOOLEAN NOT NULL DEFAULT false,
+      active BOOLEAN NOT NULL DEFAULT true,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(preset_id, channel_id)
+    );
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS lockdown_sessions (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      preset_id TEXT REFERENCES lockdown_presets(id) ON DELETE SET NULL,
+      preset_name TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'ACTIVE',
+      started_by_user_id TEXT,
+      ended_by_user_id TEXT,
+      reason TEXT,
+      end_reason TEXT,
+      updates_channel_id TEXT,
+      channel_count INTEGER NOT NULL DEFAULT 0,
+      fail_count INTEGER NOT NULL DEFAULT 0,
+      started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      ended_at TIMESTAMPTZ,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS lockdown_session_channels (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      session_id TEXT NOT NULL REFERENCES lockdown_sessions(id) ON DELETE CASCADE,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      channel_id TEXT NOT NULL,
+      original_overwrite_exists BOOLEAN NOT NULL DEFAULT false,
+      original_allow TEXT NOT NULL DEFAULT '0',
+      original_deny TEXT NOT NULL DEFAULT '0',
+      applied_deny_view BOOLEAN NOT NULL DEFAULT false,
+      applied_deny_send BOOLEAN NOT NULL DEFAULT false,
+      applied_deny_connect BOOLEAN NOT NULL DEFAULT false,
+      announcement_message_id TEXT,
+      status TEXT NOT NULL DEFAULT 'PENDING',
+      error TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      restored_at TIMESTAMPTZ
+    );
+  `);
+
+  await query(`ALTER TABLE lockdown_presets ADD COLUMN IF NOT EXISTS updates_channel_id TEXT;`).catch(() => {});
+  await query(`ALTER TABLE lockdown_presets ADD COLUMN IF NOT EXISTS announcement_title TEXT NOT NULL DEFAULT 'Server Lockdown Active';`).catch(() => {});
+  await query(`ALTER TABLE lockdown_presets ADD COLUMN IF NOT EXISTS announcement_body TEXT NOT NULL DEFAULT 'This server is currently in lockdown while staff respond to an active situation. Some channels may be temporarily restricted. Please avoid pinging staff unless it is urgent.';`).catch(() => {});
+  await query(`ALTER TABLE lockdown_presets ADD COLUMN IF NOT EXISTS ping_role_id TEXT;`).catch(() => {});
+  await query(`ALTER TABLE lockdown_presets ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT true;`).catch(() => {});
+  await query(`CREATE INDEX IF NOT EXISTS idx_lockdown_presets_guild_active ON lockdown_presets(guild_id, active);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_lockdown_channels_preset_active ON lockdown_preset_channels(preset_id, active);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_lockdown_sessions_guild_status ON lockdown_sessions(guild_id, status, started_at DESC);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_lockdown_session_channels_session ON lockdown_session_channels(session_id);`);
+
   await query(`
     CREATE TABLE IF NOT EXISTS team_permission_levels (
       id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,

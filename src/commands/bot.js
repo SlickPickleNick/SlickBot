@@ -30,6 +30,11 @@ const MODULE_CHECKS = {
     { name: 'Cases', sql: 'SELECT COUNT(*)::int AS count FROM moderation_cases WHERE guild_id = $1' },
     { name: 'User notes', sql: 'SELECT COUNT(*)::int AS count FROM user_notes WHERE guild_id = $1' }
   ],
+  [ModuleKeys.LOCKDOWN]: [
+    { name: 'Lockdown presets', sql: 'SELECT COUNT(*)::int AS count FROM lockdown_presets WHERE guild_id = $1' },
+    { name: 'Controlled channels', sql: 'SELECT COUNT(*)::int AS count FROM lockdown_preset_channels WHERE guild_id = $1' },
+    { name: 'Lockdown sessions', sql: 'SELECT COUNT(*)::int AS count FROM lockdown_sessions WHERE guild_id = $1' }
+  ],
   [ModuleKeys.TICKETS]: [
     { name: 'Ticket config', sql: 'SELECT COUNT(*)::int AS count FROM ticket_configs WHERE guild_id = $1' },
     { name: 'Ticket types', sql: 'SELECT COUNT(*)::int AS count FROM ticket_types WHERE guild_id = $1' },
@@ -126,6 +131,7 @@ const MODULE_FIXES = Object.freeze({
   [ModuleKeys.REPORTS]: 'Run `/report setup` and set a review channel.',
   [ModuleKeys.APPLICATIONS]: 'Run `/application setup`, add questions with `/application question-add`, then post an application panel.',
   [ModuleKeys.APPEALS]: 'Run `/appeal setup` or `/appeal edit` and set a review channel.',
+  [ModuleKeys.LOCKDOWN]: 'Run `/lockdown setup`, add channels with `/lockdown channel-add`, and test `/lockdown start` / `/lockdown end` carefully.',
   [ModuleKeys.WELCOME]: 'Run `/welcome setup` and optionally configure auto roles.',
   [ModuleKeys.REACTION_ROLES]: 'Run `/roles create-panel`, add options, then post the panel.',
   [ModuleKeys.GIVEAWAYS]: 'Run `/giveaway setup` and set a default channel.',

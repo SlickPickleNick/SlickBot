@@ -9,6 +9,8 @@ const {
 } = require('../ui/uiService');
 const { CustomIds } = require('../ui/customIds');
 const { truncate } = require('../../utils/format');
+const { LockdownService } = require('../safety/lockdownService');
+const lockdown = new LockdownService();
 
 async function buildModerationPanel(guildId) {
   const cases = await query(
@@ -19,6 +21,8 @@ async function buildModerationPanel(guildId) {
      WHERE guild_id = $1`,
     [guildId]
   );
+
+  const lockdownStatus = await lockdown.getStatus(guildId).catch(() => ({ active: null, presets: [] }));
 
   const notes = await query(
     `SELECT COUNT(*)::int AS total FROM user_notes WHERE guild_id = $1 AND is_active = true`,
@@ -60,6 +64,10 @@ async function buildModerationPanel(guildId) {
       '✅ User notes are active through `/note`.',
       `${logReady ? '✅' : '🟠'} Moderation Logs: ${logReady ? `<#${moderationLog.channel_id}>` : 'Not configured'}`,
       '',
+      '**Lockdown / Safety**',
+      lockdownStatus.active ? `⚠️ Active lockdown: **${lockdownStatus.active.preset_name}**` : `✅ No active lockdown. Presets configured: **${lockdownStatus.presets.length || 0}**`,
+      'Use `/lockdown manager` to configure emergency presets and restore controls.',
+      '',
       '**Setup Checklist**',
       logReady ? '• Logging is configured for moderation events.' : '• Set moderation logs with `/logging set-channel module:moderation channel:#logs`.',
       '• Review staff command access in `/permissions panel`.',
@@ -82,6 +90,7 @@ async function buildModerationPanel(guildId) {
   const row = createButtonRow([
     createPanelButton(CustomIds.ModerationRefresh, 'Refresh', ButtonStyle.Primary, '🔄'),
     createPanelButton(CustomIds.CasesRefresh, 'Recent Cases', ButtonStyle.Secondary, '🗂️'),
+    createPanelButton(CustomIds.LockdownRefresh, 'Lockdown', ButtonStyle.Secondary),
     createPanelButton(CustomIds.SetupRefresh, 'Back to Setup', ButtonStyle.Secondary, '↩️')
   ]);
 

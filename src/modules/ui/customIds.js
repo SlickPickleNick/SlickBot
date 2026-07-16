@@ -82,6 +82,9 @@ const CustomIds = Object.freeze({
   StatusClear: 'slickbot:status:clear',
 
   ModerationRefresh: 'slickbot:moderation:refresh',
+  LockdownRefresh: 'slickbot:lockdown:refresh',
+  LockdownResetConfirmPrefix: 'slickbot:lockdown-reset:confirm:',
+  LockdownResetCancelPrefix: 'slickbot:lockdown-reset:cancel:',
   CasesRefresh: 'slickbot:cases:refresh',
 
   SupportRefresh: 'slickbot:support:refresh',
