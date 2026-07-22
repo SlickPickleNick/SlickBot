@@ -25,6 +25,8 @@ const { JoinCreateService } = require('../voice/joinCreateService');
 const { CommunityGameService } = require('../community/gameService');
 const { FaqService } = require('../community/faqService');
 const { SuggestionService } = require('../community/suggestionService');
+const { ReferralService } = require('../community/referralService');
+const { TemporaryRoleService } = require('../moderation/tempRoleService');
 const { LockdownService } = require('../safety/lockdownService');
 const giveaways = new GiveawayService();
 const birthdays = new BirthdayService();
@@ -36,6 +38,8 @@ const joinCreate = new JoinCreateService();
 const communityGames = new CommunityGameService();
 const faq = new FaqService();
 const suggestions = new SuggestionService();
+const referrals = new ReferralService();
+const tempRoles = new TemporaryRoleService();
 const lockdown = new LockdownService();
 
 const STATUS_META = Object.freeze({
@@ -49,9 +53,9 @@ const STATUS_META = Object.freeze({
 });
 
 const MODULE_CATEGORIES = Object.freeze([
-  { key: 'CORE', label: 'Core Setup', modules: [ModuleKeys.PERMISSIONS, ModuleKeys.LOGGING, ModuleKeys.STATUS, ModuleKeys.MODERATION, ModuleKeys.LOCKDOWN] },
+  { key: 'CORE', label: 'Core Setup', modules: [ModuleKeys.PERMISSIONS, ModuleKeys.LOGGING, ModuleKeys.STATUS, ModuleKeys.MODERATION, ModuleKeys.LOCKDOWN, ModuleKeys.TEMP_ROLES] },
   { key: 'SUPPORT', label: 'Support Systems', modules: [ModuleKeys.TICKETS, ModuleKeys.REPORTS, ModuleKeys.APPLICATIONS, ModuleKeys.APPEALS] },
-  { key: 'COMMUNITY', label: 'Community Systems', modules: [ModuleKeys.WELCOME, ModuleKeys.REACTION_ROLES, ModuleKeys.GIVEAWAYS, ModuleKeys.BIRTHDAYS, ModuleKeys.LEVELING, ModuleKeys.COMMUNITY_GAMES, ModuleKeys.FAQ, ModuleKeys.SUGGESTIONS, ModuleKeys.SERVER_STATS, ModuleKeys.CUSTOM_COMMANDS, ModuleKeys.JOIN_TO_CREATE] },
+  { key: 'COMMUNITY', label: 'Community Systems', modules: [ModuleKeys.WELCOME, ModuleKeys.REACTION_ROLES, ModuleKeys.GIVEAWAYS, ModuleKeys.BIRTHDAYS, ModuleKeys.LEVELING, ModuleKeys.COMMUNITY_GAMES, ModuleKeys.FAQ, ModuleKeys.SUGGESTIONS, ModuleKeys.REFERRALS, ModuleKeys.SERVER_STATS, ModuleKeys.CUSTOM_COMMANDS, ModuleKeys.JOIN_TO_CREATE] },
   { key: 'AUTOMATION', label: 'Automation Systems', modules: [ModuleKeys.SCHEDULED_MESSAGES, ModuleKeys.BOT_UPDATES] },
   { key: 'BACKLOG', label: 'Coming Soon', modules: [ModuleKeys.UTILITY] }
 ]);
@@ -86,6 +90,12 @@ const MODULE_SETUP_CATALOG = Object.freeze({
     managerCommand: '/lockdown manager', setupCommand: '/lockdown setup',
     nextSteps: ['Create a preset with `/lockdown setup`.', 'Add controlled channels with `/lockdown channel-add`.', 'Review configured channels with `/lockdown channel-list`.', 'Start and end lockdowns with `/lockdown start` and `/lockdown end`.'],
     usefulCommands: ['/lockdown manager', '/lockdown setup', '/lockdown channel-add', '/lockdown start', '/lockdown end', '/lockdown reset']
+  },
+  [ModuleKeys.TEMP_ROLES]: {
+    name: 'Temporary Roles', category: 'Core Setup', description: 'Lets moderators assign roles to members for a fixed duration and automatically removes them when they expire.',
+    managerCommand: '/temp-role active', setupCommand: '/temp-role add',
+    nextSteps: ['Use `/temp-role add` to assign a temporary role.', 'Use `/temp-role list` or `/temp-role active` to review active assignments.', 'Use `/temp-role remove` to end an assignment early.'],
+    usefulCommands: ['/temp-role add', '/temp-role remove', '/temp-role list', '/temp-role active']
   },
   [ModuleKeys.TICKETS]: {
     name: 'Tickets', category: 'Support Systems', description: 'Creates private support channels with ticket types, questions, staff assignment, escalation, transcripts, and panels.',
@@ -140,6 +150,12 @@ const MODULE_SETUP_CATALOG = Object.freeze({
     managerCommand: '/level manager', setupCommand: '/level setup',
     nextSteps: ['Run `/level setup` to review XP and announcement behavior.', 'Add rewards with `/level role-add` if desired.', 'Add multiplier roles with `/level multiplier-add` if desired.', 'Post member-facing info with `/level info`.'],
     usefulCommands: ['/level manager', '/level setup', '/level role-add', '/level multiplier-add', '/level info']
+  },
+  [ModuleKeys.REFERRALS]: {
+    name: 'Referrals', category: 'Community Systems', description: 'Allows members to submit who referred them once and awards configured bonus XP to the referring member.',
+    managerCommand: '/referral manager', setupCommand: '/referral setup',
+    nextSteps: ['Run `/referral setup` to set the XP bonus.', 'Members use `/referral submit` once.', 'Moderators can use `/referral set` for retroactive referrals.', 'Use `/referral leaderboard` to show lifetime referrals.'],
+    usefulCommands: ['/referral setup', '/referral submit', '/referral set', '/referral leaderboard', '/referral manager']
   },
   [ModuleKeys.SERVER_STATS]: {
     name: 'Server Stats', category: 'Community Systems', description: 'Maintains optional member/human/bot/voice count channels.',
@@ -535,6 +551,11 @@ async function getModuleStatus(guildId, row) {
     return { moduleKey: row.module_key, core: false, state: 'NEEDS_CONFIG', emoji: '🟣', label: 'Needs Setup', note: 'Run /lockdown setup' };
   }
 
+  if (row.module_key === 'TEMP_ROLES') {
+    const active = await query(`SELECT COUNT(*)::int AS count FROM temporary_role_assignments WHERE guild_id = $1 AND active = true`, [guildId]).catch(() => ({ rows: [{ count: 0 }] }));
+    return { moduleKey: row.module_key, core: false, state: 'READY', emoji: '✅', label: 'Ready', note: `${active.rows[0]?.count || 0} active` };
+  }
+
   if (row.module_key === 'WELCOME') {
     const [cfg, roles] = await Promise.all([
       query(`SELECT channel_id, enabled FROM welcome_configs WHERE guild_id = $1 LIMIT 1`, [guildId]).catch(() => ({ rows: [] })),
@@ -622,6 +643,17 @@ async function getModuleStatus(guildId, row) {
     if (config.channel_id && config.review_channel_id && config.panel_active) return { moduleKey: row.module_key, core: false, state: 'READY', emoji: '✅', label: 'Ready', note: `${count.rows[0]?.count || 0} suggestion(s)` };
     if (config.channel_id || config.review_channel_id) return { moduleKey: row.module_key, core: false, state: 'PARTIAL', emoji: '🟠', label: 'Partially Configured', note: 'Complete public/review channels and panel' };
     return { moduleKey: row.module_key, core: false, state: 'NEEDS_CONFIG', emoji: '🟣', label: 'Needs Setup', note: 'Run /suggestion setup' };
+  }
+
+  if (row.module_key === 'REFERRALS') {
+    const [cfg, count] = await Promise.all([
+      query(`SELECT enabled, referral_xp FROM referral_configs WHERE guild_id = $1 LIMIT 1`, [guildId]).catch(() => ({ rows: [] })),
+      query(`SELECT COUNT(*)::int AS count FROM referrals WHERE guild_id = $1`, [guildId]).catch(() => ({ rows: [{ count: 0 }] }))
+    ]);
+    const config = cfg.rows[0];
+    if (!config) return { moduleKey: row.module_key, core: false, state: 'NEEDS_CONFIG', emoji: '🟣', label: 'Needs Setup', note: 'Run /referral setup' };
+    if (config.enabled === false) return { moduleKey: row.module_key, core: false, state: 'DISABLED', emoji: '⏸️', label: 'Disabled', note: 'Referral submissions off' };
+    return { moduleKey: row.module_key, core: false, state: 'READY', emoji: '✅', label: 'Ready', note: `${count.rows[0]?.count || 0} referral(s)` };
   }
 
   if (row.module_key === 'FAQ') {
@@ -937,6 +969,7 @@ async function buildCommunityPanel(guildId) {
   const gamesPayload = await communityGames.buildManagerPanel(guildId).catch(() => ({ embeds: [{ data: { description: 'Community games not configured.' } }] }));
   const faqPayload = await faq.buildManagerPanel(guildId).catch(() => ({ embeds: [{ data: { description: 'FAQ not configured.' } }] }));
   const suggestionPayload = await suggestions.buildManagerPanel(guildId).catch(() => ({ embeds: [{ data: { description: 'Suggestions not configured.' } }] }));
+  const referralPayload = await referrals.buildManagerPanel(guildId).catch(() => ({ embeds: [{ data: { description: 'Referrals not configured.' } }] }));
   const statsPayload = await serverStats.buildManagerPanel({ id: guildId, memberCount: 0, members: { fetch: async () => null, cache: { size: 0, filter: () => ({ size: 0 }) } }, channels: { cache: { filter: () => ({ reduce: () => 0 }) } } }).catch(() => ({ embeds: [{ data: { description: 'Server stats not configured.' } }] }));
   const levelingPayload = await leveling.buildManagerPanel(guildId).catch(() => ({ embeds: [{ data: { description: 'Leveling not configured.' } }] }));
   const customPayload = await customCommands.buildManagerPanel(guildId).catch(() => ({ embeds: [{ data: { description: 'Custom commands not configured.' } }] }));
@@ -970,6 +1003,9 @@ async function buildCommunityPanel(guildId) {
       '**Suggestions**',
       compactCommunityText(suggestionPayload, 'No suggestion status available.'),
       '',
+      '**Referrals**',
+      compactCommunityText(referralPayload, 'No referral status available.'),
+      '',
       '**Server Stats**',
       compactCommunityText(statsPayload, 'No server stats status available.'),
       '',
@@ -999,6 +1035,7 @@ async function buildCommunityPanel(guildId) {
   ]);
   const rowThree = createButtonRow([
     createPanelButton(CustomIds.SuggestionsRefresh, 'Suggestions', ButtonStyle.Secondary),
+    createPanelButton(CustomIds.ReferralsRefresh, 'Referrals', ButtonStyle.Secondary),
     createPanelButton(CustomIds.SetupRefresh, 'Back to Setup', ButtonStyle.Primary, '↩️')
   ]);
   return { embeds: [embed], components: [rowOne, rowTwo, rowThree] };

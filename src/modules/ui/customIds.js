@@ -40,6 +40,8 @@ const CustomIds = Object.freeze({
   GamesConnectFour: 'slickbot:games:connect-four',
   FaqRefresh: 'slickbot:faq:refresh',
   SuggestionsRefresh: 'slickbot:suggestions:refresh',
+  ReferralsRefresh: 'slickbot:referrals:refresh',
+  TempRolesRefresh: 'slickbot:temp-roles:refresh',
   SuggestionSubmitOpen: 'slickbot:suggestions:submit-open',
   SuggestionSubmitModalPrefix: 'slickbot:modal:suggestions-submit:',
   SuggestionVoteTotalPrefix: 'slickbot:suggestions:vote-total:',

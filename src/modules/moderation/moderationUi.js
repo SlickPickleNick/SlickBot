@@ -10,7 +10,9 @@ const {
 const { CustomIds } = require('../ui/customIds');
 const { truncate } = require('../../utils/format');
 const { LockdownService } = require('../safety/lockdownService');
+const { TemporaryRoleService } = require('./tempRoleService');
 const lockdown = new LockdownService();
+const tempRoles = new TemporaryRoleService();
 
 async function buildModerationPanel(guildId) {
   const cases = await query(
@@ -23,6 +25,7 @@ async function buildModerationPanel(guildId) {
   );
 
   const lockdownStatus = await lockdown.getStatus(guildId).catch(() => ({ active: null, presets: [] }));
+  const tempRoleStats = await tempRoles.stats(guildId).catch(() => ({ active: 0, inactive: 0 }));
 
   const notes = await query(
     `SELECT COUNT(*)::int AS total FROM user_notes WHERE guild_id = $1 AND is_active = true`,
@@ -68,6 +71,10 @@ async function buildModerationPanel(guildId) {
       lockdownStatus.active ? `⚠️ Active lockdown: **${lockdownStatus.active.preset_name}**` : `✅ No active lockdown. Presets configured: **${lockdownStatus.presets.length || 0}**`,
       'Use `/lockdown manager` to configure emergency presets and restore controls.',
       '',
+      '**Temporary Roles**',
+      `Active temporary role assignments: **${tempRoleStats.active || 0}**`,
+      'Use `/temp-role add` to assign a role for a fixed duration.',
+      '',
       '**Setup Checklist**',
       logReady ? '• Logging is configured for moderation events.' : '• Set moderation logs with `/logging set-channel module:moderation channel:#logs`.',
       '• Review staff command access in `/permissions panel`.',
@@ -91,6 +98,7 @@ async function buildModerationPanel(guildId) {
     createPanelButton(CustomIds.ModerationRefresh, 'Refresh', ButtonStyle.Primary, '🔄'),
     createPanelButton(CustomIds.CasesRefresh, 'Recent Cases', ButtonStyle.Secondary, '🗂️'),
     createPanelButton(CustomIds.LockdownRefresh, 'Lockdown', ButtonStyle.Secondary),
+    createPanelButton(CustomIds.TempRolesRefresh, 'Temp Roles', ButtonStyle.Secondary),
     createPanelButton(CustomIds.SetupRefresh, 'Back to Setup', ButtonStyle.Secondary, '↩️')
   ]);
 

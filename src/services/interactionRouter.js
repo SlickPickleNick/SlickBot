@@ -23,6 +23,8 @@ const { LevelingService } = require('../modules/community/levelingService');
 const { CommunityGameService, GAME_KEYS } = require('../modules/community/gameService');
 const { FaqService } = require('../modules/community/faqService');
 const { SuggestionService } = require('../modules/community/suggestionService');
+const { ReferralService } = require('../modules/community/referralService');
+const { TemporaryRoleService } = require('../modules/moderation/tempRoleService');
 const { LockdownService } = require('../modules/safety/lockdownService');
 const { buildRoleManagerPanel, toggleRole } = require('../modules/community/rolePanelService');
 const { JoinCreateService } = require('../modules/voice/joinCreateService');
@@ -58,6 +60,8 @@ const customCommands = new CustomCommandService();
 const communityGames = new CommunityGameService();
 const faq = new FaqService();
 const suggestions = new SuggestionService();
+const referrals = new ReferralService();
+const tempRoles = new TemporaryRoleService();
 const lockdown = new LockdownService();
 
 async function handleComponentInteraction(interaction, ctx) {
@@ -493,6 +497,18 @@ async function handleButton(interaction, ctx) {
   if (id === CustomIds.SuggestionsRefresh) {
     if (!(await requireAction(interaction, ctx, ActionKeys.SuggestionsView, ModuleKeys.SUGGESTIONS))) return true;
     await updatePanel(interaction, await suggestions.buildManagerPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id === CustomIds.ReferralsRefresh) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.ReferralsView, ModuleKeys.REFERRALS))) return true;
+    await updatePanel(interaction, await referrals.buildManagerPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id === CustomIds.TempRolesRefresh) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.TempRolesView, ModuleKeys.TEMP_ROLES))) return true;
+    await updatePanel(interaction, await tempRoles.buildManagerPanel(interaction.guildId));
     return true;
   }
 
@@ -1538,7 +1554,7 @@ async function requireAnySupportAction(interaction, ctx) {
 
 
 async function requireAnyCommunityAction(interaction, ctx) {
-  const checks = [[ActionKeys.WelcomeView, ModuleKeys.WELCOME], [ActionKeys.RolePanelsView, ModuleKeys.REACTION_ROLES], [ActionKeys.GiveawaysView, ModuleKeys.GIVEAWAYS], [ActionKeys.BirthdaysView, ModuleKeys.BIRTHDAYS], [ActionKeys.LevelingView, ModuleKeys.LEVELING], [ActionKeys.GamesView, ModuleKeys.COMMUNITY_GAMES], [ActionKeys.FaqView, ModuleKeys.FAQ], [ActionKeys.SuggestionsView, ModuleKeys.SUGGESTIONS], [ActionKeys.ScheduledMessagesView, ModuleKeys.SCHEDULED_MESSAGES], [ActionKeys.ServerStatsView, ModuleKeys.SERVER_STATS], [ActionKeys.CustomCommandsView, ModuleKeys.CUSTOM_COMMANDS], [ActionKeys.JoinCreateView, ModuleKeys.JOIN_TO_CREATE]];
+  const checks = [[ActionKeys.WelcomeView, ModuleKeys.WELCOME], [ActionKeys.RolePanelsView, ModuleKeys.REACTION_ROLES], [ActionKeys.GiveawaysView, ModuleKeys.GIVEAWAYS], [ActionKeys.BirthdaysView, ModuleKeys.BIRTHDAYS], [ActionKeys.LevelingView, ModuleKeys.LEVELING], [ActionKeys.GamesView, ModuleKeys.COMMUNITY_GAMES], [ActionKeys.FaqView, ModuleKeys.FAQ], [ActionKeys.SuggestionsView, ModuleKeys.SUGGESTIONS], [ActionKeys.ReferralsView, ModuleKeys.REFERRALS], [ActionKeys.ScheduledMessagesView, ModuleKeys.SCHEDULED_MESSAGES], [ActionKeys.ServerStatsView, ModuleKeys.SERVER_STATS], [ActionKeys.CustomCommandsView, ModuleKeys.CUSTOM_COMMANDS], [ActionKeys.JoinCreateView, ModuleKeys.JOIN_TO_CREATE]];
   for (const [action, moduleKey] of checks) {
     const result = await ctx.permissions.checkInteraction(interaction, action, moduleKey);
     if (result.allowed) return true;

@@ -146,6 +146,15 @@ const ActionKeys = Object.freeze({
   SuggestionsReveal: 'suggestions.reveal',
   SuggestionsReset: 'suggestions.reset',
 
+  ReferralsSubmit: 'referrals.submit',
+  ReferralsView: 'referrals.view',
+  ReferralsManage: 'referrals.manage',
+  ReferralsConfigure: 'referrals.configure',
+
+  TempRolesView: 'temp-roles.view',
+  TempRolesAdd: 'temp-roles.add',
+  TempRolesRemove: 'temp-roles.remove',
+
   PanelsConfigure: 'panels.configure',
 
   ServerReset: 'server.reset'
@@ -314,6 +323,15 @@ const defaultActionLevels = Object.freeze({
   [ActionKeys.SuggestionsReveal]: PermissionLevels.SENIOR_MODERATOR,
   [ActionKeys.SuggestionsReset]: PermissionLevels.OWNER,
 
+  [ActionKeys.ReferralsSubmit]: PermissionLevels.EVERYONE,
+  [ActionKeys.ReferralsView]: PermissionLevels.EVERYONE,
+  [ActionKeys.ReferralsManage]: PermissionLevels.MODERATOR,
+  [ActionKeys.ReferralsConfigure]: PermissionLevels.SENIOR_MODERATOR,
+
+  [ActionKeys.TempRolesView]: PermissionLevels.MODERATOR,
+  [ActionKeys.TempRolesAdd]: PermissionLevels.MODERATOR,
+  [ActionKeys.TempRolesRemove]: PermissionLevels.MODERATOR,
+
   [ActionKeys.ServerReset]: PermissionLevels.OWNER
 });
 
@@ -340,6 +358,8 @@ const defaultModuleLevels = Object.freeze({
   [ModuleKeys.COMMUNITY_GAMES]: PermissionLevels.EVERYONE,
   [ModuleKeys.FAQ]: PermissionLevels.MODERATOR,
   [ModuleKeys.SUGGESTIONS]: PermissionLevels.EVERYONE,
+  [ModuleKeys.REFERRALS]: PermissionLevels.EVERYONE,
+  [ModuleKeys.TEMP_ROLES]: PermissionLevels.MODERATOR,
   [ModuleKeys.UTILITY]: PermissionLevels.EVERYONE
 });
 
@@ -359,12 +379,14 @@ const defaultPublicActions = Object.freeze([
   ActionKeys.TempVoiceManage,
   ActionKeys.GamesPlay,
   ActionKeys.SuggestionsSubmit,
-  ActionKeys.SuggestionsVote
+  ActionKeys.SuggestionsVote,
+  ActionKeys.ReferralsSubmit,
+  ActionKeys.ReferralsView
 ]);
 
 const defaultTeamPermissions = Object.freeze(Object.values(ActionKeys));
 
-const PERMISSION_DEFAULTS_VERSION = '0.9.2';
+const PERMISSION_DEFAULTS_VERSION = '0.9.3';
 
 module.exports = {
   ActionKeys,

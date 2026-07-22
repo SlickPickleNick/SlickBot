@@ -1591,6 +1591,61 @@ await query(`CREATE INDEX IF NOT EXISTS idx_bot_presence_guild ON bot_presence_s
 
   await query(`CREATE INDEX IF NOT EXISTS idx_role_panel_options_panel ON role_panel_options(panel_id, active);`);
 
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS referral_configs (
+      guild_id TEXT PRIMARY KEY REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      enabled BOOLEAN NOT NULL DEFAULT true,
+      referral_xp INTEGER NOT NULL DEFAULT 100,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS referrals (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      referee_user_id TEXT NOT NULL,
+      referee_user_tag TEXT,
+      referrer_user_id TEXT NOT NULL,
+      referrer_user_tag TEXT,
+      submitted_by_user_id TEXT,
+      source TEXT NOT NULL DEFAULT 'SELF_SUBMIT',
+      xp_awarded INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (guild_id, referee_user_id)
+    );
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS temporary_role_assignments (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL,
+      user_tag TEXT,
+      role_id TEXT NOT NULL,
+      assigned_by_user_id TEXT,
+      assigned_by_tag TEXT,
+      removed_by_user_id TEXT,
+      reason TEXT,
+      remove_reason TEXT,
+      remove_status TEXT,
+      expires_at TIMESTAMPTZ NOT NULL,
+      active BOOLEAN NOT NULL DEFAULT true,
+      removed_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await query(`CREATE INDEX IF NOT EXISTS idx_referrals_guild_referrer ON referrals(guild_id, referrer_user_id);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_referrals_guild_referee ON referrals(guild_id, referee_user_id);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_temp_roles_due ON temporary_role_assignments(active, expires_at);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_temp_roles_guild_user ON temporary_role_assignments(guild_id, user_id, active);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_temp_roles_guild_role ON temporary_role_assignments(guild_id, role_id, active);`);
+
 }
 
 if (require.main === module) {

@@ -70,6 +70,9 @@ const HELP_CATALOG = Object.freeze([
   { moduleKey: ModuleKeys.MODERATION, actionKey: ActionKeys.CasesManage, command: '/case close|reopen', description: 'Close or reopen moderation cases.' },
   { moduleKey: ModuleKeys.MODERATION, actionKey: ActionKeys.UserNotesView, command: '/note list', description: 'View user notes.' },
   { moduleKey: ModuleKeys.MODERATION, actionKey: ActionKeys.UserNotesManage, command: '/note add|remove', description: 'Manage user notes.' },
+  { moduleKey: ModuleKeys.TEMP_ROLES, actionKey: ActionKeys.TempRolesView, command: '/temp-role active|list', description: 'Review active temporary role assignments.' },
+  { moduleKey: ModuleKeys.TEMP_ROLES, actionKey: ActionKeys.TempRolesAdd, command: '/temp-role add', description: 'Assign a role to a member for a fixed duration.' },
+  { moduleKey: ModuleKeys.TEMP_ROLES, actionKey: ActionKeys.TempRolesRemove, command: '/temp-role remove', description: 'Remove an active temporary role assignment early.' },
 
   { moduleKey: ModuleKeys.TICKETS, actionKey: ActionKeys.TicketsOpen, command: '/ticket open', description: 'Open a support ticket.' },
   { moduleKey: ModuleKeys.TICKETS, actionKey: ActionKeys.TicketsPanel, command: '/ticket manager', description: 'Open the ticket manager.' },
@@ -140,6 +143,11 @@ const HELP_CATALOG = Object.freeze([
   { moduleKey: ModuleKeys.FAQ, actionKey: ActionKeys.FaqAnswer, command: 'FAQ Reply message command', description: 'Right-click a message and use Apps → FAQ Reply for a direct FAQ response.' },
   { moduleKey: ModuleKeys.FAQ, actionKey: ActionKeys.FaqView, command: '/faq status|panel', description: 'View Knowledge Base / FAQ setup status.' },
   { moduleKey: ModuleKeys.FAQ, actionKey: ActionKeys.FaqConfigure, command: '/faq setup|edit|refresh', description: 'Configure the FAQ forum and refresh the master index post.' },
+
+  { moduleKey: ModuleKeys.REFERRALS, actionKey: ActionKeys.ReferralsSubmit, command: '/referral submit', description: 'Record who referred you to the server. One time only.' },
+  { moduleKey: ModuleKeys.REFERRALS, actionKey: ActionKeys.ReferralsView, command: '/referral leaderboard|status', description: 'View lifetime referral standings or referral status.' },
+  { moduleKey: ModuleKeys.REFERRALS, actionKey: ActionKeys.ReferralsManage, command: '/referral manager|set', description: 'Review referrals or retroactively record a referral for a member.' },
+  { moduleKey: ModuleKeys.REFERRALS, actionKey: ActionKeys.ReferralsConfigure, command: '/referral setup', description: 'Configure referral XP and enabled state.' },
 
   { moduleKey: ModuleKeys.SCHEDULED_MESSAGES, actionKey: ActionKeys.ScheduledMessagesView, command: '/schedule manager|list', description: 'View scheduled messages.' },
   { moduleKey: ModuleKeys.SCHEDULED_MESSAGES, actionKey: ActionKeys.ScheduledMessagesConfigure, command: '/schedule setup', description: 'Configure schedule defaults.' },

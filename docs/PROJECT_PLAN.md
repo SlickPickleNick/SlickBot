@@ -1,6 +1,6 @@
 # SlickBot Project Plan
 
-## Current Version: 0.9.2
+## Current Version: 0.9.3
 
 SlickBot is being built as a modular all-in-one Discord server management bot for the SlickPickleNick community.
 
@@ -35,8 +35,44 @@ SlickBot is being built as a modular all-in-one Discord server management bot fo
 - Community Games: Counting, Tic-Tac-Toe, and Connect Four
 - Knowledge Base / FAQ
 - Suggestions
+- Referrals
+- Temporary Roles
 
 
+
+
+## v0.9.3 — Referrals and Temporary Roles
+
+### Referrals
+
+- Implemented the `REFERRALS` module under Community Systems.
+- Members can submit a one-time referral using `/referral submit`.
+- The selected referrer receives the configured bonus XP through the Leveling module when referrals are recorded.
+- Moderators can retroactively set referrals with `/referral set`; this uses the same one-time referral record for the referred member.
+- Added lifetime referral leaderboard, member referral status lookup, manager panel, setup command, logging, permission defaults, setup/module status, and `/bot test` diagnostics.
+
+### Temporary Roles
+
+- Implemented the `TEMP_ROLES` module under Moderation/Core controls.
+- Moderators can add temporary roles with `/temp-role add user role duration`, using durations such as `30m`, `2h`, `7d`, or `1w`.
+- Temporary role assignments are persisted in PostgreSQL and removed automatically when due, including after a bot restart.
+- Added `/temp-role remove`, `/temp-role list`, and `/temp-role active` for staff review and early removal.
+- Added temporary-role logging events, permission defaults, setup/module status, startup/interval expiration processing, and `/bot test` diagnostics.
+
+### Commands
+
+```text
+/referral setup
+/referral submit
+/referral leaderboard
+/referral status
+/referral manager
+/referral set
+/temp-role add
+/temp-role remove
+/temp-role list
+/temp-role active
+```
 
 
 ## v0.9.2 — Lockdown / Safety

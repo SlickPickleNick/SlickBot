@@ -1,4 +1,32 @@
 {
+  "0.9.3": {
+    "title": "SlickBot v0.9.3",
+    "summary": "Adds Referrals and Temporary Roles, with referral XP bonuses, a lifetime referral leaderboard, staff retroactive referral setting, and persistent timed role removals.",
+    "notes": [
+      "Added the REFERRALS module under Community Systems.",
+      "Members can use /referral submit once to record who referred them to the server.",
+      "The configured referrer earns a configurable bonus XP amount through the Leveling system when referrals are recorded.",
+      "Moderators can retroactively record a member referral with /referral set, preserving the one-time referral rule.",
+      "Added /referral leaderboard for a lifetime referrals leaderboard and /referral status for member referral lookup.",
+      "Added the TEMP_ROLES module under Moderation/Core safety controls.",
+      "Moderators can assign a role for a fixed duration with /temp-role add user role duration.",
+      "SlickBot stores temporary-role expirations in PostgreSQL and removes roles automatically when due, including after bot restarts.",
+      "Moderators can review active assignments with /temp-role active or /temp-role list and remove assignments early with /temp-role remove.",
+      "Added database migrations, permission actions, logging events, setup/module status, diagnostics, command registration, and release documentation for both modules."
+    ],
+    "commands": [
+      "/referral setup",
+      "/referral submit",
+      "/referral leaderboard",
+      "/referral status",
+      "/referral manager",
+      "/referral set",
+      "/temp-role add",
+      "/temp-role remove",
+      "/temp-role list",
+      "/temp-role active"
+    ]
+  },
   "0.9.2": {
     "title": "SlickBot v0.9.2",
     "summary": "Adds the Lockdown / Safety module with named presets, @everyone-only channel permission lockdowns, persisted permission snapshots, restart-safe restoration, announcement embeds, and reset support.",

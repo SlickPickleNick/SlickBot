@@ -4,8 +4,43 @@ SlickBot is an all-in-one Discord server management bot built for the SlickPickl
 
 ## Version
 
-Current package: **v0.9.2**
+Current package: **v0.9.3**
 
+
+## v0.9.3 Updates
+
+### Referrals
+
+- Added the **Referrals** module under Community Systems.
+- Members can submit who referred them with `/referral submit`. This is one-time only per member.
+- Referrers earn a configurable server XP bonus through the Leveling system when referrals are recorded.
+- Moderators can retroactively record referrals with `/referral set` so older referrals still count toward the one-time referral record.
+- Added a lifetime referral leaderboard with `/referral leaderboard`.
+- Added `/referral status`, `/referral manager`, and `/referral setup`.
+
+### Temporary Roles
+
+- Added the **Temporary Roles** module under Moderation/Core controls.
+- Moderators can assign a role for a fixed duration with `/temp-role add user:@User role:@Role duration:2h`.
+- SlickBot stores temporary role assignments in PostgreSQL and removes roles automatically when they expire, including after bot restarts.
+- Moderators can review active assignments with `/temp-role active` and `/temp-role list`.
+- Moderators can remove an active temporary role assignment early with `/temp-role remove`.
+- Added permission actions, logging events, setup/module status, `/bot test` diagnostics, command registration, and database migrations for both modules.
+
+Updated commands:
+
+```text
+/referral setup
+/referral submit
+/referral leaderboard
+/referral status
+/referral manager
+/referral set
+/temp-role add
+/temp-role remove
+/temp-role list
+/temp-role active
+```
 
 ## v0.9.2 Updates
 

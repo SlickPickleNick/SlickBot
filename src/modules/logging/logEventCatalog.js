@@ -114,6 +114,18 @@ const LogModuleCatalog = Object.freeze([
     defaultDelivery: 'IMMEDIATE'
   },
   {
+    key: 'referrals',
+    label: 'Referrals',
+    description: 'Referral submissions, staff referral setting, and referral XP awards.',
+    defaultDelivery: 'IMMEDIATE'
+  },
+  {
+    key: 'temp-roles',
+    label: 'Temporary Roles',
+    description: 'Temporary role assignment, manual removal, automatic expiration, and errors.',
+    defaultDelivery: 'IMMEDIATE'
+  },
+  {
     key: 'server-stats',
     label: 'Server Stats',
     description: 'Member, human, bot, and voice counter channel updates.',
@@ -231,6 +243,14 @@ const LogEventCatalog = Object.freeze([
   { key: 'suggestion-review', moduleKey: 'suggestions', label: 'Suggestion Reviewed', description: 'Staff changed a suggestion review status.', defaultDelivery: 'IMMEDIATE' },
   { key: 'suggestion-note', moduleKey: 'suggestions', label: 'Suggestion Details Added', description: 'Staff added details to a suggestion.', defaultDelivery: 'IMMEDIATE' },
   { key: 'suggestion-error', moduleKey: 'suggestions', label: 'Suggestion Error', description: 'Suggestion processing failed.', defaultDelivery: 'IMMEDIATE' },
+
+  { key: 'referral-config', moduleKey: 'referrals', label: 'Referral Config', description: 'Referral settings changed.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'referral-submit', moduleKey: 'referrals', label: 'Referral Submitted', description: 'A referral was submitted or set by staff.', defaultDelivery: 'IMMEDIATE' },
+
+  { key: 'temp-role-add', moduleKey: 'temp-roles', label: 'Temporary Role Added', description: 'A temporary role was assigned.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'temp-role-remove', moduleKey: 'temp-roles', label: 'Temporary Role Removed', description: 'A temporary role was manually removed.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'temp-role-expire', moduleKey: 'temp-roles', label: 'Temporary Role Expired', description: 'A temporary role expired and was removed.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'temp-role-error', moduleKey: 'temp-roles', label: 'Temporary Role Error', description: 'A temporary role action or expiration failed.', defaultDelivery: 'IMMEDIATE' },
 
   { key: 'server-stats-config', moduleKey: 'server-stats', label: 'Server Stats Config', description: 'Server stats configuration changed.', defaultDelivery: 'IMMEDIATE' },
   { key: 'server-stats-update', moduleKey: 'server-stats', label: 'Server Stats Updated', description: 'Server stat counter channels were refreshed.', defaultDelivery: 'IMMEDIATE' },

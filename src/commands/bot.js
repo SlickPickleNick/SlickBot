@@ -122,6 +122,14 @@ const MODULE_CHECKS = {
     { name: 'Suggestions', sql: 'SELECT COUNT(*)::int AS count FROM suggestions WHERE guild_id = $1' },
     { name: 'Suggestion votes', sql: 'SELECT COUNT(*)::int AS count FROM suggestion_votes WHERE guild_id = $1' },
     { name: 'Suggestion review indexes', sql: 'SELECT COUNT(*)::int AS count FROM suggestion_review_indexes WHERE guild_id = $1' }
+  ],
+  [ModuleKeys.REFERRALS]: [
+    { name: 'Referral config', sql: 'SELECT COUNT(*)::int AS count FROM referral_configs WHERE guild_id = $1' },
+    { name: 'Referrals', sql: 'SELECT COUNT(*)::int AS count FROM referrals WHERE guild_id = $1' }
+  ],
+  [ModuleKeys.TEMP_ROLES]: [
+    { name: 'Temporary assignments', sql: 'SELECT COUNT(*)::int AS count FROM temporary_role_assignments WHERE guild_id = $1' },
+    { name: 'Active temporary roles', sql: 'SELECT COUNT(*)::int AS count FROM temporary_role_assignments WHERE guild_id = $1 AND active = true' }
   ]
 };
 
@@ -144,7 +152,9 @@ const MODULE_FIXES = Object.freeze({
   [ModuleKeys.JOIN_TO_CREATE]: 'Run `/join-create create-hub` or `/join-create setup` to configure a hub channel.',
   [ModuleKeys.COMMUNITY_GAMES]: 'Run `/games manager`, configure games, enable each game separately, then post a launcher with `/games panel post` if desired.',
   [ModuleKeys.FAQ]: 'Run `/faq setup` with a forum channel, create FAQ posts in that forum, then run `/faq refresh`.',
-  [ModuleKeys.SUGGESTIONS]: 'Run `/suggestion setup`, add/review categories, post a launcher with `/suggestion panel post`, and create a staff index with `/suggestion review-index`.'
+  [ModuleKeys.SUGGESTIONS]: 'Run `/suggestion setup`, add/review categories, post a launcher with `/suggestion panel post`, and create a staff index with `/suggestion review-index`.',
+  [ModuleKeys.REFERRALS]: 'Run `/referral setup`, then members can use `/referral submit` and staff can use `/referral set`.',
+  [ModuleKeys.TEMP_ROLES]: 'Use `/temp-role add` to assign a role temporarily and `/temp-role active` to review active assignments.'
 });
 
 function statusIcon(status) {

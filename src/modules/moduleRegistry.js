@@ -21,6 +21,8 @@ const ModuleKeys = Object.freeze({
   COMMUNITY_GAMES: 'COMMUNITY_GAMES',
   FAQ: 'FAQ',
   SUGGESTIONS: 'SUGGESTIONS',
+  REFERRALS: 'REFERRALS',
+  TEMP_ROLES: 'TEMP_ROLES',
   UTILITY: 'UTILITY'
 });
 
@@ -49,6 +51,8 @@ const defaultModules = [
   { key: ModuleKeys.COMMUNITY_GAMES, enabled: true },
   { key: ModuleKeys.FAQ, enabled: true },
   { key: ModuleKeys.SUGGESTIONS, enabled: true },
+  { key: ModuleKeys.REFERRALS, enabled: true },
+  { key: ModuleKeys.TEMP_ROLES, enabled: true },
   { key: ModuleKeys.UTILITY, enabled: false }
 ];
 
@@ -79,7 +83,9 @@ const implementedModules = Object.freeze([
   ModuleKeys.JOIN_TO_CREATE,
   ModuleKeys.COMMUNITY_GAMES,
   ModuleKeys.FAQ,
-  ModuleKeys.SUGGESTIONS
+  ModuleKeys.SUGGESTIONS,
+  ModuleKeys.REFERRALS,
+  ModuleKeys.TEMP_ROLES
 ]);
 
 function isImplementedModule(moduleKey) {

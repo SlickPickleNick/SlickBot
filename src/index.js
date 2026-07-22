@@ -22,6 +22,7 @@ const { JoinCreateService } = require('./modules/voice/joinCreateService');
 const { LevelingService } = require('./modules/community/levelingService');
 const { CommunityGameService } = require('./modules/community/gameService');
 const { FaqService } = require('./modules/community/faqService');
+const { TemporaryRoleService } = require('./modules/moderation/tempRoleService');
 const { handleReactionRole, syncAllPublishedReactionPanels } = require('./modules/community/rolePanelService');
 const { handleComponentInteraction } = require('./services/interactionRouter');
 const { ActionKeys } = require('./modules/permissions/actionKeys');
@@ -57,6 +58,7 @@ const joinCreate = new JoinCreateService();
 const leveling = new LevelingService();
 const communityGames = new CommunityGameService();
 const faq = new FaqService();
+const tempRoles = new TemporaryRoleService();
 const healthServer = startHealthServer(client);
 
 client.once(Events.ClientReady, async (readyClient) => {
@@ -97,6 +99,11 @@ client.once(Events.ClientReady, async (readyClient) => {
     communityGames.expireStaleSessions(readyClient).catch((error) => console.error('Failed to expire stale community games:', error));
   }, 5 * 60 * 1000);
   await communityGames.expireStaleSessions(readyClient).catch((error) => console.error('Failed to expire stale community games:', error));
+
+  setInterval(() => {
+    tempRoles.processExpired(readyClient, logger).catch((error) => console.error('Failed to process temporary role expirations:', error));
+  }, 60 * 1000);
+  await tempRoles.processExpired(readyClient, logger).catch((error) => console.error('Failed to process temporary role expirations:', error));
 
   setInterval(() => {
     for (const guild of readyClient.guilds.cache.values()) {
