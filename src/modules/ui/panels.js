@@ -27,6 +27,7 @@ const { FaqService } = require('../community/faqService');
 const { SuggestionService } = require('../community/suggestionService');
 const { ReferralService } = require('../community/referralService');
 const { TemporaryRoleService } = require('../moderation/tempRoleService');
+const { AchievementService } = require('../community/achievementService');
 const { LockdownService } = require('../safety/lockdownService');
 const giveaways = new GiveawayService();
 const birthdays = new BirthdayService();
@@ -40,6 +41,7 @@ const faq = new FaqService();
 const suggestions = new SuggestionService();
 const referrals = new ReferralService();
 const tempRoles = new TemporaryRoleService();
+const achievements = new AchievementService();
 const lockdown = new LockdownService();
 
 const STATUS_META = Object.freeze({
@@ -55,7 +57,7 @@ const STATUS_META = Object.freeze({
 const MODULE_CATEGORIES = Object.freeze([
   { key: 'CORE', label: 'Core Setup', modules: [ModuleKeys.PERMISSIONS, ModuleKeys.LOGGING, ModuleKeys.STATUS, ModuleKeys.MODERATION, ModuleKeys.LOCKDOWN, ModuleKeys.TEMP_ROLES] },
   { key: 'SUPPORT', label: 'Support Systems', modules: [ModuleKeys.TICKETS, ModuleKeys.REPORTS, ModuleKeys.APPLICATIONS, ModuleKeys.APPEALS] },
-  { key: 'COMMUNITY', label: 'Community Systems', modules: [ModuleKeys.WELCOME, ModuleKeys.REACTION_ROLES, ModuleKeys.GIVEAWAYS, ModuleKeys.BIRTHDAYS, ModuleKeys.LEVELING, ModuleKeys.COMMUNITY_GAMES, ModuleKeys.FAQ, ModuleKeys.SUGGESTIONS, ModuleKeys.REFERRALS, ModuleKeys.SERVER_STATS, ModuleKeys.CUSTOM_COMMANDS, ModuleKeys.JOIN_TO_CREATE] },
+  { key: 'COMMUNITY', label: 'Community Systems', modules: [ModuleKeys.WELCOME, ModuleKeys.REACTION_ROLES, ModuleKeys.GIVEAWAYS, ModuleKeys.BIRTHDAYS, ModuleKeys.LEVELING, ModuleKeys.COMMUNITY_GAMES, ModuleKeys.FAQ, ModuleKeys.SUGGESTIONS, ModuleKeys.REFERRALS, ModuleKeys.ACHIEVEMENTS, ModuleKeys.SERVER_STATS, ModuleKeys.CUSTOM_COMMANDS, ModuleKeys.JOIN_TO_CREATE] },
   { key: 'AUTOMATION', label: 'Automation Systems', modules: [ModuleKeys.SCHEDULED_MESSAGES, ModuleKeys.BOT_UPDATES] },
   { key: 'BACKLOG', label: 'Coming Soon', modules: [ModuleKeys.UTILITY] }
 ]);
@@ -156,6 +158,12 @@ const MODULE_SETUP_CATALOG = Object.freeze({
     managerCommand: '/referral manager', setupCommand: '/referral setup',
     nextSteps: ['Run `/referral setup` to set the XP bonus.', 'Members use `/referral submit` once.', 'Moderators can use `/referral set` for retroactive referrals.', 'Use `/referral leaderboard` to show lifetime referrals.'],
     usefulCommands: ['/referral setup', '/referral submit', '/referral set', '/referral leaderboard', '/referral manager']
+  },
+  [ModuleKeys.ACHIEVEMENTS]: {
+    name: 'Achievements', category: 'Community Systems', description: 'Tracks server activity achievements with Bronze/Silver/Gold/Diamond tiers plus one-time unlocks for boosting and birthday setup.',
+    managerCommand: '/achievement manager', setupCommand: '/achievement setup',
+    nextSteps: ['Run `/achievement setup` to configure announcements and optional AFK exclusion.', 'Review standard Bronze/Silver/Gold/Diamond tiers with `/achievement list`.', 'Customize tier rewards with `/achievement tier-set`.', 'Configure one-time achievements with `/achievement one-time-config`.', 'Rename achievement categories with `/achievement rename`.', 'Ignore non-counting channels with `/achievement ignored-channel add`.'],
+    usefulCommands: ['/achievement manager', '/achievement setup', '/achievement list', '/achievement profile', '/achievement leaderboard', '/achievement tier-set', '/achievement one-time-config', '/achievement rename']
   },
   [ModuleKeys.SERVER_STATS]: {
     name: 'Server Stats', category: 'Community Systems', description: 'Maintains optional member/human/bot/voice count channels.',
@@ -656,6 +664,19 @@ async function getModuleStatus(guildId, row) {
     return { moduleKey: row.module_key, core: false, state: 'READY', emoji: '✅', label: 'Ready', note: `${count.rows[0]?.count || 0} referral(s)` };
   }
 
+  if (row.module_key === 'ACHIEVEMENTS') {
+    const [cfg, tiers, unlocks] = await Promise.all([
+      query(`SELECT enabled, announcement_channel_id FROM achievement_configs WHERE guild_id = $1 LIMIT 1`, [guildId]).catch(() => ({ rows: [] })),
+      query(`SELECT COUNT(*)::int AS count FROM achievement_tiers WHERE guild_id = $1 AND enabled = true`, [guildId]).catch(() => ({ rows: [{ count: 0 }] })),
+      query(`SELECT COUNT(*)::int AS count FROM achievement_unlocks WHERE guild_id = $1`, [guildId]).catch(() => ({ rows: [{ count: 0 }] }))
+    ]);
+    const config = cfg.rows[0];
+    if (!config) return { moduleKey: row.module_key, core: false, state: 'PARTIAL', emoji: '🟠', label: 'Partially Configured', note: `${tiers.rows[0]?.count || 0} default tier(s)` };
+    if (config.enabled === false) return { moduleKey: row.module_key, core: false, state: 'DISABLED', emoji: '⏸️', label: 'Disabled', note: 'Tracking off' };
+    if (config.announcement_channel_id) return { moduleKey: row.module_key, core: false, state: 'READY', emoji: '✅', label: 'Ready', note: `${unlocks.rows[0]?.count || 0} unlock(s)` };
+    return { moduleKey: row.module_key, core: false, state: 'PARTIAL', emoji: '🟠', label: 'Partially Configured', note: 'Tracking active; no announcement channel' };
+  }
+
   if (row.module_key === 'FAQ') {
     const cfg = await query(`SELECT forum_channel_id, master_thread_id, ticket_channel_id FROM faq_configs WHERE guild_id = $1 LIMIT 1`, [guildId]).catch(() => ({ rows: [] }));
     const config = cfg.rows[0] || {};
@@ -970,6 +991,7 @@ async function buildCommunityPanel(guildId) {
   const faqPayload = await faq.buildManagerPanel(guildId).catch(() => ({ embeds: [{ data: { description: 'FAQ not configured.' } }] }));
   const suggestionPayload = await suggestions.buildManagerPanel(guildId).catch(() => ({ embeds: [{ data: { description: 'Suggestions not configured.' } }] }));
   const referralPayload = await referrals.buildManagerPanel(guildId).catch(() => ({ embeds: [{ data: { description: 'Referrals not configured.' } }] }));
+  const achievementPayload = await achievements.buildManagerPanel(guildId).catch(() => ({ embeds: [{ data: { description: 'Achievements not configured.' } }] }));
   const statsPayload = await serverStats.buildManagerPanel({ id: guildId, memberCount: 0, members: { fetch: async () => null, cache: { size: 0, filter: () => ({ size: 0 }) } }, channels: { cache: { filter: () => ({ reduce: () => 0 }) } } }).catch(() => ({ embeds: [{ data: { description: 'Server stats not configured.' } }] }));
   const levelingPayload = await leveling.buildManagerPanel(guildId).catch(() => ({ embeds: [{ data: { description: 'Leveling not configured.' } }] }));
   const customPayload = await customCommands.buildManagerPanel(guildId).catch(() => ({ embeds: [{ data: { description: 'Custom commands not configured.' } }] }));
@@ -1006,6 +1028,9 @@ async function buildCommunityPanel(guildId) {
       '**Referrals**',
       compactCommunityText(referralPayload, 'No referral status available.'),
       '',
+      '**Achievements**',
+      compactCommunityText(achievementPayload, 'No achievement status available.'),
+      '',
       '**Server Stats**',
       compactCommunityText(statsPayload, 'No server stats status available.'),
       '',
@@ -1036,6 +1061,7 @@ async function buildCommunityPanel(guildId) {
   const rowThree = createButtonRow([
     createPanelButton(CustomIds.SuggestionsRefresh, 'Suggestions', ButtonStyle.Secondary),
     createPanelButton(CustomIds.ReferralsRefresh, 'Referrals', ButtonStyle.Secondary),
+    createPanelButton(CustomIds.AchievementsRefresh, 'Achievements', ButtonStyle.Secondary),
     createPanelButton(CustomIds.SetupRefresh, 'Back to Setup', ButtonStyle.Primary, '↩️')
   ]);
   return { embeds: [embed], components: [rowOne, rowTwo, rowThree] };

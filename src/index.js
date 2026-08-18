@@ -23,6 +23,7 @@ const { LevelingService } = require('./modules/community/levelingService');
 const { CommunityGameService } = require('./modules/community/gameService');
 const { FaqService } = require('./modules/community/faqService');
 const { TemporaryRoleService } = require('./modules/moderation/tempRoleService');
+const { AchievementService, ACHIEVEMENT_KEYS } = require('./modules/community/achievementService');
 const { handleReactionRole, syncAllPublishedReactionPanels } = require('./modules/community/rolePanelService');
 const { handleComponentInteraction } = require('./services/interactionRouter');
 const { ActionKeys } = require('./modules/permissions/actionKeys');
@@ -59,6 +60,7 @@ const leveling = new LevelingService();
 const communityGames = new CommunityGameService();
 const faq = new FaqService();
 const tempRoles = new TemporaryRoleService();
+const achievements = new AchievementService();
 const healthServer = startHealthServer(client);
 
 client.once(Events.ClientReady, async (readyClient) => {
@@ -104,6 +106,11 @@ client.once(Events.ClientReady, async (readyClient) => {
     tempRoles.processExpired(readyClient, logger).catch((error) => console.error('Failed to process temporary role expirations:', error));
   }, 60 * 1000);
   await tempRoles.processExpired(readyClient, logger).catch((error) => console.error('Failed to process temporary role expirations:', error));
+
+  setInterval(() => {
+    achievements.processVoiceHeartbeat(readyClient, logger).catch((error) => console.error('Failed to process achievement voice sessions:', error));
+  }, 5 * 60 * 1000);
+  await achievements.processVoiceHeartbeat(readyClient, logger).catch((error) => console.error('Failed to process achievement voice sessions:', error));
 
   setInterval(() => {
     for (const guild of readyClient.guilds.cache.values()) {
@@ -202,6 +209,20 @@ client.on(Events.GuildMemberUpdate, async (oldMember, newMember) => {
       metadata: { userId: newMember.id, addedRoles, removedRoles }
     }).catch((error) => console.error('Failed to log member role change:', error));
   }
+
+  const wasBoosting = Boolean(oldMember.premiumSince);
+  const isBoosting = Boolean(newMember.premiumSince);
+  if (wasBoosting !== isBoosting) {
+    const achievementsEnabled = await permissions.isModuleEnabled(newMember.guild.id, ModuleKeys.ACHIEVEMENTS).catch(() => false);
+    if (achievementsEnabled && isBoosting) {
+      await achievements.recordOneTimeAchievement({ guild: newMember.guild, user: newMember.user, achievementKey: ACHIEVEMENT_KEYS.SERVER_BOOSTING, logger })
+        .catch((error) => console.error('Failed to record server boost achievement:', error));
+    }
+    if (achievementsEnabled && !isBoosting) {
+      await achievements.revokeOneTimeAchievementIfConfigured({ guild: newMember.guild, userId: newMember.id, achievementKey: ACHIEVEMENT_KEYS.SERVER_BOOSTING, logger })
+        .catch((error) => console.error('Failed to process server boost achievement removal:', error));
+    }
+  }
 });
 
 client.on(Events.MessageDelete, async (message) => {
@@ -281,6 +302,10 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
     }
   }).catch((error) => console.error('Failed to log voice state:', error));
   const guild = newState.guild || oldState.guild;
+  const achievementsEnabled = await permissions.isModuleEnabled(guild.id, ModuleKeys.ACHIEVEMENTS).catch(() => false);
+  if (achievementsEnabled) {
+    await achievements.processVoiceStateUpdate(oldState, newState, logger).catch((error) => console.error('Failed to process achievement voice state:', error));
+  }
   const joinCreateEnabled = await permissions.isModuleEnabled(guild.id, 'JOIN_TO_CREATE').catch(() => false);
   if (joinCreateEnabled) {
     await joinCreate.handleVoiceState(oldState, newState, logger).catch((error) => console.error('Failed to process join-to-create voice state:', error));
@@ -332,6 +357,11 @@ client.on(Events.MessageCreate, async (message) => {
           }).catch(() => {});
         });
       }
+    }
+
+    const achievementsEnabled = await permissions.isModuleEnabled(message.guild.id, ModuleKeys.ACHIEVEMENTS).catch(() => false);
+    if (achievementsEnabled) {
+      await achievements.recordMessage(message, logger).catch((error) => console.error('Failed to process achievement message stat:', error));
     }
 
     const levelingEnabled = await permissions.isModuleEnabled(message.guild.id, 'LEVELING').catch(() => false);

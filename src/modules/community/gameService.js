@@ -6,6 +6,7 @@ const {
 } = require('discord.js');
 const { pool, query } = require('../../services/db');
 const { LevelingService } = require('./levelingService');
+const { AchievementService, ACHIEVEMENT_KEYS } = require('./achievementService');
 const {
   createBaseEmbed,
   createButtonRow,
@@ -336,6 +337,7 @@ function sessionExpired(session) {
 class CommunityGameService {
   constructor() {
     this.leveling = new LevelingService();
+    this.achievements = new AchievementService();
   }
 
   async ensureGameConfigs(guildId) {
@@ -1098,6 +1100,27 @@ Next Number: **${outcome.next.toString()}**`,
 
   async awardBoardGameCompletionXp({ guild, channel, session, draw, logger }) {
     if (!guild || !session || ![GAME_KEYS.TIC_TAC_TOE, GAME_KEYS.CONNECT_FOUR].includes(session.game_key)) return [];
+    for (const userId of [session.player_one_id, session.player_two_id]) {
+      await this.achievements.recordStat({
+        guild,
+        channel,
+        userId,
+        statKey: ACHIEVEMENT_KEYS.GAMES_PLAYED,
+        amount: 1,
+        logger
+      }).catch(() => []);
+    }
+    if (!draw && session.winner_user_id) {
+      await this.achievements.recordStat({
+        guild,
+        channel,
+        userId: session.winner_user_id,
+        statKey: ACHIEVEMENT_KEYS.GAMES_WON,
+        amount: 1,
+        logger
+      }).catch(() => []);
+    }
+
     const config = await this.getGameConfig(session.guild_id || guild.id, session.game_key).catch(() => null);
     const winXp = Math.max(0, Number(config?.win_xp ?? DEFAULT_BOARD_GAME_WIN_XP));
     if (!winXp) return [];

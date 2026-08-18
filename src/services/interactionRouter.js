@@ -25,6 +25,7 @@ const { FaqService } = require('../modules/community/faqService');
 const { SuggestionService } = require('../modules/community/suggestionService');
 const { ReferralService } = require('../modules/community/referralService');
 const { TemporaryRoleService } = require('../modules/moderation/tempRoleService');
+const { AchievementService, ACHIEVEMENT_KEYS } = require('../modules/community/achievementService');
 const { LockdownService } = require('../modules/safety/lockdownService');
 const { buildRoleManagerPanel, toggleRole } = require('../modules/community/rolePanelService');
 const { JoinCreateService } = require('../modules/voice/joinCreateService');
@@ -62,6 +63,7 @@ const faq = new FaqService();
 const suggestions = new SuggestionService();
 const referrals = new ReferralService();
 const tempRoles = new TemporaryRoleService();
+const achievements = new AchievementService();
 const lockdown = new LockdownService();
 
 async function handleComponentInteraction(interaction, ctx) {
@@ -512,6 +514,45 @@ async function handleButton(interaction, ctx) {
     return true;
   }
 
+  if (id === CustomIds.AchievementsRefresh) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.AchievementsView, ModuleKeys.ACHIEVEMENTS))) return true;
+    await updatePanel(interaction, await achievements.buildManagerPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.AchievementsHistoryPrefix)) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.AchievementsUse, ModuleKeys.ACHIEVEMENTS))) return true;
+    const raw = id.slice(CustomIds.AchievementsHistoryPrefix.length);
+    const [userId, pageText] = raw.split(':');
+    const user = await interaction.client.users.fetch(userId).catch(() => interaction.user);
+    await updatePanel(interaction, await achievements.buildHistoryPayload(interaction.guild, user, Number(pageText || 0)));
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.AchievementsResetConfirmPrefix) || id.startsWith(CustomIds.AchievementsResetCancelPrefix)) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.AchievementsReset, ModuleKeys.ACHIEVEMENTS))) return true;
+    const confirmed = id.startsWith(CustomIds.AchievementsResetConfirmPrefix);
+    const raw = id.slice((confirmed ? CustomIds.AchievementsResetConfirmPrefix : CustomIds.AchievementsResetCancelPrefix).length);
+    const [scope, targetId, actorId] = raw.split(':');
+    if (actorId && actorId !== interaction.user.id) {
+      return replyPrivate(interaction, { embeds: [createWarningEmbed('Reset Confirmation Locked', 'Only the staff member who opened this confirmation can use it.')], deleteAfterSeconds: 10 });
+    }
+    if (!confirmed) {
+      await updatePanel(interaction, { embeds: [createWarningEmbed('Achievement Reset Cancelled', 'No achievement data was changed.')], components: [] });
+      return true;
+    }
+    await achievements.reset({ guildId: interaction.guildId, scope, userId: targetId === 'server' ? null : targetId });
+    await ctx.logger.log({
+      guildId: interaction.guildId,
+      eventKey: 'achievement-config',
+      title: 'Achievements Reset',
+      body: `Reset By: <@${interaction.user.id}>\nScope: **${scope}**${targetId && targetId !== 'server' ? `\nUser: <@${targetId}>` : ''}`,
+      actorUserId: interaction.user.id
+    }).catch(() => {});
+    await updatePanel(interaction, { embeds: [createSuccessEmbed('Achievement Reset Complete', scope === 'server' ? 'Server achievement setup and tracked data were cleared.' : `Achievement data was cleared for <@${targetId}>.`)], components: [] });
+    return true;
+  }
+
   if (id === CustomIds.WelcomeRefresh) {
     if (!(await requireAction(interaction, ctx, ActionKeys.WelcomeView, ModuleKeys.WELCOME))) return true;
     await updatePanel(interaction, withSetupSubheader(await buildWelcomePanel(interaction.guildId), 'SlickBot Community Center', 'Welcome / Auto Roles'));
@@ -634,6 +675,7 @@ async function handleButton(interaction, ctx) {
     birthdays.cancelSetupSession(sessionId);
     if (!result.ok) return updatePanel(interaction, { embeds: [createWarningEmbed('Birthday Not Saved', result.reason)], components: [] });
     await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'birthday-profile', title: 'Birthday Saved', body: `User: <@${interaction.user.id}>\nBirthday: **${require('../modules/community/birthdayService').formatBirthday(result.profile.birth_month, result.profile.birth_day)}**`, actorUserId: interaction.user.id }).catch(() => {});
+    await achievements.recordOneTimeAchievement({ guild: interaction.guild, user: interaction.user, achievementKey: ACHIEVEMENT_KEYS.HAPPY_BIRTHDAY, logger: ctx.logger }).catch(() => {});
     await updatePanel(interaction, { embeds: [createSuccessEmbed('Birthday Saved', `Your birthday was saved for **${require('../modules/community/birthdayService').formatBirthday(result.profile.birth_month, result.profile.birth_day)}** with timezone **${result.profile.timezone || 'server default'}**.`)], components: [] });
     return true;
   }
@@ -1554,7 +1596,7 @@ async function requireAnySupportAction(interaction, ctx) {
 
 
 async function requireAnyCommunityAction(interaction, ctx) {
-  const checks = [[ActionKeys.WelcomeView, ModuleKeys.WELCOME], [ActionKeys.RolePanelsView, ModuleKeys.REACTION_ROLES], [ActionKeys.GiveawaysView, ModuleKeys.GIVEAWAYS], [ActionKeys.BirthdaysView, ModuleKeys.BIRTHDAYS], [ActionKeys.LevelingView, ModuleKeys.LEVELING], [ActionKeys.GamesView, ModuleKeys.COMMUNITY_GAMES], [ActionKeys.FaqView, ModuleKeys.FAQ], [ActionKeys.SuggestionsView, ModuleKeys.SUGGESTIONS], [ActionKeys.ReferralsView, ModuleKeys.REFERRALS], [ActionKeys.ScheduledMessagesView, ModuleKeys.SCHEDULED_MESSAGES], [ActionKeys.ServerStatsView, ModuleKeys.SERVER_STATS], [ActionKeys.CustomCommandsView, ModuleKeys.CUSTOM_COMMANDS], [ActionKeys.JoinCreateView, ModuleKeys.JOIN_TO_CREATE]];
+  const checks = [[ActionKeys.WelcomeView, ModuleKeys.WELCOME], [ActionKeys.RolePanelsView, ModuleKeys.REACTION_ROLES], [ActionKeys.GiveawaysView, ModuleKeys.GIVEAWAYS], [ActionKeys.BirthdaysView, ModuleKeys.BIRTHDAYS], [ActionKeys.LevelingView, ModuleKeys.LEVELING], [ActionKeys.GamesView, ModuleKeys.COMMUNITY_GAMES], [ActionKeys.FaqView, ModuleKeys.FAQ], [ActionKeys.SuggestionsView, ModuleKeys.SUGGESTIONS], [ActionKeys.ReferralsView, ModuleKeys.REFERRALS], [ActionKeys.AchievementsView, ModuleKeys.ACHIEVEMENTS], [ActionKeys.ScheduledMessagesView, ModuleKeys.SCHEDULED_MESSAGES], [ActionKeys.ServerStatsView, ModuleKeys.SERVER_STATS], [ActionKeys.CustomCommandsView, ModuleKeys.CUSTOM_COMMANDS], [ActionKeys.JoinCreateView, ModuleKeys.JOIN_TO_CREATE]];
   for (const [action, moduleKey] of checks) {
     const result = await ctx.permissions.checkInteraction(interaction, action, moduleKey);
     if (result.allowed) return true;

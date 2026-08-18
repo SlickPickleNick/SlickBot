@@ -1646,6 +1646,135 @@ await query(`CREATE INDEX IF NOT EXISTS idx_bot_presence_guild ON bot_presence_s
   await query(`CREATE INDEX IF NOT EXISTS idx_temp_roles_guild_user ON temporary_role_assignments(guild_id, user_id, active);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_temp_roles_guild_role ON temporary_role_assignments(guild_id, role_id, active);`);
 
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS achievement_configs (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT UNIQUE NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      enabled BOOLEAN NOT NULL DEFAULT true,
+      announcement_channel_id TEXT,
+      afk_channel_id TEXT,
+      unlock_message TEXT NOT NULL DEFAULT '{user} unlocked **{achievement} — Level {level}**!',
+      unlock_image_url TEXT,
+      standard_tiers_version TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS achievement_definitions (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      achievement_key TEXT NOT NULL,
+      name TEXT NOT NULL,
+      description TEXT,
+      stat_key TEXT NOT NULL,
+      achievement_type TEXT NOT NULL DEFAULT 'TIERED',
+      one_time_xp_reward INTEGER NOT NULL DEFAULT 0,
+      one_time_role_reward_id TEXT,
+      remove_when_condition_ends BOOLEAN NOT NULL DEFAULT false,
+      enabled BOOLEAN NOT NULL DEFAULT true,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (guild_id, achievement_key)
+    );
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS achievement_tiers (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      achievement_key TEXT NOT NULL,
+      tier_level INTEGER NOT NULL,
+      tier_name TEXT,
+      threshold_value INTEGER NOT NULL,
+      xp_reward INTEGER NOT NULL DEFAULT 0,
+      role_reward_id TEXT,
+      enabled BOOLEAN NOT NULL DEFAULT true,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (guild_id, achievement_key, tier_level)
+    );
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS achievement_user_stats (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL,
+      user_tag TEXT,
+      messages_sent INTEGER NOT NULL DEFAULT 0,
+      voice_minutes INTEGER NOT NULL DEFAULT 0,
+      referrals INTEGER NOT NULL DEFAULT 0,
+      suggestions_submitted INTEGER NOT NULL DEFAULT 0,
+      games_played INTEGER NOT NULL DEFAULT 0,
+      games_won INTEGER NOT NULL DEFAULT 0,
+      first_message_at TIMESTAMPTZ,
+      first_voice_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (guild_id, user_id)
+    );
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS achievement_unlocks (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL,
+      user_tag TEXT,
+      achievement_key TEXT NOT NULL,
+      tier_level INTEGER NOT NULL,
+      tier_name TEXT,
+      threshold_value INTEGER NOT NULL,
+      xp_rewarded INTEGER NOT NULL DEFAULT 0,
+      role_reward_id TEXT,
+      unlocked_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (guild_id, user_id, achievement_key, tier_level)
+    );
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS achievement_voice_sessions (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL,
+      user_tag TEXT,
+      channel_id TEXT NOT NULL,
+      joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (guild_id, user_id)
+    );
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS achievement_ignored_message_channels (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      channel_id TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (guild_id, channel_id)
+    );
+  `);
+
+
+  await query(`ALTER TABLE achievement_configs ADD COLUMN IF NOT EXISTS standard_tiers_version TEXT;`);
+  await query(`ALTER TABLE achievement_definitions ADD COLUMN IF NOT EXISTS achievement_type TEXT NOT NULL DEFAULT 'TIERED';`);
+  await query(`ALTER TABLE achievement_definitions ADD COLUMN IF NOT EXISTS one_time_xp_reward INTEGER NOT NULL DEFAULT 0;`);
+  await query(`ALTER TABLE achievement_definitions ADD COLUMN IF NOT EXISTS one_time_role_reward_id TEXT;`);
+  await query(`ALTER TABLE achievement_definitions ADD COLUMN IF NOT EXISTS remove_when_condition_ends BOOLEAN NOT NULL DEFAULT false;`);
+  await query(`ALTER TABLE achievement_tiers ADD COLUMN IF NOT EXISTS tier_name TEXT;`);
+  await query(`UPDATE achievement_tiers SET tier_name = CASE tier_level WHEN 1 THEN 'Bronze' WHEN 2 THEN 'Silver' WHEN 3 THEN 'Gold' WHEN 4 THEN 'Diamond' ELSE COALESCE(tier_name, 'Legacy Level ' || tier_level::text) END WHERE tier_name IS NULL;`);
+
+  await query(`CREATE INDEX IF NOT EXISTS idx_achievement_tiers_key ON achievement_tiers(guild_id, achievement_key, tier_level);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_achievement_unlocks_user ON achievement_unlocks(guild_id, user_id, unlocked_at DESC);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_achievement_unlocks_key ON achievement_unlocks(guild_id, achievement_key, tier_level);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_achievement_stats_messages ON achievement_user_stats(guild_id, messages_sent DESC);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_achievement_stats_voice ON achievement_user_stats(guild_id, voice_minutes DESC);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_achievement_voice_sessions ON achievement_voice_sessions(guild_id, user_id, channel_id);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_achievement_ignored_channels ON achievement_ignored_message_channels(guild_id, channel_id);`);
+
 }
 
 if (require.main === module) {

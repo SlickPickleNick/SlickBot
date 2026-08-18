@@ -28,6 +28,10 @@ const MODULE_LABELS = Object.freeze({
   [ModuleKeys.LEVELING]: 'Leveling',
   [ModuleKeys.COMMUNITY_GAMES]: 'Community Games',
   [ModuleKeys.FAQ]: 'Knowledge Base / FAQ',
+  [ModuleKeys.SUGGESTIONS]: 'Suggestions',
+  [ModuleKeys.REFERRALS]: 'Referrals',
+  [ModuleKeys.TEMP_ROLES]: 'Temporary Roles',
+  [ModuleKeys.ACHIEVEMENTS]: 'Achievements',
   [ModuleKeys.SERVER_STATS]: 'Server Stats',
   [ModuleKeys.BOT_UPDATES]: 'Bot Updates',
   [ModuleKeys.CUSTOM_COMMANDS]: 'Custom Commands',
@@ -148,6 +152,11 @@ const HELP_CATALOG = Object.freeze([
   { moduleKey: ModuleKeys.REFERRALS, actionKey: ActionKeys.ReferralsView, command: '/referral leaderboard|status', description: 'View lifetime referral standings or referral status.' },
   { moduleKey: ModuleKeys.REFERRALS, actionKey: ActionKeys.ReferralsManage, command: '/referral manager|set', description: 'Review referrals or retroactively record a referral for a member.' },
   { moduleKey: ModuleKeys.REFERRALS, actionKey: ActionKeys.ReferralsConfigure, command: '/referral setup', description: 'Configure referral XP and enabled state.' },
+
+  { moduleKey: ModuleKeys.ACHIEVEMENTS, actionKey: ActionKeys.AchievementsUse, command: '/achievement profile|list|leaderboard', description: 'View achievement profiles, available tiers, and stat leaderboards.' },
+  { moduleKey: ModuleKeys.ACHIEVEMENTS, actionKey: ActionKeys.AchievementsView, command: '/achievement manager', description: 'Open the Achievements manager panel.' },
+  { moduleKey: ModuleKeys.ACHIEVEMENTS, actionKey: ActionKeys.AchievementsConfigure, command: '/achievement setup|tier-set|one-time-config|rename|ignored-channel', description: 'Configure achievement tracking, standard tiers, one-time achievements, rewards, names, announcements, and ignored message channels.' },
+  { moduleKey: ModuleKeys.ACHIEVEMENTS, actionKey: ActionKeys.AchievementsReset, command: '/achievement reset', description: 'Owner-only achievement reset for testing and troubleshooting.' },
 
   { moduleKey: ModuleKeys.SCHEDULED_MESSAGES, actionKey: ActionKeys.ScheduledMessagesView, command: '/schedule manager|list', description: 'View scheduled messages.' },
   { moduleKey: ModuleKeys.SCHEDULED_MESSAGES, actionKey: ActionKeys.ScheduledMessagesConfigure, command: '/schedule setup', description: 'Configure schedule defaults.' },

@@ -130,6 +130,14 @@ const MODULE_CHECKS = {
   [ModuleKeys.TEMP_ROLES]: [
     { name: 'Temporary assignments', sql: 'SELECT COUNT(*)::int AS count FROM temporary_role_assignments WHERE guild_id = $1' },
     { name: 'Active temporary roles', sql: 'SELECT COUNT(*)::int AS count FROM temporary_role_assignments WHERE guild_id = $1 AND active = true' }
+  ],
+  [ModuleKeys.ACHIEVEMENTS]: [
+    { name: 'Achievement config', sql: 'SELECT COUNT(*)::int AS count FROM achievement_configs WHERE guild_id = $1' },
+    { name: 'Achievement definitions', sql: 'SELECT COUNT(*)::int AS count FROM achievement_definitions WHERE guild_id = $1' },
+    { name: 'Achievement tiers', sql: 'SELECT COUNT(*)::int AS count FROM achievement_tiers WHERE guild_id = $1' },
+    { name: 'Achievement stats', sql: 'SELECT COUNT(*)::int AS count FROM achievement_user_stats WHERE guild_id = $1' },
+    { name: 'Achievement unlocks', sql: 'SELECT COUNT(*)::int AS count FROM achievement_unlocks WHERE guild_id = $1' },
+    { name: 'Achievement voice sessions', sql: 'SELECT COUNT(*)::int AS count FROM achievement_voice_sessions WHERE guild_id = $1' }
   ]
 };
 

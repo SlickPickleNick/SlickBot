@@ -126,6 +126,12 @@ const LogModuleCatalog = Object.freeze([
     defaultDelivery: 'IMMEDIATE'
   },
   {
+    key: 'achievements',
+    label: 'Achievements',
+    description: 'Achievement tracking, unlocks, voice sessions, and configuration changes.',
+    defaultDelivery: 'IMMEDIATE'
+  },
+  {
     key: 'server-stats',
     label: 'Server Stats',
     description: 'Member, human, bot, and voice counter channel updates.',
@@ -251,6 +257,11 @@ const LogEventCatalog = Object.freeze([
   { key: 'temp-role-remove', moduleKey: 'temp-roles', label: 'Temporary Role Removed', description: 'A temporary role was manually removed.', defaultDelivery: 'IMMEDIATE' },
   { key: 'temp-role-expire', moduleKey: 'temp-roles', label: 'Temporary Role Expired', description: 'A temporary role expired and was removed.', defaultDelivery: 'IMMEDIATE' },
   { key: 'temp-role-error', moduleKey: 'temp-roles', label: 'Temporary Role Error', description: 'A temporary role action or expiration failed.', defaultDelivery: 'IMMEDIATE' },
+
+  { key: 'achievement-config', moduleKey: 'achievements', label: 'Achievements Configured', description: 'Achievement tracking or reward configuration changed.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'achievement-unlock', moduleKey: 'achievements', label: 'Achievement Unlocked', description: 'A member unlocked an achievement tier.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'achievement-voice-session', moduleKey: 'achievements', label: 'Voice Achievement Time', description: 'Voice time was recorded for achievement tracking.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'achievement-error', moduleKey: 'achievements', label: 'Achievement Error', description: 'Achievement processing failed.', defaultDelivery: 'IMMEDIATE' },
 
   { key: 'server-stats-config', moduleKey: 'server-stats', label: 'Server Stats Config', description: 'Server stats configuration changed.', defaultDelivery: 'IMMEDIATE' },
   { key: 'server-stats-update', moduleKey: 'server-stats', label: 'Server Stats Updated', description: 'Server stat counter channels were refreshed.', defaultDelivery: 'IMMEDIATE' },

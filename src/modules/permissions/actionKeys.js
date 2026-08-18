@@ -155,6 +155,11 @@ const ActionKeys = Object.freeze({
   TempRolesAdd: 'temp-roles.add',
   TempRolesRemove: 'temp-roles.remove',
 
+  AchievementsUse: 'achievements.use',
+  AchievementsView: 'achievements.view',
+  AchievementsConfigure: 'achievements.configure',
+  AchievementsReset: 'achievements.reset',
+
   PanelsConfigure: 'panels.configure',
 
   ServerReset: 'server.reset'
@@ -332,6 +337,11 @@ const defaultActionLevels = Object.freeze({
   [ActionKeys.TempRolesAdd]: PermissionLevels.MODERATOR,
   [ActionKeys.TempRolesRemove]: PermissionLevels.MODERATOR,
 
+  [ActionKeys.AchievementsUse]: PermissionLevels.EVERYONE,
+  [ActionKeys.AchievementsView]: PermissionLevels.MODERATOR,
+  [ActionKeys.AchievementsConfigure]: PermissionLevels.SENIOR_MODERATOR,
+  [ActionKeys.AchievementsReset]: PermissionLevels.OWNER,
+
   [ActionKeys.ServerReset]: PermissionLevels.OWNER
 });
 
@@ -360,6 +370,7 @@ const defaultModuleLevels = Object.freeze({
   [ModuleKeys.SUGGESTIONS]: PermissionLevels.EVERYONE,
   [ModuleKeys.REFERRALS]: PermissionLevels.EVERYONE,
   [ModuleKeys.TEMP_ROLES]: PermissionLevels.MODERATOR,
+  [ModuleKeys.ACHIEVEMENTS]: PermissionLevels.EVERYONE,
   [ModuleKeys.UTILITY]: PermissionLevels.EVERYONE
 });
 
@@ -381,12 +392,13 @@ const defaultPublicActions = Object.freeze([
   ActionKeys.SuggestionsSubmit,
   ActionKeys.SuggestionsVote,
   ActionKeys.ReferralsSubmit,
-  ActionKeys.ReferralsView
+  ActionKeys.ReferralsView,
+  ActionKeys.AchievementsUse
 ]);
 
 const defaultTeamPermissions = Object.freeze(Object.values(ActionKeys));
 
-const PERMISSION_DEFAULTS_VERSION = '0.9.3';
+const PERMISSION_DEFAULTS_VERSION = '0.9.4';
 
 module.exports = {
   ActionKeys,

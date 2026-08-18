@@ -10,6 +10,7 @@ const {
 const { query, pool } = require('../../services/db');
 const { createBaseEmbed, createButtonRow, createPanelButton, createLinkButton, SlickBotColors, withPanelHeaderImage } = require('../ui/uiService');
 const { CustomIds } = require('../ui/customIds');
+const { AchievementService, ACHIEVEMENT_KEYS } = require('./achievementService');
 
 const DEFAULT_PANEL_TITLE = 'Server Suggestions';
 const DEFAULT_PANEL_DESCRIPTION = 'Have an idea for the server? Submit a suggestion below. Staff will review suggestions and update their status when a decision is made.';
@@ -302,6 +303,8 @@ function formatCounts(counts) {
     .join('\n');
 }
 
+const achievements = new AchievementService();
+
 class SuggestionService {
   async getConfig(guildId) {
     const result = await query(`SELECT * FROM suggestion_configs WHERE guild_id = $1 LIMIT 1`, [guildId]);
@@ -539,6 +542,15 @@ class SuggestionService {
     const refreshed = await this.getSuggestionByNumber(guild.id, posted.suggestion.id).catch(() => posted.suggestion);
     await this.repostPanel(client || guild.client, guild.id).catch(() => {});
     await this.refreshReviewIndexes({ client: client || guild.client, guildId: guild.id }).catch(() => {});
+    await achievements.recordStat({
+      guild,
+      channel: posted.message?.channel || null,
+      userId: user.id,
+      userTag: user.tag || user.username || null,
+      statKey: ACHIEVEMENT_KEYS.SUGGESTIONS_SUBMITTED,
+      amount: 1,
+      logger
+    }).catch(() => []);
     await this.sendSuggestionLog({ guild, config, suggestion: refreshed || posted.suggestion, action: 'New Suggestion Submitted', actorUserId: user.id, logger }).catch(() => {});
     await logger?.log?.({
       guildId: guild.id,

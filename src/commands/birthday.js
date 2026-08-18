@@ -1,6 +1,7 @@
 const { SlashCommandBuilder, ChannelType } = require('discord.js');
 const { ModuleKeys } = require('../modules/moduleRegistry');
 const { ActionKeys } = require('../modules/permissions/actionKeys');
+const { AchievementService, ACHIEVEMENT_KEYS } = require('../modules/community/achievementService');
 const { replyPrivate } = require('../utils/reply');
 const { recordPublishedPanel } = require('../modules/panels/publishedPanelService');
 const {
@@ -14,6 +15,7 @@ const {
 const { createSuccessEmbed, createWarningEmbed } = require('../modules/ui/uiService');
 
 const birthdays = new BirthdayService();
+const achievements = new AchievementService();
 
 function addTimezoneOption(option, description = 'Timezone, such as America/New_York.') {
   return option
@@ -155,6 +157,7 @@ module.exports = {
       });
       if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Birthday Not Saved', result.reason)] });
       await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'birthday-profile', title: 'Birthday Saved', body: `User: <@${interaction.user.id}>\nBirthday: **${formatBirthday(result.profile.birth_month, result.profile.birth_day)}**`, actorUserId: interaction.user.id }).catch(() => {});
+      await achievements.recordOneTimeAchievement({ guild: interaction.guild, user: interaction.user, achievementKey: ACHIEVEMENT_KEYS.HAPPY_BIRTHDAY, logger: ctx.logger }).catch(() => {});
       await replyPrivate(interaction, { embeds: [birthdaySavedEmbed(result.profile)], deleteAfterSeconds: 12 });
       return;
     }
@@ -171,6 +174,7 @@ module.exports = {
       const profile = await birthdays.removeBirthday(interaction.guildId, interaction.user.id);
       if (!profile) return replyPrivate(interaction, { embeds: [birthdayNotFoundEmbed()], deleteAfterSeconds: 12 });
       await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'birthday-profile', title: 'Birthday Removed', body: `User: <@${interaction.user.id}>`, actorUserId: interaction.user.id }).catch(() => {});
+      await achievements.revokeOneTimeAchievementIfConfigured({ guild: interaction.guild, userId: interaction.user.id, achievementKey: ACHIEVEMENT_KEYS.HAPPY_BIRTHDAY, logger: ctx.logger }).catch(() => {});
       await replyPrivate(interaction, { embeds: [createSuccessEmbed('Birthday Removed', 'Your birthday has been removed from SlickBot.')], deleteAfterSeconds: 12 });
       return;
     }

@@ -1,6 +1,6 @@
 # SlickBot Project Plan
 
-## Current Version: 0.9.3
+## Current Version: 0.9.4
 
 SlickBot is being built as a modular all-in-one Discord server management bot for the SlickPickleNick community.
 
@@ -37,8 +37,59 @@ SlickBot is being built as a modular all-in-one Discord server management bot fo
 - Suggestions
 - Referrals
 - Temporary Roles
+- Achievements
 
 
+
+
+
+## v0.9.4 — Achievements
+
+### Added
+
+- Implemented the `ACHIEVEMENTS` module under Community Systems.
+- Added built-in tiered achievements for:
+  - Messages Sent
+  - Voice Time
+  - Referrals
+  - Suggestions Submitted
+  - Games Played
+  - Games Won
+- Tiered achievements now use four standard tier names: **Bronze**, **Silver**, **Gold**, and **Diamond**.
+- Once a member earns Diamond for a tiered achievement, SlickBot continues tracking that stat but does not award further tiers for that category.
+- Added default Bronze/Silver/Gold/Diamond thresholds for every tiered achievement. Voice Time defaults to 60, 120, 300, and 600 minutes.
+- Added configurable tier rewards with `/achievement tier-set`, including XP rewards, optional role rewards, thresholds, and tier enablement.
+- Added `/achievement rename` so staff can change the display name and description of an achievement category.
+- Added one-time, non-tiered achievements for **Server Booster** and **Happy Birthday**.
+- One-time achievements default to permanent unlocks, but `/achievement one-time-config` can enable removal if the underlying condition ends or is removed.
+- Added message-stat ignored channels so staff can exclude specific channels from message achievements.
+- Added voice-time tracking with persisted sessions, restart-safe cleanup, optional AFK channel exclusion, and muted/deafened users still counting toward voice time.
+- Removed first message and first voice join from achievement profile output after review.
+- Added configurable achievement unlock announcements with custom message text and optional image URL.
+- Added `/achievement profile` with tracked stats, top five recent achievements, and a paginated History button.
+- Added `/achievement leaderboard` for each supported tiered achievement stat.
+- Integrated Referrals, Suggestions, Tic-Tac-Toe, and Connect Four with achievement stat tracking.
+- Server boosting and birthday setup now feed one-time achievement unlocks.
+- Added owner-level `/achievement reset` for test resets and troubleshooting.
+- Added setup/module status, `/bot test` diagnostics, command registration, permissions, logging events, database migrations, and release documentation.
+
+### Commands
+
+```text
+/achievement profile
+/achievement list
+/achievement leaderboard
+/achievement manager
+/achievement setup
+/achievement tier-set
+/achievement tier-remove
+/achievement rename
+/achievement one-time-config
+/achievement ignored-channel add
+/achievement ignored-channel remove
+/achievement ignored-channel list
+/achievement reset
+```
 
 
 ## v0.9.3 — Referrals and Temporary Roles

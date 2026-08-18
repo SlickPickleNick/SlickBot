@@ -1,4 +1,40 @@
 {
+  "0.9.4": {
+    "title": "SlickBot v0.9.4",
+    "summary": "Adds and refines the Achievements module with standard Bronze/Silver/Gold/Diamond tiers, one-time achievements, configurable rewards, profiles, history, leaderboards, and integrations.",
+    "notes": [
+      "Added the ACHIEVEMENTS module under Community Systems.",
+      "Added built-in tiered achievements for messages sent, voice time, referrals, suggestions submitted, games played, and games won.",
+      "Changed tiered achievements to the standard Bronze, Silver, Gold, and Diamond model. Stats continue after Diamond, but no additional tiers are awarded.",
+      "Seeded default Bronze/Silver/Gold/Diamond thresholds for every tiered achievement, including Voice Time at 60, 120, 300, and 600 minutes.",
+      "Achievement tiers remain configurable with /achievement tier-set for thresholds, XP rewards, optional role rewards, and enabled state.",
+      "Added /achievement rename so staff can customize achievement category names and descriptions.",
+      "Added one-time achievements for Server Booster and Happy Birthday, with configurable XP/role rewards and optional removal if the underlying condition ends.",
+      "Added message-stat ignored channels and optional AFK voice-channel exclusion.",
+      "Voice time counts muted/deafened members and persists active sessions so missed leaves can be reconciled after restart.",
+      "Removed first message and first voice join from achievement profile output.",
+      "Added configurable unlock announcements with an announcement channel, custom message text, and optional image URL.",
+      "Added /achievement profile with stats, the five most recent unlocks, and a paginated history button showing earned dates.",
+      "Added /achievement leaderboard for each supported tiered achievement stat.",
+      "Integrated Referrals, Suggestions, Tic-Tac-Toe, Connect Four, server boosting, and birthday setup with achievement stat/unlock tracking.",
+      "Added owner-level /achievement reset plus database migrations, permission actions, logging events, setup/module status, diagnostics, command registration, and release documentation."
+    ],
+    "commands": [
+      "/achievement profile",
+      "/achievement list",
+      "/achievement leaderboard",
+      "/achievement manager",
+      "/achievement setup",
+      "/achievement tier-set",
+      "/achievement tier-remove",
+      "/achievement rename",
+      "/achievement one-time-config",
+      "/achievement ignored-channel add",
+      "/achievement ignored-channel remove",
+      "/achievement ignored-channel list",
+      "/achievement reset"
+    ]
+  },
   "0.9.3": {
     "title": "SlickBot v0.9.3",
     "summary": "Adds Referrals and Temporary Roles, with referral XP bonuses, a lifetime referral leaderboard, staff retroactive referral setting, and persistent timed role removals.",

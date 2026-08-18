@@ -1,5 +1,6 @@
 const { createBaseEmbed, createSuccessEmbed, createWarningEmbed, SlickBotColors } = require('../ui/uiService');
 const { LevelingService } = require('./levelingService');
+const { AchievementService, ACHIEVEMENT_KEYS } = require('./achievementService');
 const { query } = require('../../services/db');
 
 const DEFAULT_REFERRAL_XP = 100;
@@ -15,6 +16,7 @@ function safeUserTag(user) {
 class ReferralService {
   constructor() {
     this.leveling = new LevelingService();
+    this.achievements = new AchievementService();
   }
 
   async getConfig(guildId) {
@@ -86,6 +88,15 @@ class ReferralService {
         reason: `Referral bonus for ${refereeUser.tag || refereeUser.username}`
       }).catch(() => ({ awarded: false }));
     }
+
+    await this.achievements.recordStat({
+      guild,
+      userId: referrerUser.id,
+      userTag: safeUserTag(referrerUser),
+      statKey: ACHIEVEMENT_KEYS.REFERRALS,
+      amount: 1,
+      logger
+    }).catch(() => []);
 
     await logger?.log?.({
       guildId: guild.id,
