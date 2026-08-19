@@ -6,7 +6,13 @@ const { query } = require('../services/db');
 const { buildModulesPanel } = require('../modules/ui/panels');
 const { createBaseEmbed, SlickBotColors } = require('../modules/ui/uiService');
 
-const moduleChoices = Object.values(ModuleKeys).map((moduleKey) => ({ name: moduleKey, value: moduleKey }));
+function buildModuleAutocompleteChoices(focused) {
+  const search = String(focused || '').toLowerCase();
+  return Object.values(ModuleKeys)
+    .filter((moduleKey) => !search || moduleKey.toLowerCase().includes(search))
+    .slice(0, 25)
+    .map((moduleKey) => ({ name: moduleKey, value: moduleKey }));
+}
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -18,16 +24,20 @@ module.exports = {
       subcommand
         .setName('enable')
         .setDescription('Enable a module.')
-        .addStringOption((option) => option.setName('module').setDescription('Module to enable.').setRequired(true).addChoices(...moduleChoices))
+        .addStringOption((option) => option.setName('module').setDescription('Module to enable.').setRequired(true).setAutocomplete(true))
     )
     .addSubcommand((subcommand) =>
       subcommand
         .setName('disable')
         .setDescription('Disable a module.')
-        .addStringOption((option) => option.setName('module').setDescription('Module to disable.').setRequired(true).addChoices(...moduleChoices))
+        .addStringOption((option) => option.setName('module').setDescription('Module to disable.').setRequired(true).setAutocomplete(true))
     ),
   actionKey: ActionKeys.ModulesManage,
   moduleKey: ModuleKeys.PERMISSIONS,
+  async autocomplete(interaction) {
+    const focused = interaction.options.getFocused();
+    await interaction.respond(buildModuleAutocompleteChoices(focused)).catch(() => {});
+  },
   async execute(interaction, ctx) {
     const subcommand = interaction.options.getSubcommand();
 

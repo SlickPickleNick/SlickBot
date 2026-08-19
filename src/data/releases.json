@@ -17,7 +17,8 @@
       "Added /achievement profile with stats, the five most recent unlocks, and a paginated history button showing earned dates.",
       "Added /achievement leaderboard for each supported tiered achievement stat.",
       "Integrated Referrals, Suggestions, Tic-Tac-Toe, Connect Four, server boosting, and birthday setup with achievement stat/unlock tracking.",
-      "Added owner-level /achievement reset plus database migrations, permission actions, logging events, setup/module status, diagnostics, command registration, and release documentation."
+      "Added owner-level /achievement reset plus database migrations, permission actions, logging events, setup/module status, diagnostics, command registration, and release documentation.",
+      "Patched /modules enable and /modules disable to use autocomplete instead of a fixed choice list so the command remains valid after SlickBot exceeded Discord\u2019s 25-choice limit for slash-command options."
     ],
     "commands": [
       "/achievement profile",

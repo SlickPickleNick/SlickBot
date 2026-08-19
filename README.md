@@ -18,6 +18,7 @@ Current package: **v0.9.4**
 - Default tier thresholds are seeded for every tiered achievement. Voice Time defaults to Bronze 60 minutes, Silver 120 minutes, Gold 300 minutes, and Diamond 600 minutes.
 - Achievement tiers remain customizable with `/achievement tier-set`, including threshold, XP reward, optional role reward, and enabled state.
 - Achievement category names and descriptions can be customized with `/achievement rename`.
+- Patched `/modules enable` and `/modules disable` to use autocomplete instead of a fixed module choice list so command deployment remains valid after SlickBot exceeded Discord’s 25-choice slash option limit.
 - Added non-tiered one-time achievements for **Server Booster** and **Happy Birthday**. These unlock once by default and remain earned even if the boost or birthday setup is removed.
 - One-time achievements can be configured with `/achievement one-time-config`, including enabled state, XP reward, optional role reward, and whether the achievement should be removed if the condition ends.
 - Message achievements support ignored message channels through `/achievement ignored-channel`.
