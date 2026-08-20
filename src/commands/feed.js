@@ -1,4 +1,5 @@
 const { SlashCommandBuilder, ChannelType, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { env } = require('../config/env');
 const { ModuleKeys } = require('../modules/moduleRegistry');
 const { ActionKeys } = require('../modules/permissions/actionKeys');
 const { replyPrivate } = require('../utils/reply');
@@ -511,10 +512,19 @@ module.exports = {
       // Display interactive connection prompt
       const config = await feeds.getConfig(interaction.guildId);
       const isConnected = Boolean(config.tiktok_session_token || config.tiktok_access_token);
-      const webPort = process.env.PORT || 3000;
-      const webHost = process.env.WEB_HOST || 'localhost';
-      const hostUrl = webHost === '0.0.0.0' ? 'localhost' : webHost;
-      const loginUrl = `http://${hostUrl}:${webPort}/auth/tiktok/login?guildId=${interaction.guildId}`;
+
+      // Compute actual TikTok login page URL
+      let loginUrl = 'https://www.tiktok.com/login';
+      if (env.TIKTOK_CLIENT_KEY) {
+        const publicHost = env.PUBLIC_URL || (process.env.WEB_HOST && process.env.WEB_HOST !== '0.0.0.0' ? `http://${process.env.WEB_HOST}:${process.env.PORT || 3000}` : null);
+        if (publicHost) {
+          const redirectUri = `${publicHost.replace(/\/+$/, '')}/auth/tiktok/callback`;
+          const state = Buffer.from(JSON.stringify({ guildId: interaction.guildId, timestamp: Date.now() })).toString('base64url');
+          loginUrl = `https://www.tiktok.com/v2/auth/authorize/?client_key=${encodeURIComponent(env.TIKTOK_CLIENT_KEY)}&scope=user.info.basic,video.list&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&state=${encodeURIComponent(state)}`;
+        }
+      } else if (env.PUBLIC_URL) {
+        loginUrl = `${env.PUBLIC_URL.replace(/\/+$/, '')}/auth/tiktok/login?guildId=${interaction.guildId}`;
+      }
 
       const embed = createBaseEmbed({
         title: 'Connect TikTok Account',
@@ -524,16 +534,16 @@ module.exports = {
           'Connect your TikTok account to allow SlickBot to automatically announce new video uploads, ephemeral stories, and live streams.',
           '',
           '**How to connect:**',
-          '• Click **"Log in with TikTok (Web)"** below to open the browser login portal.',
-          '• Or click **"Enter Token"** to enter credentials directly in Discord.'
+          '• **Step 1**: Make sure you are logged into your account at [TikTok.com/login](https://www.tiktok.com/login).',
+          '• **Step 2**: Click **"Connect Account (In Discord)"** below to link your account in Discord.'
         ].join('\n'),
         color: SlickBotColors.PRIMARY,
         footer: 'SlickBot Social Feeds · TikTok Auth'
       });
 
       const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setLabel('Log in with TikTok (Web)').setStyle(ButtonStyle.Link).setURL(loginUrl).setEmoji('🌐'),
-        new ButtonBuilder().setCustomId(CustomIds.FeedsConnectTikTok).setLabel('Enter Token (Modal)').setStyle(ButtonStyle.Primary).setEmoji('✏️')
+        new ButtonBuilder().setCustomId(CustomIds.FeedsConnectTikTok).setLabel('Connect Account (In Discord)').setStyle(ButtonStyle.Success).setEmoji('🔑'),
+        new ButtonBuilder().setLabel('Open TikTok Login (Browser)').setStyle(ButtonStyle.Link).setURL(loginUrl).setEmoji('🌐')
       );
 
       if (isConnected) {

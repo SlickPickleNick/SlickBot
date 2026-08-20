@@ -113,7 +113,8 @@ function startHealthServer(client) {
     if (pathname === '/auth/tiktok/login') {
       const guildId = reqUrl.searchParams.get('guildId') || '';
       const clientKey = env.TIKTOK_CLIENT_KEY;
-      const redirectUri = `http://${host}/auth/tiktok/callback`;
+      const hostUrl = env.PUBLIC_URL || `http://${host}`;
+      const redirectUri = `${hostUrl.replace(/\/+$/, '')}/auth/tiktok/callback`;
       const state = Buffer.from(JSON.stringify({ guildId, timestamp: Date.now() })).toString('base64url');
 
       if (clientKey) {
@@ -123,40 +124,9 @@ function startHealthServer(client) {
         return;
       }
 
-      // If no official developer client key is configured, provide instant web login portal
-      const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Connect TikTok Account · SlickBot</title>
-  <style>
-    body { margin: 0; background: #0f1117; color: #e6e8f0; font-family: system-ui, sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
-    .card { background: #181b24; border: 1px solid #374151; border-radius: 16px; padding: 32px; max-width: 440px; width: 90%; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
-    h2 { margin-top: 0; color: #fff; }
-    p { color: #9ca3af; font-size: 14px; line-height: 1.5; }
-    label { display: block; margin-top: 16px; font-size: 13px; font-weight: 600; color: #d1d5db; }
-    input[type=text] { width: 100%; box-sizing: border-box; padding: 10px 14px; margin-top: 6px; background: #0f1117; border: 1px solid #374151; border-radius: 8px; color: #fff; font-size: 14px; }
-    .btn { display: block; width: 100%; box-sizing: border-box; background: #fe2c55; color: #fff; border: none; padding: 12px; border-radius: 8px; font-weight: 600; margin-top: 24px; cursor: pointer; font-size: 15px; }
-    .btn:hover { background: #e02449; }
-  </style>
-</head>
-<body>
-  <div class="card">
-    <h2>🎵 Connect TikTok Account</h2>
-    <p>Connect your TikTok account credentials to enable automated video upload, story, and live stream announcements in Discord.</p>
-    <form method="POST" action="/auth/tiktok/connect">
-      <input type="hidden" name="guildId" value="${guildId}">
-      <label>TikTok Username / Handle</label>
-      <input type="text" name="username" placeholder="@yourhandle" required>
-      <label>Session / Access Token</label>
-      <input type="text" name="sessionToken" placeholder="Paste your TikTok session or API token" required>
-      <button type="submit" class="btn">Connect Account</button>
-    </form>
-  </div>
-</body>
-</html>`;
-      response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-      response.end(html);
+      // If no official developer client key is configured, redirect directly to TikTok login
+      response.writeHead(302, { Location: 'https://www.tiktok.com/login' });
+      response.end();
       return;
     }
 
