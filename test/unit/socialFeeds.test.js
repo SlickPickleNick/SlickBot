@@ -244,4 +244,32 @@ test('Feed Slash Command Structure and Permissions', async (t) => {
 
     db.uninstall();
   });
+
+  await t.test('parseRssItems extracts tweets, links, and media correctly', () => {
+    const service = new SocialFeedService();
+    const mockRssXml = `
+      <rss version="2.0">
+        <channel>
+          <title>Twitter / SlickPickleNick</title>
+          <item>
+            <title>Just dropped a brand new SlickBot release v0.9.5! Check it out!</title>
+            <dc:creator>SlickPickleNick</dc:creator>
+            <description>&lt;p&gt;Just dropped a brand new SlickBot release v0.9.5! Check it out!&lt;/p&gt;&lt;img src="https://pbs.twimg.com/media/preview.jpg" /&gt;</description>
+            <pubDate>Thu, 20 Aug 2026 05:40:00 GMT</pubDate>
+            <guid>https://x.com/SlickPickleNick/status/1987654321098765432</guid>
+            <link>https://x.com/SlickPickleNick/status/1987654321098765432</link>
+          </item>
+        </channel>
+      </rss>
+    `;
+
+    const items = service.parseRssItems(mockRssXml, 'SlickPickleNick', 'https://x.com');
+    assert.equal(items.length, 1);
+    assert.equal(items[0].itemId, '1987654321098765432');
+    assert.equal(items[0].authorName, 'SlickPickleNick');
+    assert.ok(items[0].title.includes('SlickBot release v0.9.5'));
+    assert.equal(items[0].thumbnailUrl, 'https://pbs.twimg.com/media/preview.jpg');
+    assert.equal(items[0].url, 'https://x.com/SlickPickleNick/status/1987654321098765432');
+    assert.equal(items[0].itemType, 'POST');
+  });
 });

@@ -148,6 +148,7 @@ class SocialFeedService {
   constructor() {
     this.configCache = new Map();
     this.tokenCache = new Map();
+    this.xUserCache = new Map();
   }
 
   async getConfig(guildId) {
@@ -478,6 +479,214 @@ class SocialFeedService {
     return items;
   }
 
+  async fetchXUpdates(feed) {
+    const handle = feed.account_id;
+    const bearerToken = env.X_BEARER_TOKEN;
+
+    // 1. Official Twitter API v2 if bearer token is provided
+    if (bearerToken) {
+      try {
+        let userId = this.xUserCache.get(handle.toLowerCase());
+        if (!userId) {
+          const userRes = await fetch(`https://api.twitter.com/2/users/by/username/${encodeURIComponent(handle)}`, {
+            headers: { Authorization: `Bearer ${bearerToken}` }
+          });
+          if (userRes.ok) {
+            const userData = await userRes.json();
+            if (userData.data?.id) {
+              userId = userData.data.id;
+              this.xUserCache.set(handle.toLowerCase(), userId);
+            }
+          }
+        }
+
+        if (userId) {
+          const tweetRes = await fetch(
+            `https://api.twitter.com/2/users/${userId}/tweets?tweet.fields=created_at,text,attachments,entities&expansions=attachments.media_keys&media.fields=url,preview_image_url&max_results=5`,
+            { headers: { Authorization: `Bearer ${bearerToken}` } }
+          );
+          if (tweetRes.ok) {
+            const tweetData = await tweetRes.json();
+            const mediaMap = new Map();
+            if (tweetData.includes?.media) {
+              for (const m of tweetData.includes.media) {
+                mediaMap.set(m.media_key, m.url || m.preview_image_url);
+              }
+            }
+
+            if (Array.isArray(tweetData.data) && tweetData.data.length > 0) {
+              return tweetData.data.map((tw) => {
+                const mediaKey = tw.attachments?.media_keys?.[0];
+                const thumb = mediaKey ? mediaMap.get(mediaKey) : null;
+                const link = `https://x.com/${handle}/status/${tw.id}`;
+                return {
+                  itemId: String(tw.id),
+                  title: `New Post from ${feed.account_name}`,
+                  description: tw.text || '',
+                  url: link,
+                  authorName: feed.account_name,
+                  publishedAt: tw.created_at ? new Date(tw.created_at) : new Date(),
+                  thumbnailUrl: thumb || null,
+                  itemType: 'POST'
+                };
+              });
+            }
+          }
+        }
+      } catch (_err) {
+        // Fallback to syndication
+      }
+    }
+
+    // 2. Syndication / FixTweet API fallback
+    const fixTweetUrls = [
+      `https://api.fxtwitter.com/${encodeURIComponent(handle)}/latest`,
+      `https://api.vxtwitter.com/${encodeURIComponent(handle)}/latest`
+    ];
+
+    for (const url of fixTweetUrls) {
+      try {
+        const res = await fetch(url, {
+          headers: { 'User-Agent': 'Mozilla/5.0 (compatible; SlickBot/0.9.5)' }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const tweet = data.tweet;
+          if (tweet && tweet.id) {
+            const mediaUrl = tweet.media?.photos?.[0]?.url || tweet.media?.all?.[0]?.url || tweet.media?.mosaic?.formats?.jpeg || null;
+            return [{
+              itemId: String(tweet.id),
+              title: `New Post from ${tweet.author?.name || feed.account_name}`,
+              description: tweet.text || '',
+              url: tweet.url || `https://x.com/${handle}/status/${tweet.id}`,
+              authorName: tweet.author?.name || feed.account_name,
+              avatarUrl: tweet.author?.avatar_url || null,
+              thumbnailUrl: mediaUrl,
+              publishedAt: tweet.created_at ? new Date(tweet.created_at) : (tweet.epoch ? new Date(tweet.epoch * 1000) : new Date()),
+              itemType: 'POST'
+            }];
+          }
+        }
+      } catch (_err) {
+        // Try next fallback
+      }
+    }
+
+    // 3. Public RSS Bridges (Nitter / XCancel)
+    const rssUrls = [
+      `https://xcancel.com/${encodeURIComponent(handle)}/rss`,
+      `https://nitter.net/${encodeURIComponent(handle)}/rss`,
+      `https://nitter.cz/${encodeURIComponent(handle)}/rss`,
+      `https://nitter.privacydev.net/${encodeURIComponent(handle)}/rss`
+    ];
+
+    for (const url of rssUrls) {
+      try {
+        const res = await fetch(url, {
+          headers: { 'User-Agent': 'Mozilla/5.0 (compatible; SlickBot/0.9.5)' }
+        });
+        if (res.ok) {
+          const xml = await res.text();
+          const items = this.parseRssItems(xml, feed.account_name, 'https://x.com');
+          if (items.length > 0) return items;
+        }
+      } catch (_err) {
+        // Try next fallback
+      }
+    }
+
+    return [];
+  }
+
+  async fetchTikTokUpdates(feed) {
+    const handle = feed.account_id;
+
+    // 1. ProxiTok / Public RSS Fallbacks
+    const rssUrls = [
+      `https://proxitok.pabloferreiro.es/@${encodeURIComponent(handle)}/rss`,
+      `https://tok.habedieeh.re/@${encodeURIComponent(handle)}/rss`,
+      `https://proxitok.pussthecat.org/@${encodeURIComponent(handle)}/rss`
+    ];
+
+    for (const url of rssUrls) {
+      try {
+        const res = await fetch(url, {
+          headers: { 'User-Agent': 'Mozilla/5.0 (compatible; SlickBot/0.9.5)' }
+        });
+        if (res.ok) {
+          const xml = await res.text();
+          const items = this.parseRssItems(xml, feed.account_name, 'https://www.tiktok.com');
+          if (items.length > 0) return items;
+        }
+      } catch (_err) {
+        // Try next
+      }
+    }
+
+    return [];
+  }
+
+  parseRssItems(xml, defaultAuthorName, defaultBaseUrl) {
+    const items = [];
+    const itemMatches = xml.matchAll(/<item>([\s\S]*?)<\/item>/g);
+    for (const match of itemMatches) {
+      const itemXml = match[1];
+      const titleMatch = itemXml.match(/<title>([\s\S]*?)<\/title>/);
+      const linkMatch = itemXml.match(/<link>([\s\S]*?)<\/link>/);
+      const guidMatch = itemXml.match(/<guid.*?>([\s\S]*?)<\/guid>/);
+      const pubDateMatch = itemXml.match(/<pubDate>([\s\S]*?)<\/pubDate>/);
+      const descMatch = itemXml.match(/<description>([\s\S]*?)<\/description>/);
+      const authorMatch = itemXml.match(/<dc:creator>([\s\S]*?)<\/dc:creator>/) || itemXml.match(/<author>([\s\S]*?)<\/author>/);
+
+      const link = linkMatch ? linkMatch[1].trim() : (guidMatch ? guidMatch[1].trim() : null);
+      if (!link) continue;
+
+      let itemId = guidMatch ? guidMatch[1].trim() : link;
+      const statusIdMatch = link.match(/\/status\/(\d+)/) || link.match(/\/video\/(\d+)/) || link.match(/\/v\/(\d+)/);
+      if (statusIdMatch) itemId = statusIdMatch[1];
+
+      const rawTitle = titleMatch
+        ? titleMatch[1].replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&').trim()
+        : '';
+      const decodedDesc = descMatch
+        ? descMatch[1].replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&')
+        : '';
+      const rawDesc = decodedDesc.replace(/<[^>]*>/g, '').trim();
+      const author = authorMatch ? authorMatch[1].replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1').trim() : defaultAuthorName;
+      const pubDate = pubDateMatch ? new Date(pubDateMatch[1].trim()) : new Date();
+
+      let thumb = null;
+      const imgMatch = itemXml.match(/<enclosure[^>]*url="([^"]+)"/) ||
+        itemXml.match(/<media:thumbnail[^>]*url="([^"]+)"/) ||
+        decodedDesc.match(/<img[^>]*src="([^"]+)"/) ||
+        itemXml.match(/src="([^"]+\.(?:jpg|jpeg|png|webp)[^"]*)"/i);
+      if (imgMatch) thumb = imgMatch[1];
+
+      let itemType = 'POST';
+      if (link.includes('/shorts/') || rawTitle.toLowerCase().includes('#shorts') || rawTitle.toLowerCase().includes('#short')) {
+        itemType = 'SHORT';
+      } else if (link.includes('tiktok.com') && (rawTitle.toLowerCase().includes('live') || link.includes('/live'))) {
+        itemType = 'LIVE';
+      } else if (link.includes('tiktok.com') && rawTitle.toLowerCase().includes('story')) {
+        itemType = 'STORY';
+      } else if (link.includes('tiktok.com') || link.includes('youtube.com')) {
+        itemType = 'VIDEO';
+      }
+
+      items.push({
+        itemId: String(itemId),
+        title: rawTitle.slice(0, 200) || `New update from ${author}`,
+        description: rawDesc.slice(0, 1000),
+        url: link.startsWith('http') ? link : `${defaultBaseUrl}${link}`,
+        authorName: author,
+        thumbnailUrl: thumb,
+        publishedAt: isNaN(pubDate.getTime()) ? new Date() : pubDate,
+        itemType
+      });
+    }
+    return items;
+  }
+
   // --- Announcement & Message Editing Engine ---
 
   async sendAnnouncement(client, feed, updateData, logger) {
@@ -529,7 +738,7 @@ class SocialFeedService {
     const isLive = updateData.itemType === 'LIVE';
     const embed = new EmbedBuilder()
       .setColor(platformMeta.color || SlickBotColors.PRIMARY)
-      .setAuthor({ name: `${updateData.authorName || feed.account_name} (${platformMeta.label})`, url: updateData.url, iconURL: updateData.avatarUrl })
+      .setAuthor({ name: `${updateData.authorName || feed.account_name} (${platformMeta.label})`, url: updateData.url, iconURL: updateData.avatarUrl || undefined })
       .setTitle(updateData.title ? updateData.title.slice(0, 256) : `${updateData.authorName || feed.account_name} on ${platformMeta.label}`)
       .setURL(updateData.url)
       .setTimestamp(updateData.publishedAt || new Date())
@@ -742,6 +951,30 @@ class SocialFeedService {
           }
         } else if (feed.platform === PLATFORM_KEYS.YOUTUBE) {
           const updates = await this.fetchYouTubeUpdates(feed);
+          for (const item of updates.slice(0, 3)) {
+            const exists = await query(
+              `SELECT id FROM social_feed_posts_history WHERE feed_id = $1 AND item_id = $2 LIMIT 1`,
+              [feed.id, item.itemId]
+            );
+            if (!exists.rows[0]) {
+              const res = await this.sendAnnouncement(client, feed, item, logger);
+              if (res.ok) announcedCount++;
+            }
+          }
+        } else if (feed.platform === PLATFORM_KEYS.X) {
+          const updates = await this.fetchXUpdates(feed);
+          for (const item of updates.slice(0, 3)) {
+            const exists = await query(
+              `SELECT id FROM social_feed_posts_history WHERE feed_id = $1 AND item_id = $2 LIMIT 1`,
+              [feed.id, item.itemId]
+            );
+            if (!exists.rows[0]) {
+              const res = await this.sendAnnouncement(client, feed, item, logger);
+              if (res.ok) announcedCount++;
+            }
+          }
+        } else if (feed.platform === PLATFORM_KEYS.TIKTOK) {
+          const updates = await this.fetchTikTokUpdates(feed);
           for (const item of updates.slice(0, 3)) {
             const exists = await query(
               `SELECT id FROM social_feed_posts_history WHERE feed_id = $1 AND item_id = $2 LIMIT 1`,
