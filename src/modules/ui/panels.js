@@ -419,14 +419,14 @@ async function buildModulesPanel(guildId) {
     emoji: item.emoji
   }));
 
-  const toggleOptions = statuses.map((item) => ({
-    label: moduleLabel(item.moduleKey).slice(0, 100),
-    value: item.moduleKey,
-    description: isCoreModule(item.moduleKey)
-      ? 'Core module; cannot be disabled.'
-      : `${item.label}. Select to toggle on/off.`,
-    emoji: item.emoji
-  }));
+  const toggleOptions = statuses
+    .filter((item) => !isCoreModule(item.moduleKey))
+    .map((item) => ({
+      label: moduleLabel(item.moduleKey).slice(0, 100),
+      value: item.moduleKey,
+      description: compactLine(`${item.label}. Select to toggle on/off.`, 100),
+      emoji: item.emoji
+    }));
 
   const detailSelect = createSelectRow(CustomIds.ModulesDetailSelect, 'View module setup details...', detailOptions.slice(0, 25));
   const toggleSelect = createSelectRow(CustomIds.ModulesSelect, 'Toggle a non-core module...', toggleOptions.slice(0, 25));
@@ -998,8 +998,14 @@ async function buildPermissionsPanel(guildId, selectedTeamId = null) {
 
 
 function compactCommunityText(payload, fallback) {
-  const value = payload?.embeds?.[0]?.data?.description || fallback;
-  return String(value).length > 320 ? `${String(value).slice(0, 317)}...` : String(value);
+  const desc = payload?.embeds?.[0]?.data?.description || fallback;
+  const lines = String(desc)
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l && !l.startsWith('**Viewing:**') && !l.startsWith('Use `/') && !l.startsWith('Use the ') && !l.startsWith('Staff can ') && !l.startsWith('Members use '));
+  const text = lines.slice(0, 2).join(' · ');
+  const clean = text.replace(/\s+/g, ' ').trim();
+  return clean.length > 120 ? `${clean.slice(0, 117)}...` : (clean || fallback);
 }
 
 async function buildCommunityPanel(guildId) {

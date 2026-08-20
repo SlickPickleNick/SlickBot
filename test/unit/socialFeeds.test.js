@@ -174,9 +174,8 @@ test('SocialFeedService Database CRUD and Caching', async (t) => {
 });
 
 test('Feed Slash Command Structure and Permissions', async (t) => {
-  await t.test('feed command is registered with correct metadata', () => {
+  await t.test('feed command is registered with correct metadata and action keys', () => {
     assert.equal(feedCommand.data.name, 'feed');
-    assert.equal(feedCommand.actionKey, ActionKeys.FeedsView);
     assert.equal(feedCommand.moduleKey, ModuleKeys.SOCIAL_FEEDS);
 
     const subcommands = feedCommand.data.options.map((opt) => opt.name);
@@ -189,6 +188,14 @@ test('Feed Slash Command Structure and Permissions', async (t) => {
     assert.ok(subcommands.includes('check'));
     assert.ok(subcommands.includes('manager'));
     assert.ok(subcommands.includes('reset'));
+
+    assert.equal(feedCommand.getActionKey({ options: { getSubcommand: () => 'list' } }), ActionKeys.FeedsView);
+    assert.equal(feedCommand.getActionKey({ options: { getSubcommand: () => 'check' } }), ActionKeys.FeedsCheck);
+    assert.equal(feedCommand.getActionKey({ options: { getSubcommand: () => 'reset' } }), ActionKeys.FeedsReset);
+    assert.equal(feedCommand.getActionKey({ options: { getSubcommand: () => 'setup' } }), ActionKeys.FeedsManage);
+    assert.equal(feedCommand.getActionKey({ options: { getSubcommand: () => 'add' } }), ActionKeys.FeedsManage);
+    assert.equal(feedCommand.isPublic({ options: { getSubcommand: () => 'list' } }), true);
+    assert.equal(feedCommand.isPublic({ options: { getSubcommand: () => 'add' } }), false);
   });
 
   await t.test('feed list outputs followed feeds cleanly', async () => {
@@ -225,7 +232,7 @@ test('Feed Slash Command Structure and Permissions', async (t) => {
     });
 
     const ctx = {
-      permissions: { canPerformAction: async () => true },
+      permissions: {},
       logger: { log: async () => {} }
     };
 

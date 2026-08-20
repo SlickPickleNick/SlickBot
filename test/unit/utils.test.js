@@ -36,6 +36,18 @@ test('Formatting and UI helper functions', async (t) => {
     assert.equal(embed.data.color, SlickBotColors.PRIMARY);
   });
 
+  await t.test('createBaseEmbed safely truncates oversized descriptions and titles', () => {
+    const longDesc = 'A'.repeat(5000);
+    const longTitle = 'T'.repeat(300);
+    const embed = createBaseEmbed({
+      title: longTitle,
+      description: longDesc
+    });
+    assert.ok(embed.data.description.length <= 4000);
+    assert.ok(embed.data.description.endsWith('...'));
+    assert.ok(embed.data.title.length <= 256);
+  });
+
   await t.test('createSuccessEmbed, createWarningEmbed, createErrorEmbed apply proper colors', () => {
     const success = createSuccessEmbed('Success', 'Operation completed');
     assert.equal(success.data.color, SlickBotColors.SUCCESS);

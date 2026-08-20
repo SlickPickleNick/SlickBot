@@ -185,8 +185,17 @@ module.exports = {
         .setDescription('Reset and remove all social feed configurations for this server.')
     ),
 
-  actionKey: ActionKeys.FeedsView,
   moduleKey: ModuleKeys.SOCIAL_FEEDS,
+  getActionKey(interaction) {
+    const sub = interaction.options.getSubcommand();
+    if (sub === 'list') return ActionKeys.FeedsView;
+    if (sub === 'check') return ActionKeys.FeedsCheck;
+    if (sub === 'reset') return ActionKeys.FeedsReset;
+    return ActionKeys.FeedsManage;
+  },
+  isPublic(interaction) {
+    return interaction.options.getSubcommand() === 'list';
+  },
 
   async autocomplete(interaction) {
     const focused = interaction.options.getFocused(true);
@@ -214,17 +223,10 @@ module.exports = {
     const subcommand = interaction.options.getSubcommand();
 
     if (subcommand === 'manager') {
-      if (!(await ctx.permissions.canPerformAction(interaction.guildId, interaction.member, ActionKeys.FeedsManage))) {
-        return replyPrivate(interaction, { embeds: [createWarningEmbed('Access Restricted', 'You need staff permissions to open the Social Feeds Manager.')] });
-      }
       return replyPrivate(interaction, await feeds.buildManagerPanel(interaction.guildId));
     }
 
     if (subcommand === 'setup') {
-      if (!(await ctx.permissions.canPerformAction(interaction.guildId, interaction.member, ActionKeys.FeedsManage))) {
-        return replyPrivate(interaction, { embeds: [createWarningEmbed('Access Restricted', 'You need staff permissions to configure Social Feeds.')] });
-      }
-
       const enabled = interaction.options.getBoolean('enabled', false);
       const defaultChannel = interaction.options.getChannel('default_channel', false);
       const defaultPingRole = interaction.options.getRole('default_ping_role', false);
@@ -264,10 +266,6 @@ module.exports = {
     }
 
     if (subcommand === 'add') {
-      if (!(await ctx.permissions.canPerformAction(interaction.guildId, interaction.member, ActionKeys.FeedsManage))) {
-        return replyPrivate(interaction, { embeds: [createWarningEmbed('Access Restricted', 'You need staff permissions to add social feeds.')] });
-      }
-
       const platform = interaction.options.getString('platform', true);
       const account = interaction.options.getString('account', true);
       const channel = interaction.options.getChannel('channel', false);
@@ -325,10 +323,6 @@ module.exports = {
     }
 
     if (subcommand === 'remove') {
-      if (!(await ctx.permissions.canPerformAction(interaction.guildId, interaction.member, ActionKeys.FeedsManage))) {
-        return replyPrivate(interaction, { embeds: [createWarningEmbed('Access Restricted', 'You need staff permissions to remove social feeds.')] });
-      }
-
       const feedId = interaction.options.getString('feed', true);
       const removed = await feeds.removeFeed(interaction.guildId, feedId);
 
@@ -353,10 +347,6 @@ module.exports = {
     }
 
     if (subcommand === 'edit') {
-      if (!(await ctx.permissions.canPerformAction(interaction.guildId, interaction.member, ActionKeys.FeedsManage))) {
-        return replyPrivate(interaction, { embeds: [createWarningEmbed('Access Restricted', 'You need staff permissions to edit social feeds.')] });
-      }
-
       const feedId = interaction.options.getString('feed', true);
       const channel = interaction.options.getChannel('channel', false);
       const pingRole = interaction.options.getRole('ping_role', false);
@@ -445,10 +435,6 @@ module.exports = {
     }
 
     if (subcommand === 'test') {
-      if (!(await ctx.permissions.canPerformAction(interaction.guildId, interaction.member, ActionKeys.FeedsManage))) {
-        return replyPrivate(interaction, { embeds: [createWarningEmbed('Access Restricted', 'You need staff permissions to send test feed announcements.')] });
-      }
-
       const feedId = interaction.options.getString('feed', true);
       const testType = interaction.options.getString('type', false);
 
@@ -471,10 +457,6 @@ module.exports = {
     }
 
     if (subcommand === 'check') {
-      if (!(await ctx.permissions.canPerformAction(interaction.guildId, interaction.member, ActionKeys.FeedsCheck))) {
-        return replyPrivate(interaction, { embeds: [createWarningEmbed('Access Restricted', 'You need staff permissions to force a feed check.')] });
-      }
-
       await interaction.deferReply({ flags: 64 }).catch(() => {});
       const result = await feeds.checkGuildFeeds(interaction.guildId, ctx.client, ctx.logger);
 
@@ -487,9 +469,6 @@ module.exports = {
     }
 
     if (subcommand === 'reset') {
-      if (!(await ctx.permissions.canPerformAction(interaction.guildId, interaction.member, ActionKeys.FeedsReset))) {
-        return replyPrivate(interaction, { embeds: [createWarningEmbed('Access Restricted', 'Only server owners or designated administrators can reset the Social Feeds module.')] });
-      }
 
       const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder()

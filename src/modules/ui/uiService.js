@@ -16,12 +16,21 @@ const SlickBotColors = Object.freeze({
 });
 
 function createBaseEmbed({ title, description, color = SlickBotColors.PRIMARY, footer = 'SlickBot Control Panel' }) {
-  return new EmbedBuilder()
+  const safeDescription = typeof description === 'string'
+    ? (description.length > 4000 ? `${description.slice(0, 3995)}...` : description)
+    : (description || null);
+
+  const embed = new EmbedBuilder()
     .setColor(color)
-    .setTitle(title)
-    .setDescription(description || null)
-    .setFooter({ text: footer })
+    .setDescription(safeDescription)
+    .setFooter({ text: footer ? String(footer).slice(0, 2048) : 'SlickBot Control Panel' })
     .setTimestamp(new Date());
+
+  if (title) {
+    embed.setTitle(String(title).slice(0, 256));
+  }
+
+  return embed;
 }
 
 function createSuccessEmbed(title, description) {
