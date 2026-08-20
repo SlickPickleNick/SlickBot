@@ -513,38 +513,41 @@ module.exports = {
       const config = await feeds.getConfig(interaction.guildId);
       const isConnected = Boolean(config.tiktok_session_token || config.tiktok_access_token);
 
-      // Compute actual TikTok login page URL
-      let loginUrl = 'https://www.tiktok.com/login';
+      // Compute OAuth authorization URL if TikTok app credentials are provided
+      let oauthUrl = null;
       if (env.TIKTOK_CLIENT_KEY) {
-        const publicHost = env.PUBLIC_URL || (process.env.WEB_HOST && process.env.WEB_HOST !== '0.0.0.0' ? `http://${process.env.WEB_HOST}:${process.env.PORT || 3000}` : null);
-        if (publicHost) {
-          const redirectUri = `${publicHost.replace(/\/+$/, '')}/auth/tiktok/callback`;
-          const state = Buffer.from(JSON.stringify({ guildId: interaction.guildId, timestamp: Date.now() })).toString('base64url');
-          loginUrl = `https://www.tiktok.com/v2/auth/authorize/?client_key=${encodeURIComponent(env.TIKTOK_CLIENT_KEY)}&scope=user.info.basic,video.list&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&state=${encodeURIComponent(state)}`;
-        }
-      } else if (env.PUBLIC_URL) {
-        loginUrl = `${env.PUBLIC_URL.replace(/\/+$/, '')}/auth/tiktok/login?guildId=${interaction.guildId}`;
+        const publicHost = env.PUBLIC_URL || (process.env.WEB_HOST && process.env.WEB_HOST !== '0.0.0.0' ? `http://${process.env.WEB_HOST}:${process.env.PORT || 3000}` : `http://localhost:${process.env.PORT || 3000}`);
+        const redirectUri = `${publicHost.replace(/\/+$/, '')}/auth/tiktok/callback`;
+        const state = Buffer.from(JSON.stringify({ guildId: interaction.guildId, timestamp: Date.now() })).toString('base64url');
+        oauthUrl = `https://www.tiktok.com/v2/auth/authorize/?client_key=${encodeURIComponent(env.TIKTOK_CLIENT_KEY)}&scope=user.info.basic,video.list&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&state=${encodeURIComponent(state)}`;
       }
+
+      const descriptionLines = [
+        '**Status:** ' + (isConnected ? `✅ Connected${config.tiktok_username ? ` as **@${config.tiktok_username}**` : ''}` : '⚠️ **Not Connected**'),
+        '',
+        'Connect your TikTok account to allow SlickBot to automatically announce new video uploads, ephemeral stories, and live streams.',
+        '',
+        '**Connection Methods:**',
+        '• **In-Discord Connection**: Click **"Connect Account (In Discord)"** below to enter your account token directly in Discord.',
+        oauthUrl ? '• **One-Click OAuth**: Click **"Authorize with TikTok"** to authorize through TikTok\'s official developer dialog.' : '• **Official OAuth**: Requires `TIKTOK_CLIENT_KEY` and `TIKTOK_CLIENT_SECRET` in `.env` (from [developers.tiktok.com](https://developers.tiktok.com/)).'
+      ];
 
       const embed = createBaseEmbed({
         title: 'Connect TikTok Account',
-        description: [
-          '**Status:** ' + (isConnected ? `✅ Connected${config.tiktok_username ? ` as **@${config.tiktok_username}**` : ''}` : '⚠️ **Not Connected**'),
-          '',
-          'Connect your TikTok account to allow SlickBot to automatically announce new video uploads, ephemeral stories, and live streams.',
-          '',
-          '**How to connect:**',
-          '• **Step 1**: Make sure you are logged into your account at [TikTok.com/login](https://www.tiktok.com/login).',
-          '• **Step 2**: Click **"Connect Account (In Discord)"** below to link your account in Discord.'
-        ].join('\n'),
+        description: descriptionLines.join('\n'),
         color: SlickBotColors.PRIMARY,
         footer: 'SlickBot Social Feeds · TikTok Auth'
       });
 
       const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(CustomIds.FeedsConnectTikTok).setLabel('Connect Account (In Discord)').setStyle(ButtonStyle.Success).setEmoji('🔑'),
-        new ButtonBuilder().setLabel('Open TikTok Login (Browser)').setStyle(ButtonStyle.Link).setURL(loginUrl).setEmoji('🌐')
+        new ButtonBuilder().setCustomId(CustomIds.FeedsConnectTikTok).setLabel('Connect Account (In Discord)').setStyle(ButtonStyle.Success).setEmoji('🔑')
       );
+
+      if (oauthUrl) {
+        row.addComponents(
+          new ButtonBuilder().setLabel('Authorize with TikTok (OAuth)').setStyle(ButtonStyle.Link).setURL(oauthUrl).setEmoji('🌐')
+        );
+      }
 
       if (isConnected) {
         row.addComponents(
