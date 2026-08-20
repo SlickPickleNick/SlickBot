@@ -180,6 +180,22 @@ module.exports = {
     )
     .addSubcommand((sub) =>
       sub
+        .setName('login')
+        .setDescription('Connect and authenticate your TikTok account for video/story announcements.')
+        .addStringOption((option) =>
+          option.setName('token').setDescription('Optional session or access token to save directly').setRequired(false)
+        )
+        .addStringOption((option) =>
+          option.setName('username').setDescription('Optional TikTok username/handle (e.g. @mrbeast)').setRequired(false)
+        )
+    )
+    .addSubcommand((sub) =>
+      sub
+        .setName('disconnect')
+        .setDescription('Unlink and disconnect the connected TikTok account for this server.')
+    )
+    .addSubcommand((sub) =>
+      sub
         .setName('reset')
         .setDescription('Reset and remove all social feed configurations for this server.')
     ),
@@ -474,6 +490,67 @@ module.exports = {
             '',
             '💡 *Tip: You can verify Discord channels, embeds, and role pings anytime with `/feed test`.*'
           ].join('\n')
+        )]
+      });
+    }
+
+    if (subcommand === 'login') {
+      const token = interaction.options.getString('token');
+      const username = interaction.options.getString('username');
+
+      if (token) {
+        await feeds.connectTikTokAccount(interaction.guildId, { sessionToken: token, username: username || null });
+        return replyPrivate(interaction, {
+          embeds: [createSuccessEmbed(
+            'TikTok Account Connected',
+            `Successfully connected TikTok credentials${username ? ` for **@${username.replace(/^@/, '')}**` : ''}!`
+          )]
+        });
+      }
+
+      // Display interactive connection prompt
+      const config = await feeds.getConfig(interaction.guildId);
+      const isConnected = Boolean(config.tiktok_session_token || config.tiktok_access_token);
+      const webPort = process.env.PORT || 3000;
+      const webHost = process.env.WEB_HOST || 'localhost';
+      const hostUrl = webHost === '0.0.0.0' ? 'localhost' : webHost;
+      const loginUrl = `http://${hostUrl}:${webPort}/auth/tiktok/login?guildId=${interaction.guildId}`;
+
+      const embed = createBaseEmbed({
+        title: 'Connect TikTok Account',
+        description: [
+          '**Status:** ' + (isConnected ? `✅ Connected${config.tiktok_username ? ` as **@${config.tiktok_username}**` : ''}` : '⚠️ **Not Connected**'),
+          '',
+          'Connect your TikTok account to allow SlickBot to automatically announce new video uploads, ephemeral stories, and live streams.',
+          '',
+          '**How to connect:**',
+          '• Click **"Log in with TikTok (Web)"** below to open the browser login portal.',
+          '• Or click **"Enter Token"** to enter credentials directly in Discord.'
+        ].join('\n'),
+        color: SlickBotColors.PRIMARY,
+        footer: 'SlickBot Social Feeds · TikTok Auth'
+      });
+
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setLabel('Log in with TikTok (Web)').setStyle(ButtonStyle.Link).setURL(loginUrl).setEmoji('🌐'),
+        new ButtonBuilder().setCustomId(CustomIds.FeedsConnectTikTok).setLabel('Enter Token (Modal)').setStyle(ButtonStyle.Primary).setEmoji('✏️')
+      );
+
+      if (isConnected) {
+        row.addComponents(
+          new ButtonBuilder().setCustomId(CustomIds.FeedsDisconnectTikTok).setLabel('Disconnect').setStyle(ButtonStyle.Danger).setEmoji('🗑️')
+        );
+      }
+
+      return replyPrivate(interaction, { embeds: [embed], components: [row] });
+    }
+
+    if (subcommand === 'disconnect') {
+      await feeds.disconnectTikTokAccount(interaction.guildId);
+      return replyPrivate(interaction, {
+        embeds: [createSuccessEmbed(
+          'TikTok Account Disconnected',
+          'Successfully disconnected and cleared TikTok credentials for this server.'
         )]
       });
     }

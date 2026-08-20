@@ -1767,10 +1767,21 @@ await query(`CREATE INDEX IF NOT EXISTS idx_bot_presence_guild ON bot_presence_s
       default_channel_id TEXT,
       default_ping_role_id TEXT,
       check_interval_seconds INTEGER NOT NULL DEFAULT 120,
+      tiktok_session_token TEXT,
+      tiktok_access_token TEXT,
+      tiktok_user_id TEXT,
+      tiktok_username TEXT,
+      tiktok_connected_at TIMESTAMPTZ,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
+
+  await query(`ALTER TABLE social_feed_configs ADD COLUMN IF NOT EXISTS tiktok_session_token TEXT;`);
+  await query(`ALTER TABLE social_feed_configs ADD COLUMN IF NOT EXISTS tiktok_access_token TEXT;`);
+  await query(`ALTER TABLE social_feed_configs ADD COLUMN IF NOT EXISTS tiktok_user_id TEXT;`);
+  await query(`ALTER TABLE social_feed_configs ADD COLUMN IF NOT EXISTS tiktok_username TEXT;`);
+  await query(`ALTER TABLE social_feed_configs ADD COLUMN IF NOT EXISTS tiktok_connected_at TIMESTAMPTZ;`);
 
   await query(`
     CREATE TABLE IF NOT EXISTS social_feeds (

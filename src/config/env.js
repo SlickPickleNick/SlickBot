@@ -57,7 +57,11 @@ const env = {
   TWITCH_CLIENT_ID: readOptionalVariable('TWITCH_CLIENT_ID', []),
   TWITCH_CLIENT_SECRET: readOptionalVariable('TWITCH_CLIENT_SECRET', []),
   YOUTUBE_API_KEY: readOptionalVariable('YOUTUBE_API_KEY', []),
-  TIKTOK_API_KEY: readOptionalVariable('TIKTOK_API_KEY', [])
+  TIKTOK_API_KEY: readOptionalVariable('TIKTOK_API_KEY', []),
+  TIKTOK_SESSION_ID: readOptionalVariable('TIKTOK_SESSION_ID', ['TIKTOK_COOKIE', 'TIKTOK_SESSION_COOKIE']),
+  TIKTOK_ACCESS_TOKEN: readOptionalVariable('TIKTOK_ACCESS_TOKEN', ['TIKTOK_TOKEN']),
+  TIKTOK_CLIENT_KEY: readOptionalVariable('TIKTOK_CLIENT_KEY', ['TIKTOK_APP_ID']),
+  TIKTOK_CLIENT_SECRET: readOptionalVariable('TIKTOK_CLIENT_SECRET', [])
 };
 
 function validateEnv() {

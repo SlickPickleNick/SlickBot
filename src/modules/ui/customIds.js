@@ -183,7 +183,15 @@ const CustomIds = Object.freeze({
   JoinCreateTransferModalPrefix: 'slickbot:modal:join-create-transfer:',
   JoinCreatePermitUserSelectPrefix: 'slickbot:select:join-create-permit:',
   JoinCreateRemoveUserSelectPrefix: 'slickbot:select:join-create-remove:',
-  JoinCreateTransferUserSelectPrefix: 'slickbot:select:join-create-transfer:'
+  JoinCreateTransferUserSelectPrefix: 'slickbot:select:join-create-transfer:',
+
+  FeedsCheckNow: 'slickbot:feeds:check-now',
+  FeedsRefresh: 'slickbot:feeds:refresh',
+  FeedsResetConfirmPrefix: 'slickbot:feeds:reset:confirm:',
+  FeedsResetCancelPrefix: 'slickbot:feeds:reset:cancel:',
+  FeedsConnectTikTok: 'slickbot:feeds:connect-tiktok',
+  FeedsDisconnectTikTok: 'slickbot:feeds:disconnect-tiktok',
+  FeedsTikTokModal: 'slickbot:modal:feeds-tiktok'
 });
 
 module.exports = { CustomIds };
