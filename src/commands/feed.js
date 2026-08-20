@@ -460,10 +460,21 @@ module.exports = {
       await interaction.deferReply({ flags: 64 }).catch(() => {});
       const result = await feeds.checkGuildFeeds(interaction.guildId, ctx.client, ctx.logger);
 
+      const lines = (result.results || []).map((r) => {
+        const meta = PLATFORM_META[r.feed.platform] || { icon: '🌐', label: r.feed.platform };
+        return `• ${meta.icon} **[${r.feed.account_name}](${r.feed.account_url})** (${meta.label}): ${r.note}`;
+      });
+
       return interaction.editReply({
         embeds: [createSuccessEmbed(
-          'Social Feeds Refreshed',
-          `Checked **${result.checked}** active feed(s).\nAnnouncements posted: **${result.announced}**`
+          'Social Feeds Polling Complete',
+          [
+            `Checked **${result.checked}** active feed(s). Announcements posted: **${result.announced}**`,
+            '',
+            lines.length ? '**Results:**\n' + lines.join('\n') : '*No active feeds to check.*',
+            '',
+            '💡 *Tip: You can verify Discord channels, embeds, and role pings anytime with `/feed test`.*'
+          ].join('\n')
         )]
       });
     }

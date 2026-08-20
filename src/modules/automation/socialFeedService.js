@@ -923,13 +923,17 @@ class SocialFeedService {
 
   async checkGuildFeeds(guildId, client, logger) {
     const config = await this.getConfig(guildId);
-    if (!config.enabled) return { checked: 0, announced: 0 };
+    if (!config.enabled) return { checked: 0, announced: 0, results: [] };
 
     const feeds = await this.listFeeds(guildId);
     const activeFeeds = feeds.filter((f) => f.enabled);
     let announcedCount = 0;
+    const results = [];
 
     for (const feed of activeFeeds) {
+      let feedAnnounced = 0;
+      let statusNote = 'No new updates';
+
       try {
         if (feed.platform === PLATFORM_KEYS.TWITCH) {
           const status = await this.fetchTwitchStream(feed);
@@ -945,9 +949,16 @@ class SocialFeedService {
               startedAt: status.startedAt,
               thumbnailUrl: status.thumbnailUrl
             }, logger);
-            if (res.ok) announcedCount++;
+            if (res.ok) {
+              announcedCount++;
+              feedAnnounced++;
+              statusNote = '🔴 Announced LIVE stream';
+            }
           } else if (!status.isLive && feed.last_status === 'LIVE') {
             await this.handleStreamOffline(client, feed, logger);
+            statusNote = '⚫ Stream ended / updated offline';
+          } else {
+            statusNote = status.isLive ? 'Currently live (already announced)' : 'Stream is offline';
           }
         } else if (feed.platform === PLATFORM_KEYS.YOUTUBE) {
           const updates = await this.fetchYouTubeUpdates(feed);
@@ -958,9 +969,13 @@ class SocialFeedService {
             );
             if (!exists.rows[0]) {
               const res = await this.sendAnnouncement(client, feed, item, logger);
-              if (res.ok) announcedCount++;
+              if (res.ok) {
+                announcedCount++;
+                feedAnnounced++;
+              }
             }
           }
+          statusNote = feedAnnounced > 0 ? `Announced ${feedAnnounced} new upload(s)` : (updates.length ? 'Up to date' : 'No uploads found');
         } else if (feed.platform === PLATFORM_KEYS.X) {
           const updates = await this.fetchXUpdates(feed);
           for (const item of updates.slice(0, 3)) {
@@ -970,8 +985,20 @@ class SocialFeedService {
             );
             if (!exists.rows[0]) {
               const res = await this.sendAnnouncement(client, feed, item, logger);
-              if (res.ok) announcedCount++;
+              if (res.ok) {
+                announcedCount++;
+                feedAnnounced++;
+              }
             }
+          }
+          if (feedAnnounced > 0) {
+            statusNote = `Announced ${feedAnnounced} new post(s)`;
+          } else if (updates.length > 0) {
+            statusNote = 'Up to date';
+          } else if (!env.X_BEARER_TOKEN) {
+            statusNote = 'Requires X_BEARER_TOKEN in .env for Twitter API v2';
+          } else {
+            statusNote = 'No new posts found on X';
           }
         } else if (feed.platform === PLATFORM_KEYS.TIKTOK) {
           const updates = await this.fetchTikTokUpdates(feed);
@@ -982,16 +1009,24 @@ class SocialFeedService {
             );
             if (!exists.rows[0]) {
               const res = await this.sendAnnouncement(client, feed, item, logger);
-              if (res.ok) announcedCount++;
+              if (res.ok) {
+                announcedCount++;
+                feedAnnounced++;
+              }
             }
           }
+          statusNote = feedAnnounced > 0 ? `Announced ${feedAnnounced} new upload(s)` : (updates.length ? 'Up to date' : 'No updates retrieved');
         }
+
+        await query(`UPDATE social_feeds SET last_checked_at = NOW(), last_error = NULL WHERE id = $1`, [feed.id]);
+        results.push({ feed, ok: true, note: statusNote, announced: feedAnnounced });
       } catch (err) {
         await query(`UPDATE social_feeds SET last_error = $2, last_checked_at = NOW() WHERE id = $1`, [feed.id, err.message]);
+        results.push({ feed, ok: false, note: `Error: ${err.message}`, announced: 0 });
       }
     }
 
-    return { checked: activeFeeds.length, announced: announcedCount };
+    return { checked: activeFeeds.length, announced: announcedCount, results };
   }
 
   async processFeeds(client, logger) {
