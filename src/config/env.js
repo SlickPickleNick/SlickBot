@@ -57,7 +57,6 @@ const env = {
   TWITCH_CLIENT_ID: readOptionalVariable('TWITCH_CLIENT_ID', []),
   TWITCH_CLIENT_SECRET: readOptionalVariable('TWITCH_CLIENT_SECRET', []),
   YOUTUBE_API_KEY: readOptionalVariable('YOUTUBE_API_KEY', []),
-  X_BEARER_TOKEN: readOptionalVariable('X_BEARER_TOKEN', ['TWITTER_BEARER_TOKEN']),
   TIKTOK_API_KEY: readOptionalVariable('TIKTOK_API_KEY', [])
 };
 

@@ -22,9 +22,9 @@ test('Social Feeds Utility and Helper Functions', async (t) => {
     assert.equal(normalizePlatform('twitch'), PLATFORM_KEYS.TWITCH);
     assert.equal(normalizePlatform('TWITCH'), PLATFORM_KEYS.TWITCH);
     assert.equal(normalizePlatform('youtube'), PLATFORM_KEYS.YOUTUBE);
-    assert.equal(normalizePlatform('x'), PLATFORM_KEYS.X);
-    assert.equal(normalizePlatform('twitter'), PLATFORM_KEYS.X);
     assert.equal(normalizePlatform('tiktok'), PLATFORM_KEYS.TIKTOK);
+    assert.equal(normalizePlatform('x'), null);
+    assert.equal(normalizePlatform('twitter'), null);
     assert.equal(normalizePlatform('instagram'), null);
     assert.equal(normalizePlatform(''), null);
   });
@@ -32,8 +32,6 @@ test('Social Feeds Utility and Helper Functions', async (t) => {
   await t.test('normalizeAccountId extracts usernames and channel IDs correctly', () => {
     assert.equal(normalizeAccountId(PLATFORM_KEYS.TWITCH, 'https://twitch.tv/ninja'), 'ninja');
     assert.equal(normalizeAccountId(PLATFORM_KEYS.TWITCH, 'ninja'), 'ninja');
-    assert.equal(normalizeAccountId(PLATFORM_KEYS.X, 'https://x.com/elonmusk'), 'elonmusk');
-    assert.equal(normalizeAccountId(PLATFORM_KEYS.X, '@SlickNick'), 'slicknick');
     assert.equal(normalizeAccountId(PLATFORM_KEYS.TIKTOK, 'https://tiktok.com/@tiktokcreator'), 'tiktokcreator');
     assert.equal(normalizeAccountId(PLATFORM_KEYS.YOUTUBE, 'https://youtube.com/@SlickNick'), 'slicknick');
     assert.equal(normalizeAccountId(PLATFORM_KEYS.YOUTUBE, 'UC1234567890abcdef123456'), 'uc1234567890abcdef123456');
@@ -245,31 +243,31 @@ test('Feed Slash Command Structure and Permissions', async (t) => {
     db.uninstall();
   });
 
-  await t.test('parseRssItems extracts tweets, links, and media correctly', () => {
+  await t.test('parseRssItems extracts videos, links, and media correctly', () => {
     const service = new SocialFeedService();
     const mockRssXml = `
       <rss version="2.0">
         <channel>
-          <title>Twitter / SlickPickleNick</title>
+          <title>TikTok / SlickNick</title>
           <item>
-            <title>Just dropped a brand new SlickBot release v0.9.5! Check it out!</title>
-            <dc:creator>SlickPickleNick</dc:creator>
-            <description>&lt;p&gt;Just dropped a brand new SlickBot release v0.9.5! Check it out!&lt;/p&gt;&lt;img src="https://pbs.twimg.com/media/preview.jpg" /&gt;</description>
+            <title>Insane gaming moment in TikTok video!</title>
+            <dc:creator>SlickNick</dc:creator>
+            <description>&lt;p&gt;Insane gaming moment!&lt;/p&gt;&lt;img src="https://p16.tiktokcdn.com/media/preview.jpg" /&gt;</description>
             <pubDate>Thu, 20 Aug 2026 05:40:00 GMT</pubDate>
-            <guid>https://x.com/SlickPickleNick/status/1987654321098765432</guid>
-            <link>https://x.com/SlickPickleNick/status/1987654321098765432</link>
+            <guid>https://www.tiktok.com/@SlickNick/video/7198765432109876543</guid>
+            <link>https://www.tiktok.com/@SlickNick/video/7198765432109876543</link>
           </item>
         </channel>
       </rss>
     `;
 
-    const items = service.parseRssItems(mockRssXml, 'SlickPickleNick', 'https://x.com');
+    const items = service.parseRssItems(mockRssXml, 'SlickNick', 'https://www.tiktok.com');
     assert.equal(items.length, 1);
-    assert.equal(items[0].itemId, '1987654321098765432');
-    assert.equal(items[0].authorName, 'SlickPickleNick');
-    assert.ok(items[0].title.includes('SlickBot release v0.9.5'));
-    assert.equal(items[0].thumbnailUrl, 'https://pbs.twimg.com/media/preview.jpg');
-    assert.equal(items[0].url, 'https://x.com/SlickPickleNick/status/1987654321098765432');
-    assert.equal(items[0].itemType, 'POST');
+    assert.equal(items[0].itemId, '7198765432109876543');
+    assert.equal(items[0].authorName, 'SlickNick');
+    assert.ok(items[0].title.includes('Insane gaming moment'));
+    assert.equal(items[0].thumbnailUrl, 'https://p16.tiktokcdn.com/media/preview.jpg');
+    assert.equal(items[0].url, 'https://www.tiktok.com/@SlickNick/video/7198765432109876543');
+    assert.equal(items[0].itemType, 'VIDEO');
   });
 });

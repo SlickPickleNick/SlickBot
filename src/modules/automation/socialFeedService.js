@@ -7,7 +7,6 @@ const { env } = require('../../config/env');
 const PLATFORM_KEYS = Object.freeze({
   TWITCH: 'TWITCH',
   YOUTUBE: 'YOUTUBE',
-  X: 'X',
   TIKTOK: 'TIKTOK'
 });
 
@@ -30,15 +29,6 @@ const PLATFORM_META = Object.freeze({
     defaultUrl: (handle) => handle.startsWith('UC') ? `https://youtube.com/channel/${handle}` : `https://youtube.com/@${handle.replace(/^@/, '')}`,
     supportsShorts: true
   },
-  [PLATFORM_KEYS.X]: {
-    key: PLATFORM_KEYS.X,
-    label: 'X (Twitter)',
-    color: 0x1DA1F2,
-    icon: '🐦',
-    emoji: '🐦',
-    defaultUrl: (handle) => `https://x.com/${handle.replace(/^@/, '')}`,
-    supportsPosts: true
-  },
   [PLATFORM_KEYS.TIKTOK]: {
     key: PLATFORM_KEYS.TIKTOK,
     label: 'TikTok',
@@ -56,7 +46,6 @@ const DEFAULT_TEMPLATES = Object.freeze({
   TWITCH_OFFLINE: '⚫ **{author}** has ended their stream. Streamed for **{duration}**.',
   YOUTUBE_VIDEO: '📹 **{author}** posted a new YouTube video!\n**{title}**\n{url}',
   YOUTUBE_SHORTS: '⚡ **{author}** uploaded a new YouTube Short!\n**{title}**\n{url}',
-  X_POST: '🐦 **{author}** posted on X:\n{title}\n{url}',
   TIKTOK_VIDEO: '🎵 **{author}** uploaded a new TikTok video!\n**{title}**\n{url}',
   TIKTOK_LIVE: '🔴 **{author}** is now LIVE on TikTok!\n{url}',
   TIKTOK_STORY: '✨ **{author}** posted a new TikTok story!\n{url}'
@@ -64,7 +53,6 @@ const DEFAULT_TEMPLATES = Object.freeze({
 
 function normalizePlatform(input) {
   const raw = String(input || '').trim().toUpperCase();
-  if (raw === 'TWITTER') return PLATFORM_KEYS.X;
   if (Object.values(PLATFORM_KEYS).includes(raw)) return raw;
   return null;
 }
@@ -75,12 +63,11 @@ function normalizeAccountId(platform, rawInput) {
 
   // Strip URLs if full profile/channel link provided
   val = val.replace(/^https?:\/\/(www\.)?twitch\.tv\//i, '');
-  val = val.replace(/^https?:\/\/(www\.)?(twitter\.com|x\.com)\//i, '');
   val = val.replace(/^https?:\/\/(www\.)?tiktok\.com\/@?/i, '');
   val = val.replace(/^https?:\/\/(www\.)?youtube\.com\/(@|channel\/|user\/|c\/)?/i, '');
   val = val.replace(/[/?#].*$/, '').trim();
 
-  // Strip leading @ for X / TikTok / YouTube handles unless UC channel ID
+  // Strip leading @ for TikTok / YouTube handles unless UC channel ID
   if (platform !== PLATFORM_KEYS.YOUTUBE || !val.startsWith('UC')) {
     val = val.replace(/^@+/, '');
   }
@@ -148,7 +135,6 @@ class SocialFeedService {
   constructor() {
     this.configCache = new Map();
     this.tokenCache = new Map();
-    this.xUserCache = new Map();
   }
 
   async getConfig(guildId) {
@@ -207,7 +193,7 @@ class SocialFeedService {
   }) {
     const normalizedPlatform = normalizePlatform(platform);
     if (!normalizedPlatform) {
-      return { ok: false, reason: 'Invalid platform. Supported platforms: Twitch, YouTube, X, TikTok.' };
+      return { ok: false, reason: 'Invalid platform. Supported platforms: Twitch, YouTube, TikTok.' };
     }
 
     const normalizedAccount = normalizeAccountId(normalizedPlatform, account);
@@ -479,125 +465,6 @@ class SocialFeedService {
     return items;
   }
 
-  async fetchXUpdates(feed) {
-    const handle = feed.account_id;
-    const bearerToken = env.X_BEARER_TOKEN;
-
-    // 1. Official Twitter API v2 if bearer token is provided
-    if (bearerToken) {
-      try {
-        let userId = this.xUserCache.get(handle.toLowerCase());
-        if (!userId) {
-          const userRes = await fetch(`https://api.twitter.com/2/users/by/username/${encodeURIComponent(handle)}`, {
-            headers: { Authorization: `Bearer ${bearerToken}` }
-          });
-          if (userRes.ok) {
-            const userData = await userRes.json();
-            if (userData.data?.id) {
-              userId = userData.data.id;
-              this.xUserCache.set(handle.toLowerCase(), userId);
-            }
-          }
-        }
-
-        if (userId) {
-          const tweetRes = await fetch(
-            `https://api.twitter.com/2/users/${userId}/tweets?tweet.fields=created_at,text,attachments,entities&expansions=attachments.media_keys&media.fields=url,preview_image_url&max_results=5`,
-            { headers: { Authorization: `Bearer ${bearerToken}` } }
-          );
-          if (tweetRes.ok) {
-            const tweetData = await tweetRes.json();
-            const mediaMap = new Map();
-            if (tweetData.includes?.media) {
-              for (const m of tweetData.includes.media) {
-                mediaMap.set(m.media_key, m.url || m.preview_image_url);
-              }
-            }
-
-            if (Array.isArray(tweetData.data) && tweetData.data.length > 0) {
-              return tweetData.data.map((tw) => {
-                const mediaKey = tw.attachments?.media_keys?.[0];
-                const thumb = mediaKey ? mediaMap.get(mediaKey) : null;
-                const link = `https://x.com/${handle}/status/${tw.id}`;
-                return {
-                  itemId: String(tw.id),
-                  title: `New Post from ${feed.account_name}`,
-                  description: tw.text || '',
-                  url: link,
-                  authorName: feed.account_name,
-                  publishedAt: tw.created_at ? new Date(tw.created_at) : new Date(),
-                  thumbnailUrl: thumb || null,
-                  itemType: 'POST'
-                };
-              });
-            }
-          }
-        }
-      } catch (_err) {
-        // Fallback to syndication
-      }
-    }
-
-    // 2. Syndication / FixTweet API fallback
-    const fixTweetUrls = [
-      `https://api.fxtwitter.com/${encodeURIComponent(handle)}/latest`,
-      `https://api.vxtwitter.com/${encodeURIComponent(handle)}/latest`
-    ];
-
-    for (const url of fixTweetUrls) {
-      try {
-        const res = await fetch(url, {
-          headers: { 'User-Agent': 'Mozilla/5.0 (compatible; SlickBot/0.9.5)' }
-        });
-        if (res.ok) {
-          const data = await res.json();
-          const tweet = data.tweet;
-          if (tweet && tweet.id) {
-            const mediaUrl = tweet.media?.photos?.[0]?.url || tweet.media?.all?.[0]?.url || tweet.media?.mosaic?.formats?.jpeg || null;
-            return [{
-              itemId: String(tweet.id),
-              title: `New Post from ${tweet.author?.name || feed.account_name}`,
-              description: tweet.text || '',
-              url: tweet.url || `https://x.com/${handle}/status/${tweet.id}`,
-              authorName: tweet.author?.name || feed.account_name,
-              avatarUrl: tweet.author?.avatar_url || null,
-              thumbnailUrl: mediaUrl,
-              publishedAt: tweet.created_at ? new Date(tweet.created_at) : (tweet.epoch ? new Date(tweet.epoch * 1000) : new Date()),
-              itemType: 'POST'
-            }];
-          }
-        }
-      } catch (_err) {
-        // Try next fallback
-      }
-    }
-
-    // 3. Public RSS Bridges (Nitter / XCancel)
-    const rssUrls = [
-      `https://xcancel.com/${encodeURIComponent(handle)}/rss`,
-      `https://nitter.net/${encodeURIComponent(handle)}/rss`,
-      `https://nitter.cz/${encodeURIComponent(handle)}/rss`,
-      `https://nitter.privacydev.net/${encodeURIComponent(handle)}/rss`
-    ];
-
-    for (const url of rssUrls) {
-      try {
-        const res = await fetch(url, {
-          headers: { 'User-Agent': 'Mozilla/5.0 (compatible; SlickBot/0.9.5)' }
-        });
-        if (res.ok) {
-          const xml = await res.text();
-          const items = this.parseRssItems(xml, feed.account_name, 'https://x.com');
-          if (items.length > 0) return items;
-        }
-      } catch (_err) {
-        // Try next fallback
-      }
-    }
-
-    return [];
-  }
-
   async fetchTikTokUpdates(feed) {
     const handle = feed.account_id;
 
@@ -719,7 +586,7 @@ class SocialFeedService {
     } else if (updateData.itemType === 'STORY' && !template) {
       template = DEFAULT_TEMPLATES.TIKTOK_STORY;
     } else if (!template) {
-      template = feed.platform === PLATFORM_KEYS.X ? DEFAULT_TEMPLATES.X_POST : `{author} posted a new update on {platform}!\n{url}`;
+      template = `{author} posted a new update on {platform}!\n{url}`;
     }
 
     const messageContent = applyFeedPlaceholders(template, {
@@ -897,7 +764,7 @@ class SocialFeedService {
 
   async testFeedAnnouncement(client, feed, customType = null, logger = null) {
     const platform = feed.platform;
-    const type = customType || (platform === PLATFORM_KEYS.TWITCH ? 'LIVE' : platform === PLATFORM_KEYS.YOUTUBE ? 'VIDEO' : 'POST');
+    const type = customType || (platform === PLATFORM_KEYS.TWITCH ? 'LIVE' : 'VIDEO');
     const meta = PLATFORM_META[platform] || { label: platform };
 
     const mockData = {
@@ -976,30 +843,6 @@ class SocialFeedService {
             }
           }
           statusNote = feedAnnounced > 0 ? `Announced ${feedAnnounced} new upload(s)` : (updates.length ? 'Up to date' : 'No uploads found');
-        } else if (feed.platform === PLATFORM_KEYS.X) {
-          const updates = await this.fetchXUpdates(feed);
-          for (const item of updates.slice(0, 3)) {
-            const exists = await query(
-              `SELECT id FROM social_feed_posts_history WHERE feed_id = $1 AND item_id = $2 LIMIT 1`,
-              [feed.id, item.itemId]
-            );
-            if (!exists.rows[0]) {
-              const res = await this.sendAnnouncement(client, feed, item, logger);
-              if (res.ok) {
-                announcedCount++;
-                feedAnnounced++;
-              }
-            }
-          }
-          if (feedAnnounced > 0) {
-            statusNote = `Announced ${feedAnnounced} new post(s)`;
-          } else if (updates.length > 0) {
-            statusNote = 'Up to date';
-          } else if (!env.X_BEARER_TOKEN) {
-            statusNote = 'Requires X_BEARER_TOKEN in .env for Twitter API v2';
-          } else {
-            statusNote = 'No new posts found on X';
-          }
         } else if (feed.platform === PLATFORM_KEYS.TIKTOK) {
           const updates = await this.fetchTikTokUpdates(feed);
           for (const item of updates.slice(0, 3)) {
@@ -1051,7 +894,6 @@ class SocialFeedService {
     const activeCount = feeds.filter((f) => f.enabled).length;
     const twitchCount = byPlatform[PLATFORM_KEYS.TWITCH] || 0;
     const ytCount = byPlatform[PLATFORM_KEYS.YOUTUBE] || 0;
-    const xCount = byPlatform[PLATFORM_KEYS.X] || 0;
     const ttCount = byPlatform[PLATFORM_KEYS.TIKTOK] || 0;
 
     const embed = createBaseEmbed({
@@ -1067,7 +909,6 @@ class SocialFeedService {
         `• Total Feeds: **${feeds.length}** (${activeCount} active)`,
         `• 🟣 Twitch: **${twitchCount}**`,
         `• 🔴 YouTube: **${ytCount}**`,
-        `• 🐦 X (Twitter): **${xCount}**`,
         `• 🎵 TikTok: **${ttCount}**`,
         '',
         '**Quick Commands**',

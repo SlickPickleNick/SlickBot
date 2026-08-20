@@ -214,9 +214,9 @@ const MODULE_SETUP_CATALOG = Object.freeze({
     usefulCommands: ['/bot-updates panel', '/bot-updates setup', '/bot-updates role-add', '/bot-updates preview', '/bot-updates send']
   },
   [ModuleKeys.SOCIAL_FEEDS]: {
-    name: 'Social Feeds', category: 'Automation Systems', description: 'Follows Twitch, YouTube, X (Twitter), and TikTok channels and posts customizable announcements in designated Discord channels.',
+    name: 'Social Feeds', category: 'Automation Systems', description: 'Follows Twitch, YouTube, and TikTok channels and posts customizable announcements in designated Discord channels.',
     managerCommand: '/feed manager', setupCommand: '/feed setup',
-    nextSteps: ['Run `/feed setup` to set a default announcement channel.', 'Use `/feed add` to follow Twitch, YouTube, X, or TikTok creators.', 'Use `/feed test` to verify announcement formatting and channel permissions.', 'Open `/feed manager` to review tracked accounts.'],
+    nextSteps: ['Run `/feed setup` to set a default announcement channel.', 'Use `/feed add` to follow Twitch, YouTube, or TikTok creators.', 'Use `/feed test` to verify announcement formatting and channel permissions.', 'Open `/feed manager` to review tracked accounts.'],
     usefulCommands: ['/feed manager', '/feed setup', '/feed add', '/feed list', '/feed edit', '/feed test', '/feed check', '/feed remove']
   },
   [ModuleKeys.UTILITY]: {

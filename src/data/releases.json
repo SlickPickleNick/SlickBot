@@ -1,14 +1,13 @@
 {
   "0.9.5": {
     "title": "SlickBot v0.9.5",
-    "summary": "Adds the Social Feeds module supporting Twitch live/offline announcements with duration tracking, YouTube video and Shorts separation with custom templates, X (Twitter) posts, and TikTok live/video/stories.",
+    "summary": "Adds the Social Feeds module supporting Twitch live/offline announcements with duration tracking, YouTube video and Shorts separation with custom templates, and TikTok live/video/stories.",
     "notes": [
       "Added the SOCIAL_FEEDS module under Automation Systems.",
-      "Supports following unlimited creator feeds across Twitch, YouTube, X (Twitter), and TikTok, each configured with its own announcement channel, ping role, and custom messages.",
+      "Supports following unlimited creator feeds across Twitch, YouTube, and TikTok, each configured with its own announcement channel, ping role, and custom messages.",
       "Twitch live announcements show stream title, game/category, viewer count, and live since timestamp.",
       "When a Twitch stream ends, SlickBot updates the original announcement embed to show offline status, exact offline timestamp, and total stream duration.",
       "YouTube tracker differentiates between Shorts and regular Longform videos with distinct customizable announcement text templates.",
-      "X (Twitter) posts announcement messages with tweet text, creator handle/avatar, media attachments, and custom text templates.",
       "TikTok tracks live streams, video uploads, and stories with distinct customizable announcement text templates.",
       "Added /feed command group: /feed setup, /feed add, /feed remove, /feed edit, /feed list, /feed test, /feed check, /feed manager, /feed reset.",
       "Added interactive autocomplete for selecting and managing existing feeds in /feed remove, /feed edit, and /feed test.",

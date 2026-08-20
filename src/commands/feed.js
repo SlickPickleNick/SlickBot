@@ -20,7 +20,7 @@ const platformChoices = Object.values(PLATFORM_KEYS).map((k) => ({
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('feed')
-    .setDescription('Manage social feeds and announcements for Twitch, YouTube, X, and TikTok.')
+    .setDescription('Manage social feeds and announcements for Twitch, YouTube, and TikTok.')
     .addSubcommand((sub) =>
       sub
         .setName('setup')
@@ -42,7 +42,7 @@ module.exports = {
     .addSubcommand((sub) =>
       sub
         .setName('add')
-        .setDescription('Follow a creator or channel across Twitch, YouTube, X, or TikTok.')
+        .setDescription('Follow a creator or channel across Twitch, YouTube, or TikTok.')
         .addStringOption((option) =>
           option
             .setName('platform')
@@ -53,7 +53,7 @@ module.exports = {
         .addStringOption((option) =>
           option
             .setName('account')
-            .setDescription('Username, handle, or channel ID (e.g. ninja, @SlickNick, mrbeast)')
+            .setDescription('Username, handle, or channel ID (e.g. ninja, @mrbeast)')
             .setRequired(true)
             .setMaxLength(150)
         )
@@ -164,8 +164,7 @@ module.exports = {
               { name: 'Live Stream (Twitch/TikTok)', value: 'LIVE' },
               { name: 'Longform Video (YouTube/TikTok)', value: 'VIDEO' },
               { name: 'YouTube Short', value: 'SHORT' },
-              { name: 'TikTok Story', value: 'STORY' },
-              { name: 'X / Post', value: 'POST' }
+              { name: 'TikTok Story', value: 'STORY' }
             )
         )
     )
