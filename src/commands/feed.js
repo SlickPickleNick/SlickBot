@@ -1,5 +1,4 @@
 const { SlashCommandBuilder, ChannelType, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const { env } = require('../config/env');
 const { ModuleKeys } = require('../modules/moduleRegistry');
 const { ActionKeys } = require('../modules/permissions/actionKeys');
 const { replyPrivate } = require('../utils/reply');
@@ -21,7 +20,7 @@ const platformChoices = Object.values(PLATFORM_KEYS).map((k) => ({
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('feed')
-    .setDescription('Manage social feeds and announcements for Twitch, YouTube, and TikTok.')
+    .setDescription('Manage social feeds and announcements for Twitch and YouTube.')
     .addSubcommand((sub) =>
       sub
         .setName('setup')
@@ -43,7 +42,7 @@ module.exports = {
     .addSubcommand((sub) =>
       sub
         .setName('add')
-        .setDescription('Follow a creator or channel across Twitch, YouTube, or TikTok.')
+        .setDescription('Follow a creator or channel on Twitch or YouTube.')
         .addStringOption((option) =>
           option
             .setName('platform')
@@ -162,10 +161,9 @@ module.exports = {
             .setDescription('Test notification type')
             .setRequired(false)
             .addChoices(
-              { name: 'Live Stream (Twitch/TikTok)', value: 'LIVE' },
-              { name: 'Longform Video (YouTube/TikTok)', value: 'VIDEO' },
-              { name: 'YouTube Short', value: 'SHORT' },
-              { name: 'TikTok Story', value: 'STORY' }
+              { name: 'Live Stream (Twitch)', value: 'LIVE' },
+              { name: 'Longform Video (YouTube)', value: 'VIDEO' },
+              { name: 'YouTube Short', value: 'SHORT' }
             )
         )
     )
@@ -178,22 +176,6 @@ module.exports = {
       sub
         .setName('manager')
         .setDescription('Open the interactive Social Feeds manager panel.')
-    )
-    .addSubcommand((sub) =>
-      sub
-        .setName('login')
-        .setDescription('Connect and authenticate your TikTok account for video/story announcements.')
-        .addStringOption((option) =>
-          option.setName('token').setDescription('Optional session or access token to save directly').setRequired(false)
-        )
-        .addStringOption((option) =>
-          option.setName('username').setDescription('Optional TikTok username/handle (e.g. @mrbeast)').setRequired(false)
-        )
-    )
-    .addSubcommand((sub) =>
-      sub
-        .setName('disconnect')
-        .setDescription('Unlink and disconnect the connected TikTok account for this server.')
     )
     .addSubcommand((sub) =>
       sub
@@ -491,79 +473,6 @@ module.exports = {
             '',
             '💡 *Tip: You can verify Discord channels, embeds, and role pings anytime with `/feed test`.*'
           ].join('\n')
-        )]
-      });
-    }
-
-    if (subcommand === 'login') {
-      const token = interaction.options.getString('token');
-      const username = interaction.options.getString('username');
-
-      if (token) {
-        await feeds.connectTikTokAccount(interaction.guildId, { sessionToken: token, username: username || null });
-        return replyPrivate(interaction, {
-          embeds: [createSuccessEmbed(
-            'TikTok Account Connected',
-            `Successfully connected TikTok credentials${username ? ` for **@${username.replace(/^@/, '')}**` : ''}!`
-          )]
-        });
-      }
-
-      // Display interactive connection prompt
-      const config = await feeds.getConfig(interaction.guildId);
-      const isConnected = Boolean(config.tiktok_session_token || config.tiktok_access_token);
-
-      // Compute OAuth authorization URL if TikTok app credentials are provided
-      let oauthUrl = null;
-      if (env.TIKTOK_CLIENT_KEY) {
-        const publicHost = env.PUBLIC_URL || (process.env.WEB_HOST && process.env.WEB_HOST !== '0.0.0.0' ? `http://${process.env.WEB_HOST}:${process.env.PORT || 3000}` : `http://localhost:${process.env.PORT || 3000}`);
-        const redirectUri = `${publicHost.replace(/\/+$/, '')}/auth/tiktok/callback`;
-        const state = Buffer.from(JSON.stringify({ guildId: interaction.guildId, timestamp: Date.now() })).toString('base64url');
-        oauthUrl = `https://www.tiktok.com/v2/auth/authorize/?client_key=${encodeURIComponent(env.TIKTOK_CLIENT_KEY)}&scope=user.info.basic,video.list&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&state=${encodeURIComponent(state)}`;
-      }
-
-      const descriptionLines = [
-        '**Status:** ' + (isConnected ? `✅ Connected${config.tiktok_username ? ` as **@${config.tiktok_username}**` : ''}` : '⚠️ **Not Connected**'),
-        '',
-        'Connect your TikTok account to allow SlickBot to automatically announce new video uploads, ephemeral stories, and live streams.',
-        '',
-        '**Connection Methods:**',
-        '• **In-Discord Connection**: Click **"Connect Account (In Discord)"** below to enter your account token directly in Discord.',
-        oauthUrl ? '• **One-Click OAuth**: Click **"Authorize with TikTok"** to authorize through TikTok\'s official developer dialog.' : '• **Official OAuth**: Requires `TIKTOK_CLIENT_KEY` and `TIKTOK_CLIENT_SECRET` in `.env` (from [developers.tiktok.com](https://developers.tiktok.com/)).'
-      ];
-
-      const embed = createBaseEmbed({
-        title: 'Connect TikTok Account',
-        description: descriptionLines.join('\n'),
-        color: SlickBotColors.PRIMARY,
-        footer: 'SlickBot Social Feeds · TikTok Auth'
-      });
-
-      const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(CustomIds.FeedsConnectTikTok).setLabel('Connect Account (In Discord)').setStyle(ButtonStyle.Success).setEmoji('🔑')
-      );
-
-      if (oauthUrl) {
-        row.addComponents(
-          new ButtonBuilder().setLabel('Authorize with TikTok (OAuth)').setStyle(ButtonStyle.Link).setURL(oauthUrl).setEmoji('🌐')
-        );
-      }
-
-      if (isConnected) {
-        row.addComponents(
-          new ButtonBuilder().setCustomId(CustomIds.FeedsDisconnectTikTok).setLabel('Disconnect').setStyle(ButtonStyle.Danger).setEmoji('🗑️')
-        );
-      }
-
-      return replyPrivate(interaction, { embeds: [embed], components: [row] });
-    }
-
-    if (subcommand === 'disconnect') {
-      await feeds.disconnectTikTokAccount(interaction.guildId);
-      return replyPrivate(interaction, {
-        embeds: [createSuccessEmbed(
-          'TikTok Account Disconnected',
-          'Successfully disconnected and cleared TikTok credentials for this server.'
         )]
       });
     }

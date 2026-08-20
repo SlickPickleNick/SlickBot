@@ -22,7 +22,7 @@ test('Social Feeds Utility and Helper Functions', async (t) => {
     assert.equal(normalizePlatform('twitch'), PLATFORM_KEYS.TWITCH);
     assert.equal(normalizePlatform('TWITCH'), PLATFORM_KEYS.TWITCH);
     assert.equal(normalizePlatform('youtube'), PLATFORM_KEYS.YOUTUBE);
-    assert.equal(normalizePlatform('tiktok'), PLATFORM_KEYS.TIKTOK);
+    assert.equal(normalizePlatform('tiktok'), null);
     assert.equal(normalizePlatform('x'), null);
     assert.equal(normalizePlatform('twitter'), null);
     assert.equal(normalizePlatform('instagram'), null);
@@ -32,7 +32,6 @@ test('Social Feeds Utility and Helper Functions', async (t) => {
   await t.test('normalizeAccountId extracts usernames and channel IDs correctly', () => {
     assert.equal(normalizeAccountId(PLATFORM_KEYS.TWITCH, 'https://twitch.tv/ninja'), 'ninja');
     assert.equal(normalizeAccountId(PLATFORM_KEYS.TWITCH, 'ninja'), 'ninja');
-    assert.equal(normalizeAccountId(PLATFORM_KEYS.TIKTOK, 'https://tiktok.com/@tiktokcreator'), 'tiktokcreator');
     assert.equal(normalizeAccountId(PLATFORM_KEYS.YOUTUBE, 'https://youtube.com/@SlickNick'), 'slicknick');
     assert.equal(normalizeAccountId(PLATFORM_KEYS.YOUTUBE, 'UC1234567890abcdef123456'), 'uc1234567890abcdef123456');
   });
@@ -111,12 +110,11 @@ test('SocialFeedService Database CRUD and Caching', async (t) => {
     });
 
     const config1 = await service.getConfig(guildId);
-    assert.equal(config1.guild_id, guildId);
     assert.equal(config1.enabled, true);
-    assert.equal(queryCount, 1);
+    assert.equal(config1.default_channel_id, '300000000000000001');
 
     const config2 = await service.getConfig(guildId);
-    assert.equal(config2.guild_id, guildId);
+    assert.equal(config2.enabled, true);
     assert.equal(queryCount, 1); // Served from cache
   });
 
@@ -169,43 +167,6 @@ test('SocialFeedService Database CRUD and Caching', async (t) => {
     assert.ok(removed);
     assert.equal(removed.account_name, 'ninja');
   });
-
-  await t.test('connectTikTokAccount and disconnectTikTokAccount update database', async () => {
-    db.addHandler('INSERT INTO social_feed_configs', (text, params) => {
-      return {
-        rows: [{
-          guild_id: params[0],
-          tiktok_session_token: params[1],
-          tiktok_access_token: params[2],
-          tiktok_user_id: params[3],
-          tiktok_username: params[4]
-        }],
-        rowCount: 1
-      };
-    });
-
-    db.addHandler('UPDATE social_feed_configs', () => {
-      return {
-        rows: [{
-          guild_id: guildId,
-          tiktok_session_token: null,
-          tiktok_access_token: null,
-          tiktok_username: null
-        }],
-        rowCount: 1
-      };
-    });
-
-    const connected = await service.connectTikTokAccount(guildId, {
-      sessionToken: 'test-session-token-123',
-      username: 'mrbeast'
-    });
-    assert.equal(connected.tiktok_session_token, 'test-session-token-123');
-    assert.equal(connected.tiktok_username, 'mrbeast');
-
-    const disconnected = await service.disconnectTikTokAccount(guildId);
-    assert.equal(disconnected.tiktok_session_token, null);
-  });
 });
 
 test('Feed Slash Command Structure and Permissions', async (t) => {
@@ -222,8 +183,6 @@ test('Feed Slash Command Structure and Permissions', async (t) => {
     assert.ok(subcommands.includes('test'));
     assert.ok(subcommands.includes('check'));
     assert.ok(subcommands.includes('manager'));
-    assert.ok(subcommands.includes('login'));
-    assert.ok(subcommands.includes('disconnect'));
     assert.ok(subcommands.includes('reset'));
 
     assert.equal(feedCommand.getActionKey({ options: { getSubcommand: () => 'list' } }), ActionKeys.FeedsView);
@@ -231,8 +190,6 @@ test('Feed Slash Command Structure and Permissions', async (t) => {
     assert.equal(feedCommand.getActionKey({ options: { getSubcommand: () => 'reset' } }), ActionKeys.FeedsReset);
     assert.equal(feedCommand.getActionKey({ options: { getSubcommand: () => 'setup' } }), ActionKeys.FeedsManage);
     assert.equal(feedCommand.getActionKey({ options: { getSubcommand: () => 'add' } }), ActionKeys.FeedsManage);
-    assert.equal(feedCommand.getActionKey({ options: { getSubcommand: () => 'login' } }), ActionKeys.FeedsManage);
-    assert.equal(feedCommand.getActionKey({ options: { getSubcommand: () => 'disconnect' } }), ActionKeys.FeedsManage);
     assert.equal(feedCommand.isPublic({ options: { getSubcommand: () => 'list' } }), true);
     assert.equal(feedCommand.isPublic({ options: { getSubcommand: () => 'add' } }), false);
   });
@@ -282,57 +239,5 @@ test('Feed Slash Command Structure and Permissions', async (t) => {
     assert.ok(reply.embeds?.[0]?.data?.description?.includes('Ninja'));
 
     db.uninstall();
-  });
-
-  await t.test('parseRssItems extracts videos, links, and media correctly', () => {
-    const service = new SocialFeedService();
-    const mockRssXml = `
-      <rss version="2.0">
-        <channel>
-          <title>TikTok / SlickNick</title>
-          <item>
-            <title>Insane gaming moment in TikTok video!</title>
-            <dc:creator>SlickNick</dc:creator>
-            <description>&lt;p&gt;Insane gaming moment!&lt;/p&gt;&lt;img src="https://p16.tiktokcdn.com/media/preview.jpg" /&gt;</description>
-            <pubDate>Thu, 20 Aug 2026 05:40:00 GMT</pubDate>
-            <guid>https://www.tiktok.com/@SlickNick/video/7198765432109876543</guid>
-            <link>https://www.tiktok.com/@SlickNick/video/7198765432109876543</link>
-          </item>
-        </channel>
-      </rss>
-    `;
-
-    const items = service.parseRssItems(mockRssXml, 'SlickNick', 'https://www.tiktok.com');
-    assert.equal(items.length, 1);
-    assert.equal(items[0].itemId, '7198765432109876543');
-    assert.equal(items[0].authorName, 'SlickNick');
-    assert.ok(items[0].title.includes('Insane gaming moment'));
-    assert.equal(items[0].thumbnailUrl, 'https://p16.tiktokcdn.com/media/preview.jpg');
-    assert.equal(items[0].url, 'https://www.tiktok.com/@SlickNick/video/7198765432109876543');
-    assert.equal(items[0].itemType, 'VIDEO');
-  });
-
-  await t.test('parseRssItems detects TikTok stories from story tags', () => {
-    const service = new SocialFeedService();
-    const mockStoryXml = `
-      <rss version="2.0">
-        <channel>
-          <title>TikTok / SlickNick</title>
-          <item>
-            <title>My quick daily update! #story</title>
-            <dc:creator>SlickNick</dc:creator>
-            <description>Check out my story!</description>
-            <pubDate>Thu, 20 Aug 2026 05:45:00 GMT</pubDate>
-            <guid>https://www.tiktok.com/@SlickNick/video/7999888777666555444</guid>
-            <link>https://www.tiktok.com/@SlickNick/video/7999888777666555444</link>
-          </item>
-        </channel>
-      </rss>
-    `;
-
-    const items = service.parseRssItems(mockStoryXml, 'SlickNick', 'https://www.tiktok.com');
-    assert.equal(items.length, 1);
-    assert.equal(items[0].itemId, '7999888777666555444');
-    assert.equal(items[0].itemType, 'STORY');
   });
 });

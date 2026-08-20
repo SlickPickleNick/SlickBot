@@ -386,44 +386,6 @@ async function handleButton(interaction, ctx) {
     return true;
   }
 
-  if (id === CustomIds.FeedsConnectTikTok) {
-    if (!(await requireAction(interaction, ctx, ActionKeys.FeedsManage, ModuleKeys.SOCIAL_FEEDS))) return true;
-    const modal = new ModalBuilder()
-      .setCustomId(CustomIds.FeedsTikTokModal)
-      .setTitle('Connect TikTok Account');
-
-    const usernameInput = new TextInputBuilder()
-      .setCustomId('username')
-      .setLabel('TikTok Username / Handle')
-      .setPlaceholder('@yourhandle (e.g. @mrbeast)')
-      .setStyle(TextInputStyle.Short)
-      .setRequired(false)
-      .setMaxLength(100);
-
-    const tokenInput = new TextInputBuilder()
-      .setCustomId('token')
-      .setLabel('Session / Access Token')
-      .setPlaceholder('Paste your TikTok session or API token')
-      .setStyle(TextInputStyle.Paragraph)
-      .setRequired(true)
-      .setMaxLength(1000);
-
-    modal.addComponents(
-      new ActionRowBuilder().addComponents(usernameInput),
-      new ActionRowBuilder().addComponents(tokenInput)
-    );
-
-    await interaction.showModal(modal);
-    return true;
-  }
-
-  if (id === CustomIds.FeedsDisconnectTikTok) {
-    if (!(await requireAction(interaction, ctx, ActionKeys.FeedsManage, ModuleKeys.SOCIAL_FEEDS))) return true;
-    await socialFeeds.disconnectTikTokAccount(interaction.guildId);
-    await updatePanel(interaction, await socialFeeds.buildManagerPanel(interaction.guildId));
-    return true;
-  }
-
   if (id.startsWith(CustomIds.SupportResetCancelPrefix)) {
     const payload = parseSupportResetId(id, CustomIds.SupportResetCancelPrefix);
     if (!payload || payload.requestedByUserId !== interaction.user.id) {
@@ -1318,31 +1280,6 @@ async function handleSelect(interaction, ctx) {
 
 async function handleModal(interaction, ctx) {
   const id = interaction.customId;
-
-  if (id === CustomIds.FeedsTikTokModal) {
-    if (!(await requireAction(interaction, ctx, ActionKeys.FeedsManage, ModuleKeys.SOCIAL_FEEDS))) return true;
-    const username = (interaction.fields.getTextInputValue('username') || '').trim();
-    const token = (interaction.fields.getTextInputValue('token') || '').trim();
-    if (token) {
-      await socialFeeds.connectTikTokAccount(interaction.guildId, {
-        sessionToken: token,
-        username: username ? username.replace(/^@/, '') : null
-      });
-      await interaction.reply({
-        embeds: [createSuccessEmbed(
-          'TikTok Account Connected',
-          `Successfully saved TikTok credentials${username ? ` for **@${username.replace(/^@/, '')}**` : ''}!`
-        )],
-        flags: MessageFlags.Ephemeral
-      });
-    } else {
-      await interaction.reply({
-        embeds: [createWarningEmbed('Token Required', 'Please provide a valid session or access token.')],
-        flags: MessageFlags.Ephemeral
-      });
-    }
-    return true;
-  }
 
   if (id === CustomIds.StatusActivityTextModal) {
     if (!(await requireAction(interaction, ctx, ActionKeys.StatusManage, ModuleKeys.STATUS))) return true;

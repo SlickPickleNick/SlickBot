@@ -188,10 +188,7 @@ const CustomIds = Object.freeze({
   FeedsCheckNow: 'slickbot:feeds:check-now',
   FeedsRefresh: 'slickbot:feeds:refresh',
   FeedsResetConfirmPrefix: 'slickbot:feeds:reset:confirm:',
-  FeedsResetCancelPrefix: 'slickbot:feeds:reset:cancel:',
-  FeedsConnectTikTok: 'slickbot:feeds:connect-tiktok',
-  FeedsDisconnectTikTok: 'slickbot:feeds:disconnect-tiktok',
-  FeedsTikTokModal: 'slickbot:modal:feeds-tiktok'
+  FeedsResetCancelPrefix: 'slickbot:feeds:reset:cancel:'
 });
 
 module.exports = { CustomIds };

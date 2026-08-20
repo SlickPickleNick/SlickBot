@@ -6,8 +6,7 @@ const { env } = require('../../config/env');
 
 const PLATFORM_KEYS = Object.freeze({
   TWITCH: 'TWITCH',
-  YOUTUBE: 'YOUTUBE',
-  TIKTOK: 'TIKTOK'
+  YOUTUBE: 'YOUTUBE'
 });
 
 const PLATFORM_META = Object.freeze({
@@ -28,16 +27,6 @@ const PLATFORM_META = Object.freeze({
     emoji: '▶️',
     defaultUrl: (handle) => handle.startsWith('UC') ? `https://youtube.com/channel/${handle}` : `https://youtube.com/@${handle.replace(/^@/, '')}`,
     supportsShorts: true
-  },
-  [PLATFORM_KEYS.TIKTOK]: {
-    key: PLATFORM_KEYS.TIKTOK,
-    label: 'TikTok',
-    color: 0xEE1D52,
-    icon: '🎵',
-    emoji: '🎵',
-    defaultUrl: (handle) => `https://tiktok.com/@${handle.replace(/^@/, '')}`,
-    supportsLive: true,
-    supportsStories: true
   }
 });
 
@@ -45,10 +34,7 @@ const DEFAULT_TEMPLATES = Object.freeze({
   TWITCH_LIVE: '🔴 **{author}** is now LIVE on Twitch playing **{game}**!\n**{title}**\n{url}',
   TWITCH_OFFLINE: '⚫ **{author}** has ended their stream. Streamed for **{duration}**.',
   YOUTUBE_VIDEO: '📹 **{author}** posted a new YouTube video!\n**{title}**\n{url}',
-  YOUTUBE_SHORTS: '⚡ **{author}** uploaded a new YouTube Short!\n**{title}**\n{url}',
-  TIKTOK_VIDEO: '🎵 **{author}** uploaded a new TikTok video!\n**{title}**\n{url}',
-  TIKTOK_LIVE: '🔴 **{author}** is now LIVE on TikTok!\n{url}',
-  TIKTOK_STORY: '✨ **{author}** posted a new TikTok story!\n{url}'
+  YOUTUBE_SHORTS: '⚡ **{author}** uploaded a new YouTube Short!\n**{title}**\n{url}'
 });
 
 function normalizePlatform(input) {
@@ -63,7 +49,6 @@ function normalizeAccountId(platform, rawInput) {
 
   // Strip URLs if full profile/channel link provided
   val = val.replace(/^https?:\/\/(www\.)?twitch\.tv\//i, '');
-  val = val.replace(/^https?:\/\/(www\.)?tiktok\.com\/@?/i, '');
   val = val.replace(/^https?:\/\/(www\.)?youtube\.com\/(@|channel\/|user\/|c\/)?/i, '');
   val = val.replace(/[/?#].*$/, '').trim();
 
@@ -178,41 +163,6 @@ class SocialFeedService {
     return result.rows[0];
   }
 
-  async connectTikTokAccount(guildId, { sessionToken = null, accessToken = null, userId = null, username = null } = {}) {
-    const result = await query(
-      `INSERT INTO social_feed_configs (guild_id, tiktok_session_token, tiktok_access_token, tiktok_user_id, tiktok_username, tiktok_connected_at)
-       VALUES ($1, $2, $3, $4, $5, NOW())
-       ON CONFLICT (guild_id) DO UPDATE SET
-         tiktok_session_token = COALESCE(EXCLUDED.tiktok_session_token, social_feed_configs.tiktok_session_token),
-         tiktok_access_token = COALESCE(EXCLUDED.tiktok_access_token, social_feed_configs.tiktok_access_token),
-         tiktok_user_id = COALESCE(EXCLUDED.tiktok_user_id, social_feed_configs.tiktok_user_id),
-         tiktok_username = COALESCE(EXCLUDED.tiktok_username, social_feed_configs.tiktok_username),
-         tiktok_connected_at = NOW(),
-         updated_at = NOW()
-       RETURNING *`,
-      [guildId, sessionToken, accessToken, userId, username]
-    );
-    this.configCache.delete(guildId);
-    return result.rows[0];
-  }
-
-  async disconnectTikTokAccount(guildId) {
-    const result = await query(
-      `UPDATE social_feed_configs
-       SET tiktok_session_token = NULL,
-           tiktok_access_token = NULL,
-           tiktok_user_id = NULL,
-           tiktok_username = NULL,
-           tiktok_connected_at = NULL,
-           updated_at = NOW()
-       WHERE guild_id = $1
-       RETURNING *`,
-      [guildId]
-    );
-    this.configCache.delete(guildId);
-    return result.rows[0] || null;
-  }
-
   async addFeed({
     guildId,
     platform,
@@ -228,7 +178,7 @@ class SocialFeedService {
   }) {
     const normalizedPlatform = normalizePlatform(platform);
     if (!normalizedPlatform) {
-      return { ok: false, reason: 'Invalid platform. Supported platforms: Twitch, YouTube, TikTok.' };
+      return { ok: false, reason: 'Invalid platform. Supported platforms: Twitch, YouTube.' };
     }
 
     const normalizedAccount = normalizeAccountId(normalizedPlatform, account);
@@ -500,211 +450,6 @@ class SocialFeedService {
     return items;
   }
 
-  async fetchTikTokUpdates(feed) {
-    const handle = feed.account_id;
-    const cleanHandle = handle.replace(/^@/, '');
-    const config = await this.getConfig(feed.guild_id);
-    const sessionId = config.tiktok_session_token || env.TIKTOK_SESSION_ID;
-    const accessToken = config.tiktok_access_token || env.TIKTOK_ACCESS_TOKEN;
-
-    // 1. Authenticated User Session Login (via sessionid cookie)
-    if (sessionId) {
-      try {
-        const cookieHeader = sessionId.includes('sessionid=') ? sessionId : `sessionid=${sessionId}`;
-        const profileUrl = `https://www.tiktok.com/@${encodeURIComponent(cleanHandle)}`;
-        const res = await fetch(profileUrl, {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.9',
-            'Cookie': cookieHeader
-          },
-          signal: AbortSignal.timeout(6000)
-        });
-
-        if (res.ok) {
-          const html = await res.text();
-          const rehydrationMatch = html.match(/<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__"[^>]*>([\s\S]*?)<\/script>/);
-          if (rehydrationMatch) {
-            const data = JSON.parse(rehydrationMatch[1]);
-            const defaultScope = data['__DEFAULT_SCOPE__'] || {};
-            const userDetail = defaultScope['webapp.user-detail'] || {};
-            const userInfo = userDetail.userInfo || {};
-            const authorName = userInfo.user?.nickname || userInfo.user?.uniqueId || feed.account_name;
-            const secUid = userInfo.user?.secUid;
-            const roomId = userInfo.user?.roomId;
-
-            const updates = [];
-
-            // Check if creator is currently LIVE
-            if (roomId) {
-              updates.push({
-                itemId: `live-${roomId}`,
-                title: `🔴 ${authorName} is LIVE on TikTok!`,
-                description: 'Watch live stream on TikTok!',
-                url: `https://www.tiktok.com/@${cleanHandle}/live`,
-                authorName,
-                avatarUrl: userInfo.user?.avatarLarger || null,
-                publishedAt: new Date(),
-                itemType: 'LIVE'
-              });
-            }
-
-            // Check items via TikTok web API endpoint with authenticated cookie
-            if (secUid) {
-              try {
-                const apiRes = await fetch(`https://www.tiktok.com/api/post/item_list/?aid=1988&app_name=tiktok_web&count=10&secUid=${encodeURIComponent(secUid)}`, {
-                  headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-                    'Cookie': cookieHeader
-                  },
-                  signal: AbortSignal.timeout(5000)
-                });
-                if (apiRes.ok) {
-                  const apiData = await apiRes.json();
-                  const itemList = apiData.itemList || [];
-                  for (const item of itemList) {
-                    const isStory = item.isStory || item.itemType === 1 || String(item.desc || '').toLowerCase().includes('#story');
-                    updates.push({
-                      itemId: String(item.id),
-                      title: item.desc ? item.desc.slice(0, 150) : `New ${isStory ? 'story' : 'video'} from ${authorName}`,
-                      description: item.desc || '',
-                      url: `https://www.tiktok.com/@${cleanHandle}/video/${item.id}`,
-                      authorName: item.author?.nickname || authorName,
-                      avatarUrl: item.author?.avatarLarger || null,
-                      thumbnailUrl: item.video?.cover || item.video?.originCover || null,
-                      publishedAt: item.createTime ? new Date(item.createTime * 1000) : new Date(),
-                      itemType: isStory ? 'STORY' : 'VIDEO'
-                    });
-                  }
-                }
-              } catch (_apiErr) {}
-            }
-
-            if (updates.length > 0) return updates;
-          }
-        }
-      } catch (_err) {
-        // Fallback to next strategy
-      }
-    }
-
-    // 2. Official TikTok API v2 (if access token configured)
-    if (accessToken) {
-      try {
-        const res = await fetch('https://open.tiktokapis.com/v2/video/list/?fields=id,title,video_description,duration,cover_image_url,share_url,create_time', {
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json'
-          },
-          signal: AbortSignal.timeout(5000)
-        });
-        if (res.ok) {
-          const data = await res.json();
-          const videos = data.data?.videos || [];
-          if (Array.isArray(videos) && videos.length > 0) {
-            return videos.map((v) => ({
-              itemId: String(v.id),
-              title: v.title || v.video_description || `New TikTok from ${feed.account_name}`,
-              description: v.video_description || '',
-              url: v.share_url || `https://www.tiktok.com/@${cleanHandle}/video/${v.id}`,
-              authorName: feed.account_name,
-              thumbnailUrl: v.cover_image_url || null,
-              publishedAt: v.create_time ? new Date(v.create_time * 1000) : new Date(),
-              itemType: 'VIDEO'
-            }));
-          }
-        }
-      } catch (_err) {}
-    }
-
-    // 3. ProxiTok / Public RSS Fallbacks
-    const rssUrls = [
-      `https://proxitok.pabloferreiro.es/@${encodeURIComponent(cleanHandle)}/rss`,
-      `https://tok.habedieeh.re/@${encodeURIComponent(cleanHandle)}/rss`,
-      `https://proxitok.pussthecat.org/@${encodeURIComponent(cleanHandle)}/rss`
-    ];
-
-    for (const url of rssUrls) {
-      try {
-        const res = await fetch(url, {
-          headers: { 'User-Agent': 'Mozilla/5.0 (compatible; SlickBot/0.9.5)' },
-          signal: AbortSignal.timeout(3000)
-        });
-        if (res.ok) {
-          const xml = await res.text();
-          const items = this.parseRssItems(xml, feed.account_name, 'https://www.tiktok.com');
-          if (items.length > 0) return items;
-        }
-      } catch (_err) {
-        // Try next
-      }
-    }
-
-    return [];
-  }
-
-  parseRssItems(xml, defaultAuthorName, defaultBaseUrl) {
-    const items = [];
-    const itemMatches = xml.matchAll(/<item>([\s\S]*?)<\/item>/g);
-    for (const match of itemMatches) {
-      const itemXml = match[1];
-      const titleMatch = itemXml.match(/<title>([\s\S]*?)<\/title>/);
-      const linkMatch = itemXml.match(/<link>([\s\S]*?)<\/link>/);
-      const guidMatch = itemXml.match(/<guid.*?>([\s\S]*?)<\/guid>/);
-      const pubDateMatch = itemXml.match(/<pubDate>([\s\S]*?)<\/pubDate>/);
-      const descMatch = itemXml.match(/<description>([\s\S]*?)<\/description>/);
-      const authorMatch = itemXml.match(/<dc:creator>([\s\S]*?)<\/dc:creator>/) || itemXml.match(/<author>([\s\S]*?)<\/author>/);
-
-      const link = linkMatch ? linkMatch[1].trim() : (guidMatch ? guidMatch[1].trim() : null);
-      if (!link) continue;
-
-      let itemId = guidMatch ? guidMatch[1].trim() : link;
-      const statusIdMatch = link.match(/\/status\/(\d+)/) || link.match(/\/video\/(\d+)/) || link.match(/\/v\/(\d+)/);
-      if (statusIdMatch) itemId = statusIdMatch[1];
-
-      const rawTitle = titleMatch
-        ? titleMatch[1].replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&').trim()
-        : '';
-      const decodedDesc = descMatch
-        ? descMatch[1].replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&')
-        : '';
-      const rawDesc = decodedDesc.replace(/<[^>]*>/g, '').trim();
-      const author = authorMatch ? authorMatch[1].replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1').trim() : defaultAuthorName;
-      const pubDate = pubDateMatch ? new Date(pubDateMatch[1].trim()) : new Date();
-
-      let thumb = null;
-      const imgMatch = itemXml.match(/<enclosure[^>]*url="([^"]+)"/) ||
-        itemXml.match(/<media:thumbnail[^>]*url="([^"]+)"/) ||
-        decodedDesc.match(/<img[^>]*src="([^"]+)"/) ||
-        itemXml.match(/src="([^"]+\.(?:jpg|jpeg|png|webp)[^"]*)"/i);
-      if (imgMatch) thumb = imgMatch[1];
-
-      let itemType = 'POST';
-      if (link.includes('/shorts/') || rawTitle.toLowerCase().includes('#shorts') || rawTitle.toLowerCase().includes('#short')) {
-        itemType = 'SHORT';
-      } else if (link.includes('tiktok.com') && (rawTitle.toLowerCase().includes('live') || link.includes('/live'))) {
-        itemType = 'LIVE';
-      } else if (link.includes('tiktok.com') && rawTitle.toLowerCase().includes('story')) {
-        itemType = 'STORY';
-      } else if (link.includes('tiktok.com') || link.includes('youtube.com')) {
-        itemType = 'VIDEO';
-      }
-
-      items.push({
-        itemId: String(itemId),
-        title: rawTitle.slice(0, 200) || `New update from ${author}`,
-        description: rawDesc.slice(0, 1000),
-        url: link.startsWith('http') ? link : `${defaultBaseUrl}${link}`,
-        authorName: author,
-        thumbnailUrl: thumb,
-        publishedAt: isNaN(pubDate.getTime()) ? new Date() : pubDate,
-        itemType
-      });
-    }
-    return items;
-  }
-
   // --- Announcement & Message Editing Engine ---
 
   async sendAnnouncement(client, feed, updateData, logger) {
@@ -727,15 +472,11 @@ class SocialFeedService {
     } else if (updateData.itemType === 'VIDEO' && feed.video_message) {
       template = feed.video_message;
     } else if (updateData.itemType === 'VIDEO' && !template) {
-      template = feed.platform === PLATFORM_KEYS.TIKTOK ? DEFAULT_TEMPLATES.TIKTOK_VIDEO : DEFAULT_TEMPLATES.YOUTUBE_VIDEO;
+      template = DEFAULT_TEMPLATES.YOUTUBE_VIDEO;
     } else if (updateData.itemType === 'LIVE' && feed.live_message) {
       template = feed.live_message;
     } else if (updateData.itemType === 'LIVE' && !template) {
-      template = feed.platform === PLATFORM_KEYS.TIKTOK ? DEFAULT_TEMPLATES.TIKTOK_LIVE : DEFAULT_TEMPLATES.TWITCH_LIVE;
-    } else if (updateData.itemType === 'STORY' && feed.story_message) {
-      template = feed.story_message;
-    } else if (updateData.itemType === 'STORY' && !template) {
-      template = DEFAULT_TEMPLATES.TIKTOK_STORY;
+      template = DEFAULT_TEMPLATES.TWITCH_LIVE;
     } else if (!template) {
       template = `{author} posted a new update on {platform}!\n{url}`;
     }
@@ -994,30 +735,6 @@ class SocialFeedService {
             }
           }
           statusNote = feedAnnounced > 0 ? `Announced ${feedAnnounced} new upload(s)` : (updates.length ? 'Up to date' : 'No uploads found');
-        } else if (feed.platform === PLATFORM_KEYS.TIKTOK) {
-          const updates = await this.fetchTikTokUpdates(feed);
-          for (const item of updates.slice(0, 3)) {
-            const exists = await query(
-              `SELECT id FROM social_feed_posts_history WHERE feed_id = $1 AND item_id = $2 LIMIT 1`,
-              [feed.id, item.itemId]
-            );
-            if (!exists.rows[0]) {
-              const res = await this.sendAnnouncement(client, feed, item, logger);
-              if (res.ok) {
-                announcedCount++;
-                feedAnnounced++;
-              }
-            }
-          }
-          if (feedAnnounced > 0) {
-            statusNote = `Announced ${feedAnnounced} new upload(s)`;
-          } else if (updates.length > 0) {
-            statusNote = 'Up to date';
-          } else if (!env.TIKTOK_SESSION_ID && !env.TIKTOK_ACCESS_TOKEN) {
-            statusNote = 'Requires TIKTOK_SESSION_ID in .env for authenticated login';
-          } else {
-            statusNote = 'No new updates found on TikTok';
-          }
         }
 
         await query(`UPDATE social_feeds SET last_checked_at = NOW(), last_error = NULL WHERE id = $1`, [feed.id]);
@@ -1053,8 +770,6 @@ class SocialFeedService {
     const activeCount = feeds.filter((f) => f.enabled).length;
     const twitchCount = byPlatform[PLATFORM_KEYS.TWITCH] || 0;
     const ytCount = byPlatform[PLATFORM_KEYS.YOUTUBE] || 0;
-    const isTikTokConnected = Boolean(config.tiktok_session_token || config.tiktok_access_token || env.TIKTOK_SESSION_ID || env.TIKTOK_ACCESS_TOKEN);
-    const tiktokLabel = config.tiktok_username ? `@${config.tiktok_username}` : (isTikTokConnected ? 'Connected' : null);
 
     const embed = createBaseEmbed({
       title: 'SlickBot Social Feeds Manager',
@@ -1064,16 +779,13 @@ class SocialFeedService {
         `Module Enabled: **${config.enabled ? '✅ Enabled' : '⏸️ Disabled'}**`,
         `Default Channel: ${config.default_channel_id ? `<#${config.default_channel_id}>` : '*None (Configured per feed)*'}`,
         `Default Ping Role: ${config.default_ping_role_id ? `<@&${config.default_ping_role_id}>` : '*None*'}`,
-        `TikTok Account: **${tiktokLabel ? `✅ ${tiktokLabel}` : '⚠️ Not Connected (Click Connect below)'}**`,
         '',
         '**Tracked Channels Summary**',
         `• Total Feeds: **${feeds.length}** (${activeCount} active)`,
         `• 🟣 Twitch: **${twitchCount}**`,
         `• 🔴 YouTube: **${ytCount}**`,
-        `• 🎵 TikTok: **${ttCount}**`,
         '',
         '**Quick Commands**',
-        '• `/feed login` — Connect or authenticate TikTok account',
         '• `/feed add` — Follow a new creator or channel',
         '• `/feed remove` — Unfollow a channel',
         '• `/feed edit` — Change notification channels or custom messages',
@@ -1086,7 +798,6 @@ class SocialFeedService {
     });
 
     const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId(CustomIds.FeedsConnectTikTok).setLabel(isTikTokConnected ? 'Manage TikTok' : 'Connect TikTok').setStyle(isTikTokConnected ? ButtonStyle.Secondary : ButtonStyle.Success).setEmoji('🎵'),
       new ButtonBuilder().setCustomId(CustomIds.FeedsCheckNow).setLabel('Check Feeds Now').setStyle(ButtonStyle.Primary).setEmoji('🔄'),
       new ButtonBuilder().setCustomId(CustomIds.FeedsRefresh).setLabel('Refresh Panel').setStyle(ButtonStyle.Secondary).setEmoji('📋'),
       new ButtonBuilder().setCustomId(CustomIds.SetupRefresh).setLabel('Setup Center').setStyle(ButtonStyle.Secondary).setEmoji('🏠')
