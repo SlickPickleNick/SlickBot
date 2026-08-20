@@ -13,11 +13,50 @@ const {
 } = require('./actionKeys');
 
 class PermissionService {
+  constructor() {
+    this.seededGuilds = new Set();
+    this.ignoredUsersCache = new Map();
+    this.moduleEnabledCache = new Map();
+    this.publicActionCache = new Map();
+    this.requiredLevelCache = new Map();
+  }
+
   isBotOwner(userId) {
     return botOwnerIds.includes(userId);
   }
 
-  async ensureGuildConfig(guildId, guildName = null) {
+  invalidateIgnoredUsers(guildId) {
+    if (guildId) this.ignoredUsersCache.delete(guildId);
+    else this.ignoredUsersCache.clear();
+  }
+
+  invalidateModuleConfigs(guildId) {
+    if (guildId) this.moduleEnabledCache.delete(guildId);
+    else this.moduleEnabledCache.clear();
+  }
+
+  invalidatePublicActions(guildId) {
+    if (guildId) this.publicActionCache.delete(guildId);
+    else this.publicActionCache.clear();
+  }
+
+  invalidatePermissionLevels(guildId) {
+    if (guildId) this.requiredLevelCache.delete(guildId);
+    else this.requiredLevelCache.clear();
+  }
+
+  clearAllCaches() {
+    this.seededGuilds.clear();
+    this.ignoredUsersCache.clear();
+    this.moduleEnabledCache.clear();
+    this.publicActionCache.clear();
+    this.requiredLevelCache.clear();
+  }
+
+  async ensureGuildConfig(guildId, guildName = null, force = false) {
+    if (!guildId) return;
+    if (!force && this.seededGuilds.has(guildId)) return;
+
     await query(
       `INSERT INTO guild_configs (guild_id, guild_name, timezone)
        VALUES ($1, $2, $3)
@@ -36,6 +75,7 @@ class PermissionService {
     }
 
     await this.ensureDefaultPermissionLevels(guildId);
+    this.seededGuilds.add(guildId);
   }
 
   async ensureOwnerTeam(guildId, ownerUserId) {
@@ -73,19 +113,32 @@ class PermissionService {
   }
 
   async isModuleEnabled(guildId, moduleKey) {
+    if (!guildId) return false;
     if (moduleKey === ModuleKeys.PERMISSIONS || moduleKey === ModuleKeys.LOGGING || moduleKey === ModuleKeys.STATUS) return true;
 
-    const result = await query(
-      `SELECT enabled FROM module_configs WHERE guild_id = $1 AND module_key = $2 LIMIT 1`,
-      [guildId, moduleKey]
-    );
+    let guildModules = this.moduleEnabledCache.get(guildId);
+    if (!guildModules) {
+      const result = await query(
+        `SELECT module_key, enabled FROM module_configs WHERE guild_id = $1`,
+        [guildId]
+      ).catch(() => ({ rows: [] }));
 
-    if (result.rowCount === 0) return false;
-    return Boolean(result.rows[0].enabled);
+      guildModules = new Map();
+      for (const row of result.rows) {
+        guildModules.set(row.module_key, Boolean(row.enabled));
+      }
+      this.moduleEnabledCache.set(guildId, guildModules);
+    }
+
+    if (guildModules.has(moduleKey)) {
+      return guildModules.get(moduleKey);
+    }
+
+    return false;
   }
 
   getInteractionRoleIds(interaction) {
-    const member = interaction.member;
+    const member = interaction?.member;
     if (!member || typeof member !== 'object') return [];
 
     if (Array.isArray(member.roles)) return member.roles;
@@ -100,20 +153,39 @@ class PermissionService {
   async isIgnored(guildId, userId) {
     if (!guildId || !userId) return false;
     if (this.isBotOwner(userId)) return false;
-    const result = await query(
-      `SELECT 1 FROM permission_ignored_users WHERE guild_id = $1 AND user_id = $2 AND active = true LIMIT 1`,
-      [guildId, userId]
-    ).catch(() => ({ rowCount: 0 }));
-    return result.rowCount > 0;
+
+    let ignoredSet = this.ignoredUsersCache.get(guildId);
+    if (!ignoredSet) {
+      const result = await query(
+        `SELECT user_id FROM permission_ignored_users WHERE guild_id = $1 AND active = true`,
+        [guildId]
+      ).catch(() => ({ rows: [] }));
+
+      ignoredSet = new Set(result.rows.map((row) => row.user_id));
+      this.ignoredUsersCache.set(guildId, ignoredSet);
+    }
+
+    return ignoredSet.has(userId);
   }
 
   async getPublicActionSetting(guildId, actionKey) {
-    const result = await query(
-      `SELECT enabled FROM public_action_permissions WHERE guild_id = $1 AND action_key = $2 LIMIT 1`,
-      [guildId, actionKey]
-    ).catch(() => ({ rows: [] }));
-    if (!result.rows.length) return null;
-    return Boolean(result.rows[0]?.enabled);
+    if (!guildId) return null;
+    let guildPublicActions = this.publicActionCache.get(guildId);
+    if (!guildPublicActions) {
+      const result = await query(
+        `SELECT action_key, enabled FROM public_action_permissions WHERE guild_id = $1`,
+        [guildId]
+      ).catch(() => ({ rows: [] }));
+
+      guildPublicActions = new Map();
+      for (const row of result.rows) {
+        guildPublicActions.set(row.action_key, Boolean(row.enabled));
+      }
+      this.publicActionCache.set(guildId, guildPublicActions);
+    }
+
+    if (!guildPublicActions.has(actionKey)) return null;
+    return guildPublicActions.get(actionKey);
   }
 
   async isPublicAction(guildId, actionKey) {
@@ -148,7 +220,6 @@ class PermissionService {
 
     return { locked: true, allowed: result.rowCount > 0 };
   }
-
 
   async ensureDefaultPermissionLevels(guildId) {
     const versionResult = await query(
@@ -233,10 +304,13 @@ class PermissionService {
        DO UPDATE SET seeded_version = EXCLUDED.seeded_version, updated_at = NOW()`,
       [guildId, PERMISSION_DEFAULTS_VERSION]
     ).catch(() => {});
+
+    this.invalidatePermissionLevels(guildId);
+    this.invalidatePublicActions(guildId);
   }
 
   isServerOwner(interaction) {
-    return Boolean(interaction.guild && interaction.guild.ownerId === interaction.user.id);
+    return Boolean(interaction?.guild && interaction.guild.ownerId === interaction.user?.id);
   }
 
   normalizeLevel(level) {
@@ -245,6 +319,10 @@ class PermissionService {
   }
 
   async getRequiredLevel(guildId, actionKey, moduleKey) {
+    const cacheKey = `${guildId}:${actionKey}:${moduleKey}`;
+    const cached = this.requiredLevelCache.get(cacheKey);
+    if (cached) return cached;
+
     const [commandLevel, moduleLevel] = await Promise.all([
       query(`SELECT required_level FROM command_permission_levels WHERE guild_id = $1 AND action_key = $2 LIMIT 1`, [guildId, actionKey]).catch(() => ({ rows: [] })),
       query(`SELECT required_level FROM module_permission_levels WHERE guild_id = $1 AND module_key = $2 LIMIT 1`, [guildId, moduleKey]).catch(() => ({ rows: [] }))
@@ -253,7 +331,9 @@ class PermissionService {
     const levels = [this.normalizeLevel(actionDefault)];
     if (commandLevel.rows[0]?.required_level) levels.push(this.normalizeLevel(commandLevel.rows[0].required_level));
     if (moduleLevel.rows[0]?.required_level) levels.push(this.normalizeLevel(moduleLevel.rows[0].required_level));
-    return levels.sort((a, b) => (permissionLevelRank[b] || 0) - (permissionLevelRank[a] || 0))[0];
+    const resolved = levels.sort((a, b) => (permissionLevelRank[b] || 0) - (permissionLevelRank[a] || 0))[0];
+    this.requiredLevelCache.set(cacheKey, resolved);
+    return resolved;
   }
 
   async getUserPermissionLevel(interaction, roleIds = []) {
@@ -292,7 +372,9 @@ class PermissionService {
   }
 
   async hasRequiredLevel(interaction, actionKey, moduleKey, roleIds) {
-    await this.ensureDefaultPermissionLevels(interaction.guildId);
+    if (!this.seededGuilds.has(interaction.guildId)) {
+      await this.ensureDefaultPermissionLevels(interaction.guildId);
+    }
     const [required, userLevel] = await Promise.all([
       this.getRequiredLevel(interaction.guildId, actionKey, moduleKey),
       this.getUserPermissionLevel(interaction, roleIds)
@@ -309,7 +391,9 @@ class PermissionService {
       return { allowed: false, reason: 'This command can only be used inside a server.' };
     }
 
-    await this.ensureGuildConfig(interaction.guildId, interaction.guild ? interaction.guild.name : null);
+    if (!this.seededGuilds.has(interaction.guildId)) {
+      await this.ensureGuildConfig(interaction.guildId, interaction.guild ? interaction.guild.name : null);
+    }
 
     if (await this.isIgnored(interaction.guildId, interaction.user.id)) {
       return { allowed: false, reason: 'You are currently blocked from interacting with SlickBot.' };
@@ -373,7 +457,9 @@ class PermissionService {
 
   async checkPublicInteraction(interaction, actionKey, moduleKey) {
     if (!interaction.guildId) return { allowed: false, reason: 'This command can only be used inside a server.' };
-    await this.ensureGuildConfig(interaction.guildId, interaction.guild ? interaction.guild.name : null);
+    if (!this.seededGuilds.has(interaction.guildId)) {
+      await this.ensureGuildConfig(interaction.guildId, interaction.guild ? interaction.guild.name : null);
+    }
     if (await this.isIgnored(interaction.guildId, interaction.user.id)) return { allowed: false, reason: 'You are currently blocked from interacting with SlickBot.' };
     const moduleEnabled = await this.isModuleEnabled(interaction.guildId, moduleKey);
     if (!moduleEnabled) return { allowed: false, reason: `The ${moduleKey} module is disabled.` };
@@ -391,4 +477,5 @@ class PermissionService {
   }
 }
 
-module.exports = { PermissionService };
+module.exports = { PermissionService, PermissionLevels };
+

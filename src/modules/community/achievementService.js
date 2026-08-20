@@ -234,9 +234,36 @@ function refreshButton() {
 class AchievementService {
   constructor() {
     this.leveling = new LevelingService();
+    this.configCache = new Map();
+    this.definitionsCache = new Map();
+    this.ignoredChannelsCache = new Map();
+    this.seededGuilds = new Set();
+  }
+
+  invalidateConfig(guildId) {
+    if (guildId) this.configCache.delete(guildId);
+    else this.configCache.clear();
+  }
+
+  invalidateDefinitions(guildId) {
+    if (guildId) this.definitionsCache.delete(guildId);
+    else this.definitionsCache.clear();
+  }
+
+  invalidateIgnoredChannels(guildId) {
+    if (guildId) this.ignoredChannelsCache.delete(guildId);
+    else this.ignoredChannelsCache.clear();
+  }
+
+  clearAllCaches() {
+    this.configCache.clear();
+    this.definitionsCache.clear();
+    this.ignoredChannelsCache.clear();
+    this.seededGuilds.clear();
   }
 
   async ensureConfig(guildId) {
+    if (!guildId) return null;
     const result = await query(
       `INSERT INTO achievement_configs (guild_id, enabled, unlock_message)
        VALUES ($1,true,$2)
@@ -244,14 +271,22 @@ class AchievementService {
        RETURNING *`,
       [guildId, DEFAULT_UNLOCK_MESSAGE]
     );
-    await this.ensureDefaultDefinitions(guildId);
-    return result.rows[0];
+    const config = result.rows[0];
+    this.configCache.set(guildId, config);
+    if (!this.seededGuilds.has(guildId)) {
+      await this.ensureDefaultDefinitions(guildId);
+    }
+    return config;
   }
 
   async getConfig(guildId) {
+    if (!guildId) return null;
+    const cached = this.configCache.get(guildId);
+    if (cached) return cached;
+
     const result = await query(`SELECT * FROM achievement_configs WHERE guild_id = $1 LIMIT 1`, [guildId]);
     if (result.rows[0]) {
-      await this.ensureDefaultDefinitions(guildId);
+      this.configCache.set(guildId, result.rows[0]);
       return result.rows[0];
     }
     return this.ensureConfig(guildId);
@@ -277,8 +312,10 @@ class AchievementService {
        RETURNING *`,
       [guildId, enabled, announcementChannelId || null, afkChannelId || null, String(unlockMessage || DEFAULT_UNLOCK_MESSAGE).slice(0, 1500), unlockImageUrl || null]
     );
+    const config = result.rows[0];
+    this.configCache.set(guildId, config);
     await this.ensureDefaultDefinitions(guildId);
-    return result.rows[0];
+    return config;
   }
 
   async ensureDefaultDefinitions(guildId) {
@@ -319,6 +356,8 @@ class AchievementService {
       );
     }
     await this.applyStandardTierDefaultsIfNeeded(guildId);
+    this.seededGuilds.add(guildId);
+    this.invalidateDefinitions(guildId);
   }
 
   async applyStandardTierDefaultsIfNeeded(guildId) {
@@ -358,8 +397,12 @@ class AchievementService {
   }
 
   async getDefinitionsMap(guildId) {
+    const cached = this.definitionsCache.get(guildId);
+    if (cached) return cached;
     const definitions = await this.listDefinitions(guildId);
-    return new Map(definitions.map((row) => [row.achievement_key, row]));
+    const map = new Map(definitions.map((row) => [row.achievement_key, row]));
+    this.definitionsCache.set(guildId, map);
+    return map;
   }
 
   async listTiers(guildId, achievementKey = null) {
@@ -431,6 +474,7 @@ class AchievementService {
        RETURNING *`,
       [guildId, safeKey, name ? String(name).slice(0, 100) : null, description === undefined ? null : String(description).slice(0, 500)]
     );
+    this.invalidateDefinitions(guildId);
     return result.rows[0];
   }
 
@@ -461,6 +505,7 @@ class AchievementService {
         roleRewardId === undefined ? existing.one_time_role_reward_id || null : roleRewardId || null
       ]
     );
+    this.invalidateDefinitions(guildId);
     return result.rows[0];
   }
 
@@ -471,23 +516,36 @@ class AchievementService {
        ON CONFLICT (guild_id, channel_id) DO UPDATE SET guild_id = EXCLUDED.guild_id`,
       [guildId, channelId]
     );
+    this.invalidateIgnoredChannels(guildId);
   }
 
   async removeIgnoredChannel(guildId, channelId) {
     await query(`DELETE FROM achievement_ignored_message_channels WHERE guild_id = $1 AND channel_id = $2`, [guildId, channelId]);
+    this.invalidateIgnoredChannels(guildId);
   }
 
   async listIgnoredChannels(guildId) {
-    const result = await query(`SELECT channel_id FROM achievement_ignored_message_channels WHERE guild_id = $1 ORDER BY channel_id ASC`, [guildId]);
-    return result.rows.map((row) => row.channel_id);
+    let ignored = this.ignoredChannelsCache.get(guildId);
+    if (!ignored) {
+      const result = await query(`SELECT channel_id FROM achievement_ignored_message_channels WHERE guild_id = $1 ORDER BY channel_id ASC`, [guildId]);
+      ignored = new Set(result.rows.map((row) => row.channel_id));
+      this.ignoredChannelsCache.set(guildId, ignored);
+    }
+    return Array.from(ignored);
   }
 
   async isMessageChannelIgnored(guildId, channelId) {
-    const result = await query(
-      `SELECT 1 FROM achievement_ignored_message_channels WHERE guild_id = $1 AND channel_id = $2 LIMIT 1`,
-      [guildId, channelId]
-    );
-    return result.rowCount > 0;
+    if (!guildId || !channelId) return false;
+    let ignored = this.ignoredChannelsCache.get(guildId);
+    if (!ignored) {
+      const result = await query(
+        `SELECT channel_id FROM achievement_ignored_message_channels WHERE guild_id = $1`,
+        [guildId]
+      ).catch(() => ({ rows: [] }));
+      ignored = new Set(result.rows.map((row) => row.channel_id));
+      this.ignoredChannelsCache.set(guildId, ignored);
+    }
+    return ignored.has(channelId);
   }
 
   async recordMessage(message, logger) {
@@ -988,6 +1046,10 @@ class AchievementService {
     await query(`DELETE FROM achievement_tiers WHERE guild_id = $1`, [guildId]);
     await query(`DELETE FROM achievement_definitions WHERE guild_id = $1`, [guildId]);
     await query(`DELETE FROM achievement_configs WHERE guild_id = $1`, [guildId]);
+    this.invalidateConfig(guildId);
+    this.invalidateDefinitions(guildId);
+    this.invalidateIgnoredChannels(guildId);
+    this.seededGuilds.delete(guildId);
     return { scope: 'server' };
   }
 }

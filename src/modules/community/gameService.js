@@ -338,6 +338,16 @@ class CommunityGameService {
   constructor() {
     this.leveling = new LevelingService();
     this.achievements = new AchievementService();
+    this.countingConfigCache = new Map();
+  }
+
+  invalidateCountingConfig(guildId) {
+    if (guildId) this.countingConfigCache.delete(guildId);
+    else this.countingConfigCache.clear();
+  }
+
+  clearAllCaches() {
+    this.countingConfigCache.clear();
   }
 
   async ensureGameConfigs(guildId) {
@@ -403,6 +413,7 @@ class CommunityGameService {
        RETURNING *`,
       [guildId, gameKey, enabled]
     );
+    this.invalidateCountingConfig(guildId);
     return { ok: true, config: result.rows[0] };
   }
 
@@ -499,6 +510,7 @@ class CommunityGameService {
       ]
     );
     if (channelChanged) await query(`DELETE FROM counting_game_entries WHERE guild_id = $1`, [guildId]);
+    this.invalidateCountingConfig(guildId);
     return { ...result.rows[0], enabled: current?.enabled ?? false };
   }
 
@@ -521,6 +533,7 @@ class CommunityGameService {
         [guildId, value.toString()]
       );
       await client.query('COMMIT');
+      this.invalidateCountingConfig(guildId);
       return result.rows[0];
     } catch (error) {
       await client.query('ROLLBACK').catch(() => {});
@@ -550,6 +563,7 @@ class CommunityGameService {
         [guildId, current.toString()]
       );
       await client.query('COMMIT');
+      this.invalidateCountingConfig(guildId);
       return result.rows[0];
     } catch (error) {
       await client.query('ROLLBACK').catch(() => {});
@@ -596,15 +610,24 @@ class CommunityGameService {
   }
 
   async getActiveCountingConfigForChannel(guildId, channelId) {
-    const result = await query(
-      `SELECT c.*, g.enabled
-       FROM counting_game_configs c
-       INNER JOIN community_game_configs g ON g.guild_id = c.guild_id AND g.game_key = 'COUNTING'
-       WHERE c.guild_id = $1 AND c.channel_id = $2 AND g.enabled = true
-       LIMIT 1`,
-      [guildId, channelId]
-    );
-    return result.rows[0] || null;
+    if (!guildId || !channelId) return null;
+    let config = this.countingConfigCache.get(guildId);
+    if (config === undefined) {
+      const result = await query(
+        `SELECT c.*, g.enabled
+         FROM counting_game_configs c
+         INNER JOIN community_game_configs g ON g.guild_id = c.guild_id AND g.game_key = 'COUNTING'
+         WHERE c.guild_id = $1
+         LIMIT 1`,
+        [guildId]
+      ).catch(() => ({ rows: [] }));
+      config = result.rows[0] || null;
+      this.countingConfigCache.set(guildId, config);
+    }
+    if (!config || config.enabled === false || config.channel_id !== channelId) {
+      return null;
+    }
+    return config;
   }
 
   async isCountingParticipantIgnored(message) {

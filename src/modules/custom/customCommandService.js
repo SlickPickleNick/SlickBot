@@ -77,9 +77,36 @@ function getCooldownKey(command, userId) {
 }
 
 class CustomCommandService {
+  constructor() {
+    this.configCache = new Map();
+    this.commandsCache = new Map();
+  }
+
+  invalidateConfig(guildId) {
+    if (guildId) this.configCache.delete(guildId);
+    else this.configCache.clear();
+  }
+
+  invalidateCommands(guildId) {
+    if (guildId) this.commandsCache.delete(guildId);
+    else this.commandsCache.clear();
+  }
+
+  clearAllCaches() {
+    this.configCache.clear();
+    this.commandsCache.clear();
+  }
+
   async getConfig(guildId) {
+    if (!guildId) return null;
+    const cached = this.configCache.get(guildId);
+    if (cached) return cached;
+
     const result = await query(`SELECT * FROM custom_command_configs WHERE guild_id = $1 LIMIT 1`, [guildId]);
-    if (result.rows[0]) return result.rows[0];
+    if (result.rows[0]) {
+      this.configCache.set(guildId, result.rows[0]);
+      return result.rows[0];
+    }
     const created = await query(
       `INSERT INTO custom_command_configs (guild_id)
        VALUES ($1)
@@ -87,7 +114,9 @@ class CustomCommandService {
        RETURNING *`,
       [guildId]
     );
-    return created.rows[0];
+    const config = created.rows[0];
+    this.configCache.set(guildId, config);
+    return config;
   }
 
   async setPrefix(guildId, prefix) {
@@ -99,6 +128,8 @@ class CustomCommandService {
        RETURNING *`,
       [guildId, normalized]
     );
+    this.invalidateConfig(guildId);
+    this.invalidateCommands(guildId);
     return result.rows[0];
   }
 
@@ -116,9 +147,16 @@ class CustomCommandService {
   }
 
   async findCommand(guildId, inputName) {
+    if (!guildId) return null;
     const config = await this.getConfig(guildId);
     const name = cleanTrigger(inputName, config.prefix);
     if (!name) return null;
+
+    let guildCommands = this.commandsCache.get(guildId);
+    if (guildCommands && guildCommands.has(name)) {
+      return guildCommands.get(name);
+    }
+
     const result = await query(
       `SELECT cc.*, ccc.prefix
        FROM custom_commands cc
@@ -128,7 +166,13 @@ class CustomCommandService {
       [guildId, name]
     );
     const row = result.rows[0];
-    return row ? { ...row, prefix: row.prefix || config.prefix || DEFAULT_PREFIX } : null;
+    const cmd = row ? { ...row, prefix: row.prefix || config.prefix || DEFAULT_PREFIX } : null;
+    if (!guildCommands) {
+      guildCommands = new Map();
+      this.commandsCache.set(guildId, guildCommands);
+    }
+    if (cmd) guildCommands.set(name, cmd);
+    return cmd;
   }
 
   async createCommand(guildId, input = {}) {
@@ -160,6 +204,7 @@ class CustomCommandService {
       if (error?.code === '23505') throw new Error(`A custom command named ${config.prefix}${name} already exists.`);
       throw error;
     });
+    this.invalidateCommands(guildId);
     return { ...result.rows[0], prefix: config.prefix || DEFAULT_PREFIX };
   }
 
@@ -207,6 +252,7 @@ class CustomCommandService {
       if (error?.code === '23505') throw new Error(`A custom command named ${config.prefix}${nextName} already exists.`);
       throw error;
     });
+    this.invalidateCommands(guildId);
     return { ...result.rows[0], prefix: config.prefix || DEFAULT_PREFIX };
   }
 
@@ -218,6 +264,7 @@ class CustomCommandService {
     const existing = await this.findCommand(guildId, name);
     if (!existing) throw new Error('That custom command was not found.');
     await query(`DELETE FROM custom_commands WHERE guild_id = $1 AND id = $2`, [guildId, existing.id]);
+    this.invalidateCommands(guildId);
     return existing;
   }
 
@@ -358,5 +405,6 @@ class CustomCommandService {
 module.exports = {
   CustomCommandService,
   cleanTrigger,
-  normalizePrefix
+  normalizePrefix,
+  replaceVariables
 };

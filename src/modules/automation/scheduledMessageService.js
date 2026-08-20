@@ -131,7 +131,14 @@ class ScheduledMessageService {
   async sendSchedule(client, schedule, logger = null, actorUserId = null) {
     const guild = await client.guilds.fetch(schedule.guild_id).catch(() => null);
     const channel = await client.channels.fetch(schedule.channel_id).catch(() => null);
-    if (!guild || !channel || typeof channel.send !== 'function') return { ok: false, reason: 'Configured channel is no longer available.' };
+    if (!guild || !channel || typeof channel.send !== 'function') {
+      if (!schedule.repeat_mode || schedule.repeat_mode === 'NONE') {
+        await query(`UPDATE scheduled_messages SET status = 'FAILED', updated_at = NOW() WHERE id = $1`, [schedule.id]).catch(() => {});
+      } else {
+        await this.markSent(schedule).catch(() => {});
+      }
+      return { ok: false, reason: 'Configured channel is no longer available.' };
+    }
     await channel.send({ content: schedule.content });
     const updated = await this.markSent(schedule);
     await logger?.log({
@@ -188,4 +195,4 @@ class ScheduledMessageService {
   }
 }
 
-module.exports = { ScheduledMessageService, parseDelay, formatTimestamp };
+module.exports = { ScheduledMessageService, parseDelay, formatTimestamp, repeatSeconds };

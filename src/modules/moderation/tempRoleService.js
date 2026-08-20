@@ -1,15 +1,15 @@
 const { createBaseEmbed, createSuccessEmbed, createWarningEmbed, SlickBotColors } = require('../ui/uiService');
 const { query } = require('../../services/db');
 
-const DURATION_PATTERN = /(\d+)\s*(w|week|weeks|d|day|days|h|hr|hrs|hour|hours|m|min|mins|minute|minutes)/gi;
 const MAX_DURATION_MS = 365 * 24 * 60 * 60 * 1000;
 
 function parseDurationToMs(input) {
   const text = String(input || '').trim().toLowerCase();
   if (!text) return 0;
+  const pattern = /(\d+)\s*(w|week|weeks|d|day|days|h|hr|hrs|hour|hours|m|min|mins|minute|minutes)/gi;
   let total = 0;
   let match;
-  while ((match = DURATION_PATTERN.exec(text)) !== null) {
+  while ((match = pattern.exec(text)) !== null) {
     const amount = Number(match[1]);
     const unit = match[2];
     if (!Number.isFinite(amount) || amount <= 0) continue;

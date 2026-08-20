@@ -54,9 +54,39 @@ function formatMultiplier(value) {
 }
 
 class LevelingService {
+  constructor() {
+    this.configCache = new Map();
+    this.multiplierCache = new Map();
+    this.cooldownCache = new Map();
+  }
+
+  invalidateConfig(guildId) {
+    if (guildId) this.configCache.delete(guildId);
+    else this.configCache.clear();
+  }
+
+  invalidateMultipliers(guildId) {
+    if (guildId) this.multiplierCache.delete(guildId);
+    else this.multiplierCache.clear();
+  }
+
+  clearAllCaches() {
+    this.configCache.clear();
+    this.multiplierCache.clear();
+    this.cooldownCache.clear();
+  }
+
   async getConfig(guildId) {
+    if (!guildId) return null;
+    const cached = this.configCache.get(guildId);
+    if (cached) return cached;
+
     const result = await query(`SELECT * FROM leveling_configs WHERE guild_id = $1 LIMIT 1`, [guildId]);
-    return result.rows[0] || null;
+    if (result.rows[0]) {
+      this.configCache.set(guildId, result.rows[0]);
+      return result.rows[0];
+    }
+    return null;
   }
 
   async saveConfig(guildId, values = {}) {
@@ -94,7 +124,9 @@ class LevelingService {
        RETURNING *`,
       [guildId, config.enabled, config.xpMin, config.xpMax, config.cooldownSeconds, config.minimumMessageLength, config.levelUpChannelId, config.levelUpMessage, config.levelUpAnnounceMode, JSON.stringify(config.ignoredChannels), JSON.stringify(config.ignoredRoles)]
     );
-    return result.rows[0];
+    const saved = result.rows[0];
+    this.configCache.set(guildId, saved);
+    return saved;
   }
 
   async getProfile(guildId, userId) {
@@ -170,6 +202,7 @@ class LevelingService {
        RETURNING *`,
       [guildId, roleId, safeMultiplier]
     );
+    this.invalidateMultipliers(guildId);
     return result.rows[0];
   }
 
@@ -179,32 +212,33 @@ class LevelingService {
        WHERE guild_id = $1 AND role_id = $2 RETURNING *`,
       [guildId, roleId]
     );
+    this.invalidateMultipliers(guildId);
     return result.rows[0] || null;
   }
 
   async listMultiplierRoles(guildId) {
-    const result = await query(
-      `SELECT * FROM leveling_multiplier_roles
-       WHERE guild_id = $1 AND active = true
-       ORDER BY multiplier DESC, created_at ASC`,
-      [guildId]
-    );
-    return result.rows;
+    let cached = this.multiplierCache.get(guildId);
+    if (!cached) {
+      const result = await query(
+        `SELECT * FROM leveling_multiplier_roles
+         WHERE guild_id = $1 AND active = true
+         ORDER BY multiplier DESC, created_at ASC`,
+        [guildId]
+      );
+      cached = result.rows;
+      this.multiplierCache.set(guildId, cached);
+    }
+    return cached;
   }
 
   async getApplicableMultiplier(guildId, memberRoleIds) {
     const roleIds = [...new Set((memberRoleIds || []).map(String))];
     if (!roleIds.length) return { multiplier: 1, roleId: null };
-    const result = await query(
-      `SELECT role_id, multiplier
-       FROM leveling_multiplier_roles
-       WHERE guild_id = $1 AND active = true AND role_id = ANY($2)
-       ORDER BY multiplier DESC
-       LIMIT 1`,
-      [guildId, roleIds]
-    );
-    if (!result.rows.length) return { multiplier: 1, roleId: null };
-    return { multiplier: Math.max(0.1, Number(result.rows[0].multiplier) || 1), roleId: result.rows[0].role_id };
+
+    const multiplierRoles = await this.listMultiplierRoles(guildId);
+    const matching = multiplierRoles.find((mr) => roleIds.includes(String(mr.role_id)));
+    if (!matching) return { multiplier: 1, roleId: null };
+    return { multiplier: Math.max(0.1, Number(matching.multiplier) || 1), roleId: matching.role_id };
   }
 
   async setXp(guildId, user, xp) {
@@ -223,6 +257,7 @@ class LevelingService {
 
   async resetProfile(guildId, userId) {
     const result = await query(`DELETE FROM leveling_profiles WHERE guild_id = $1 AND user_id = $2 RETURNING *`, [guildId, userId]);
+    this.cooldownCache.delete(`${guildId}:${userId}`);
     return result.rows[0] || null;
   }
 
@@ -236,9 +271,19 @@ class LevelingService {
     const memberRoleIds = member?.roles?.cache ? [...member.roles.cache.keys()] : [];
     if (safeArray(config.ignored_role_ids).some((id) => memberRoleIds.includes(id))) return { awarded: false };
 
-    const existing = await this.getProfile(message.guild.id, message.author.id);
     const cooldownMs = Number(config.cooldown_seconds || 60) * 1000;
-    if (existing?.last_xp_at && Date.now() - new Date(existing.last_xp_at).getTime() < cooldownMs) return { awarded: false };
+    const cooldownKey = `${message.guild.id}:${message.author.id}`;
+    const memoryLastXp = this.cooldownCache.get(cooldownKey);
+    const now = Date.now();
+    if (memoryLastXp && (now - memoryLastXp < cooldownMs)) {
+      return { awarded: false };
+    }
+
+    const existing = await this.getProfile(message.guild.id, message.author.id);
+    if (existing?.last_xp_at && now - new Date(existing.last_xp_at).getTime() < cooldownMs) {
+      this.cooldownCache.set(cooldownKey, new Date(existing.last_xp_at).getTime());
+      return { awarded: false };
+    }
 
     const minXp = Number(config.xp_min || 15);
     const maxXp = Number(config.xp_max || 25);
@@ -263,6 +308,14 @@ class LevelingService {
       [message.guild.id, message.author.id, message.author.tag || null, newXp, newLevel]
     );
     const profile = result.rows[0];
+    this.cooldownCache.set(cooldownKey, now);
+
+    if (this.cooldownCache.size > 10000) {
+      const purgeThreshold = now - 86400000;
+      for (const [k, v] of this.cooldownCache) {
+        if (v < purgeThreshold) this.cooldownCache.delete(k);
+      }
+    }
 
     if (newLevel > oldLevel) await this.handleLevelUp(message, member, profile, oldLevel, config, logger);
     return { awarded: true, baseGained, multiplier: multiplierData.multiplier, multiplierRoleId: multiplierData.roleId, gained, profile, leveledUp: newLevel > oldLevel };

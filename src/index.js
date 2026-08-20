@@ -63,6 +63,8 @@ const tempRoles = new TemporaryRoleService();
 const achievements = new AchievementService();
 const healthServer = startHealthServer(client);
 
+const backgroundIntervals = [];
+
 client.once(Events.ClientReady, async (readyClient) => {
   console.log(`SlickBot logged in as ${readyClient.user.tag}.`);
 
@@ -77,46 +79,46 @@ client.once(Events.ClientReady, async (readyClient) => {
     await permissions.ensureGuildConfig(guild.id, guild.name).catch((error) => console.error(`Failed to ensure guild config for ${guild.name}:`, error));
   }
 
-  setInterval(() => {
+  backgroundIntervals.push(setInterval(() => {
     giveaways.processDueGiveaways(readyClient, logger).catch((error) => console.error('Failed to process due giveaways:', error));
-  }, 60 * 1000);
+  }, 60 * 1000));
   await giveaways.processDueGiveaways(readyClient, logger).catch((error) => console.error('Failed to process due giveaways:', error));
 
-  setInterval(() => {
+  backgroundIntervals.push(setInterval(() => {
     birthdays.processBirthdays(readyClient, logger).catch((error) => console.error('Failed to process birthdays:', error));
-  }, 60 * 60 * 1000);
+  }, 60 * 60 * 1000));
   await birthdays.processBirthdays(readyClient, logger).catch((error) => console.error('Failed to process birthdays:', error));
 
-  setInterval(() => {
+  backgroundIntervals.push(setInterval(() => {
     scheduledMessages.processDue(readyClient, logger).catch((error) => console.error('Failed to process scheduled messages:', error));
-  }, 60 * 1000);
+  }, 60 * 1000));
   await scheduledMessages.processDue(readyClient, logger).catch((error) => console.error('Failed to process scheduled messages:', error));
 
-  setInterval(() => {
+  backgroundIntervals.push(setInterval(() => {
     applications.processExpiredSessions(readyClient, logger).catch((error) => console.error('Failed to process expired application sessions:', error));
-  }, 30 * 1000);
+  }, 30 * 1000));
   await applications.processExpiredSessions(readyClient, logger).catch((error) => console.error('Failed to process expired application sessions:', error));
 
-  setInterval(() => {
+  backgroundIntervals.push(setInterval(() => {
     communityGames.expireStaleSessions(readyClient).catch((error) => console.error('Failed to expire stale community games:', error));
-  }, 5 * 60 * 1000);
+  }, 5 * 60 * 1000));
   await communityGames.expireStaleSessions(readyClient).catch((error) => console.error('Failed to expire stale community games:', error));
 
-  setInterval(() => {
+  backgroundIntervals.push(setInterval(() => {
     tempRoles.processExpired(readyClient, logger).catch((error) => console.error('Failed to process temporary role expirations:', error));
-  }, 60 * 1000);
+  }, 60 * 1000));
   await tempRoles.processExpired(readyClient, logger).catch((error) => console.error('Failed to process temporary role expirations:', error));
 
-  setInterval(() => {
+  backgroundIntervals.push(setInterval(() => {
     achievements.processVoiceHeartbeat(readyClient, logger).catch((error) => console.error('Failed to process achievement voice sessions:', error));
-  }, 5 * 60 * 1000);
+  }, 5 * 60 * 1000));
   await achievements.processVoiceHeartbeat(readyClient, logger).catch((error) => console.error('Failed to process achievement voice sessions:', error));
 
-  setInterval(() => {
+  backgroundIntervals.push(setInterval(() => {
     for (const guild of readyClient.guilds.cache.values()) {
       serverStats.updateStats(guild, logger, '15-minute fallback interval', { forceMemberFetch: true }).catch((error) => console.error(`Failed interval server stats update for ${guild.name}:`, error));
     }
-  }, 15 * 60 * 1000);
+  }, 15 * 60 * 1000));
 
   for (const guild of readyClient.guilds.cache.values()) {
     serverStats.scheduleUpdate(guild, logger, 'startup', 10 * 1000, { forceMemberFetch: true });
@@ -590,6 +592,9 @@ main().catch(async (error) => {
 
 async function shutdown() {
   console.log('Shutting down SlickBot...');
+  for (const interval of backgroundIntervals) {
+    clearInterval(interval);
+  }
   healthServer.close();
   client.destroy();
   await closeDatabase();

@@ -12,6 +12,21 @@ const LogDeliveryMode = Object.freeze({
 class LoggingService {
   constructor(client) {
     this.client = client;
+    this.routingCache = new Map();
+  }
+
+  invalidateRouting(guildId) {
+    if (guildId) {
+      for (const key of this.routingCache.keys()) {
+        if (key.startsWith(`${guildId}:`)) this.routingCache.delete(key);
+      }
+    } else {
+      this.routingCache.clear();
+    }
+  }
+
+  clearAllCaches() {
+    this.routingCache.clear();
   }
 
   async writeAudit(input) {
@@ -41,6 +56,11 @@ class LoggingService {
    * the parent log module has a configured channel.
    */
   async getLogRouting(guildId, eventKey) {
+    if (!guildId || !eventKey) return null;
+    const cacheKey = `${guildId}:${eventKey}`;
+    const cached = this.routingCache.get(cacheKey);
+    if (cached !== undefined) return cached;
+
     const event = getLogEvent(eventKey) || {
       key: eventKey,
       moduleKey: eventKey,
@@ -49,33 +69,45 @@ class LoggingService {
     };
     const moduleInfo = getLogModule(event.moduleKey);
 
-    const moduleResult = await query(
-      `SELECT * FROM log_module_settings WHERE guild_id = $1 AND module_key = $2 LIMIT 1`,
-      [guildId, event.moduleKey]
-    );
-    const eventResult = await query(
-      `SELECT * FROM log_settings WHERE guild_id = $1 AND event_key = $2 LIMIT 1`,
-      [guildId, eventKey]
-    );
+    const [moduleResult, eventResult] = await Promise.all([
+      query(
+        `SELECT * FROM log_module_settings WHERE guild_id = $1 AND module_key = $2 LIMIT 1`,
+        [guildId, event.moduleKey]
+      ).catch(() => ({ rows: [] })),
+      query(
+        `SELECT * FROM log_settings WHERE guild_id = $1 AND event_key = $2 LIMIT 1`,
+        [guildId, eventKey]
+      ).catch(() => ({ rows: [] }))
+    ]);
 
     const moduleSetting = moduleResult.rows[0] || null;
     const eventSetting = eventResult.rows[0] || null;
 
     if (eventSetting && (eventSetting.enabled === false || eventSetting.delivery_mode === LogDeliveryMode.DISABLED)) {
+      this.routingCache.set(cacheKey, null);
       return null;
     }
 
     if (moduleSetting && (moduleSetting.enabled === false || moduleSetting.delivery_mode === LogDeliveryMode.DISABLED)) {
-      if (!eventSetting || !eventSetting.channel_id) return null;
+      if (!eventSetting || !eventSetting.channel_id) {
+        this.routingCache.set(cacheKey, null);
+        return null;
+      }
     }
 
     const channelId = eventSetting?.channel_id || moduleSetting?.channel_id || null;
-    if (!channelId) return null;
+    if (!channelId) {
+      this.routingCache.set(cacheKey, null);
+      return null;
+    }
 
     const configuredDeliveryMode = eventSetting?.delivery_mode || moduleSetting?.delivery_mode || event.defaultDelivery || LogDeliveryMode.IMMEDIATE;
-    if (configuredDeliveryMode === LogDeliveryMode.DISABLED) return null;
+    if (configuredDeliveryMode === LogDeliveryMode.DISABLED) {
+      this.routingCache.set(cacheKey, null);
+      return null;
+    }
 
-    return {
+    const routing = {
       guildId,
       eventKey,
       moduleKey: event.moduleKey,
@@ -84,6 +116,9 @@ class LoggingService {
       event,
       module: moduleInfo
     };
+
+    this.routingCache.set(cacheKey, routing);
+    return routing;
   }
 
   async log(input) {
@@ -119,3 +154,4 @@ class LoggingService {
 }
 
 module.exports = { LoggingService, LogDeliveryMode };
+

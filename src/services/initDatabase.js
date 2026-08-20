@@ -1774,7 +1774,15 @@ await query(`CREATE INDEX IF NOT EXISTS idx_bot_presence_guild ON bot_presence_s
   await query(`CREATE INDEX IF NOT EXISTS idx_achievement_stats_voice ON achievement_user_stats(guild_id, voice_minutes DESC);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_achievement_voice_sessions ON achievement_voice_sessions(guild_id, user_id, channel_id);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_achievement_ignored_channels ON achievement_ignored_message_channels(guild_id, channel_id);`);
-
+  await query(`CREATE INDEX IF NOT EXISTS idx_achievement_user_stats_lookup ON achievement_user_stats(guild_id, user_id);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_leveling_profiles_lookup ON leveling_profiles(guild_id, user_id);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_counting_game_entries_time ON counting_game_entries(guild_id, channel_id, created_at DESC);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_custom_command_usage_command ON custom_command_usage_logs(guild_id, command_id);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_permission_ignored_active ON permission_ignored_users(guild_id, active);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_temp_roles_active_expiry ON temporary_role_assignments(guild_id, active, expires_at);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_command_permission_levels_action ON command_permission_levels(guild_id, action_key);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_module_permission_levels_module ON module_permission_levels(guild_id, module_key);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_role_permission_levels_role ON role_permission_levels(guild_id, role_id);`);
 }
 
 if (require.main === module) {
