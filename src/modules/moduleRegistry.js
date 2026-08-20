@@ -24,6 +24,7 @@ const ModuleKeys = Object.freeze({
   REFERRALS: 'REFERRALS',
   TEMP_ROLES: 'TEMP_ROLES',
   ACHIEVEMENTS: 'ACHIEVEMENTS',
+  SOCIAL_FEEDS: 'SOCIAL_FEEDS',
   UTILITY: 'UTILITY'
 });
 
@@ -55,6 +56,7 @@ const defaultModules = [
   { key: ModuleKeys.REFERRALS, enabled: true },
   { key: ModuleKeys.TEMP_ROLES, enabled: true },
   { key: ModuleKeys.ACHIEVEMENTS, enabled: true },
+  { key: ModuleKeys.SOCIAL_FEEDS, enabled: true },
   { key: ModuleKeys.UTILITY, enabled: false }
 ];
 
@@ -88,7 +90,8 @@ const implementedModules = Object.freeze([
   ModuleKeys.SUGGESTIONS,
   ModuleKeys.REFERRALS,
   ModuleKeys.TEMP_ROLES,
-  ModuleKeys.ACHIEVEMENTS
+  ModuleKeys.ACHIEVEMENTS,
+  ModuleKeys.SOCIAL_FEEDS
 ]);
 
 function isImplementedModule(moduleKey) {

@@ -138,6 +138,12 @@ const MODULE_CHECKS = {
     { name: 'Achievement stats', sql: 'SELECT COUNT(*)::int AS count FROM achievement_user_stats WHERE guild_id = $1' },
     { name: 'Achievement unlocks', sql: 'SELECT COUNT(*)::int AS count FROM achievement_unlocks WHERE guild_id = $1' },
     { name: 'Achievement voice sessions', sql: 'SELECT COUNT(*)::int AS count FROM achievement_voice_sessions WHERE guild_id = $1' }
+  ],
+  [ModuleKeys.SOCIAL_FEEDS]: [
+    { name: 'Feed config', sql: 'SELECT COUNT(*)::int AS count FROM social_feed_configs WHERE guild_id = $1' },
+    { name: 'Tracked feeds', sql: 'SELECT COUNT(*)::int AS count FROM social_feeds WHERE guild_id = $1' },
+    { name: 'Active feeds', sql: 'SELECT COUNT(*)::int AS count FROM social_feeds WHERE guild_id = $1 AND enabled = true' },
+    { name: 'Feed history', sql: 'SELECT COUNT(*)::int AS count FROM social_feed_posts_history WHERE guild_id = $1' }
   ]
 };
 
@@ -148,6 +154,7 @@ const MODULE_FIXES = Object.freeze({
   [ModuleKeys.APPLICATIONS]: 'Run `/application setup`, add questions with `/application question-add`, then post an application panel.',
   [ModuleKeys.APPEALS]: 'Run `/appeal setup` or `/appeal edit` and set a review channel.',
   [ModuleKeys.LOCKDOWN]: 'Run `/lockdown setup`, add channels with `/lockdown channel-add`, and test `/lockdown start` / `/lockdown end` carefully.',
+  [ModuleKeys.SOCIAL_FEEDS]: 'Run `/feed setup` and follow creators with `/feed add platform account channel`.',
   [ModuleKeys.WELCOME]: 'Run `/welcome setup` and optionally configure auto roles.',
   [ModuleKeys.REACTION_ROLES]: 'Run `/roles create-panel`, add options, then post the panel.',
   [ModuleKeys.GIVEAWAYS]: 'Run `/giveaway setup` and set a default channel.',

@@ -1759,6 +1759,66 @@ await query(`CREATE INDEX IF NOT EXISTS idx_bot_presence_guild ON bot_presence_s
   `);
 
 
+  await query(`
+    CREATE TABLE IF NOT EXISTS social_feed_configs (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT UNIQUE NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      enabled BOOLEAN NOT NULL DEFAULT true,
+      default_channel_id TEXT,
+      default_ping_role_id TEXT,
+      check_interval_seconds INTEGER NOT NULL DEFAULT 120,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS social_feeds (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      platform TEXT NOT NULL,
+      account_id TEXT NOT NULL,
+      account_name TEXT NOT NULL,
+      account_url TEXT,
+      channel_id TEXT NOT NULL,
+      ping_role_id TEXT,
+      custom_message TEXT,
+      shorts_message TEXT,
+      video_message TEXT,
+      live_message TEXT,
+      story_message TEXT,
+      offline_message TEXT,
+      enabled BOOLEAN NOT NULL DEFAULT true,
+      last_status TEXT NOT NULL DEFAULT 'OFFLINE',
+      last_item_id TEXT,
+      last_announcement_message_id TEXT,
+      last_announcement_channel_id TEXT,
+      live_started_at TIMESTAMPTZ,
+      last_checked_at TIMESTAMPTZ,
+      last_error TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (guild_id, platform, account_id)
+    );
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS social_feed_posts_history (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      feed_id TEXT NOT NULL REFERENCES social_feeds(id) ON DELETE CASCADE,
+      platform TEXT NOT NULL,
+      item_id TEXT NOT NULL,
+      item_type TEXT NOT NULL,
+      title TEXT,
+      url TEXT,
+      message_id TEXT,
+      channel_id TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (feed_id, item_id, item_type)
+    );
+  `);
+
   await query(`ALTER TABLE achievement_configs ADD COLUMN IF NOT EXISTS standard_tiers_version TEXT;`);
   await query(`ALTER TABLE achievement_definitions ADD COLUMN IF NOT EXISTS achievement_type TEXT NOT NULL DEFAULT 'TIERED';`);
   await query(`ALTER TABLE achievement_definitions ADD COLUMN IF NOT EXISTS one_time_xp_reward INTEGER NOT NULL DEFAULT 0;`);
@@ -1775,6 +1835,10 @@ await query(`CREATE INDEX IF NOT EXISTS idx_bot_presence_guild ON bot_presence_s
   await query(`CREATE INDEX IF NOT EXISTS idx_achievement_voice_sessions ON achievement_voice_sessions(guild_id, user_id, channel_id);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_achievement_ignored_channels ON achievement_ignored_message_channels(guild_id, channel_id);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_achievement_user_stats_lookup ON achievement_user_stats(guild_id, user_id);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_social_feeds_guild ON social_feeds(guild_id, platform);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_social_feeds_active ON social_feeds(enabled, last_checked_at);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_social_feed_history_lookup ON social_feed_posts_history(feed_id, item_id);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_social_feed_history_time ON social_feed_posts_history(guild_id, created_at DESC);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_leveling_profiles_lookup ON leveling_profiles(guild_id, user_id);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_counting_game_entries_time ON counting_game_entries(guild_id, channel_id, created_at DESC);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_custom_command_usage_command ON custom_command_usage_logs(guild_id, command_id);`);

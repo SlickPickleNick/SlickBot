@@ -24,6 +24,7 @@ const { CommunityGameService } = require('./modules/community/gameService');
 const { FaqService } = require('./modules/community/faqService');
 const { TemporaryRoleService } = require('./modules/moderation/tempRoleService');
 const { AchievementService, ACHIEVEMENT_KEYS } = require('./modules/community/achievementService');
+const { SocialFeedService } = require('./modules/automation/socialFeedService');
 const { handleReactionRole, syncAllPublishedReactionPanels } = require('./modules/community/rolePanelService');
 const { handleComponentInteraction } = require('./services/interactionRouter');
 const { ActionKeys } = require('./modules/permissions/actionKeys');
@@ -61,6 +62,7 @@ const communityGames = new CommunityGameService();
 const faq = new FaqService();
 const tempRoles = new TemporaryRoleService();
 const achievements = new AchievementService();
+const socialFeeds = new SocialFeedService();
 const healthServer = startHealthServer(client);
 
 const backgroundIntervals = [];
@@ -113,6 +115,11 @@ client.once(Events.ClientReady, async (readyClient) => {
     achievements.processVoiceHeartbeat(readyClient, logger).catch((error) => console.error('Failed to process achievement voice sessions:', error));
   }, 5 * 60 * 1000));
   await achievements.processVoiceHeartbeat(readyClient, logger).catch((error) => console.error('Failed to process achievement voice sessions:', error));
+
+  backgroundIntervals.push(setInterval(() => {
+    socialFeeds.processFeeds(readyClient, logger).catch((error) => console.error('Failed to process social feeds:', error));
+  }, 60 * 1000));
+  await socialFeeds.processFeeds(readyClient, logger).catch((error) => console.error('Failed to process social feeds on startup:', error));
 
   backgroundIntervals.push(setInterval(() => {
     for (const guild of readyClient.guilds.cache.values()) {

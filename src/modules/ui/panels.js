@@ -58,7 +58,7 @@ const MODULE_CATEGORIES = Object.freeze([
   { key: 'CORE', label: 'Core Setup', modules: [ModuleKeys.PERMISSIONS, ModuleKeys.LOGGING, ModuleKeys.STATUS, ModuleKeys.MODERATION, ModuleKeys.LOCKDOWN, ModuleKeys.TEMP_ROLES] },
   { key: 'SUPPORT', label: 'Support Systems', modules: [ModuleKeys.TICKETS, ModuleKeys.REPORTS, ModuleKeys.APPLICATIONS, ModuleKeys.APPEALS] },
   { key: 'COMMUNITY', label: 'Community Systems', modules: [ModuleKeys.WELCOME, ModuleKeys.REACTION_ROLES, ModuleKeys.GIVEAWAYS, ModuleKeys.BIRTHDAYS, ModuleKeys.LEVELING, ModuleKeys.COMMUNITY_GAMES, ModuleKeys.FAQ, ModuleKeys.SUGGESTIONS, ModuleKeys.REFERRALS, ModuleKeys.ACHIEVEMENTS, ModuleKeys.SERVER_STATS, ModuleKeys.CUSTOM_COMMANDS, ModuleKeys.JOIN_TO_CREATE] },
-  { key: 'AUTOMATION', label: 'Automation Systems', modules: [ModuleKeys.SCHEDULED_MESSAGES, ModuleKeys.BOT_UPDATES] },
+  { key: 'AUTOMATION', label: 'Automation Systems', modules: [ModuleKeys.SCHEDULED_MESSAGES, ModuleKeys.BOT_UPDATES, ModuleKeys.SOCIAL_FEEDS] },
   { key: 'BACKLOG', label: 'Coming Soon', modules: [ModuleKeys.UTILITY] }
 ]);
 
@@ -212,6 +212,12 @@ const MODULE_SETUP_CATALOG = Object.freeze({
     managerCommand: '/bot-updates panel', setupCommand: '/bot-updates setup',
     nextSteps: ['Run `/bot-updates setup` and set an update channel.', 'Add optional ping roles with `/bot-updates role-add`.', 'Use `/bot-updates preview` before sending.'],
     usefulCommands: ['/bot-updates panel', '/bot-updates setup', '/bot-updates role-add', '/bot-updates preview', '/bot-updates send']
+  },
+  [ModuleKeys.SOCIAL_FEEDS]: {
+    name: 'Social Feeds', category: 'Automation Systems', description: 'Follows Twitch, YouTube, X (Twitter), and TikTok channels and posts customizable announcements in designated Discord channels.',
+    managerCommand: '/feed manager', setupCommand: '/feed setup',
+    nextSteps: ['Run `/feed setup` to set a default announcement channel.', 'Use `/feed add` to follow Twitch, YouTube, X, or TikTok creators.', 'Use `/feed test` to verify announcement formatting and channel permissions.', 'Open `/feed manager` to review tracked accounts.'],
+    usefulCommands: ['/feed manager', '/feed setup', '/feed add', '/feed list', '/feed edit', '/feed test', '/feed check', '/feed remove']
   },
   [ModuleKeys.UTILITY]: {
     name: 'Utility', category: 'Coming Soon', description: 'Future utility tools module. This module is not implemented yet.',
@@ -734,6 +740,20 @@ async function getModuleStatus(guildId, row) {
     if (hubCount > 0) return { moduleKey: row.module_key, core: false, state: 'READY', emoji: '✅', label: 'Ready', note: `${hubCount} hub(s), ${activeCount} active` };
     if (activeCount > 0) return { moduleKey: row.module_key, core: false, state: 'PARTIAL', emoji: '🟠', label: 'Partially Configured', note: `${activeCount} active, setup needed` };
     return { moduleKey: row.module_key, core: false, state: 'NEEDS_CONFIG', emoji: '🟣', label: 'Needs Setup', note: 'Run /join-create setup' };
+  }
+
+  if (row.module_key === 'SOCIAL_FEEDS') {
+    const [cfg, feeds] = await Promise.all([
+      query(`SELECT enabled, default_channel_id FROM social_feed_configs WHERE guild_id = $1 LIMIT 1`, [guildId]).catch(() => ({ rows: [] })),
+      query(`SELECT COUNT(*)::int AS total, COUNT(*) FILTER (WHERE enabled = true)::int AS active FROM social_feeds WHERE guild_id = $1`, [guildId]).catch(() => ({ rows: [{ total: 0, active: 0 }] }))
+    ]);
+    const config = cfg.rows[0] || {};
+    const total = feeds.rows[0]?.total || 0;
+    const active = feeds.rows[0]?.active || 0;
+    if (config.enabled === false) return { moduleKey: row.module_key, core: false, state: 'DISABLED', emoji: '⏸️', label: 'Disabled', note: 'Notifications paused' };
+    if (active > 0) return { moduleKey: row.module_key, core: false, state: 'READY', emoji: '✅', label: 'Ready', note: `${active}/${total} feed(s) active` };
+    if (total > 0) return { moduleKey: row.module_key, core: false, state: 'PARTIAL', emoji: '🟠', label: 'Partially Configured', note: `${total} disabled feed(s)` };
+    return { moduleKey: row.module_key, core: false, state: 'NEEDS_CONFIG', emoji: '🟣', label: 'Needs Setup', note: 'Run /feed add' };
   }
 
   return { moduleKey: row.module_key, core: false, state: 'PARTIAL', emoji: '🟠', label: 'Partially Configured', note: 'Module shell only' };

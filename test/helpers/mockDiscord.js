@@ -196,7 +196,19 @@ function createMockInteraction(overrides = {}) {
     isStringSelectMenu: () => Boolean(overrides.customId && overrides.values),
     isModalSubmit: () => Boolean(overrides.isModalSubmit),
     replies,
-    ...overrides
+    ...overrides,
+    options: {
+      getString: (name) => typeof overrides.options?.getString === 'function' ? overrides.options.getString(name) : (overrides.options?.[name] ?? null),
+      getInteger: (name) => typeof overrides.options?.getInteger === 'function' ? overrides.options.getInteger(name) : (overrides.options?.[name] ?? null),
+      getNumber: (name) => typeof overrides.options?.getNumber === 'function' ? overrides.options.getNumber(name) : (overrides.options?.[name] ?? null),
+      getBoolean: (name) => typeof overrides.options?.getBoolean === 'function' ? overrides.options.getBoolean(name) : (overrides.options?.[name] ?? null),
+      getUser: (name) => typeof overrides.options?.getUser === 'function' ? overrides.options.getUser(name) : (overrides.options?.[name] ?? null),
+      getMember: (name) => typeof overrides.options?.getMember === 'function' ? overrides.options.getMember(name) : (overrides.options?.[name] ?? null),
+      getRole: (name) => typeof overrides.options?.getRole === 'function' ? overrides.options.getRole(name) : (overrides.options?.[name] ?? null),
+      getChannel: (name) => typeof overrides.options?.getChannel === 'function' ? overrides.options.getChannel(name) : (overrides.options?.[name] ?? null),
+      getSubcommand: () => typeof overrides.options?.getSubcommand === 'function' ? overrides.options.getSubcommand() : (overrides.subcommand || null),
+      getSubcommandGroup: () => typeof overrides.options?.getSubcommandGroup === 'function' ? overrides.options.getSubcommandGroup() : (overrides.subcommandGroup || null)
+    }
   };
 }
 

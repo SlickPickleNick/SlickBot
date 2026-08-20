@@ -160,6 +160,11 @@ const ActionKeys = Object.freeze({
   AchievementsConfigure: 'achievements.configure',
   AchievementsReset: 'achievements.reset',
 
+  FeedsView: 'feeds.view',
+  FeedsManage: 'feeds.manage',
+  FeedsCheck: 'feeds.check',
+  FeedsReset: 'feeds.reset',
+
   PanelsConfigure: 'panels.configure',
 
   ServerReset: 'server.reset'
@@ -342,6 +347,11 @@ const defaultActionLevels = Object.freeze({
   [ActionKeys.AchievementsConfigure]: PermissionLevels.SENIOR_MODERATOR,
   [ActionKeys.AchievementsReset]: PermissionLevels.OWNER,
 
+  [ActionKeys.FeedsView]: PermissionLevels.EVERYONE,
+  [ActionKeys.FeedsManage]: PermissionLevels.SENIOR_MODERATOR,
+  [ActionKeys.FeedsCheck]: PermissionLevels.MODERATOR,
+  [ActionKeys.FeedsReset]: PermissionLevels.OWNER,
+
   [ActionKeys.ServerReset]: PermissionLevels.OWNER
 });
 
@@ -371,6 +381,7 @@ const defaultModuleLevels = Object.freeze({
   [ModuleKeys.REFERRALS]: PermissionLevels.EVERYONE,
   [ModuleKeys.TEMP_ROLES]: PermissionLevels.MODERATOR,
   [ModuleKeys.ACHIEVEMENTS]: PermissionLevels.EVERYONE,
+  [ModuleKeys.SOCIAL_FEEDS]: PermissionLevels.EVERYONE,
   [ModuleKeys.UTILITY]: PermissionLevels.EVERYONE
 });
 
@@ -393,12 +404,13 @@ const defaultPublicActions = Object.freeze([
   ActionKeys.SuggestionsVote,
   ActionKeys.ReferralsSubmit,
   ActionKeys.ReferralsView,
-  ActionKeys.AchievementsUse
+  ActionKeys.AchievementsUse,
+  ActionKeys.FeedsView
 ]);
 
 const defaultTeamPermissions = Object.freeze(Object.values(ActionKeys));
 
-const PERMISSION_DEFAULTS_VERSION = '0.9.4';
+const PERMISSION_DEFAULTS_VERSION = '0.9.5';
 
 module.exports = {
   ActionKeys,

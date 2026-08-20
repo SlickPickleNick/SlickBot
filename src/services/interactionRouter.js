@@ -27,6 +27,7 @@ const { ReferralService } = require('../modules/community/referralService');
 const { TemporaryRoleService } = require('../modules/moderation/tempRoleService');
 const { AchievementService, ACHIEVEMENT_KEYS } = require('../modules/community/achievementService');
 const { LockdownService } = require('../modules/safety/lockdownService');
+const { SocialFeedService } = require('../modules/automation/socialFeedService');
 const { buildRoleManagerPanel, toggleRole } = require('../modules/community/rolePanelService');
 const { JoinCreateService } = require('../modules/voice/joinCreateService');
 const { CustomCommandService } = require('../modules/custom/customCommandService');
@@ -65,6 +66,7 @@ const referrals = new ReferralService();
 const tempRoles = new TemporaryRoleService();
 const achievements = new AchievementService();
 const lockdown = new LockdownService();
+const socialFeeds = new SocialFeedService();
 
 async function handleComponentInteraction(interaction, ctx) {
   if (!interaction.guildId) {
@@ -344,6 +346,43 @@ async function handleButton(interaction, ctx) {
     const result = await suggestions.resetModule(interaction.guildId);
     await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'setup', title: 'Suggestions Module Reset', body: `Suggestions module data was reset by ${interaction.user.tag}.`, actorUserId: interaction.user.id, metadata: { before: result.before } }).catch(() => {});
     await updatePanel(interaction, suggestions.buildResetCompletePayload(result));
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.FeedsResetCancelPrefix)) {
+    const requestedByUserId = id.slice(CustomIds.FeedsResetCancelPrefix.length);
+    if (requestedByUserId !== interaction.user.id) {
+      await replyPrivate(interaction, { embeds: [createWarningEmbed('Confirmation Not Yours', 'Only the user who opened this reset confirmation can cancel it.')] });
+      return true;
+    }
+    await updatePanel(interaction, { embeds: [createSuccessEmbed('Social Feeds Reset Cancelled', 'No Social Feeds data was changed.')], components: [] });
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.FeedsResetConfirmPrefix)) {
+    const requestedByUserId = id.slice(CustomIds.FeedsResetConfirmPrefix.length);
+    if (requestedByUserId !== interaction.user.id) {
+      await replyPrivate(interaction, { embeds: [createWarningEmbed('Confirmation Not Yours', 'Only the user who opened this reset confirmation can confirm it.')] });
+      return true;
+    }
+    if (!(await requireAction(interaction, ctx, ActionKeys.FeedsReset, ModuleKeys.SOCIAL_FEEDS))) return true;
+    const result = await socialFeeds.resetModule(interaction.guildId);
+    await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'setup', title: 'Social Feeds Module Reset', body: `Social Feeds module data was reset by ${interaction.user.tag}.`, actorUserId: interaction.user.id, metadata: { before: result.before } }).catch(() => {});
+    await updatePanel(interaction, { embeds: [createSuccessEmbed('Social Feeds Reset Complete', 'All tracked social feeds and configurations have been cleared.')], components: [] });
+    return true;
+  }
+
+  if (id === CustomIds.FeedsRefresh) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.FeedsManage, ModuleKeys.SOCIAL_FEEDS))) return true;
+    await updatePanel(interaction, await socialFeeds.buildManagerPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id === CustomIds.FeedsCheckNow) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.FeedsCheck, ModuleKeys.SOCIAL_FEEDS))) return true;
+    await interaction.deferUpdate().catch(() => {});
+    await socialFeeds.checkGuildFeeds(interaction.guildId, ctx.client, ctx.logger);
+    await updatePanel(interaction, await socialFeeds.buildManagerPanel(interaction.guildId));
     return true;
   }
 

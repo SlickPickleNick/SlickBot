@@ -1,6 +1,6 @@
 # SlickBot Project Plan
 
-## Current Version: 0.9.4
+## Current Version: 0.9.5
 
 SlickBot is being built as a modular all-in-one Discord server management bot for the SlickPickleNick community.
 
@@ -38,9 +38,48 @@ SlickBot is being built as a modular all-in-one Discord server management bot fo
 - Referrals
 - Temporary Roles
 - Achievements
+- Social Feeds (Twitch, YouTube, X, TikTok)
 
 
 
+
+
+## v0.9.5 — Social Feeds
+
+### Added
+
+- Implemented the `SOCIAL_FEEDS` module under Automation Systems.
+- Supports following unlimited creator feeds across Twitch, YouTube, X (Twitter), and TikTok, each configured with its own announcement channel, ping role, and custom messages.
+- Twitch live announcements show stream title, game/category, viewer count, and live since timestamp.
+- When a Twitch stream ends, SlickBot updates the original announcement embed to show offline status, exact offline timestamp, and total stream duration.
+- YouTube tracker differentiates between Shorts and regular Longform videos with distinct customizable announcement text templates.
+- X (Twitter) posts announcement messages with tweet text, creator handle/avatar, media attachments, and custom text templates.
+- TikTok tracks live streams, video uploads, and stories with distinct customizable announcement text templates.
+- Added `/feed` command group with autocomplete for managing existing feeds:
+  - `/feed setup`
+  - `/feed add`
+  - `/feed remove`
+  - `/feed edit`
+  - `/feed list`
+  - `/feed test`
+  - `/feed check`
+  - `/feed manager`
+  - `/feed reset`
+- Added database schema (`social_feed_configs`, `social_feeds`, `social_feed_posts_history`), background polling interval, permission defaults, event logging, diagnostics in `/bot test`, and manager panel.
+
+### Commands
+
+```text
+/feed setup
+/feed add
+/feed remove
+/feed edit
+/feed list
+/feed test
+/feed check
+/feed manager
+/feed reset
+```
 
 
 ## v0.9.4 — Achievements

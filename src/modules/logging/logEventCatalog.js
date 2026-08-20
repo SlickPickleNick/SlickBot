@@ -154,6 +154,12 @@ const LogModuleCatalog = Object.freeze([
     label: 'Join-to-Create Voice',
     description: 'Temporary voice channel creation, cleanup, and owner controls.',
     defaultDelivery: 'IMMEDIATE'
+  },
+  {
+    key: 'social-feeds',
+    label: 'Social Feeds',
+    description: 'Social feed tracking, new posts, stream live/offline events, and announcement activity.',
+    defaultDelivery: 'IMMEDIATE'
   }
 ]);
 
@@ -262,6 +268,14 @@ const LogEventCatalog = Object.freeze([
   { key: 'achievement-unlock', moduleKey: 'achievements', label: 'Achievement Unlocked', description: 'A member unlocked an achievement tier.', defaultDelivery: 'IMMEDIATE' },
   { key: 'achievement-voice-session', moduleKey: 'achievements', label: 'Voice Achievement Time', description: 'Voice time was recorded for achievement tracking.', defaultDelivery: 'IMMEDIATE' },
   { key: 'achievement-error', moduleKey: 'achievements', label: 'Achievement Error', description: 'Achievement processing failed.', defaultDelivery: 'IMMEDIATE' },
+
+  { key: 'social-feed-config', moduleKey: 'social-feeds', label: 'Social Feeds Configured', description: 'Social feed setup or default channel/ping role changed.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'social-feed-added', moduleKey: 'social-feeds', label: 'Social Feed Added', description: 'A new social feed was tracked.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'social-feed-removed', moduleKey: 'social-feeds', label: 'Social Feed Removed', description: 'A tracked social feed was removed.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'social-feed-updated', moduleKey: 'social-feeds', label: 'Social Feed Updated', description: 'Social feed settings, channels, or templates were modified.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'social-feed-announced', moduleKey: 'social-feeds', label: 'Social Announcement Sent', description: 'An announcement was posted for a live stream, video, or post.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'social-feed-offline', moduleKey: 'social-feeds', label: 'Stream Ended / Offline', description: 'A live stream ended and the announcement was updated with duration.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'social-feed-error', moduleKey: 'social-feeds', label: 'Social Feed Error', description: 'Social feed polling or posting encountered an error.', defaultDelivery: 'IMMEDIATE' },
 
   { key: 'server-stats-config', moduleKey: 'server-stats', label: 'Server Stats Config', description: 'Server stats configuration changed.', defaultDelivery: 'IMMEDIATE' },
   { key: 'server-stats-update', moduleKey: 'server-stats', label: 'Server Stats Updated', description: 'Server stat counter channels were refreshed.', defaultDelivery: 'IMMEDIATE' },

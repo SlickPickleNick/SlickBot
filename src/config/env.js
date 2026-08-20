@@ -53,7 +53,12 @@ const env = {
   DEFAULT_BOT_ACTIVITY_URL: readOptionalVariable('DEFAULT_BOT_ACTIVITY_URL'),
   NODE_ENV: readOptionalVariable('NODE_ENV', [], 'development'),
   WEB_HOST: readOptionalVariable('WEB_HOST', [], '0.0.0.0'),
-  PORT: readNumber('PORT', 3000)
+  PORT: readNumber('PORT', 3000),
+  TWITCH_CLIENT_ID: readOptionalVariable('TWITCH_CLIENT_ID', []),
+  TWITCH_CLIENT_SECRET: readOptionalVariable('TWITCH_CLIENT_SECRET', []),
+  YOUTUBE_API_KEY: readOptionalVariable('YOUTUBE_API_KEY', []),
+  X_BEARER_TOKEN: readOptionalVariable('X_BEARER_TOKEN', ['TWITTER_BEARER_TOKEN']),
+  TIKTOK_API_KEY: readOptionalVariable('TIKTOK_API_KEY', [])
 };
 
 function validateEnv() {

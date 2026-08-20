@@ -34,6 +34,7 @@ const suggestionCommand = require('./suggestion');
 const referralCommand = require('./referral');
 const tempRoleCommand = require('./tempRole');
 const achievementCommand = require('./achievement');
+const feedCommand = require('./feed');
 
 const commands = [
   pingCommand,
@@ -71,7 +72,8 @@ const commands = [
   suggestionCommand,
   referralCommand,
   tempRoleCommand,
-  achievementCommand
+  achievementCommand,
+  feedCommand
 ];
 
 const commandMap = new Map(commands.map((command) => [command.data.name, command]));
