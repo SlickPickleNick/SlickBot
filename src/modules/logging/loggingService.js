@@ -211,7 +211,87 @@ class LoggingService {
     return channel;
   }
 
-  async setModuleChannel(guildId, moduleKey, channelId, deliveryMode = LogDeliveryMode.IMMEDIATE) {
+  buildChannelGuideEmbed({ group = null, modules = [] }) {
+    let title = '📋 Logging Channel Configured';
+    let headerDesc = 'This channel has been designated to receive SlickBot server logs.';
+
+    if (group) {
+      title = `${group.emoji} ${group.label} • Channel Setup`;
+      headerDesc = group.description;
+    } else if (modules.length === 1) {
+      title = `📋 ${modules[0].label} Logs • Channel Setup`;
+      headerDesc = modules[0].description;
+    }
+
+    const moduleEntries = modules.map((mod) => {
+      const { getEventsForModule } = require('./logEventCatalog');
+      const events = getEventsForModule(mod.key);
+      const eventSample = events.slice(0, 5).map((e) => `\`${e.key}\``).join(', ');
+      const more = events.length > 5 ? ` +${events.length - 5} more` : '';
+      return `• **${mod.label}** (\`${mod.key}\`)\n  ${mod.description}\n  *Events:* ${eventSample}${more}`;
+    });
+
+    const embed = new EmbedBuilder()
+      .setColor(0x5865f2)
+      .setTitle(title)
+      .setDescription([
+        `**Overview**\n${headerDesc}`,
+        '',
+        `**📦 Active Log Modules (${modules.length})**`,
+        moduleEntries.join('\n\n') || '• No specific modules mapped.',
+        '',
+        '**⚙️ Quick Management**',
+        '• Use `/logging setup` to re-assign or auto-create log hubs.',
+        '• Use `/logging set-channel` or `/logging module-mode` to configure specific modules.',
+        '• Use `/logging test event:all` to test log delivery in all configured channels.'
+      ].join('\n'))
+      .setFooter({ text: '📌 Pinned for easy reference • SlickBot Logging System' })
+      .setTimestamp(new Date());
+
+    return embed;
+  }
+
+  async postChannelSetupGuide(guildId, channelId, { groupKey = null, moduleKeys = null } = {}) {
+    if (!channelId) return null;
+    const channel = await this.fetchSendableChannel(channelId);
+    if (!channel || typeof channel.send !== 'function') return null;
+
+    const { getLogGroup, getLogModule, LOG_GROUPS } = require('./logEventCatalog');
+
+    let group = groupKey ? getLogGroup(groupKey) : null;
+    let targetModuleKeys = [];
+
+    if (group) {
+      targetModuleKeys = group.moduleKeys;
+    } else if (moduleKeys && Array.isArray(moduleKeys) && moduleKeys.length > 0) {
+      targetModuleKeys = moduleKeys;
+    } else {
+      const res = await query(
+        `SELECT module_key FROM log_module_settings WHERE guild_id = $1 AND channel_id = $2 AND enabled = true`,
+        [guildId, channelId]
+      ).catch(() => ({ rows: [] }));
+      targetModuleKeys = res.rows.map((r) => String(r.module_key).toLowerCase());
+      group = LOG_GROUPS.find((g) => g.moduleKeys.every((k) => targetModuleKeys.includes(k))) || null;
+    }
+
+    const resolvedModules = targetModuleKeys.map((k) => getLogModule(k)).filter(Boolean);
+    if (!resolvedModules.length) return null;
+
+    const embed = this.buildChannelGuideEmbed({ group, modules: resolvedModules });
+
+    try {
+      const msg = await channel.send({ embeds: [embed] });
+      if (msg && typeof msg.pin === 'function') {
+        await msg.pin().catch(() => {});
+      }
+      return msg;
+    } catch (err) {
+      console.error(`[LoggingService] Failed to post/pin setup guide in #${channel.name || channelId}:`, err);
+      return null;
+    }
+  }
+
+  async setModuleChannel(guildId, moduleKey, channelId, deliveryMode = LogDeliveryMode.IMMEDIATE, options = { sendGuide: true }) {
     const logModule = getLogModule(moduleKey);
     const key = String(logModule?.key || moduleKey).trim().toLowerCase();
     await query(
@@ -226,6 +306,10 @@ class LoggingService {
       [guildId, key, deliveryMode || LogDeliveryMode.IMMEDIATE, channelId]
     );
     this.invalidateRouting(guildId);
+
+    if (options?.sendGuide && channelId) {
+      await this.postChannelSetupGuide(guildId, channelId, { moduleKeys: [key] }).catch(() => {});
+    }
   }
 
   async setupStarterChannels(guildId, { defaultChannelId, moderationChannelId = null }) {
@@ -243,31 +327,32 @@ class LoggingService {
       const cleanKey = String(moduleKey).trim().toLowerCase();
       const targetChannelId = (moderationChannelId && modLogKeys.has(cleanKey)) ? moderationChannelId : defaultChannelId;
       if (targetChannelId) {
-        await query(
-          `INSERT INTO log_module_settings (guild_id, module_key, delivery_mode, channel_id, enabled)
-           VALUES ($1, $2, $3, $4, true)
-           ON CONFLICT (guild_id, module_key)
-           DO UPDATE SET
-             channel_id = EXCLUDED.channel_id,
-             enabled = true,
-             delivery_mode = EXCLUDED.delivery_mode,
-             updated_at = NOW()`,
-          [guildId, cleanKey, logModule?.defaultDelivery || LogDeliveryMode.IMMEDIATE, targetChannelId]
-        );
+        await this.setModuleChannel(guildId, cleanKey, targetChannelId, logModule?.defaultDelivery || LogDeliveryMode.IMMEDIATE, { sendGuide: false });
       }
     }
     this.invalidateRouting(guildId);
+
+    if (defaultChannelId) {
+      await this.postChannelSetupGuide(guildId, defaultChannelId, { groupKey: 'CORE_SYSTEM' }).catch(() => {});
+    }
+    if (moderationChannelId) {
+      await this.postChannelSetupGuide(guildId, moderationChannelId, { groupKey: 'MODERATION_SAFETY' }).catch(() => {});
+    }
   }
 
-  async setupLogGroup(guildId, groupKey, channelId) {
+  async setupLogGroup(guildId, groupKey, channelId, options = { sendGuide: true }) {
     const { getLogGroup } = require('./logEventCatalog');
     const group = getLogGroup(groupKey);
     if (!group) throw new Error(`Unknown log group: ${groupKey}`);
 
     for (const moduleKey of group.moduleKeys) {
-      await this.setModuleChannel(guildId, moduleKey, channelId);
+      await this.setModuleChannel(guildId, moduleKey, channelId, LogDeliveryMode.IMMEDIATE, { sendGuide: false });
     }
     this.invalidateRouting(guildId);
+
+    if (options?.sendGuide && channelId) {
+      await this.postChannelSetupGuide(guildId, channelId, { groupKey }).catch(() => {});
+    }
   }
 
   async getLogGroupChannels(guildId) {

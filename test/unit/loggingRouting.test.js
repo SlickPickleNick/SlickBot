@@ -76,3 +76,18 @@ test('LoggingService methods and cache lifecycle', () => {
   service.clearAllCaches();
   assert.equal(service.routingCache.size, 0);
 });
+
+test('LoggingService buildChannelGuideEmbed formats overview, active modules and quick management', () => {
+  const service = new LoggingService();
+  const { getLogGroup, getLogModule } = require('../../src/modules/logging/logEventCatalog');
+  const group = getLogGroup('CORE_SYSTEM');
+  const modules = group.moduleKeys.map((k) => getLogModule(k)).filter(Boolean);
+
+  const embed = service.buildChannelGuideEmbed({ group, modules });
+  assert.ok(embed);
+  assert.match(embed.data.title, /Core & System Logs • Channel Setup/);
+  assert.match(embed.data.description, /Active Log Modules/);
+  assert.match(embed.data.description, /Core \/ System/);
+  assert.match(embed.data.description, /Quick Management/);
+  assert.match(embed.data.footer.text, /Pinned for easy reference/);
+});
