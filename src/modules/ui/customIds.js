@@ -17,6 +17,8 @@ const CustomIds = Object.freeze({
   OnboardingNextPrefix: 'slickbot:onboarding:next:',
   OnboardingAutoCreatePrefix: 'slickbot:onboarding:auto:',
   OnboardingSkipPrefix: 'slickbot:onboarding:skip:',
+  OnboardingKeepCurrentPrefix: 'slickbot:onboarding:current:',
+  OnboardingKeepDefaultPrefix: 'slickbot:onboarding:default:',
   OnboardingDisablePrefix: 'slickbot:onboarding:disable:',
   OnboardingCancelPrefix: 'slickbot:onboarding:cancel:',
   OnboardingChannelSelectPrefix: 'slickbot:onboarding:chsel:',

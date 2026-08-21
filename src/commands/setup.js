@@ -39,8 +39,9 @@ module.exports = {
     .addStringOption((option) =>
       option
         .setName('module')
-        .setDescription('Optionally choose a specific module key to onboard (e.g. LOGGING, WELCOME, TICKETS).')
+        .setDescription('Optionally choose a specific module to onboard.')
         .setRequired(false)
+        .setAutocomplete(true)
     ),
   actionKey: ActionKeys.Setup,
   moduleKey: ModuleKeys.PERMISSIONS,
@@ -148,10 +149,49 @@ module.exports = {
         : onboarding.startServerOnboarding(interaction.guildId, interaction.user.id);
 
       if (session) {
-        return replyPrivate(interaction, onboarding.buildOnboardingPayload(session));
+        const firstStep = session.steps[0];
+        const currentVal = firstStep && typeof firstStep.getCurrent === 'function' ? await firstStep.getCurrent(interaction.guild).catch(() => null) : null;
+        return replyPrivate(interaction, onboarding.buildOnboardingPayload(session, currentVal));
       }
     }
 
     await replyPrivate(interaction, await buildSetupPanel(interaction.guildId, interaction.guild ? interaction.guild.name : null));
+  },
+  async autocomplete(interaction) {
+    const focused = interaction.options.getFocused(true);
+    if (focused.name === 'module') {
+      const choices = [
+        { name: '📋 Audit & Event Logging (LOGGING)', value: 'LOGGING' },
+        { name: '🔐 Permissions & Staff Roles (PERMISSIONS)', value: 'PERMISSIONS' },
+        { name: '👋 Welcome & Auto-Roles (WELCOME)', value: 'WELCOME' },
+        { name: '🎟️ Support Tickets (TICKETS)', value: 'TICKETS' },
+        { name: '🚩 User & Message Reports (REPORTS)', value: 'REPORTS' },
+        { name: '📝 Staff Applications (APPLICATIONS)', value: 'APPLICATIONS' },
+        { name: '⚖️ Punishment Appeals (APPEALS)', value: 'APPEALS' },
+        { name: '🎉 Giveaways (GIVEAWAYS)', value: 'GIVEAWAYS' },
+        { name: '🎂 Birthdays (BIRTHDAYS)', value: 'BIRTHDAYS' },
+        { name: '📈 Leveling & XP (LEVELING)', value: 'LEVELING' },
+        { name: '🏆 Achievements (ACHIEVEMENTS)', value: 'ACHIEVEMENTS' },
+        { name: '🎲 Community Games (COMMUNITY_GAMES)', value: 'COMMUNITY_GAMES' },
+        { name: '💡 Member Suggestions (SUGGESTIONS)', value: 'SUGGESTIONS' },
+        { name: '📚 Knowledge Base / FAQ (FAQ)', value: 'FAQ' },
+        { name: '👥 Member Referrals (REFERRALS)', value: 'REFERRALS' },
+        { name: '📊 Server Stats Counters (SERVER_STATS)', value: 'SERVER_STATS' },
+        { name: '💬 Custom Commands (CUSTOM_COMMANDS)', value: 'CUSTOM_COMMANDS' },
+        { name: '🔊 Join-to-Create Voice (JOIN_TO_CREATE)', value: 'JOIN_TO_CREATE' },
+        { name: '🗓️ Scheduled Messages (SCHEDULED_MESSAGES)', value: 'SCHEDULED_MESSAGES' },
+        { name: '🔔 Bot Updates & Releases (BOT_UPDATES)', value: 'BOT_UPDATES' },
+        { name: '📺 Social Stream Alerts (SOCIAL_FEEDS)', value: 'SOCIAL_FEEDS' },
+        { name: '🛡️ Moderation & Cases (MODERATION)', value: 'MODERATION' },
+        { name: '🔒 Emergency Lockdown (LOCKDOWN)', value: 'LOCKDOWN' },
+        { name: '⏳ Temporary Roles (TEMP_ROLES)', value: 'TEMP_ROLES' }
+      ];
+
+      const queryText = String(focused.value || '').toLowerCase().trim();
+      const filtered = choices.filter(
+        (item) => item.name.toLowerCase().includes(queryText) || item.value.toLowerCase().includes(queryText)
+      ).slice(0, 25);
+      await interaction.respond(filtered).catch(() => {});
+    }
   }
 };

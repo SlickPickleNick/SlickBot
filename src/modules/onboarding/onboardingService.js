@@ -7,22 +7,20 @@ const {
   ChannelType,
   PermissionFlagsBits
 } = require('discord.js');
-const { query } = require('../../services/db');
-const { createBaseEmbed, createSuccessEmbed, createWarningEmbed, SlickBotColors } = require('../ui/uiService');
 const { CustomIds } = require('../ui/customIds');
 const { ModuleKeys } = require('../moduleRegistry');
+const { createBaseEmbed, createSuccessEmbed, SlickBotColors } = require('../ui/uiService');
+const { query } = require('../../services/db');
 
-// In-memory active onboarding sessions
-// Map<sessionId, SessionObject>
 const activeSessions = new Map();
 
 function generateSessionId(guildId, userId) {
-  return `${guildId}:${userId}:${Date.now()}`;
+  return `${guildId}_${userId}_${Date.now()}`;
 }
 
 async function autoCreateRole(guild, { name, color = '#7869ff', mentionable = false, permissions = [], reason = 'SlickBot auto-role setup' }) {
   if (!guild || typeof guild.roles?.create !== 'function') throw new Error('Guild roles manager not available.');
-  const existing = guild.roles.cache.find((r) => r.name.toLowerCase() === name.toLowerCase());
+  const existing = guild.roles.cache ? guild.roles.cache.find((r) => r.name.toLowerCase() === name.toLowerCase()) : null;
   if (existing) return existing;
 
   const hexColor = color.startsWith('#') ? Number.parseInt(color.slice(1), 16) : SlickBotColors.PRIMARY;
@@ -45,16 +43,16 @@ async function autoCreateChannel(guild, {
   reason = 'SlickBot auto-channel setup'
 }) {
   if (!guild || typeof guild.channels?.create !== 'function') throw new Error('Guild channels manager not available.');
-  const existing = guild.channels.cache.find((c) => c.name.toLowerCase() === name.toLowerCase() && c.type === type);
+  const existing = guild.channels.cache ? guild.channels.cache.find((c) => c.name.toLowerCase() === name.toLowerCase() && c.type === type) : null;
   if (existing) return existing;
 
   const overwrites = [];
-  const clientUser = guild.client?.user;
-  const botMember = clientUser ? guild.members.cache.get(clientUser.id) : null;
+  const everyoneId = guild.roles?.everyone?.id || guild.id;
+  const botMember = guild.members?.me || (guild.client?.user ? guild.members?.cache?.get(guild.client.user.id) : null);
 
-  if (isPrivate) {
+  if (isPrivate && everyoneId) {
     overwrites.push({
-      id: guild.roles.everyone.id,
+      id: everyoneId,
       deny: [PermissionFlagsBits.ViewChannel]
     });
     if (botMember) {
@@ -105,12 +103,25 @@ const ONBOARDING_STEPS = Object.freeze({
       pickerType: 'ROLE',
       autoCreateLabel: 'Auto-Create Staff Roles',
       autoCreateDescription: 'Creates @Admin and @Moderator roles with standard management permissions.',
-      async applySelection(guild, roleId, session) {
+      async getCurrent(guild) {
+        const res = await query(`SELECT role_id, permission_level FROM role_permission_levels WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
+        if (!res.rows.length) return null;
+        return res.rows.map((r) => `${r.permission_level}: <@&${r.role_id}>`).join(', ');
+      },
+      async applyDefault(guild) {
+        const adminRole = guild.roles.cache.find((r) => r.name.toLowerCase() === 'admin' || r.name.toLowerCase() === 'administrator');
+        const modRole = guild.roles.cache.find((r) => r.name.toLowerCase() === 'moderator' || r.name.toLowerCase() === 'mod');
+        const { PermissionService } = require('../permissions/permissionService');
+        const permissions = new PermissionService();
+        await permissions.setupRoles(guild.id, { adminRoleId: adminRole?.id || null, modRoleId: modRole?.id || null });
+        return { result: adminRole || modRole ? 'Matched server roles' : 'Default permissions saved' };
+      },
+      async applySelection(guild, roleId) {
         const { PermissionService } = require('../permissions/permissionService');
         const permissions = new PermissionService();
         await permissions.setupRoles(guild.id, { adminRoleId: roleId });
       },
-      async autoCreate(guild, session) {
+      async autoCreate(guild) {
         const adminRole = await autoCreateRole(guild, { name: 'Admin', color: '#e74c3c', permissions: [PermissionFlagsBits.Administrator] });
         const modRole = await autoCreateRole(guild, { name: 'Moderator', color: '#3498db', permissions: [PermissionFlagsBits.KickMembers, PermissionFlagsBits.BanMembers, PermissionFlagsBits.ModerateMembers, PermissionFlagsBits.ManageMessages] });
         const { PermissionService } = require('../permissions/permissionService');
@@ -128,12 +139,26 @@ const ONBOARDING_STEPS = Object.freeze({
       channelTypes: [ChannelType.GuildText],
       autoCreateLabel: 'Auto-Create #bot-logs',
       autoCreateDescription: 'Creates private #bot-logs and #mod-logs channels for staff.',
-      async applySelection(guild, channelId, session) {
+      async getCurrent(guild) {
+        const res = await query(`SELECT channel_id FROM log_module_settings WHERE guild_id = $1 AND module_key = 'CORE' AND enabled = true`, [guild.id]).catch(() => ({ rows: [] }));
+        return res.rows[0]?.channel_id ? `<#${res.rows[0].channel_id}>` : null;
+      },
+      async applyDefault(guild) {
+        const existing = guild.channels.cache.find((c) => c.name.toLowerCase().includes('log') && c.type === ChannelType.GuildText);
+        if (existing) {
+          const { LoggingService } = require('../logging/loggingService');
+          const logging = new LoggingService();
+          await logging.setModuleChannel(guild.id, 'core', existing.id);
+          return { result: `Routed to <#${existing.id}>` };
+        }
+        return { result: 'Default audit settings saved' };
+      },
+      async applySelection(guild, channelId) {
         const { LoggingService } = require('../logging/loggingService');
         const logging = new LoggingService();
         await logging.setModuleChannel(guild.id, 'core', channelId);
       },
-      async autoCreate(guild, session) {
+      async autoCreate(guild) {
         const botLogs = await autoCreateChannel(guild, { name: 'bot-logs', isPrivate: true, reason: 'SlickBot Audit Log Channel' });
         const modLogs = await autoCreateChannel(guild, { name: 'mod-logs', isPrivate: true, reason: 'SlickBot Moderation Log Channel' });
         const { LoggingService } = require('../logging/loggingService');
@@ -152,11 +177,25 @@ const ONBOARDING_STEPS = Object.freeze({
       channelTypes: [ChannelType.GuildText],
       autoCreateLabel: 'Auto-Create #welcome & @Member',
       autoCreateDescription: 'Creates public #welcome channel and @Member role assigned on join.',
-      async applySelection(guild, channelId, session) {
+      async getCurrent(guild) {
+        const res = await query(`SELECT channel_id, enabled FROM welcome_configs WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
+        return res.rows[0]?.channel_id ? `<#${res.rows[0].channel_id}>` : null;
+      },
+      async applyDefault(guild) {
+        const { upsertWelcomeConfig } = require('../community/welcomeService');
+        const welcomeChan = guild.channels.cache.find((c) => c.name.toLowerCase() === 'welcome' && c.type === ChannelType.GuildText);
+        if (welcomeChan) {
+          await upsertWelcomeConfig({ guildId: guild.id, channelId: welcomeChan.id, enabled: true });
+          return { result: `Assigned existing <#${welcomeChan.id}>` };
+        }
+        await upsertWelcomeConfig({ guildId: guild.id, enabled: true });
+        return { result: 'Default welcome configuration saved' };
+      },
+      async applySelection(guild, channelId) {
         const { upsertWelcomeConfig } = require('../community/welcomeService');
         await upsertWelcomeConfig({ guildId: guild.id, channelId, enabled: true });
       },
-      async autoCreate(guild, session) {
+      async autoCreate(guild) {
         const welcomeChannel = await autoCreateChannel(guild, { name: 'welcome', isPrivate: false, topic: 'Welcome new members to the server!' });
         const memberRole = await autoCreateRole(guild, { name: 'Member', color: '#2ecc71' });
         const { upsertWelcomeConfig, addAutoRole } = require('../community/welcomeService');
@@ -174,17 +213,32 @@ const ONBOARDING_STEPS = Object.freeze({
       channelTypes: [ChannelType.GuildCategory],
       autoCreateLabel: 'Auto-Create "Tickets" Category',
       autoCreateDescription: 'Creates a private "Tickets" category and #support-tickets channel.',
-      async applySelection(guild, categoryId, session) {
+      async getCurrent(guild) {
+        const res = await query(`SELECT category_id FROM ticket_configs WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
+        return res.rows[0]?.category_id ? `Category <#${res.rows[0].category_id}>` : null;
+      },
+      async applyDefault(guild) {
         const { TicketService } = require('../support/supportService');
         const tickets = new TicketService();
-        await tickets.setup(guild.id, { categoryId });
+        const existingCat = guild.channels.cache.find((c) => c.name.toLowerCase() === 'tickets' && c.type === ChannelType.GuildCategory);
+        if (existingCat) {
+          await tickets.updateConfig(guild.id, { categoryId: existingCat.id });
+          return { result: `Assigned existing category <#${existingCat.id}>` };
+        }
+        await tickets.updateConfig(guild.id, { deleteSeconds: 10, transcriptsEnabled: true });
+        return { result: 'Default ticket settings saved' };
       },
-      async autoCreate(guild, session) {
+      async applySelection(guild, categoryId) {
+        const { TicketService } = require('../support/supportService');
+        const tickets = new TicketService();
+        await tickets.updateConfig(guild.id, { categoryId });
+      },
+      async autoCreate(guild) {
         const category = await autoCreateChannel(guild, { name: 'Tickets', type: ChannelType.GuildCategory, isPrivate: true });
         const panelChannel = await autoCreateChannel(guild, { name: 'support-tickets', isPrivate: false, topic: 'Open a support ticket with staff' });
         const { TicketService } = require('../support/supportService');
         const tickets = new TicketService();
-        await tickets.setup(guild.id, { categoryId: category.id });
+        await tickets.updateConfig(guild.id, { categoryId: category.id });
         return { created: `Category "${category.name}", #${panelChannel.name}` };
       }
     },
@@ -197,12 +251,22 @@ const ONBOARDING_STEPS = Object.freeze({
       channelTypes: [ChannelType.GuildCategory],
       autoCreateLabel: 'Auto-Create Server Stats Counters',
       autoCreateDescription: 'Creates a "📊 Server Stats" category with live member counter channels.',
-      async applySelection(guild, categoryId, session) {
+      async getCurrent(guild) {
+        const res = await query(`SELECT member_channel_id, enabled FROM server_stats_configs WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
+        return res.rows[0]?.member_channel_id ? `<#${res.rows[0].member_channel_id}> (Enabled: ${res.rows[0].enabled})` : null;
+      },
+      async applyDefault(guild) {
+        const { ServerStatsService } = require('../community/serverStatsService');
+        const stats = new ServerStatsService();
+        await stats.upsertConfig(guild.id, { enabled: true });
+        return { result: 'Server stats counters enabled' };
+      },
+      async applySelection(guild, categoryId) {
         const { ServerStatsService } = require('../community/serverStatsService');
         const stats = new ServerStatsService();
         await stats.upsertConfig(guild.id, { enabled: true });
       },
-      async autoCreate(guild, session) {
+      async autoCreate(guild) {
         const category = await autoCreateChannel(guild, { name: '📊 Server Stats', type: ChannelType.GuildCategory });
         const memberCount = guild.memberCount || 1;
         const memberChannel = await autoCreateChannel(guild, { name: `👥 Members: ${memberCount}`, type: ChannelType.GuildVoice, parentId: category.id });
@@ -221,14 +285,28 @@ const ONBOARDING_STEPS = Object.freeze({
 
   [ModuleKeys.LOGGING]: [
     {
-      id: 'log_channel',
+      id: 'log_core',
       moduleKey: ModuleKeys.LOGGING,
-      title: 'Default Audit Log Channel',
-      description: 'Select the primary text channel where SlickBot posts audit events.',
+      title: 'Core System & Audit Log Channel',
+      description: 'Select where SlickBot logs core administrative changes, setup modifications, and permission updates.',
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildText],
       autoCreateLabel: 'Auto-Create #bot-logs',
-      autoCreateDescription: 'Creates a private #bot-logs channel for staff only.',
+      autoCreateDescription: 'Creates private #bot-logs for staff.',
+      async getCurrent(guild) {
+        const res = await query(`SELECT channel_id FROM log_module_settings WHERE guild_id = $1 AND module_key = 'CORE' AND enabled = true`, [guild.id]).catch(() => ({ rows: [] }));
+        return res.rows[0]?.channel_id ? `<#${res.rows[0].channel_id}>` : null;
+      },
+      async applyDefault(guild) {
+        const existing = guild.channels.cache.find((c) => c.name.toLowerCase() === 'bot-logs' || c.name.toLowerCase() === 'logs');
+        if (existing) {
+          const { LoggingService } = require('../logging/loggingService');
+          const logging = new LoggingService();
+          await logging.setModuleChannel(guild.id, 'core', existing.id);
+          return { result: `Assigned <#${existing.id}>` };
+        }
+        return { result: 'Core logging initialized' };
+      },
       async applySelection(guild, channelId) {
         const { LoggingService } = require('../logging/loggingService');
         const logging = new LoggingService();
@@ -239,6 +317,100 @@ const ONBOARDING_STEPS = Object.freeze({
         const { LoggingService } = require('../logging/loggingService');
         const logging = new LoggingService();
         await logging.setModuleChannel(guild.id, 'core', channel.id);
+        return { created: `#${channel.name}` };
+      }
+    },
+    {
+      id: 'log_moderation',
+      moduleKey: ModuleKeys.LOGGING,
+      title: 'Moderation & Safety Log Channel',
+      description: 'Select where SlickBot logs disciplinary actions, bans, kicks, mutes, and safety events.',
+      pickerType: 'CHANNEL',
+      channelTypes: [ChannelType.GuildText],
+      autoCreateLabel: 'Auto-Create #mod-logs',
+      autoCreateDescription: 'Creates private #mod-logs for staff.',
+      async getCurrent(guild) {
+        const res = await query(`SELECT channel_id FROM log_module_settings WHERE guild_id = $1 AND module_key = 'MODERATION' AND enabled = true`, [guild.id]).catch(() => ({ rows: [] }));
+        return res.rows[0]?.channel_id ? `<#${res.rows[0].channel_id}>` : null;
+      },
+      async applyDefault(guild) {
+        const existing = guild.channels.cache.find((c) => c.name.toLowerCase() === 'mod-logs');
+        if (existing) {
+          const { LoggingService } = require('../logging/loggingService');
+          const logging = new LoggingService();
+          await logging.setModuleChannel(guild.id, 'moderation', existing.id);
+          return { result: `Assigned <#${existing.id}>` };
+        }
+        return { result: 'Moderation logging initialized' };
+      },
+      async applySelection(guild, channelId) {
+        const { LoggingService } = require('../logging/loggingService');
+        const logging = new LoggingService();
+        await logging.setModuleChannel(guild.id, 'moderation', channelId);
+      },
+      async autoCreate(guild) {
+        const channel = await autoCreateChannel(guild, { name: 'mod-logs', isPrivate: true, reason: 'SlickBot Moderation Log Channel' });
+        const { LoggingService } = require('../logging/loggingService');
+        const logging = new LoggingService();
+        await logging.setModuleChannel(guild.id, 'moderation', channel.id);
+        return { created: `#${channel.name}` };
+      }
+    },
+    {
+      id: 'log_voice',
+      moduleKey: ModuleKeys.LOGGING,
+      title: 'Voice Activity Log Channel',
+      description: 'Select where voice channel joins, leaves, and moves are logged.',
+      pickerType: 'CHANNEL',
+      channelTypes: [ChannelType.GuildText],
+      autoCreateLabel: 'Auto-Create #voice-logs',
+      autoCreateDescription: 'Creates private #voice-logs channel.',
+      async getCurrent(guild) {
+        const res = await query(`SELECT channel_id FROM log_module_settings WHERE guild_id = $1 AND module_key = 'VOICE' AND enabled = true`, [guild.id]).catch(() => ({ rows: [] }));
+        return res.rows[0]?.channel_id ? `<#${res.rows[0].channel_id}>` : null;
+      },
+      async applyDefault() {
+        return { result: 'Voice logging follows server defaults' };
+      },
+      async applySelection(guild, channelId) {
+        const { LoggingService } = require('../logging/loggingService');
+        const logging = new LoggingService();
+        await logging.setModuleChannel(guild.id, 'voice', channelId);
+      },
+      async autoCreate(guild) {
+        const channel = await autoCreateChannel(guild, { name: 'voice-logs', isPrivate: true, reason: 'SlickBot Voice Log Channel' });
+        const { LoggingService } = require('../logging/loggingService');
+        const logging = new LoggingService();
+        await logging.setModuleChannel(guild.id, 'voice', channel.id);
+        return { created: `#${channel.name}` };
+      }
+    },
+    {
+      id: 'log_member',
+      moduleKey: ModuleKeys.LOGGING,
+      title: 'Member & Message Event Log Channel',
+      description: 'Select where message edits, message deletes, and nickname changes are logged.',
+      pickerType: 'CHANNEL',
+      channelTypes: [ChannelType.GuildText],
+      autoCreateLabel: 'Auto-Create #member-logs',
+      autoCreateDescription: 'Creates private #member-logs channel.',
+      async getCurrent(guild) {
+        const res = await query(`SELECT channel_id FROM log_module_settings WHERE guild_id = $1 AND module_key = 'MEMBER' AND enabled = true`, [guild.id]).catch(() => ({ rows: [] }));
+        return res.rows[0]?.channel_id ? `<#${res.rows[0].channel_id}>` : null;
+      },
+      async applyDefault() {
+        return { result: 'Member logging follows server defaults' };
+      },
+      async applySelection(guild, channelId) {
+        const { LoggingService } = require('../logging/loggingService');
+        const logging = new LoggingService();
+        await logging.setModuleChannel(guild.id, 'member', channelId);
+      },
+      async autoCreate(guild) {
+        const channel = await autoCreateChannel(guild, { name: 'member-logs', isPrivate: true, reason: 'SlickBot Member Log Channel' });
+        const { LoggingService } = require('../logging/loggingService');
+        const logging = new LoggingService();
+        await logging.setModuleChannel(guild.id, 'member', channel.id);
         return { created: `#${channel.name}` };
       }
     }
@@ -254,6 +426,15 @@ const ONBOARDING_STEPS = Object.freeze({
       channelTypes: [ChannelType.GuildText],
       autoCreateLabel: 'Auto-Create #welcome',
       autoCreateDescription: 'Creates a public #welcome channel for new arrivals.',
+      async getCurrent(guild) {
+        const res = await query(`SELECT channel_id FROM welcome_configs WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
+        return res.rows[0]?.channel_id ? `<#${res.rows[0].channel_id}>` : null;
+      },
+      async applyDefault(guild) {
+        const { upsertWelcomeConfig } = require('../community/welcomeService');
+        await upsertWelcomeConfig({ guildId: guild.id, enabled: true });
+        return { result: 'Welcome announcements enabled' };
+      },
       async applySelection(guild, channelId) {
         const { upsertWelcomeConfig } = require('../community/welcomeService');
         await upsertWelcomeConfig({ guildId: guild.id, channelId, enabled: true });
@@ -263,6 +444,38 @@ const ONBOARDING_STEPS = Object.freeze({
         const { upsertWelcomeConfig } = require('../community/welcomeService');
         await upsertWelcomeConfig({ guildId: guild.id, channelId: channel.id, enabled: true });
         return { created: `#${channel.name}` };
+      }
+    },
+    {
+      id: 'welcome_autorole',
+      moduleKey: ModuleKeys.WELCOME,
+      title: 'Auto-Assigned Member Role',
+      description: 'Select a role to assign automatically to new members when they join.',
+      pickerType: 'ROLE',
+      autoCreateLabel: 'Auto-Create @Member',
+      autoCreateDescription: 'Creates standard @Member role assigned on join.',
+      async getCurrent(guild) {
+        const res = await query(`SELECT role_id FROM welcome_auto_roles WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
+        return res.rows.length ? res.rows.map((r) => `<@&${r.role_id}>`).join(', ') : null;
+      },
+      async applyDefault(guild) {
+        const memberRole = guild.roles.cache.find((r) => r.name.toLowerCase() === 'member');
+        if (memberRole) {
+          const { addAutoRole } = require('../community/welcomeService');
+          await addAutoRole(guild.id, memberRole.id).catch(() => {});
+          return { result: `Assigned existing <@&${memberRole.id}>` };
+        }
+        return { result: 'No auto-role assigned by default' };
+      },
+      async applySelection(guild, roleId) {
+        const { addAutoRole } = require('../community/welcomeService');
+        await addAutoRole(guild.id, roleId);
+      },
+      async autoCreate(guild) {
+        const role = await autoCreateRole(guild, { name: 'Member', color: '#2ecc71' });
+        const { addAutoRole } = require('../community/welcomeService');
+        await addAutoRole(guild.id, role.id);
+        return { created: `@${role.name}` };
       }
     }
   ],
@@ -277,17 +490,62 @@ const ONBOARDING_STEPS = Object.freeze({
       channelTypes: [ChannelType.GuildCategory],
       autoCreateLabel: 'Auto-Create "Tickets" Category',
       autoCreateDescription: 'Creates a private "Tickets" category.',
+      async getCurrent(guild) {
+        const res = await query(`SELECT category_id FROM ticket_configs WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
+        return res.rows[0]?.category_id ? `Category <#${res.rows[0].category_id}>` : null;
+      },
+      async applyDefault(guild) {
+        const { TicketService } = require('../support/supportService');
+        const tickets = new TicketService();
+        await tickets.updateConfig(guild.id, { transcriptsEnabled: true, deleteSeconds: 10 });
+        return { result: 'Default ticket configuration applied' };
+      },
       async applySelection(guild, categoryId) {
         const { TicketService } = require('../support/supportService');
         const tickets = new TicketService();
-        await tickets.setup(guild.id, { categoryId });
+        await tickets.updateConfig(guild.id, { categoryId });
       },
       async autoCreate(guild) {
         const category = await autoCreateChannel(guild, { name: 'Tickets', type: ChannelType.GuildCategory, isPrivate: true });
         const { TicketService } = require('../support/supportService');
         const tickets = new TicketService();
-        await tickets.setup(guild.id, { categoryId: category.id });
+        await tickets.updateConfig(guild.id, { categoryId: category.id });
         return { created: `Category "${category.name}"` };
+      }
+    },
+    {
+      id: 'ticket_staff_role',
+      moduleKey: ModuleKeys.TICKETS,
+      title: 'Ticket Support Staff Role',
+      description: 'Select the role that can view, claim, and respond to member tickets.',
+      pickerType: 'ROLE',
+      autoCreateLabel: 'Auto-Create @Support Staff',
+      autoCreateDescription: 'Creates @Support Staff role for ticket management.',
+      async getCurrent(guild) {
+        const res = await query(`SELECT staff_role_id FROM ticket_configs WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
+        return res.rows[0]?.staff_role_id ? `<@&${res.rows[0].staff_role_id}>` : null;
+      },
+      async applyDefault(guild) {
+        const modRole = guild.roles.cache.find((r) => r.name.toLowerCase() === 'support' || r.name.toLowerCase() === 'moderator');
+        if (modRole) {
+          const { TicketService } = require('../support/supportService');
+          const tickets = new TicketService();
+          await tickets.updateConfig(guild.id, { staffRoleId: modRole.id });
+          return { result: `Assigned <@&${modRole.id}>` };
+        }
+        return { result: 'Default staff access applied' };
+      },
+      async applySelection(guild, roleId) {
+        const { TicketService } = require('../support/supportService');
+        const tickets = new TicketService();
+        await tickets.updateConfig(guild.id, { staffRoleId: roleId });
+      },
+      async autoCreate(guild) {
+        const role = await autoCreateRole(guild, { name: 'Support Staff', color: '#3498db' });
+        const { TicketService } = require('../support/supportService');
+        const tickets = new TicketService();
+        await tickets.updateConfig(guild.id, { staffRoleId: role.id });
+        return { created: `@${role.name}` };
       }
     }
   ],
@@ -302,6 +560,16 @@ const ONBOARDING_STEPS = Object.freeze({
       channelTypes: [ChannelType.GuildText],
       autoCreateLabel: 'Auto-Create #giveaways',
       autoCreateDescription: 'Creates a public #giveaways channel.',
+      async getCurrent(guild) {
+        const res = await query(`SELECT default_channel_id FROM giveaway_configs WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
+        return res.rows[0]?.default_channel_id ? `<#${res.rows[0].default_channel_id}>` : null;
+      },
+      async applyDefault(guild) {
+        const { GiveawayService } = require('../community/giveawayService');
+        const giveaways = new GiveawayService();
+        await giveaways.updateConfig(guild.id, { panelColor: '#7869ff' });
+        return { result: 'Default giveaway settings saved' };
+      },
       async applySelection(guild, channelId) {
         const { GiveawayService } = require('../community/giveawayService');
         const giveaways = new GiveawayService();
@@ -327,6 +595,16 @@ const ONBOARDING_STEPS = Object.freeze({
       channelTypes: [ChannelType.GuildText],
       autoCreateLabel: 'Auto-Create #birthdays',
       autoCreateDescription: 'Creates a public #birthdays channel.',
+      async getCurrent(guild) {
+        const res = await query(`SELECT channel_id FROM birthday_configs WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
+        return res.rows[0]?.channel_id ? `<#${res.rows[0].channel_id}>` : null;
+      },
+      async applyDefault(guild) {
+        const { BirthdayService } = require('../community/birthdayService');
+        const birthdays = new BirthdayService();
+        await birthdays.setup(guild.id, { enabled: true });
+        return { result: 'Birthday announcements enabled' };
+      },
       async applySelection(guild, channelId) {
         const { BirthdayService } = require('../community/birthdayService');
         const birthdays = new BirthdayService();
@@ -352,6 +630,16 @@ const ONBOARDING_STEPS = Object.freeze({
       channelTypes: [ChannelType.GuildText],
       autoCreateLabel: 'Auto-Create #suggestions',
       autoCreateDescription: 'Creates a public #suggestions channel.',
+      async getCurrent(guild) {
+        const res = await query(`SELECT channel_id FROM suggestion_configs WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
+        return res.rows[0]?.channel_id ? `<#${res.rows[0].channel_id}>` : null;
+      },
+      async applyDefault(guild) {
+        const { SuggestionService } = require('../community/suggestionService');
+        const suggestions = new SuggestionService();
+        await suggestions.setup(guild.id, { panelActive: true });
+        return { result: 'Suggestions enabled' };
+      },
       async applySelection(guild, channelId) {
         const { SuggestionService } = require('../community/suggestionService');
         const suggestions = new SuggestionService();
@@ -377,6 +665,16 @@ const ONBOARDING_STEPS = Object.freeze({
       channelTypes: [ChannelType.GuildText],
       autoCreateLabel: 'Auto-Create #bot-news',
       autoCreateDescription: 'Creates a public #bot-news channel.',
+      async getCurrent(guild) {
+        const res = await query(`SELECT channel_id FROM bot_updates_configs WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
+        return res.rows[0]?.channel_id ? `<#${res.rows[0].channel_id}>` : null;
+      },
+      async applyDefault(guild) {
+        const { BotUpdatesService } = require('../status/botUpdatesService');
+        const botUpdates = new BotUpdatesService();
+        await botUpdates.updateConfig(guild.id, { enabled: true });
+        return { result: 'Bot updates enabled' };
+      },
       async applySelection(guild, channelId) {
         const { BotUpdatesService } = require('../status/botUpdatesService');
         const botUpdates = new BotUpdatesService();
@@ -402,6 +700,16 @@ const ONBOARDING_STEPS = Object.freeze({
       channelTypes: [ChannelType.GuildText],
       autoCreateLabel: 'Auto-Create #stream-alerts',
       autoCreateDescription: 'Creates a public #stream-alerts channel.',
+      async getCurrent(guild) {
+        const res = await query(`SELECT default_channel_id FROM feed_configs WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
+        return res.rows[0]?.default_channel_id ? `<#${res.rows[0].default_channel_id}>` : null;
+      },
+      async applyDefault(guild) {
+        const { SocialFeedService } = require('../automation/socialFeedService');
+        const feeds = new SocialFeedService();
+        await feeds.setup(guild.id, { enabled: true });
+        return { result: 'Social feeds initialized' };
+      },
       async applySelection(guild, channelId) {
         const { SocialFeedService } = require('../automation/socialFeedService');
         const feeds = new SocialFeedService();
@@ -427,6 +735,13 @@ const ONBOARDING_STEPS = Object.freeze({
       channelTypes: [ChannelType.GuildVoice],
       autoCreateLabel: 'Auto-Create "➕ Join to Create"',
       autoCreateDescription: 'Creates a voice hub channel ready for instant use.',
+      async getCurrent(guild) {
+        const res = await query(`SELECT channel_id FROM join_create_hubs WHERE guild_id = $1 AND enabled = true LIMIT 1`, [guild.id]).catch(() => ({ rows: [] }));
+        return res.rows[0]?.channel_id ? `<#${res.rows[0].channel_id}>` : null;
+      },
+      async applyDefault() {
+        return { result: 'Join-to-Create voice system initialized' };
+      },
       async applySelection(guild, channelId) {
         const { JoinCreateService } = require('../voice/joinCreateService');
         const joinCreate = new JoinCreateService();
@@ -487,10 +802,40 @@ class OnboardingService {
     return session;
   }
 
-  async advanceSession(session, guild, action = 'NEXT') {
+  async advanceSession(session, guild, action = 'NEXT', payload = {}) {
+    const currentStep = session.steps[session.stepIndex];
+
     if (action === 'SKIP') {
-      session.completedSteps.push({ step: session.steps[session.stepIndex], result: 'Skipped' });
+      session.completedSteps.push({ step: currentStep, result: 'Skipped' });
+    } else if (action === 'KEEP_DEFAULT') {
+      let applied = 'Applied default';
+      if (currentStep && typeof currentStep.applyDefault === 'function') {
+        const def = await currentStep.applyDefault(guild, session).catch((err) => ({ error: err.message }));
+        applied = def?.result || 'Default applied';
+      }
+      session.completedSteps.push({ step: currentStep, result: applied });
+    } else if (action === 'KEEP_CURRENT') {
+      let currentVal = null;
+      if (currentStep && typeof currentStep.getCurrent === 'function') {
+        currentVal = await currentStep.getCurrent(guild).catch(() => null);
+      }
+      if (currentVal) {
+        session.completedSteps.push({ step: currentStep, result: `Kept current: ${currentVal}` });
+      } else {
+        // Fallback to default if no current setup stored
+        let applied = 'Applied default (no current setup stored)';
+        if (currentStep && typeof currentStep.applyDefault === 'function') {
+          const def = await currentStep.applyDefault(guild, session).catch((err) => ({ error: err.message }));
+          applied = def?.result ? `${def.result} (no current setup stored)` : applied;
+        }
+        session.completedSteps.push({ step: currentStep, result: applied });
+      }
+    } else if (action === 'AUTO_CREATE') {
+      session.completedSteps.push({ step: currentStep, result: payload.created || 'Auto-created' });
+    } else if (action === 'SELECT') {
+      session.completedSteps.push({ step: currentStep, result: payload.selected || 'Configured' });
     }
+
     session.stepIndex += 1;
     if (session.stepIndex >= session.steps.length) {
       activeSessions.delete(session.id);
@@ -499,10 +844,17 @@ class OnboardingService {
     return { done: false, session };
   }
 
-  buildOnboardingPayload(session) {
+  buildOnboardingPayload(session, currentVal = null) {
     if (!session || session.stepIndex >= session.steps.length) {
+      const completedList = (session?.completedSteps || [])
+        .map((item, idx) => `**Step ${idx + 1}: ${item.step?.title || 'Configuration'}**\n└ ${item.result || 'Completed'}`)
+        .join('\n\n');
+
       return {
-        embeds: [createSuccessEmbed('🎉 Onboarding Complete!', 'All setup steps have been completed! Your server is now fully configured and ready to go.')],
+        embeds: [createSuccessEmbed(
+          '🎉 Onboarding Complete!',
+          `All setup steps have been completed! Your server is now fully configured and ready to go.\n\n${completedList || ''}`
+        )],
         components: [
           new ActionRowBuilder().addComponents(
             new ButtonBuilder()
@@ -526,7 +878,8 @@ class OnboardingService {
       `**${currentStep.title}**`,
       currentStep.description,
       '',
-      currentStep.autoCreateDescription ? `💡 *Tip: Click **${currentStep.autoCreateLabel}** to let SlickBot create and configure everything for you automatically.*` : ''
+      `**Current Setting:** ${currentVal ? `\`${currentVal}\`` : '*None (Not configured yet)*'}`,
+      currentStep.autoCreateDescription ? `💡 *Tip: Click **${currentStep.autoCreateLabel || 'Auto-Create for Me'}** to let SlickBot provision and link everything automatically.*` : ''
     ].filter(Boolean);
 
     const embed = createBaseEmbed({
@@ -542,34 +895,52 @@ class OnboardingService {
     if (currentStep.pickerType === 'CHANNEL') {
       const channelSelect = new ChannelSelectMenuBuilder()
         .setCustomId(`${CustomIds.OnboardingChannelSelectPrefix}${session.id}`)
-        .setPlaceholder('Or select an existing channel...')
+        .setPlaceholder('Or choose an existing channel...')
         .setChannelTypes(currentStep.channelTypes || [ChannelType.GuildText]);
       components.push(new ActionRowBuilder().addComponents(channelSelect));
     } else if (currentStep.pickerType === 'ROLE') {
       const roleSelect = new RoleSelectMenuBuilder()
         .setCustomId(`${CustomIds.OnboardingRoleSelectPrefix}${session.id}`)
-        .setPlaceholder('Or select an existing role...');
+        .setPlaceholder('Or choose an existing role...');
       components.push(new ActionRowBuilder().addComponents(roleSelect));
     }
 
-    // Row 2: Action buttons (Auto-create, Skip, Cancel)
-    const buttonRow = new ActionRowBuilder().addComponents(
+    // Row 2: Action buttons (Auto-create, Keep Current, Keep Default, Skip, Exit)
+    const buttonRow = new ActionRowBuilder();
+
+    if (currentStep.autoCreateLabel) {
+      buttonRow.addComponents(
+        new ButtonBuilder()
+          .setCustomId(`${CustomIds.OnboardingAutoCreatePrefix}${session.id}`)
+          .setLabel(currentStep.autoCreateLabel)
+          .setStyle(ButtonStyle.Success)
+          .setEmoji('✨')
+      );
+    }
+
+    buttonRow.addComponents(
       new ButtonBuilder()
-        .setCustomId(`${CustomIds.OnboardingAutoCreatePrefix}${session.id}`)
-        .setLabel(currentStep.autoCreateLabel || '✨ Auto-Create for Me')
-        .setStyle(ButtonStyle.Success)
-        .setEmoji('✨'),
+        .setCustomId(`${CustomIds.OnboardingKeepCurrentPrefix}${session.id}`)
+        .setLabel('Keep Current')
+        .setStyle(ButtonStyle.Primary)
+        .setEmoji('📌'),
+      new ButtonBuilder()
+        .setCustomId(`${CustomIds.OnboardingKeepDefaultPrefix}${session.id}`)
+        .setLabel('Keep Default')
+        .setStyle(ButtonStyle.Secondary)
+        .setEmoji('⚙️'),
       new ButtonBuilder()
         .setCustomId(`${CustomIds.OnboardingSkipPrefix}${session.id}`)
-        .setLabel('Skip / Keep Default')
+        .setLabel('Skip')
         .setStyle(ButtonStyle.Secondary)
-        .setEmoji('⏩'),
+        .setEmoji('⏭️'),
       new ButtonBuilder()
         .setCustomId(`${CustomIds.OnboardingCancelPrefix}${session.id}`)
-        .setLabel('Exit Onboarding')
+        .setLabel('Exit')
         .setStyle(ButtonStyle.Danger)
         .setEmoji('✖️')
     );
+
     components.push(buttonRow);
 
     return { embeds: [embed], components };

@@ -517,8 +517,9 @@ async function buildModuleDetailPanel(guildId, moduleKey) {
   });
 
   const buttons = createButtonRow([
+    createPanelButton(`${CustomIds.OnboardingModulePrefix}${moduleKey}`, 'Guided Setup', ButtonStyle.Success, '🚀'),
     createPanelButton(CustomIds.ModulesRefresh, 'Back to Modules', ButtonStyle.Primary, '↩️'),
-    createPanelButton(CustomIds.SetupRefresh, 'Setup Center', ButtonStyle.Secondary, '🏠')
+    createPanelButton(CustomIds.SetupRefresh, 'Setup Center', ButtonStyle.Secondary, '⚙️')
   ]);
 
   return { embeds: [embed], components: [buttons] };
@@ -845,9 +846,10 @@ async function buildLoggingPanel(guildId) {
   });
 
   const row = createButtonRow([
+    createPanelButton(`${CustomIds.OnboardingModulePrefix}LOGGING`, 'Quick Setup', ButtonStyle.Success, '🚀'),
     createPanelButton(CustomIds.LoggingTest, 'Send Test', ButtonStyle.Primary, '🧪'),
     createPanelButton(CustomIds.LoggingRefresh, 'Refresh', ButtonStyle.Secondary, '🔄'),
-    createPanelButton(CustomIds.SetupRefresh, 'Back to Setup', ButtonStyle.Secondary, '↩️')
+    createPanelButton(CustomIds.SetupRefresh, 'Setup Center', ButtonStyle.Secondary, '⚙️')
   ]);
 
   return { embeds: [embed], components: [row] };

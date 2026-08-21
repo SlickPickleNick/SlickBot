@@ -146,10 +146,58 @@ class LoggingService {
   }
 
   async fetchSendableChannel(channelId) {
+    if (!this.client?.channels?.fetch) return null;
     const channel = await this.client.channels.fetch(channelId).catch(() => null);
     if (!channel || !channel.isTextBased || !channel.isTextBased()) return null;
     if (typeof channel.send !== 'function') return null;
     return channel;
+  }
+
+  async setModuleChannel(guildId, moduleKey, channelId, deliveryMode = LogDeliveryMode.IMMEDIATE) {
+    const logModule = getLogModule(moduleKey);
+    const key = (logModule?.key || moduleKey).toUpperCase();
+    await query(
+      `INSERT INTO log_module_settings (guild_id, module_key, delivery_mode, channel_id, enabled)
+       VALUES ($1, $2, $3, $4, true)
+       ON CONFLICT (guild_id, module_key)
+       DO UPDATE SET
+         channel_id = EXCLUDED.channel_id,
+         enabled = true,
+         delivery_mode = EXCLUDED.delivery_mode,
+         updated_at = NOW()`,
+      [guildId, key, deliveryMode || LogDeliveryMode.IMMEDIATE, channelId]
+    );
+    this.invalidateRouting(guildId);
+  }
+
+  async setupStarterChannels(guildId, { defaultChannelId, moderationChannelId = null }) {
+    if (defaultChannelId) {
+      await query(
+        `UPDATE guild_configs SET default_log_channel_id = $1, updated_at = NOW() WHERE guild_id = $2`,
+        [defaultChannelId, guildId]
+      );
+    }
+
+    const { StarterLogModuleKeys } = require('./logEventCatalog');
+    const modLogKeys = new Set(['MODERATION', 'SAFETY', 'CASES']);
+    for (const moduleKey of StarterLogModuleKeys) {
+      const logModule = getLogModule(moduleKey);
+      const targetChannelId = (moderationChannelId && modLogKeys.has(moduleKey)) ? moderationChannelId : defaultChannelId;
+      if (targetChannelId) {
+        await query(
+          `INSERT INTO log_module_settings (guild_id, module_key, delivery_mode, channel_id, enabled)
+           VALUES ($1, $2, $3, $4, true)
+           ON CONFLICT (guild_id, module_key)
+           DO UPDATE SET
+             channel_id = EXCLUDED.channel_id,
+             enabled = true,
+             delivery_mode = EXCLUDED.delivery_mode,
+             updated_at = NOW()`,
+          [guildId, moduleKey, logModule?.defaultDelivery || LogDeliveryMode.IMMEDIATE, targetChannelId]
+        );
+      }
+    }
+    this.invalidateRouting(guildId);
   }
 }
 

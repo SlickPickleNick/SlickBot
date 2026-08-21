@@ -475,6 +475,26 @@ class PermissionService {
     if (levelCheck.allowed && levelCheck.userLevel !== PermissionLevels.EVERYONE) return { allowed: true };
     return { allowed: false, reason: `This command is not currently available to everyone. Required level: ${levelCheck.required}. Your level: ${levelCheck.userLevel}.` };
   }
+
+  async setupRoles(guildId, { adminRoleId = null, modRoleId = null }) {
+    if (adminRoleId) {
+      await query(
+        `INSERT INTO role_permission_levels (guild_id, role_id, permission_level)
+         VALUES ($1, $2, 'ADMINISTRATOR')
+         ON CONFLICT (guild_id, role_id) DO UPDATE SET permission_level = 'ADMINISTRATOR', updated_at = NOW()`,
+        [guildId, adminRoleId]
+      );
+    }
+    if (modRoleId) {
+      await query(
+        `INSERT INTO role_permission_levels (guild_id, role_id, permission_level)
+         VALUES ($1, $2, 'MODERATOR')
+         ON CONFLICT (guild_id, role_id) DO UPDATE SET permission_level = 'MODERATOR', updated_at = NOW()`,
+        [guildId, modRoleId]
+      );
+    }
+    this.invalidatePermissionLevels(guildId);
+  }
 }
 
 module.exports = { PermissionService, PermissionLevels };

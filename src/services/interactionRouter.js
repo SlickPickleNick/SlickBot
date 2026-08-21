@@ -487,7 +487,9 @@ async function handleButton(interaction, ctx) {
   if (id === CustomIds.OnboardingStart || id === CustomIds.OnboardingServerStart) {
     if (!(await requireAction(interaction, ctx, ActionKeys.Setup, ModuleKeys.PERMISSIONS))) return true;
     const session = onboarding.startServerOnboarding(interaction.guildId, interaction.user.id);
-    await updatePanel(interaction, onboarding.buildOnboardingPayload(session));
+    const firstStep = session.steps[0];
+    const currentVal = firstStep && typeof firstStep.getCurrent === 'function' ? await firstStep.getCurrent(interaction.guild).catch(() => null) : null;
+    await updatePanel(interaction, onboarding.buildOnboardingPayload(session, currentVal));
     return true;
   }
 
@@ -502,7 +504,9 @@ async function handleButton(interaction, ctx) {
     if (!session) {
       return replyPrivate(interaction, { embeds: [createWarningEmbed('No Onboarding Available', `Guided setup is not yet configured for ${target}. Use the module manager panel instead.`)], deleteAfterSeconds: 10 });
     }
-    await updatePanel(interaction, onboarding.buildOnboardingPayload(session));
+    const firstStep = session.steps[0];
+    const currentVal = firstStep && typeof firstStep.getCurrent === 'function' ? await firstStep.getCurrent(interaction.guild).catch(() => null) : null;
+    await updatePanel(interaction, onboarding.buildOnboardingPayload(session, currentVal));
     return true;
   }
 
@@ -512,15 +516,42 @@ async function handleButton(interaction, ctx) {
     const session = onboarding.getSession(sessionId, interaction.user.id);
     if (!session) return replyPrivate(interaction, { embeds: [createWarningEmbed('Onboarding Expired', 'This onboarding session has expired or belongs to another user. Please launch onboarding again.')], deleteAfterSeconds: 10 });
     const currentStep = session.steps[session.stepIndex];
+    let createdResult = null;
     if (currentStep && typeof currentStep.autoCreate === 'function') {
       try {
-        await currentStep.autoCreate(interaction.guild, session);
+        createdResult = await currentStep.autoCreate(interaction.guild, session);
       } catch (err) {
         return replyPrivate(interaction, { embeds: [createWarningEmbed('Auto-Creation Failed', err instanceof Error ? err.message : String(err))] });
       }
     }
-    await onboarding.advanceSession(session, interaction.guild, 'AUTO_CREATE');
-    await updatePanel(interaction, onboarding.buildOnboardingPayload(session));
+    await onboarding.advanceSession(session, interaction.guild, 'AUTO_CREATE', createdResult || {});
+    const nextStep = session.steps[session.stepIndex];
+    const currentVal = nextStep && typeof nextStep.getCurrent === 'function' ? await nextStep.getCurrent(interaction.guild).catch(() => null) : null;
+    await updatePanel(interaction, onboarding.buildOnboardingPayload(session, currentVal));
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.OnboardingKeepCurrentPrefix)) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.Setup, ModuleKeys.PERMISSIONS))) return true;
+    const sessionId = id.slice(CustomIds.OnboardingKeepCurrentPrefix.length);
+    const session = onboarding.getSession(sessionId, interaction.user.id);
+    if (!session) return replyPrivate(interaction, { embeds: [createWarningEmbed('Onboarding Expired', 'This onboarding session has expired or belongs to another user. Please launch onboarding again.')], deleteAfterSeconds: 10 });
+    await onboarding.advanceSession(session, interaction.guild, 'KEEP_CURRENT');
+    const nextStep = session.steps[session.stepIndex];
+    const currentVal = nextStep && typeof nextStep.getCurrent === 'function' ? await nextStep.getCurrent(interaction.guild).catch(() => null) : null;
+    await updatePanel(interaction, onboarding.buildOnboardingPayload(session, currentVal));
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.OnboardingKeepDefaultPrefix)) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.Setup, ModuleKeys.PERMISSIONS))) return true;
+    const sessionId = id.slice(CustomIds.OnboardingKeepDefaultPrefix.length);
+    const session = onboarding.getSession(sessionId, interaction.user.id);
+    if (!session) return replyPrivate(interaction, { embeds: [createWarningEmbed('Onboarding Expired', 'This onboarding session has expired or belongs to another user. Please launch onboarding again.')], deleteAfterSeconds: 10 });
+    await onboarding.advanceSession(session, interaction.guild, 'KEEP_DEFAULT');
+    const nextStep = session.steps[session.stepIndex];
+    const currentVal = nextStep && typeof nextStep.getCurrent === 'function' ? await nextStep.getCurrent(interaction.guild).catch(() => null) : null;
+    await updatePanel(interaction, onboarding.buildOnboardingPayload(session, currentVal));
     return true;
   }
 
@@ -530,7 +561,9 @@ async function handleButton(interaction, ctx) {
     const session = onboarding.getSession(sessionId, interaction.user.id);
     if (!session) return replyPrivate(interaction, { embeds: [createWarningEmbed('Onboarding Expired', 'This onboarding session has expired or belongs to another user. Please launch onboarding again.')], deleteAfterSeconds: 10 });
     await onboarding.advanceSession(session, interaction.guild, 'SKIP');
-    await updatePanel(interaction, onboarding.buildOnboardingPayload(session));
+    const nextStep = session.steps[session.stepIndex];
+    const currentVal = nextStep && typeof nextStep.getCurrent === 'function' ? await nextStep.getCurrent(interaction.guild).catch(() => null) : null;
+    await updatePanel(interaction, onboarding.buildOnboardingPayload(session, currentVal));
     return true;
   }
 
@@ -1471,7 +1504,7 @@ async function handleButton(interaction, ctx) {
 async function handleSelect(interaction, ctx) {
   const id = interaction.customId;
 
-  if (id === CustomIds.SetupModuleSelect) {
+  if (id === CustomIds.SetupModuleSelect || id === CustomIds.ModulesDetailSelect) {
     if (!(await requireAction(interaction, ctx, ActionKeys.Setup, ModuleKeys.PERMISSIONS))) return true;
     const moduleKey = interaction.values?.[0];
     if (!moduleKey) return true;
@@ -1579,8 +1612,10 @@ async function handleSelect(interaction, ctx) {
         return replyPrivate(interaction, { embeds: [createWarningEmbed('Selection Failed', err instanceof Error ? err.message : String(err))] });
       }
     }
-    await onboarding.advanceSession(session, interaction.guild, 'SELECTION');
-    await updatePanel(interaction, onboarding.buildOnboardingPayload(session));
+    await onboarding.advanceSession(session, interaction.guild, 'SELECT', { selected: selectedValue });
+    const nextStep = session.steps[session.stepIndex];
+    const currentVal = nextStep && typeof nextStep.getCurrent === 'function' ? await nextStep.getCurrent(interaction.guild).catch(() => null) : null;
+    await updatePanel(interaction, onboarding.buildOnboardingPayload(session, currentVal));
     return true;
   }
 
