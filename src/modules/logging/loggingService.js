@@ -165,8 +165,17 @@ class LoggingService {
       .setColor(resolveLogColor(input.eventKey, input.color))
       .setTitle(input.title ? truncate(input.title, 256) : 'SlickBot Log')
       .setDescription(input.body ? truncate(input.body, 4000) : '')
-      .setFooter({ text: `${routing.module?.label || routing.moduleKey} • ${routing.event?.label || input.eventKey}` })
       .setTimestamp(input.timestamp ? new Date(input.timestamp) : new Date());
+
+    if (input.footer) {
+      if (typeof input.footer === 'string') {
+        embed.setFooter({ text: truncate(input.footer, 2048) });
+      } else if (input.footer.text) {
+        embed.setFooter({ text: truncate(input.footer.text, 2048), iconURL: input.footer.iconURL });
+      }
+    } else {
+      embed.setFooter({ text: `${routing.module?.label || routing.moduleKey} • ${routing.event?.label || input.eventKey}` });
+    }
 
     if (input.fields && Array.isArray(input.fields)) {
       embed.addFields(input.fields.slice(0, 25));
@@ -174,8 +183,19 @@ class LoggingService {
     if (input.thumbnailUrl) {
       embed.setThumbnail(input.thumbnailUrl);
     }
+    if (input.imageUrl) {
+      embed.setImage(input.imageUrl);
+    }
     if (input.author) {
-      embed.setAuthor(input.author);
+      if (typeof input.author === 'string') {
+        embed.setAuthor({ name: truncate(input.author, 256) });
+      } else if (input.author.name) {
+        embed.setAuthor({
+          name: truncate(input.author.name, 256),
+          iconURL: input.author.iconURL,
+          url: input.author.url
+        });
+      }
     }
 
     await channel.send({ embeds: [embed] }).catch((err) => {

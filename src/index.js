@@ -172,8 +172,15 @@ client.on(Events.GuildMemberAdd, async (member) => {
   await logger.log({
     guildId: member.guild.id,
     eventKey: 'member-join',
-    title: 'Member Joined',
-    body: `${member.user.tag} (${member.id}) joined the server.`,
+    title: 'Member joined',
+    body: `<@${member.id}> (${member.user.tag})\nAccount Created: <t:${Math.floor(member.user.createdTimestamp / 1000)}:R>`,
+    author: {
+      name: member.user.username,
+      iconURL: member.user.displayAvatarURL()
+    },
+    thumbnailUrl: member.user.displayAvatarURL({ size: 256 }),
+    footer: `ID: ${member.id}`,
+    color: 0x57f287,
     metadata: { userId: member.id, bot: member.user.bot }
   }).catch((error) => console.error('Failed to log member join:', error));
 
@@ -186,11 +193,23 @@ client.on(Events.GuildMemberAdd, async (member) => {
 
 client.on(Events.GuildMemberRemove, async (member) => {
   serverStats.scheduleUpdate(member.guild, logger, 'member leave', 10 * 1000, { forceMemberFetch: true });
+  const joinedTime = member.joinedTimestamp ? `<t:${Math.floor(member.joinedTimestamp / 1000)}:R>` : '*Unknown*';
+  const roleList = member.roles?.cache
+    ? member.roles.cache.filter((r) => r.id !== member.guild.id).map((r) => `<@&${r.id}>`).join(', ') || 'None'
+    : 'None';
+
   await logger.log({
     guildId: member.guild.id,
     eventKey: 'member-leave',
-    title: 'Member Left',
-    body: `${member.user?.tag || member.id} (${member.id}) left the server.`,
+    title: 'Member left',
+    body: `<@${member.id}> (${member.user?.tag || 'Unknown'})\nJoined Server: ${joinedTime}\nRoles: ${roleList}`,
+    author: {
+      name: member.user?.username || member.id,
+      iconURL: member.user?.displayAvatarURL?.()
+    },
+    thumbnailUrl: member.user?.displayAvatarURL?.({ size: 256 }),
+    footer: `ID: ${member.id}`,
+    color: 0xed4245,
     metadata: { userId: member.id, bot: member.user?.bot || false }
   }).catch((error) => console.error('Failed to log member leave:', error));
 });
@@ -198,35 +217,76 @@ client.on(Events.GuildMemberRemove, async (member) => {
 client.on(Events.GuildMemberUpdate, async (oldMember, newMember) => {
   if (newMember.user?.bot) return;
 
+  // Nickname change
   if (oldMember.nickname !== newMember.nickname) {
+    const title = !oldMember.nickname && newMember.nickname
+      ? 'Nickname added'
+      : oldMember.nickname && !newMember.nickname
+        ? 'Nickname removed'
+        : 'Nickname changed';
+
+    const beforeText = oldMember.nickname || oldMember.user.username;
+    const afterText = newMember.nickname || newMember.user.username;
+
     await logger.log({
       guildId: newMember.guild.id,
       eventKey: 'member-nickname',
-      title: 'Nickname Changed',
-      body: [
-        `Member: ${newMember.user.tag} (${newMember.id})`,
-        `Before: ${oldMember.nickname || oldMember.user.username}`,
-        `After: ${newMember.nickname || newMember.user.username}`
-      ].join('\n'),
+      title,
+      body: `Before: ${beforeText}\n+After: ${afterText}`,
+      author: {
+        name: newMember.user.username,
+        iconURL: newMember.user.displayAvatarURL()
+      },
+      thumbnailUrl: newMember.user.displayAvatarURL({ size: 256 }),
+      footer: `ID: ${newMember.id}`,
+      color: 0x5865f2,
       metadata: { userId: newMember.id, before: oldMember.nickname, after: newMember.nickname }
     }).catch((error) => console.error('Failed to log nickname change:', error));
   }
 
+  // Server Avatar change
+  if (oldMember.avatar !== newMember.avatar) {
+    await logger.log({
+      guildId: newMember.guild.id,
+      eventKey: 'member-avatar',
+      title: 'Avatar update',
+      body: `<@${newMember.id}>`,
+      author: {
+        name: newMember.user.username,
+        iconURL: newMember.displayAvatarURL()
+      },
+      thumbnailUrl: newMember.displayAvatarURL({ size: 512 }),
+      footer: `ID: ${newMember.id}`,
+      color: 0x5865f2,
+      metadata: { userId: newMember.id }
+    }).catch((error) => console.error('Failed to log member avatar change:', error));
+  }
+
+  // Role changes
   const oldRoleIds = new Set(oldMember.roles.cache.keys());
   const newRoleIds = new Set(newMember.roles.cache.keys());
   const addedRoles = [...newRoleIds].filter((roleId) => !oldRoleIds.has(roleId));
   const removedRoles = [...oldRoleIds].filter((roleId) => !newRoleIds.has(roleId));
 
   if (addedRoles.length || removedRoles.length) {
+    const roleLines = [
+      `<@${newMember.id}>`,
+      addedRoles.length ? `+Added: ${addedRoles.map((roleId) => `<@&${roleId}>`).join(', ')}` : null,
+      removedRoles.length ? `-Removed: ${removedRoles.map((roleId) => `<@&${roleId}>`).join(', ')}` : null
+    ].filter(Boolean).join('\n');
+
     await logger.log({
       guildId: newMember.guild.id,
       eventKey: 'member-roles',
-      title: 'Member Roles Updated',
-      body: [
-        `Member: ${newMember.user.tag} (${newMember.id})`,
-        addedRoles.length ? `Added: ${addedRoles.map((roleId) => `<@&${roleId}>`).join(', ')}` : null,
-        removedRoles.length ? `Removed: ${removedRoles.map((roleId) => `<@&${roleId}>`).join(', ')}` : null
-      ].filter(Boolean).join('\n'),
+      title: 'Role update',
+      body: roleLines,
+      author: {
+        name: newMember.user.username,
+        iconURL: newMember.user.displayAvatarURL()
+      },
+      thumbnailUrl: newMember.user.displayAvatarURL({ size: 256 }),
+      footer: `ID: ${newMember.id}`,
+      color: 0x5865f2,
       metadata: { userId: newMember.id, addedRoles, removedRoles }
     }).catch((error) => console.error('Failed to log member role change:', error));
   }
@@ -246,18 +306,81 @@ client.on(Events.GuildMemberUpdate, async (oldMember, newMember) => {
   }
 });
 
+client.on(Events.UserUpdate, async (oldUser, newUser) => {
+  if (newUser.bot) return;
+
+  const usernameChanged = oldUser.username !== newUser.username;
+  const avatarChanged = oldUser.avatar !== newUser.avatar;
+
+  if (!usernameChanged && !avatarChanged) return;
+
+  for (const guild of client.guilds.cache.values()) {
+    if (guild.members.cache.has(newUser.id)) {
+      if (usernameChanged) {
+        await logger.log({
+          guildId: guild.id,
+          eventKey: 'user-update',
+          title: 'Username changed',
+          body: `Before: ${oldUser.username}\n+After: ${newUser.username}`,
+          author: {
+            name: newUser.username,
+            iconURL: newUser.displayAvatarURL()
+          },
+          thumbnailUrl: newUser.displayAvatarURL({ size: 256 }),
+          footer: `ID: ${newUser.id}`,
+          color: 0x5865f2,
+          metadata: { userId: newUser.id, before: oldUser.username, after: newUser.username }
+        }).catch(() => {});
+      }
+
+      if (avatarChanged) {
+        await logger.log({
+          guildId: guild.id,
+          eventKey: 'member-avatar',
+          title: 'Avatar update',
+          body: `<@${newUser.id}>`,
+          author: {
+            name: newUser.username,
+            iconURL: newUser.displayAvatarURL()
+          },
+          thumbnailUrl: newUser.displayAvatarURL({ size: 512 }),
+          footer: `ID: ${newUser.id}`,
+          color: 0x5865f2,
+          metadata: { userId: newUser.id }
+        }).catch(() => {});
+      }
+    }
+  }
+});
+
 client.on(Events.MessageDelete, async (message) => {
   await handleCountingMessageMutationEvent(message, 'DELETED');
   if (!message.guild || message.author?.bot) return;
+
+  const attachmentUrls = message.attachments?.size
+    ? message.attachments.map((a) => a.url).join('\n')
+    : null;
+
+  const bodyLines = [
+    `Channel: <#${message.channelId}>`,
+    `Author: <@${message.author?.id}> (${message.author?.tag || 'Unknown'})`,
+    `Content: ${message.content || '*[Attachment/Embed only]*'}`,
+    attachmentUrls ? `Attachments:\n${attachmentUrls}` : null
+  ].filter(Boolean).join('\n');
+
   await logger.log({
     guildId: message.guild.id,
     eventKey: 'message-delete',
-    title: 'Message Deleted',
-    body: [
-      `Channel: <#${message.channelId}>`,
-      `Author: ${message.author ? `${message.author.tag} (${message.author.id})` : 'Unknown'}`,
-      `Content: ${message.content || '[No content available]'}`
-    ].join('\n'),
+    title: 'Message deleted',
+    body: bodyLines,
+    author: {
+      name: message.author?.username || 'Unknown',
+      iconURL: message.author?.displayAvatarURL?.()
+    },
+    thumbnailUrl: message.author?.displayAvatarURL?.({ size: 256 }),
+    imageUrl: message.attachments?.first()?.url || null,
+    footer: `Author ID: ${message.author?.id || 'Unknown'} • Message ID: ${message.id}`,
+    color: 0xed4245,
     metadata: {
       channelId: message.channelId,
       authorId: message.author?.id || null,
@@ -276,13 +399,19 @@ client.on(Events.MessageUpdate, async (oldMessage, newMessage) => {
   await logger.log({
     guildId: newMessage.guild.id,
     eventKey: 'message-edit',
-    title: 'Message Edited',
+    title: 'Message edited',
     body: [
-      `Channel: <#${newMessage.channelId}>`,
-      `Author: ${newMessage.author ? `${newMessage.author.tag} (${newMessage.author.id})` : 'Unknown'}`,
+      `Channel: <#${newMessage.channelId}> • [Jump to Message](${newMessage.url})`,
       `Before: ${oldContent}`,
-      `After: ${newContent}`
+      `+After: ${newContent}`
     ].join('\n'),
+    author: {
+      name: newMessage.author?.username || 'Unknown',
+      iconURL: newMessage.author?.displayAvatarURL?.()
+    },
+    thumbnailUrl: newMessage.author?.displayAvatarURL?.({ size: 256 }),
+    footer: `Author ID: ${newMessage.author?.id || 'Unknown'} • Message ID: ${newMessage.id}`,
+    color: 0xfee75c,
     metadata: {
       channelId: newMessage.channelId,
       authorId: newMessage.author?.id || null,
@@ -301,14 +430,14 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
   if (oldChannelId === newChannelId) return;
 
   let action = 'Voice Channel Moved';
-  let body = `${user ? `${user.tag} (${user.id})` : 'Unknown user'} moved from <#${oldChannelId}> to <#${newChannelId}>.`;
+  let body = `<@${user ? user.id : 'Unknown'}> moved from <#${oldChannelId}> to <#${newChannelId}>.`;
 
   if (!oldChannelId && newChannelId) {
     action = 'Voice Channel Joined';
-    body = `${user ? `${user.tag} (${user.id})` : 'Unknown user'} joined <#${newChannelId}>.`;
+    body = `<@${user ? user.id : 'Unknown'}> joined <#${newChannelId}>.`;
   } else if (oldChannelId && !newChannelId) {
     action = 'Voice Channel Left';
-    body = `${user ? `${user.tag} (${user.id})` : 'Unknown user'} left <#${oldChannelId}>.`;
+    body = `<@${user ? user.id : 'Unknown'}> left <#${oldChannelId}>.`;
   }
 
   await logger.log({
@@ -316,6 +445,12 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
     eventKey: action === 'Voice Channel Joined' ? 'voice-join' : action === 'Voice Channel Left' ? 'voice-leave' : 'voice-move',
     title: action,
     body,
+    author: user ? {
+      name: user.username,
+      iconURL: user.displayAvatarURL()
+    } : null,
+    thumbnailUrl: user ? user.displayAvatarURL({ size: 256 }) : null,
+    footer: `ID: ${user ? user.id : 'Unknown'}`,
     metadata: {
       userId: user?.id || null,
       oldChannelId,
@@ -577,11 +712,18 @@ client.on(Events.GuildBanAdd, async (ban) => {
   await logger.log({
     guildId: ban.guild.id,
     eventKey: 'guild-ban-add',
-    title: 'Member Banned',
+    title: 'Member banned',
     body: [
-      `User: ${ban.user.tag} (${ban.user.id})`,
-      `Reason: ${ban.reason || '*No reason provided*'}`
+      `<@${ban.user.id}> (${ban.user.tag})`,
+      ban.reason ? `Reason: ${ban.reason}` : '*No reason provided*'
     ].join('\n'),
+    author: {
+      name: ban.user.username,
+      iconURL: ban.user.displayAvatarURL()
+    },
+    thumbnailUrl: ban.user.displayAvatarURL({ size: 256 }),
+    footer: `ID: ${ban.user.id}`,
+    color: 0xed4245,
     metadata: { userId: ban.user.id, reason: ban.reason }
   }).catch((error) => console.error('Failed to log ban add:', error));
 });
@@ -590,10 +732,15 @@ client.on(Events.GuildBanRemove, async (ban) => {
   await logger.log({
     guildId: ban.guild.id,
     eventKey: 'guild-ban-remove',
-    title: 'Member Unbanned',
-    body: [
-      `User: ${ban.user.tag} (${ban.user.id})`
-    ].join('\n'),
+    title: 'Member unbanned',
+    body: `<@${ban.user.id}> (${ban.user.tag})`,
+    author: {
+      name: ban.user.username,
+      iconURL: ban.user.displayAvatarURL()
+    },
+    thumbnailUrl: ban.user.displayAvatarURL({ size: 256 }),
+    footer: `ID: ${ban.user.id}`,
+    color: 0x57f287,
     metadata: { userId: ban.user.id }
   }).catch((error) => console.error('Failed to log ban remove:', error));
 });
@@ -603,7 +750,7 @@ client.on(Events.InviteCreate, async (invite) => {
   await logger.log({
     guildId: invite.guild.id,
     eventKey: 'invite-create',
-    title: 'Invite Created',
+    title: 'Invite created',
     body: [
       `Code: \`${invite.code}\``,
       `Channel: ${invite.channel ? `<#${invite.channel.id}>` : '*Unknown*'}`,
@@ -611,6 +758,12 @@ client.on(Events.InviteCreate, async (invite) => {
       invite.maxUses ? `Max Uses: **${invite.maxUses}**` : 'Max Uses: **Unlimited**',
       invite.maxAge ? `Expires In: **${invite.maxAge}s**` : 'Expires: **Never**'
     ].join('\n'),
+    author: invite.inviter ? {
+      name: invite.inviter.username,
+      iconURL: invite.inviter.displayAvatarURL()
+    } : null,
+    footer: `Invite Code: ${invite.code}`,
+    color: 0x57f287,
     metadata: { code: invite.code, channelId: invite.channel?.id, inviterId: invite.inviter?.id }
   }).catch((error) => console.error('Failed to log invite create:', error));
 });
@@ -620,11 +773,13 @@ client.on(Events.InviteDelete, async (invite) => {
   await logger.log({
     guildId: invite.guild.id,
     eventKey: 'invite-delete',
-    title: 'Invite Deleted',
+    title: 'Invite deleted',
     body: [
       `Code: \`${invite.code}\``,
       `Channel: ${invite.channel ? `<#${invite.channel.id}>` : '*Unknown*'}`
     ].join('\n'),
+    footer: `Invite Code: ${invite.code}`,
+    color: 0xed4245,
     metadata: { code: invite.code, channelId: invite.channel?.id }
   }).catch((error) => console.error('Failed to log invite delete:', error));
 });
@@ -633,12 +788,15 @@ client.on(Events.GuildEmojiCreate, async (emoji) => {
   await logger.log({
     guildId: emoji.guild.id,
     eventKey: 'emoji-create',
-    title: 'Emoji Added',
+    title: 'Emoji added',
     body: [
       `Emoji: ${emoji} (\`:${emoji.name}:\`)`,
       `Animated: **${emoji.animated ? 'Yes' : 'No'}**`,
       `ID: \`${emoji.id}\``
     ].join('\n'),
+    thumbnailUrl: emoji.imageURL?.() || null,
+    footer: `ID: ${emoji.id}`,
+    color: 0x57f287,
     metadata: { emojiId: emoji.id, name: emoji.name, animated: emoji.animated }
   }).catch((error) => console.error('Failed to log emoji create:', error));
 });
@@ -647,11 +805,13 @@ client.on(Events.GuildEmojiDelete, async (emoji) => {
   await logger.log({
     guildId: emoji.guild.id,
     eventKey: 'emoji-delete',
-    title: 'Emoji Deleted',
+    title: 'Emoji deleted',
     body: [
       `Emoji Name: \`:${emoji.name}:\``,
       `ID: \`${emoji.id}\``
     ].join('\n'),
+    footer: `ID: ${emoji.id}`,
+    color: 0xed4245,
     metadata: { emojiId: emoji.id, name: emoji.name }
   }).catch((error) => console.error('Failed to log emoji delete:', error));
 });
@@ -661,12 +821,15 @@ client.on(Events.GuildEmojiUpdate, async (oldEmoji, newEmoji) => {
   await logger.log({
     guildId: newEmoji.guild.id,
     eventKey: 'emoji-update',
-    title: 'Emoji Renamed',
+    title: 'Emoji renamed',
     body: [
       `Emoji: ${newEmoji}`,
       `Before: \`:${oldEmoji.name}:\``,
-      `After: \`:${newEmoji.name}:\``
+      `+After: \`:${newEmoji.name}:\``
     ].join('\n'),
+    thumbnailUrl: newEmoji.imageURL?.() || null,
+    footer: `ID: ${newEmoji.id}`,
+    color: 0xfee75c,
     metadata: { emojiId: newEmoji.id, before: oldEmoji.name, after: newEmoji.name }
   }).catch((error) => console.error('Failed to log emoji update:', error));
 });
@@ -676,12 +839,15 @@ client.on(Events.GuildStickerCreate, async (sticker) => {
   await logger.log({
     guildId: sticker.guild.id,
     eventKey: 'sticker-create',
-    title: 'Sticker Added',
+    title: 'Sticker added',
     body: [
       `Sticker: **${sticker.name}**`,
       `Description: ${sticker.description || '*None*'}`,
       `ID: \`${sticker.id}\``
     ].join('\n'),
+    thumbnailUrl: sticker.url || null,
+    footer: `ID: ${sticker.id}`,
+    color: 0x57f287,
     metadata: { stickerId: sticker.id, name: sticker.name }
   }).catch((error) => console.error('Failed to log sticker create:', error));
 });
@@ -691,11 +857,13 @@ client.on(Events.GuildStickerDelete, async (sticker) => {
   await logger.log({
     guildId: sticker.guild.id,
     eventKey: 'sticker-delete',
-    title: 'Sticker Deleted',
+    title: 'Sticker deleted',
     body: [
       `Sticker Name: **${sticker.name}**`,
       `ID: \`${sticker.id}\``
     ].join('\n'),
+    footer: `ID: ${sticker.id}`,
+    color: 0xed4245,
     metadata: { stickerId: sticker.id, name: sticker.name }
   }).catch((error) => console.error('Failed to log sticker delete:', error));
 });
@@ -710,11 +878,14 @@ client.on(Events.GuildStickerUpdate, async (oldSticker, newSticker) => {
   await logger.log({
     guildId: newSticker.guild.id,
     eventKey: 'sticker-update',
-    title: 'Sticker Updated',
+    title: 'Sticker updated',
     body: [
       `Sticker: **${newSticker.name}** (\`${newSticker.id}\`)`,
       ...changes
     ].join('\n'),
+    thumbnailUrl: newSticker.url || null,
+    footer: `ID: ${newSticker.id}`,
+    color: 0xfee75c,
     metadata: { stickerId: newSticker.id, changes }
   }).catch((error) => console.error('Failed to log sticker update:', error));
 });
@@ -723,7 +894,7 @@ client.on(Events.AutoModerationActionExecution, async (execution) => {
   await logger.log({
     guildId: execution.guild.id,
     eventKey: 'automod-execution',
-    title: 'AutoMod Action Triggered',
+    title: 'AutoMod action triggered',
     body: [
       `User: <@${execution.userId}>`,
       `Rule: **${execution.ruleTriggerType || 'AutoMod Rule'}**`,
@@ -732,6 +903,8 @@ client.on(Events.AutoModerationActionExecution, async (execution) => {
       execution.content ? `Content: ${execution.content}` : null,
       execution.matchedKeyword ? `Matched Keyword: \`${execution.matchedKeyword}\`` : null
     ].filter(Boolean).join('\n'),
+    footer: `ID: ${execution.userId}`,
+    color: 0xed4245,
     metadata: { userId: execution.userId, ruleTriggerType: execution.ruleTriggerType, action: execution.action }
   }).catch((error) => console.error('Failed to log automod execution:', error));
 });

@@ -219,7 +219,9 @@ const LogEventCatalog = Object.freeze([
   { key: 'member-leave', moduleKey: 'member', label: 'Member Leaves', description: 'Members leaving the server.', defaultDelivery: 'IMMEDIATE' },
   { key: 'member-update', moduleKey: 'member', label: 'Member Updates', description: 'General member profile/server-profile updates.', defaultDelivery: 'IMMEDIATE' },
   { key: 'member-nickname', moduleKey: 'member', label: 'Nickname Changes', description: 'Member nickname changes.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'member-avatar', moduleKey: 'member', label: 'Avatar Updates', description: 'Member server or global avatar changes.', defaultDelivery: 'IMMEDIATE' },
   { key: 'member-roles', moduleKey: 'member', label: 'Role Changes', description: 'Member role additions and removals.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'user-update', moduleKey: 'member', label: 'Username Changes', description: 'Global username and account changes.', defaultDelivery: 'IMMEDIATE' },
 
   { key: 'message-delete', moduleKey: 'message', label: 'Message Deletes', description: 'Deleted message logs.', defaultDelivery: 'IMMEDIATE' },
   { key: 'message-edit', moduleKey: 'message', label: 'Message Edits', description: 'Edited message logs.', defaultDelivery: 'IMMEDIATE' },
