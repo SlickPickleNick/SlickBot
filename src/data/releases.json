@@ -1,4 +1,44 @@
 {
+  "0.9.6": {
+    "title": "SlickBot v0.9.6",
+    "summary": "Introduces the Utility & Server Essentials module with advanced message purge filters, rich identity & server info cards, interactive polling, persistent reminders, visual embed composer, AFK auto-replies, and moderation snipe tools.",
+    "notes": [
+      "Added the UTILITY module under Core Setup / Server Essentials.",
+      "Added /purge bulk deletion command with safety guards (14-day cutoff) and granular filters: amount (1–100), user, bots_only, humans_only, contains text, has_attachment, has_link, and keep_pinned toggle (defaults to true).",
+      "Added rich identity cards (/userinfo) featuring Discord badges, join/creation dates, highest role, and cross-module stats (Leveling XP/Rank, Achievements, Referrals, Moderation Cases, Notes).",
+      "Added /serverinfo, /roleinfo, and /channelinfo for comprehensive server statistics, channel breakdowns, role hierarchy permissions, and voice channel bitrate/limits.",
+      "Added /avatar and /banner commands with high-resolution global and server asset viewer and direct download links.",
+      "Added Context Menu Apps commands: Right-click User -> Apps -> 'User Information' and 'View Avatar'.",
+      "Added interactive community polling engine (/poll create, /poll end, /poll list) supporting up to 10 choices, custom emojis, duration countdown, single/multi-choice voting, anonymous voting, live percentage progress bars, and selectable UI styles (Automatic, Buttons, Dropdown Menu).",
+      "Added persistent reminders system (/remind set, /remind list, /remind cancel) with natural duration parser (30s, 10m, 2h, 1d, 2w), DM or channel delivery, and background tick dispatch.",
+      "Added modal-based visual embed builder (/embed create, /embed edit) with interactive preview controls (Send with optional role ping, Edit Content, Add Field, Cancel).",
+      "Added AFK auto-reply system (/afk) that alerts members mentioning the user with relative time since AFK and auto-clears upon the user's next chat message.",
+      "Added staff snipe cache (/snipe) storing recent deleted messages, attachments, and timestamps per channel.",
+      "Added /utility manager, /utility setup, and /utility reset for centralized configuration, quick toggles, and server owner reset controls."
+    ],
+    "commands": [
+      "/utility manager",
+      "/utility setup",
+      "/utility reset",
+      "/purge",
+      "/userinfo",
+      "/serverinfo",
+      "/roleinfo",
+      "/channelinfo",
+      "/avatar",
+      "/banner",
+      "/poll create",
+      "/poll end",
+      "/poll list",
+      "/remind set",
+      "/remind list",
+      "/remind cancel",
+      "/embed create",
+      "/embed edit",
+      "/afk",
+      "/snipe"
+    ]
+  },
   "0.9.5": {
     "title": "SlickBot v0.9.5",
     "summary": "Adds the Social Feeds module supporting Twitch live/offline announcements with duration tracking, and YouTube video and Shorts separation with custom templates.",
