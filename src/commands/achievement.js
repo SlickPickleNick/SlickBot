@@ -70,6 +70,7 @@ module.exports = {
       .setDescription('Configure achievement tracking and announcements.')
       .addBooleanOption((option) => option.setName('enabled').setDescription('Enable or disable achievements.').setRequired(false))
       .addChannelOption((option) => option.setName('announcement_channel').setDescription('Channel for achievement unlock announcements.').addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement).setRequired(false))
+      .addBooleanOption((option) => option.setName('dm_user').setDescription('Send a direct message to members when they unlock an achievement.').setRequired(false))
       .addChannelOption((option) => option.setName('afk_channel').setDescription('Optional voice channel to exclude from voice time.').addChannelTypes(ChannelType.GuildVoice, ChannelType.GuildStageVoice).setRequired(false))
       .addBooleanOption((option) => option.setName('clear_afk_channel').setDescription('Clear the configured AFK voice exclusion channel.').setRequired(false))
       .addStringOption((option) => option.setName('unlock_message').setDescription('Custom unlock message. Supports {user}, {achievement}, {tier}, {level}, {threshold}, {reward_xp}.').setMaxLength(1500).setRequired(false))
@@ -83,6 +84,8 @@ module.exports = {
       .addIntegerOption((option) => option.setName('threshold').setDescription('Required stat value for this tier.').setMinValue(1).setRequired(true))
       .addIntegerOption((option) => option.setName('xp').setDescription('XP reward for this tier.').setMinValue(0).setMaxValue(100000).setRequired(false))
       .addRoleOption((option) => option.setName('role').setDescription('Optional role reward for this tier.').setRequired(false))
+      .addStringOption((option) => option.setName('image_url').setDescription('Optional custom image URL for this achievement tier.').setMaxLength(1800).setRequired(false))
+      .addBooleanOption((option) => option.setName('clear_image').setDescription('Clear the custom image for this tier.').setRequired(false))
       .addBooleanOption((option) => option.setName('enabled').setDescription('Enable or disable this tier.').setRequired(false)))
     .addSubcommand((sub) => sub
       .setName('tier-remove')
@@ -102,7 +105,9 @@ module.exports = {
       .addBooleanOption((option) => option.setName('enabled').setDescription('Enable or disable this one-time achievement.').setRequired(false))
       .addBooleanOption((option) => option.setName('remove_when_lost').setDescription('Remove the achievement if the boost/birthday condition ends.').setRequired(false))
       .addIntegerOption((option) => option.setName('xp').setDescription('XP reward for unlocking this achievement.').setMinValue(0).setMaxValue(100000).setRequired(false))
-      .addRoleOption((option) => option.setName('role').setDescription('Optional role reward for this one-time achievement.').setRequired(false)))
+      .addRoleOption((option) => option.setName('role').setDescription('Optional role reward for this one-time achievement.').setRequired(false))
+      .addStringOption((option) => option.setName('image_url').setDescription('Optional custom image URL for this one-time achievement.').setMaxLength(1800).setRequired(false))
+      .addBooleanOption((option) => option.setName('clear_image').setDescription('Clear the custom image for this one-time achievement.').setRequired(false)))
     .addSubcommandGroup((group) => group
       .setName('ignored-channel')
       .setDescription('Manage message channels ignored by achievement message stats.')
@@ -172,7 +177,8 @@ module.exports = {
         clearAfkChannel: interaction.options.getBoolean('clear_afk_channel') === true,
         unlockMessage: interaction.options.getString('unlock_message') ?? undefined,
         unlockImageUrl: interaction.options.getString('unlock_image_url') ?? undefined,
-        clearImage: interaction.options.getBoolean('clear_image') === true
+        clearImage: interaction.options.getBoolean('clear_image') === true,
+        dmEnabled: interaction.options.getBoolean('dm_user') ?? undefined
       });
       await ctx.logger.log({
         guildId: interaction.guildId,
@@ -181,7 +187,7 @@ module.exports = {
         body: `Updated By: <@${interaction.user.id}>\nStatus: **${config.enabled === false ? 'Disabled' : 'Enabled'}**`,
         actorUserId: interaction.user.id
       }).catch(() => {});
-      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Achievements Configured', `Achievements are **${config.enabled === false ? 'disabled' : 'enabled'}**.\nAnnouncement Channel: ${config.announcement_channel_id ? `<#${config.announcement_channel_id}>` : 'Not configured'}\nAFK Channel Exclusion: ${config.afk_channel_id ? `<#${config.afk_channel_id}>` : 'Not configured'}`)] });
+      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Achievements Configured', `Achievements are **${config.enabled === false ? 'disabled' : 'enabled'}**.\nAnnouncement Channel: ${config.announcement_channel_id ? `<#${config.announcement_channel_id}>` : 'Not configured'}\nDM Notifications: **${config.dm_enabled ? 'Enabled' : 'Disabled'}**\nAFK Channel Exclusion: ${config.afk_channel_id ? `<#${config.afk_channel_id}>` : 'Not configured'}`)] });
     }
 
     if (sub === 'tier-set') {
@@ -192,9 +198,11 @@ module.exports = {
         threshold: interaction.options.getInteger('threshold', true),
         xpReward: interaction.options.getInteger('xp') ?? undefined,
         roleRewardId: interaction.options.getRole('role')?.id,
+        imageUrl: interaction.options.getString('image_url') ?? undefined,
+        clearImage: interaction.options.getBoolean('clear_image') === true,
         enabled: interaction.options.getBoolean('enabled') ?? true
       });
-      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Achievement Tier Saved', `Saved **${tier.achievement_key} ${tier.tier_name || `Tier ${tier.tier_level}`}**.\nThreshold: **${tier.threshold_value}**\nXP: **${tier.xp_reward || 0}**${tier.role_reward_id ? `\nRole: <@&${tier.role_reward_id}>` : ''}`)] });
+      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Achievement Tier Saved', `Saved **${tier.achievement_key} ${tier.tier_name || `Tier ${tier.tier_level}`}**.\nThreshold: **${tier.threshold_value}**\nXP: **${tier.xp_reward || 0}**${tier.role_reward_id ? `\nRole: <@&${tier.role_reward_id}>` : ''}\nImage: **${tier.image_url ? 'Configured' : 'Default/None'}**`)] });
     }
 
     if (sub === 'tier-remove') {
@@ -223,13 +231,16 @@ module.exports = {
         enabled: interaction.options.getBoolean('enabled') ?? undefined,
         removeWhenLost: interaction.options.getBoolean('remove_when_lost') ?? undefined,
         xpReward: interaction.options.getInteger('xp') ?? undefined,
-        roleRewardId: interaction.options.getRole('role')?.id
+        roleRewardId: interaction.options.getRole('role')?.id,
+        imageUrl: interaction.options.getString('image_url') ?? undefined,
+        clearImage: interaction.options.getBoolean('clear_image') === true
       });
       return replyPrivate(interaction, { embeds: [createSuccessEmbed('One-Time Achievement Configured', [
         `Achievement: **${definition.name}**`,
         `Status: **${definition.enabled === false ? 'Disabled' : 'Enabled'}**`,
         `XP: **${definition.one_time_xp_reward || 0}**`,
         definition.one_time_role_reward_id ? `Role: <@&${definition.one_time_role_reward_id}>` : 'Role: Not configured',
+        `Image: **${definition.image_url ? 'Configured' : 'Default/None'}**`,
         `Remove if condition ends: **${definition.remove_when_condition_ends ? 'Yes' : 'No'}**`
       ].join('\n'))] });
     }

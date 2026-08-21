@@ -1656,6 +1656,7 @@ await query(`CREATE INDEX IF NOT EXISTS idx_bot_presence_guild ON bot_presence_s
       afk_channel_id TEXT,
       unlock_message TEXT NOT NULL DEFAULT '{user} unlocked **{achievement} — Level {level}**!',
       unlock_image_url TEXT,
+      dm_enabled BOOLEAN NOT NULL DEFAULT false,
       standard_tiers_version TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -1674,6 +1675,7 @@ await query(`CREATE INDEX IF NOT EXISTS idx_bot_presence_guild ON bot_presence_s
       one_time_xp_reward INTEGER NOT NULL DEFAULT 0,
       one_time_role_reward_id TEXT,
       remove_when_condition_ends BOOLEAN NOT NULL DEFAULT false,
+      image_url TEXT,
       enabled BOOLEAN NOT NULL DEFAULT true,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -1691,6 +1693,7 @@ await query(`CREATE INDEX IF NOT EXISTS idx_bot_presence_guild ON bot_presence_s
       threshold_value INTEGER NOT NULL,
       xp_reward INTEGER NOT NULL DEFAULT 0,
       role_reward_id TEXT,
+      image_url TEXT,
       enabled BOOLEAN NOT NULL DEFAULT true,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -1831,11 +1834,14 @@ await query(`CREATE INDEX IF NOT EXISTS idx_bot_presence_guild ON bot_presence_s
   `);
 
   await query(`ALTER TABLE achievement_configs ADD COLUMN IF NOT EXISTS standard_tiers_version TEXT;`);
+  await query(`ALTER TABLE achievement_configs ADD COLUMN IF NOT EXISTS dm_enabled BOOLEAN NOT NULL DEFAULT false;`);
   await query(`ALTER TABLE achievement_definitions ADD COLUMN IF NOT EXISTS achievement_type TEXT NOT NULL DEFAULT 'TIERED';`);
   await query(`ALTER TABLE achievement_definitions ADD COLUMN IF NOT EXISTS one_time_xp_reward INTEGER NOT NULL DEFAULT 0;`);
   await query(`ALTER TABLE achievement_definitions ADD COLUMN IF NOT EXISTS one_time_role_reward_id TEXT;`);
   await query(`ALTER TABLE achievement_definitions ADD COLUMN IF NOT EXISTS remove_when_condition_ends BOOLEAN NOT NULL DEFAULT false;`);
+  await query(`ALTER TABLE achievement_definitions ADD COLUMN IF NOT EXISTS image_url TEXT;`);
   await query(`ALTER TABLE achievement_tiers ADD COLUMN IF NOT EXISTS tier_name TEXT;`);
+  await query(`ALTER TABLE achievement_tiers ADD COLUMN IF NOT EXISTS image_url TEXT;`);
   await query(`UPDATE achievement_tiers SET tier_name = CASE tier_level WHEN 1 THEN 'Bronze' WHEN 2 THEN 'Silver' WHEN 3 THEN 'Gold' WHEN 4 THEN 'Diamond' ELSE COALESCE(tier_name, 'Legacy Level ' || tier_level::text) END WHERE tier_name IS NULL;`);
 
   await query(`CREATE INDEX IF NOT EXISTS idx_achievement_tiers_key ON achievement_tiers(guild_id, achievement_key, tier_level);`);

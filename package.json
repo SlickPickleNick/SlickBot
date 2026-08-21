@@ -12,8 +12,8 @@
     "deploy:commands": "node src/deployCommands.js",
     "db:init": "node src/services/initDatabase.js",
     "validate:commands": "node src/scripts/validateCommands.js",
-    "test": "node --test test/**/*.test.js",
-    "test:coverage": "node --test --experimental-test-coverage test/**/*.test.js"
+    "test": "node --test",
+    "test:coverage": "node --test --experimental-test-coverage"
   },
   "dependencies": {
     "discord.js": "^14.22.1",

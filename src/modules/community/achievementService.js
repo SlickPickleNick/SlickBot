@@ -299,18 +299,20 @@ class AchievementService {
     const afkChannelId = values.clearAfkChannel ? null : (values.afkChannelId === undefined ? current.afk_channel_id : values.afkChannelId);
     const unlockMessage = values.unlockMessage ?? current.unlock_message ?? DEFAULT_UNLOCK_MESSAGE;
     const unlockImageUrl = values.clearImage ? null : (values.unlockImageUrl === undefined ? current.unlock_image_url : values.unlockImageUrl);
+    const dmEnabled = values.dmEnabled ?? current.dm_enabled ?? false;
     const result = await query(
-      `INSERT INTO achievement_configs (guild_id, enabled, announcement_channel_id, afk_channel_id, unlock_message, unlock_image_url)
-       VALUES ($1,$2,$3,$4,$5,$6)
+      `INSERT INTO achievement_configs (guild_id, enabled, announcement_channel_id, afk_channel_id, unlock_message, unlock_image_url, dm_enabled)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)
        ON CONFLICT (guild_id)
        DO UPDATE SET enabled = EXCLUDED.enabled,
                      announcement_channel_id = EXCLUDED.announcement_channel_id,
                      afk_channel_id = EXCLUDED.afk_channel_id,
                      unlock_message = EXCLUDED.unlock_message,
                      unlock_image_url = EXCLUDED.unlock_image_url,
+                     dm_enabled = EXCLUDED.dm_enabled,
                      updated_at = NOW()
        RETURNING *`,
-      [guildId, enabled, announcementChannelId || null, afkChannelId || null, String(unlockMessage || DEFAULT_UNLOCK_MESSAGE).slice(0, 1500), unlockImageUrl || null]
+      [guildId, enabled, announcementChannelId || null, afkChannelId || null, String(unlockMessage || DEFAULT_UNLOCK_MESSAGE).slice(0, 1500), unlockImageUrl || null, dmEnabled === true]
     );
     const config = result.rows[0];
     this.configCache.set(guildId, config);
@@ -420,32 +422,35 @@ class AchievementService {
     return result.rows;
   }
 
-  async setTier({ guildId, achievementKey, level, threshold, xpReward, roleRewardId, enabled = true }) {
+  async setTier({ guildId, achievementKey, level, threshold, xpReward, roleRewardId, enabled = true, imageUrl = undefined, clearImage = false }) {
     await this.ensureConfig(guildId);
     const safeKey = normalizeAchievementKey(achievementKey);
     if (!safeKey || !TIERED_ACHIEVEMENT_KEYS.includes(safeKey)) throw new Error('Invalid tiered achievement key.');
     const safeLevel = normalizeTierLevel(level);
     const safeThreshold = clampInteger(threshold, 1, 1000000000);
     const existing = await query(
-      `SELECT xp_reward, role_reward_id, enabled FROM achievement_tiers WHERE guild_id = $1 AND achievement_key = $2 AND tier_level = $3`,
+      `SELECT xp_reward, role_reward_id, image_url, enabled FROM achievement_tiers WHERE guild_id = $1 AND achievement_key = $2 AND tier_level = $3`,
       [guildId, safeKey, safeLevel]
     );
     const existingXp = existing.rows[0]?.xp_reward;
     const existingRole = existing.rows[0]?.role_reward_id;
+    const existingImage = existing.rows[0]?.image_url;
     const safeXp = clampInteger(xpReward ?? existingXp ?? 0, 0, 100000);
     const role = roleRewardId === undefined ? existingRole : roleRewardId;
+    const image = clearImage ? null : (imageUrl === undefined ? existingImage || null : imageUrl || null);
     const result = await query(
-      `INSERT INTO achievement_tiers (guild_id, achievement_key, tier_level, tier_name, threshold_value, xp_reward, role_reward_id, enabled)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+      `INSERT INTO achievement_tiers (guild_id, achievement_key, tier_level, tier_name, threshold_value, xp_reward, role_reward_id, image_url, enabled)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
        ON CONFLICT (guild_id, achievement_key, tier_level)
        DO UPDATE SET tier_name = EXCLUDED.tier_name,
                      threshold_value = EXCLUDED.threshold_value,
                      xp_reward = EXCLUDED.xp_reward,
                      role_reward_id = EXCLUDED.role_reward_id,
+                     image_url = EXCLUDED.image_url,
                      enabled = EXCLUDED.enabled,
                      updated_at = NOW()
        RETURNING *`,
-      [guildId, safeKey, safeLevel, tierName(safeLevel), safeThreshold, safeXp, role || null, enabled !== false]
+      [guildId, safeKey, safeLevel, tierName(safeLevel), safeThreshold, safeXp, role || null, image ? String(image).slice(0, 1800) : null, enabled !== false]
     );
     return result.rows[0];
   }
@@ -478,7 +483,7 @@ class AchievementService {
     return result.rows[0];
   }
 
-  async configureOneTimeAchievement({ guildId, achievementKey, enabled = undefined, removeWhenLost = undefined, xpReward = undefined, roleRewardId = undefined }) {
+  async configureOneTimeAchievement({ guildId, achievementKey, enabled = undefined, removeWhenLost = undefined, xpReward = undefined, roleRewardId = undefined, imageUrl = undefined, clearImage = false }) {
     await this.ensureConfig(guildId);
     const safeKey = normalizeAchievementKey(achievementKey);
     if (!safeKey || !ONE_TIME_ACHIEVEMENT_KEYS.includes(safeKey)) throw new Error('Invalid one-time achievement key.');
@@ -487,12 +492,14 @@ class AchievementService {
       [guildId, safeKey]
     );
     const existing = current.rows[0] || {};
+    const image = clearImage ? null : (imageUrl === undefined ? existing.image_url || null : imageUrl || null);
     const result = await query(
       `UPDATE achievement_definitions
        SET enabled = COALESCE($3, enabled),
            remove_when_condition_ends = COALESCE($4, remove_when_condition_ends),
            one_time_xp_reward = COALESCE($5, one_time_xp_reward),
            one_time_role_reward_id = $6,
+           image_url = $7,
            updated_at = NOW()
        WHERE guild_id = $1 AND achievement_key = $2
        RETURNING *`,
@@ -502,7 +509,8 @@ class AchievementService {
         enabled === undefined ? null : enabled !== false,
         removeWhenLost === undefined ? null : removeWhenLost === true,
         xpReward === undefined ? null : clampInteger(xpReward, 0, 100000),
-        roleRewardId === undefined ? existing.one_time_role_reward_id || null : roleRewardId || null
+        roleRewardId === undefined ? existing.one_time_role_reward_id || null : roleRewardId || null,
+        image ? String(image).slice(0, 1800) : null
       ]
     );
     this.invalidateDefinitions(guildId);
@@ -736,9 +744,9 @@ class AchievementService {
 
   async sendUnlockAnnouncement({ guild, channel = null, userId, achievementKey, definition = null, tier = null, xpReward = 0 }) {
     const config = await this.getConfig(guild.id);
-    if (!config.announcement_channel_id) return false;
-    const target = await guild.channels.fetch(config.announcement_channel_id).catch(() => null);
-    if (!target?.send) return false;
+    const hasAnnouncementChannel = Boolean(config?.announcement_channel_id);
+    const hasDm = Boolean(config?.dm_enabled);
+    if (!hasAnnouncementChannel && !hasDm) return false;
 
     const meta = ACHIEVEMENT_META[achievementKey] || { label: definition?.name || achievementKey, unit: 'points' };
     const displayName = definition?.name || meta.label;
@@ -754,6 +762,8 @@ class AchievementService {
       .replaceAll('{reward_xp}', String(xpReward || 0))
       .replaceAll('{server}', guild.name || 'the server');
 
+    const chosenImageUrl = tier?.image_url || definition?.image_url || config.unlock_image_url || null;
+
     const embed = createSuccessEmbed('Achievement Unlocked', message)
       .addFields(
         { name: 'Achievement', value: tier ? `${displayName} — ${displayTier}` : displayName, inline: true },
@@ -761,9 +771,27 @@ class AchievementService {
         { name: 'Reward', value: Number(xpReward || 0) > 0 ? `+${xpReward} XP` : 'No XP reward', inline: true }
       )
       .setFooter({ text: 'SlickBot Achievements' });
-    if (config.unlock_image_url) embed.setImage(config.unlock_image_url);
-    await target.send({ content: `<@${userId}>`, embeds: [embed] }).catch(() => null);
-    return true;
+    if (chosenImageUrl) embed.setImage(chosenImageUrl);
+
+    let channelSent = false;
+    let dmSent = false;
+
+    if (hasAnnouncementChannel) {
+      const target = await guild.channels.fetch(config.announcement_channel_id).catch(() => null);
+      if (target?.send) {
+        await target.send({ content: `<@${userId}>`, embeds: [embed] }).then(() => { channelSent = true; }).catch(() => null);
+      }
+    }
+
+    if (hasDm) {
+      const member = await guild.members.fetch(userId).catch(() => null);
+      const user = member?.user || await guild.client?.users?.fetch(userId).catch(() => null);
+      if (user?.send) {
+        await user.send({ embeds: [embed] }).then(() => { dmSent = true; }).catch(() => null);
+      }
+    }
+
+    return channelSent || dmSent;
   }
 
   async startVoiceSession(state) {
@@ -950,6 +978,7 @@ class AchievementService {
         '',
         `Status: **${config.enabled === false ? 'Disabled' : 'Enabled'}**`,
         `Announcement Channel: ${config.announcement_channel_id ? `<#${config.announcement_channel_id}>` : 'Not configured'}`,
+        `DM Notifications: **${config.dm_enabled ? 'Enabled' : 'Disabled'}**`,
         `AFK Channel Exclusion: ${config.afk_channel_id ? `<#${config.afk_channel_id}>` : 'Not configured'}`,
         `Ignored Message Channels: **${ignored.length}**`,
         `Tiered Achievements: **${definitions.length - oneTime.length}**`,
@@ -992,6 +1021,7 @@ class AchievementService {
             definition.description || 'One-time achievement.',
             `Reward: **+${definition.one_time_xp_reward || 0} XP**${definition.one_time_role_reward_id ? ` · <@&${definition.one_time_role_reward_id}>` : ''}`,
             `Remove if condition ends: **${definition.remove_when_condition_ends ? 'Yes' : 'No'}**`,
+            definition.image_url ? 'Custom Image: **Configured**' : null,
             definition.enabled === false ? '**Disabled**' : null
           ].filter(Boolean).join('\n'),
           inline: false
@@ -1001,7 +1031,7 @@ class AchievementService {
       const rows = grouped.get(definition.achievement_key) || [];
       embed.addFields({
         name: definition.name,
-        value: rows.map((tier) => `${tier.tier_name || tierName(tier.tier_level)}: ${Number(tier.threshold_value).toLocaleString()} ${ACHIEVEMENT_META[definition.achievement_key]?.unit || ''} · +${tier.xp_reward || 0} XP${tier.role_reward_id ? ` · <@&${tier.role_reward_id}>` : ''}`).join('\n') || 'No active standard tiers configured.',
+        value: rows.map((tier) => `${tier.tier_name || tierName(tier.tier_level)}: ${Number(tier.threshold_value).toLocaleString()} ${ACHIEVEMENT_META[definition.achievement_key]?.unit || ''} · +${tier.xp_reward || 0} XP${tier.role_reward_id ? ` · <@&${tier.role_reward_id}>` : ''}${tier.image_url ? ' 🖼️' : ''}`).join('\n') || 'No active standard tiers configured.',
         inline: false
       });
     }

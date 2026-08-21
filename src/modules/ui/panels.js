@@ -672,15 +672,15 @@ async function getModuleStatus(guildId, row) {
 
   if (row.module_key === 'ACHIEVEMENTS') {
     const [cfg, tiers, unlocks] = await Promise.all([
-      query(`SELECT enabled, announcement_channel_id FROM achievement_configs WHERE guild_id = $1 LIMIT 1`, [guildId]).catch(() => ({ rows: [] })),
+      query(`SELECT enabled, announcement_channel_id, dm_enabled FROM achievement_configs WHERE guild_id = $1 LIMIT 1`, [guildId]).catch(() => ({ rows: [] })),
       query(`SELECT COUNT(*)::int AS count FROM achievement_tiers WHERE guild_id = $1 AND enabled = true`, [guildId]).catch(() => ({ rows: [{ count: 0 }] })),
       query(`SELECT COUNT(*)::int AS count FROM achievement_unlocks WHERE guild_id = $1`, [guildId]).catch(() => ({ rows: [{ count: 0 }] }))
     ]);
     const config = cfg.rows[0];
     if (!config) return { moduleKey: row.module_key, core: false, state: 'PARTIAL', emoji: '🟠', label: 'Partially Configured', note: `${tiers.rows[0]?.count || 0} default tier(s)` };
     if (config.enabled === false) return { moduleKey: row.module_key, core: false, state: 'DISABLED', emoji: '⏸️', label: 'Disabled', note: 'Tracking off' };
-    if (config.announcement_channel_id) return { moduleKey: row.module_key, core: false, state: 'READY', emoji: '✅', label: 'Ready', note: `${unlocks.rows[0]?.count || 0} unlock(s)` };
-    return { moduleKey: row.module_key, core: false, state: 'PARTIAL', emoji: '🟠', label: 'Partially Configured', note: 'Tracking active; no announcement channel' };
+    if (config.announcement_channel_id || config.dm_enabled) return { moduleKey: row.module_key, core: false, state: 'READY', emoji: '✅', label: 'Ready', note: `${unlocks.rows[0]?.count || 0} unlock(s)` };
+    return { moduleKey: row.module_key, core: false, state: 'PARTIAL', emoji: '🟠', label: 'Partially Configured', note: 'Tracking active; no notifications configured' };
   }
 
   if (row.module_key === 'FAQ') {
