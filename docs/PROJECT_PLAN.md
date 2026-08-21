@@ -1,6 +1,6 @@
 # SlickBot Project Plan
 
-## Current Version: 0.9.5
+## Current Version: 0.9.6
 
 SlickBot is being built as a modular all-in-one Discord server management bot for the SlickPickleNick community.
 
@@ -39,9 +39,81 @@ SlickBot is being built as a modular all-in-one Discord server management bot fo
 - Temporary Roles
 - Achievements
 - Social Feeds (Twitch & YouTube)
+- Utility Tools (Purge, Info Cards, Polls, Reminders, Embeds, AFK, Snipe)
 
 
+## v0.9.6 — Utility & Server Essentials
 
+### Added
+
+- Implemented the `UTILITY` module under Core Setup / Server Essentials.
+- Added `/purge` bulk message deletion command with granular filters:
+  - Amount (1–100 messages)
+  - Target user filter
+  - Bots only / humans only filters
+  - Substring text search (`contains`)
+  - Attachment and link filters
+  - Pinned message protection toggle (`keep_pinned`, defaults to true)
+  - Audit logging to configured logging channel
+- Added rich information and profile inspection commands:
+  - `/userinfo` with cross-module statistics (Leveling XP/Rank, Achievements unlocked, Referrals made, Moderation Cases & Notes count).
+  - `/serverinfo` with complete server overview, member/bot breakdown, boost tier, channel types breakdown, and role/emoji counts.
+  - `/roleinfo` with hierarchy position, member count, and key permissions breakdown.
+  - `/channelinfo` with type, slowmode, topic, thread count, and voice bitrate/limits.
+  - `/avatar` with full-resolution global and server avatar download links (PNG, JPG, WEBP, GIF).
+  - `/banner` with user/server banner viewer and direct download links.
+  - Context menu Apps commands: Right-click User → `User Information` and `View Avatar`.
+- Added interactive community polling engine (`/poll`):
+  - Up to 10 customizable options with emoji support.
+  - Optional expiration duration with live countdown timestamp (`Ends in <t:...:R>`).
+  - Single-choice vs multiple-choice voting modes.
+  - Anonymous voting toggle.
+  - Selectable interface style: `Automatic` (buttons for ≤5 options, dropdown for 6–10), `Buttons`, or `Dropdown Menu`.
+  - Dynamic embed with live visual percentage progress bars (`[████████░░] 80% (16 votes)`).
+  - `/poll end` and End Poll button for staff/author with final winner announcement.
+  - `/poll list` for active server polls.
+- Added persistent reminder scheduling engine (`/remind`):
+  - `/remind set duration: "2h" reminder: "Text" [destination: DM/CHANNEL]` with natural duration parsing (`10m`, `2h`, `1d`, `1w`).
+  - `/remind list` to view upcoming reminders with Discord timestamps.
+  - `/remind cancel` to remove scheduled reminders.
+  - Background interval runner dispatches reminders on time with message context jump links.
+- Added visual embed builder & composer (`/embed`):
+  - Modal editor for Title, Description, Color, Thumbnail, Image, and up to 25 custom Fields.
+  - Interactive ephemeral preview with Send Embed, Edit Content, Add Field, and Cancel controls.
+  - Optional role ping on embed publishing.
+  - `/embed edit message_id: ...` to update existing embeds posted by SlickBot.
+- Added member AFK auto-reply system (`/afk`):
+  - Sets custom AFK message and alerts members who mention the user in chat with relative timestamps.
+  - Automatically welcomes the user back and clears AFK status upon their next message.
+- Added staff snipe cache (`/snipe`):
+  - In-memory cache of deleted messages and attachments per channel for moderation reference.
+- Added Utility Manager panel with `/utility manager`, `/utility setup`, feature toggles, and `/utility reset`.
+- Added database schema (`utility_configs`, `utility_reminders`, `utility_polls`, `utility_poll_options`, `utility_poll_votes`, `utility_afk_users`), background intervals, action keys, permission defaults, diagnostic checks in `/bot test`, and release documentation.
+
+### Commands
+
+```text
+/utility manager
+/utility setup
+/utility reset
+/purge
+/userinfo
+/serverinfo
+/roleinfo
+/channelinfo
+/avatar
+/banner
+/poll create
+/poll end
+/poll list
+/remind set
+/remind list
+/remind cancel
+/embed create
+/embed edit
+/afk
+/snipe
+```
 
 
 ## v0.9.5 — Social Feeds

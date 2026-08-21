@@ -33,6 +33,14 @@ const { BotUpdatesService } = require('../modules/status/botUpdatesService');
 const { buildRoleManagerPanel, toggleRole } = require('../modules/community/rolePanelService');
 const { JoinCreateService } = require('../modules/voice/joinCreateService');
 const { CustomCommandService, buildCustomCommandCreateModal, buildCustomCommandPrefixModal } = require('../modules/custom/customCommandService');
+const { UtilityService, DEFAULT_UTILITY_CONFIG } = require('../modules/utility/utilityService');
+const {
+  buildUtilityManagerPanel,
+  buildUtilitySetupModal,
+  buildEmbedComposerModal,
+  buildEmbedFieldModal,
+  buildEmbedPreviewPayload
+} = require('../modules/utility/utilityUi');
 const {
   TicketService,
   ReportService,
@@ -71,6 +79,7 @@ const lockdown = new LockdownService();
 const socialFeeds = new SocialFeedService();
 const botUpdates = new BotUpdatesService();
 const onboarding = new OnboardingService();
+const utility = new UtilityService();
 
 async function handleComponentInteraction(interaction, ctx) {
   if (!interaction.guildId) {
@@ -387,6 +396,148 @@ async function handleButton(interaction, ctx) {
     await interaction.deferUpdate().catch(() => {});
     await socialFeeds.checkGuildFeeds(interaction.guildId, ctx.client, ctx.logger);
     await updatePanel(interaction, await socialFeeds.buildManagerPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id === CustomIds.UtilityRefresh) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.UtilityView, ModuleKeys.UTILITY))) return true;
+    await updatePanel(interaction, await buildUtilityManagerPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id === CustomIds.UtilitySetupModal) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.UtilityManage, ModuleKeys.UTILITY))) return true;
+    const cfg = await utility.getConfig(interaction.guildId);
+    await interaction.showModal(buildUtilitySetupModal(cfg));
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.UtilityToggleFeaturePrefix)) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.UtilityManage, ModuleKeys.UTILITY))) return true;
+    const feature = id.slice(CustomIds.UtilityToggleFeaturePrefix.length);
+    const cfg = await utility.getConfig(interaction.guildId);
+    const key = `${feature}_enabled`;
+    if (key in cfg) {
+      await utility.upsertConfig(interaction.guildId, { [key]: !cfg[key] });
+    }
+    await updatePanel(interaction, await buildUtilityManagerPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.UtilityResetConfirmPrefix)) {
+    const guildId = id.slice(CustomIds.UtilityResetConfirmPrefix.length);
+    if (!(await requireAction(interaction, ctx, ActionKeys.UtilityReset, ModuleKeys.UTILITY))) return true;
+    await query(`DELETE FROM utility_reminders WHERE guild_id = $1`, [guildId]);
+    await query(`DELETE FROM utility_polls WHERE guild_id = $1`, [guildId]);
+    await query(`DELETE FROM utility_afk_users WHERE guild_id = $1`, [guildId]);
+    await utility.upsertConfig(guildId, DEFAULT_UTILITY_CONFIG);
+    await updatePanel(interaction, {
+      embeds: [createSuccessEmbed('Utility Module Reset', 'All utility settings, polls, reminders, and AFK records have been reset.')],
+      components: []
+    });
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.UtilityResetCancelPrefix)) {
+    await updatePanel(interaction, {
+      embeds: [createSuccessEmbed('Reset Cancelled', 'No utility module data was modified.')],
+      components: []
+    });
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.PollVotePrefix)) {
+    if (!(await requirePublicAction(interaction, ctx, ActionKeys.UtilityPollVote, ModuleKeys.UTILITY))) return true;
+    const payload = id.slice(CustomIds.PollVotePrefix.length);
+    const [pollId, optionId] = payload.split(':');
+    try {
+      const pollState = await utility.handleVote(pollId, optionId, interaction.user.id);
+      const updatedPayload = utility.buildPollPayload(pollState.poll, pollState.options, pollState.totalVotes, pollState.userVotes);
+      await interaction.update(updatedPayload);
+    } catch (err) {
+      await replyPrivate(interaction, { embeds: [createWarningEmbed('Vote Failed', err.message || 'Could not record vote.')] });
+    }
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.PollEndPrefix)) {
+    const pollId = id.slice(CustomIds.PollEndPrefix.length);
+    const pollState = await utility.getPollState(pollId);
+    if (!pollState) return true;
+    const hasManage = await ctx.permissions.canPerform(interaction.guildId, interaction.member, ActionKeys.UtilityPollManage);
+    const isCreator = pollState.poll.creator_user_id === interaction.user.id;
+    if (!hasManage && !isCreator) {
+      await replyPrivate(interaction, { embeds: [createWarningEmbed('Access Denied', 'Only the poll creator or staff can end this poll.')] });
+      return true;
+    }
+    const closed = await utility.closePoll(pollId, ctx.client, interaction.user);
+    if (closed) {
+      const updatedPayload = utility.buildPollPayload(closed.poll, closed.options, closed.totalVotes, []);
+      await interaction.update(updatedPayload);
+    }
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.ReminderCancelPrefix)) {
+    const remId = id.slice(CustomIds.ReminderCancelPrefix.length);
+    const cancelled = await utility.cancelReminder(remId, interaction.user.id);
+    if (cancelled) {
+      await replyPrivate(interaction, { embeds: [createSuccessEmbed('Reminder Cancelled', `Reminder \`${remId}\` was cancelled.`)] });
+    }
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.EmbedSendPrefix)) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.UtilityEmbedCreate, ModuleKeys.UTILITY))) return true;
+    const payload = id.slice(CustomIds.EmbedSendPrefix.length);
+    const [channelId, rolePingId] = payload.split(':');
+    const targetChannel = await ctx.client.channels.fetch(channelId).catch(() => null);
+    if (!targetChannel) {
+      await replyPrivate(interaction, { embeds: [createWarningEmbed('Channel Not Found', 'The target channel could not be found.')] });
+      return true;
+    }
+    const embedToPublish = interaction.message.embeds[1] || interaction.message.embeds[0];
+    if (!embedToPublish) {
+      await replyPrivate(interaction, { embeds: [createWarningEmbed('No Embed Found', 'No embed was found to send.')] });
+      return true;
+    }
+    const msgPayload = { embeds: [embedToPublish] };
+    if (rolePingId) msgPayload.content = `<@&${rolePingId}>`;
+    await targetChannel.send(msgPayload);
+    await interaction.update({
+      embeds: [createSuccessEmbed('🚀 Embed Published', `Your embed was successfully sent to <#${channelId}>!`)],
+      components: []
+    });
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.EmbedCancelPrefix)) {
+    await interaction.update({
+      embeds: [createSuccessEmbed('Embed Discarded', 'The draft embed was discarded.')],
+      components: []
+    });
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.EmbedEditBtnPrefix)) {
+    const channelId = id.slice(CustomIds.EmbedEditBtnPrefix.length);
+    const currentEmbed = interaction.message.embeds[1] || interaction.message.embeds[0];
+    const modal = buildEmbedComposerModal({
+      channelId,
+      title: currentEmbed?.title || '',
+      description: currentEmbed?.description || '',
+      color: currentEmbed?.hexColor || '#7869ff',
+      imageUrl: currentEmbed?.image?.url || '',
+      thumbnailUrl: currentEmbed?.thumbnail?.url || ''
+    });
+    await interaction.showModal(modal);
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.EmbedAddFieldBtnPrefix)) {
+    const channelId = id.slice(CustomIds.EmbedAddFieldBtnPrefix.length);
+    const modal = buildEmbedFieldModal(channelId);
+    await interaction.showModal(modal);
     return true;
   }
 
@@ -1639,9 +1790,25 @@ async function handleSelect(interaction, ctx) {
       case ModuleKeys.SOCIAL_FEEDS:
         await updatePanel(interaction, await socialFeeds.buildManagerPanel(interaction.guildId));
         break;
+      case ModuleKeys.UTILITY:
+        await updatePanel(interaction, await buildUtilityManagerPanel(interaction.guildId));
+        break;
       default:
         await updatePanel(interaction, await buildModuleDetailPanel(interaction.guildId, moduleKey));
         break;
+    }
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.PollSelectVotePrefix)) {
+    if (!(await requirePublicAction(interaction, ctx, ActionKeys.UtilityPollVote, ModuleKeys.UTILITY))) return true;
+    const pollId = id.slice(CustomIds.PollSelectVotePrefix.length);
+    try {
+      const pollState = await utility.handleVote(pollId, interaction.values, interaction.user.id);
+      const updatedPayload = utility.buildPollPayload(pollState.poll, pollState.options, pollState.totalVotes, pollState.userVotes);
+      await interaction.update(updatedPayload);
+    } catch (err) {
+      await replyPrivate(interaction, { embeds: [createWarningEmbed('Vote Failed', err.message || 'Could not record vote.')] });
     }
     return true;
   }
@@ -1871,6 +2038,62 @@ async function handleSelect(interaction, ctx) {
 
 async function handleModal(interaction, ctx) {
   const id = interaction.customId;
+
+  if (id === CustomIds.UtilitySetupModal) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.UtilityManage, ModuleKeys.UTILITY))) return true;
+    const pollChan = interaction.fields.getTextInputValue('default_poll_channel_id')?.trim() || null;
+    const maxRem = parseInt(interaction.fields.getTextInputValue('max_reminders_per_user')?.trim(), 10) || 10;
+    await utility.upsertConfig(interaction.guildId, {
+      default_poll_channel_id: pollChan,
+      max_reminders_per_user: Math.max(1, Math.min(50, maxRem))
+    });
+    await updatePanel(interaction, await buildUtilityManagerPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.EmbedEditModalPrefix)) {
+    const raw = id.slice(CustomIds.EmbedEditModalPrefix.length);
+    const [channelId, rolePingOrMessageId] = raw.split(':');
+    const title = interaction.fields.getTextInputValue('embed_title')?.trim() || null;
+    const description = interaction.fields.getTextInputValue('embed_desc')?.trim() || '';
+    const color = interaction.fields.getTextInputValue('embed_color')?.trim() || '#7869ff';
+    const imageUrl = interaction.fields.getTextInputValue('embed_image')?.trim() || null;
+    const thumbnailUrl = interaction.fields.getTextInputValue('embed_thumb')?.trim() || null;
+
+    const preview = buildEmbedPreviewPayload({
+      title,
+      description,
+      color,
+      imageUrl,
+      thumbnailUrl
+    }, channelId, rolePingOrMessageId);
+
+    await replyPrivate(interaction, preview);
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.EmbedAddFieldModalPrefix)) {
+    const channelId = id.slice(CustomIds.EmbedAddFieldModalPrefix.length);
+    const name = interaction.fields.getTextInputValue('field_name')?.trim();
+    const value = interaction.fields.getTextInputValue('field_value')?.trim();
+    const inline = /^(yes|y|true|1)$/i.test(interaction.fields.getTextInputValue('field_inline')?.trim());
+
+    const currentEmbed = interaction.message.embeds[1] || interaction.message.embeds[0];
+    const fields = currentEmbed?.fields ? [...currentEmbed.fields] : [];
+    fields.push({ name, value, inline });
+
+    const preview = buildEmbedPreviewPayload({
+      title: currentEmbed?.title,
+      description: currentEmbed?.description,
+      color: currentEmbed?.hexColor,
+      imageUrl: currentEmbed?.image?.url,
+      thumbnailUrl: currentEmbed?.thumbnail?.url,
+      fields
+    }, channelId);
+
+    await interaction.update(preview);
+    return true;
+  }
 
   if (id === CustomIds.StatusActivityTextModal) {
     if (!(await requireAction(interaction, ctx, ActionKeys.StatusManage, ModuleKeys.STATUS))) return true;

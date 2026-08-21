@@ -165,6 +165,19 @@ const ActionKeys = Object.freeze({
   FeedsCheck: 'feeds.check',
   FeedsReset: 'feeds.reset',
 
+  UtilityView: 'utility.view',
+  UtilityManage: 'utility.manage',
+  UtilityPurge: 'utility.purge',
+  UtilityPollCreate: 'utility.poll.create',
+  UtilityPollVote: 'utility.poll.vote',
+  UtilityPollManage: 'utility.poll.manage',
+  UtilityRemindUse: 'utility.remind.use',
+  UtilityEmbedCreate: 'utility.embed.create',
+  UtilityEmbedEdit: 'utility.embed.edit',
+  UtilityAfkUse: 'utility.afk.use',
+  UtilitySnipeView: 'utility.snipe.view',
+  UtilityReset: 'utility.reset',
+
   PanelsConfigure: 'panels.configure',
 
   ServerReset: 'server.reset'
@@ -352,6 +365,19 @@ const defaultActionLevels = Object.freeze({
   [ActionKeys.FeedsCheck]: PermissionLevels.MODERATOR,
   [ActionKeys.FeedsReset]: PermissionLevels.OWNER,
 
+  [ActionKeys.UtilityView]: PermissionLevels.EVERYONE,
+  [ActionKeys.UtilityManage]: PermissionLevels.SENIOR_MODERATOR,
+  [ActionKeys.UtilityPurge]: PermissionLevels.MODERATOR,
+  [ActionKeys.UtilityPollCreate]: PermissionLevels.MODERATOR,
+  [ActionKeys.UtilityPollVote]: PermissionLevels.EVERYONE,
+  [ActionKeys.UtilityPollManage]: PermissionLevels.MODERATOR,
+  [ActionKeys.UtilityRemindUse]: PermissionLevels.EVERYONE,
+  [ActionKeys.UtilityEmbedCreate]: PermissionLevels.MODERATOR,
+  [ActionKeys.UtilityEmbedEdit]: PermissionLevels.MODERATOR,
+  [ActionKeys.UtilityAfkUse]: PermissionLevels.EVERYONE,
+  [ActionKeys.UtilitySnipeView]: PermissionLevels.MODERATOR,
+  [ActionKeys.UtilityReset]: PermissionLevels.OWNER,
+
   [ActionKeys.ServerReset]: PermissionLevels.OWNER
 });
 
@@ -405,12 +431,16 @@ const defaultPublicActions = Object.freeze([
   ActionKeys.ReferralsSubmit,
   ActionKeys.ReferralsView,
   ActionKeys.AchievementsUse,
-  ActionKeys.FeedsView
+  ActionKeys.FeedsView,
+  ActionKeys.UtilityView,
+  ActionKeys.UtilityPollVote,
+  ActionKeys.UtilityRemindUse,
+  ActionKeys.UtilityAfkUse
 ]);
 
 const defaultTeamPermissions = Object.freeze(Object.values(ActionKeys));
 
-const PERMISSION_DEFAULTS_VERSION = '0.9.5';
+const PERMISSION_DEFAULTS_VERSION = '0.9.6';
 
 module.exports = {
   ActionKeys,

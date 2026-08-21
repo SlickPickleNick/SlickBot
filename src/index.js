@@ -25,6 +25,7 @@ const { FaqService } = require('./modules/community/faqService');
 const { TemporaryRoleService } = require('./modules/moderation/tempRoleService');
 const { AchievementService, ACHIEVEMENT_KEYS } = require('./modules/community/achievementService');
 const { SocialFeedService } = require('./modules/automation/socialFeedService');
+const { UtilityService } = require('./modules/utility/utilityService');
 const { handleReactionRole, syncAllPublishedReactionPanels } = require('./modules/community/rolePanelService');
 const { handleComponentInteraction } = require('./services/interactionRouter');
 const { ActionKeys } = require('./modules/permissions/actionKeys');
@@ -63,6 +64,7 @@ const faq = new FaqService();
 const tempRoles = new TemporaryRoleService();
 const achievements = new AchievementService();
 const socialFeeds = new SocialFeedService();
+const utility = new UtilityService();
 const healthServer = startHealthServer(client);
 
 const backgroundIntervals = [];
@@ -120,6 +122,16 @@ client.once(Events.ClientReady, async (readyClient) => {
     socialFeeds.processFeeds(readyClient, logger).catch((error) => console.error('Failed to process social feeds:', error));
   }, 60 * 1000));
   await socialFeeds.processFeeds(readyClient, logger).catch((error) => console.error('Failed to process social feeds on startup:', error));
+
+  backgroundIntervals.push(setInterval(() => {
+    utility.processDueReminders(readyClient, logger).catch((error) => console.error('Failed to process due reminders:', error));
+  }, 30 * 1000));
+  await utility.processDueReminders(readyClient, logger).catch((error) => console.error('Failed to process due reminders on startup:', error));
+
+  backgroundIntervals.push(setInterval(() => {
+    utility.processExpiredPolls(readyClient, logger).catch((error) => console.error('Failed to process expired polls:', error));
+  }, 60 * 1000));
+  await utility.processExpiredPolls(readyClient, logger).catch((error) => console.error('Failed to process expired polls on startup:', error));
 
   backgroundIntervals.push(setInterval(() => {
     for (const guild of readyClient.guilds.cache.values()) {
@@ -354,6 +366,9 @@ client.on(Events.UserUpdate, async (oldUser, newUser) => {
 });
 
 client.on(Events.MessageDelete, async (message) => {
+  try {
+    utility.recordDeletedMessage(message);
+  } catch (e) {}
   await handleCountingMessageMutationEvent(message, 'DELETED');
   if (!message.guild || message.author?.bot) return;
 
@@ -518,6 +533,11 @@ client.on(Events.MessageCreate, async (message) => {
     const achievementsEnabled = await permissions.isModuleEnabled(message.guild.id, ModuleKeys.ACHIEVEMENTS).catch(() => false);
     if (achievementsEnabled) {
       await achievements.recordMessage(message, logger).catch((error) => console.error('Failed to process achievement message stat:', error));
+    }
+
+    const utilityEnabled = await permissions.isModuleEnabled(message.guild.id, ModuleKeys.UTILITY).catch(() => false);
+    if (utilityEnabled) {
+      await utility.handleMessageAfkCheck(message).catch((error) => console.error('Failed to process AFK check:', error));
     }
 
     const levelingEnabled = await permissions.isModuleEnabled(message.guild.id, 'LEVELING').catch(() => false);

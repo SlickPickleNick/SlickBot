@@ -144,6 +144,12 @@ const MODULE_CHECKS = {
     { name: 'Tracked feeds', sql: 'SELECT COUNT(*)::int AS count FROM social_feeds WHERE guild_id = $1' },
     { name: 'Active feeds', sql: 'SELECT COUNT(*)::int AS count FROM social_feeds WHERE guild_id = $1 AND enabled = true' },
     { name: 'Feed history', sql: 'SELECT COUNT(*)::int AS count FROM social_feed_posts_history WHERE guild_id = $1' }
+  ],
+  [ModuleKeys.UTILITY]: [
+    { name: 'Utility config', sql: 'SELECT COUNT(*)::int AS count FROM utility_configs WHERE guild_id = $1' },
+    { name: 'Active reminders', sql: "SELECT COUNT(*)::int AS count FROM utility_reminders WHERE guild_id = $1 AND status = 'PENDING'" },
+    { name: 'Active polls', sql: "SELECT COUNT(*)::int AS count FROM utility_polls WHERE guild_id = $1 AND status = 'OPEN'" },
+    { name: 'AFK users', sql: 'SELECT COUNT(*)::int AS count FROM utility_afk_users WHERE guild_id = $1' }
   ]
 };
 
@@ -169,7 +175,8 @@ const MODULE_FIXES = Object.freeze({
   [ModuleKeys.FAQ]: 'Run `/faq setup` with a forum channel, create FAQ posts in that forum, then run `/faq refresh`.',
   [ModuleKeys.SUGGESTIONS]: 'Run `/suggestion setup`, add/review categories, post a launcher with `/suggestion panel post`, and create a staff index with `/suggestion review-index`.',
   [ModuleKeys.REFERRALS]: 'Run `/referral setup`, then members can use `/referral submit` and staff can use `/referral set`.',
-  [ModuleKeys.TEMP_ROLES]: 'Use `/temp-role add` to assign a role temporarily and `/temp-role active` to review active assignments.'
+  [ModuleKeys.TEMP_ROLES]: 'Use `/temp-role add` to assign a role temporarily and `/temp-role active` to review active assignments.',
+  [ModuleKeys.UTILITY]: 'Run `/utility manager` or `/utility setup` to review and configure utility settings.'
 });
 
 function statusIcon(status) {

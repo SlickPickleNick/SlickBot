@@ -15,6 +15,7 @@ const joinCreateCmd = require('../../src/commands/joinCreate');
 const faqCmd = require('../../src/commands/faq');
 const rolesCmd = require('../../src/commands/roles');
 const botUpdatesCmd = require('../../src/commands/botUpdates');
+const utilityCmd = require('../../src/commands/utility');
 const setupCmd = require('../../src/commands/setup');
 
 const mockDb = new MockDatabase();
@@ -40,7 +41,8 @@ test('Module Setup & Dashboard Command Consistency', async (t) => {
       joinCreateCmd,
       faqCmd,
       rolesCmd,
-      botUpdatesCmd
+      botUpdatesCmd,
+      utilityCmd
     ];
 
     for (const cmd of commandsWithManager) {
@@ -58,7 +60,8 @@ test('Module Setup & Dashboard Command Consistency', async (t) => {
       permissionsCmd,
       loggingCmd,
       customCommandCmd,
-      rolesCmd
+      rolesCmd,
+      utilityCmd
     ];
 
     for (const cmd of commandsWithSetup) {

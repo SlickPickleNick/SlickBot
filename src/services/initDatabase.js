@@ -1867,6 +1867,104 @@ async function initDatabase() {
   await query(`CREATE INDEX IF NOT EXISTS idx_command_permission_levels_action ON command_permission_levels(guild_id, action_key);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_module_permission_levels_module ON module_permission_levels(guild_id, module_key);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_role_permission_levels_role ON role_permission_levels(guild_id, role_id);`);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS utility_configs (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT UNIQUE NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      enabled BOOLEAN NOT NULL DEFAULT true,
+      purge_enabled BOOLEAN NOT NULL DEFAULT true,
+      polls_enabled BOOLEAN NOT NULL DEFAULT true,
+      reminders_enabled BOOLEAN NOT NULL DEFAULT true,
+      embeds_enabled BOOLEAN NOT NULL DEFAULT true,
+      afk_enabled BOOLEAN NOT NULL DEFAULT true,
+      snipe_enabled BOOLEAN NOT NULL DEFAULT true,
+      max_reminders_per_user INTEGER NOT NULL DEFAULT 10,
+      default_poll_channel_id TEXT,
+      afk_ignored_channel_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS utility_reminders (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL,
+      user_tag TEXT,
+      channel_id TEXT NOT NULL,
+      reminder_text TEXT NOT NULL,
+      destination_type TEXT NOT NULL DEFAULT 'DM',
+      message_jump_url TEXT,
+      due_at TIMESTAMPTZ NOT NULL,
+      status TEXT NOT NULL DEFAULT 'PENDING',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      sent_at TIMESTAMPTZ
+    );
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS utility_polls (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      channel_id TEXT NOT NULL,
+      message_id TEXT,
+      creator_user_id TEXT NOT NULL,
+      creator_user_tag TEXT,
+      question TEXT NOT NULL,
+      input_style TEXT NOT NULL DEFAULT 'AUTO',
+      multiple_votes BOOLEAN NOT NULL DEFAULT false,
+      anonymous BOOLEAN NOT NULL DEFAULT false,
+      status TEXT NOT NULL DEFAULT 'OPEN',
+      expires_at TIMESTAMPTZ,
+      ended_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS utility_poll_options (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      poll_id TEXT NOT NULL REFERENCES utility_polls(id) ON DELETE CASCADE,
+      option_index INTEGER NOT NULL,
+      label TEXT NOT NULL,
+      emoji TEXT,
+      UNIQUE(poll_id, option_index)
+    );
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS utility_poll_votes (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      poll_id TEXT NOT NULL REFERENCES utility_polls(id) ON DELETE CASCADE,
+      option_id TEXT NOT NULL REFERENCES utility_poll_options(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(poll_id, option_id, user_id)
+    );
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS utility_afk_users (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL,
+      user_tag TEXT,
+      message TEXT NOT NULL DEFAULT 'AFK',
+      set_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(guild_id, user_id)
+    );
+  `);
+
+  await query(`CREATE INDEX IF NOT EXISTS idx_utility_configs_guild ON utility_configs(guild_id);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_utility_reminders_due ON utility_reminders(status, due_at);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_utility_reminders_user ON utility_reminders(guild_id, user_id, status);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_utility_polls_guild ON utility_polls(guild_id, status, expires_at);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_utility_poll_votes_poll ON utility_poll_votes(poll_id);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_utility_poll_votes_user ON utility_poll_votes(poll_id, user_id);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_utility_afk_lookup ON utility_afk_users(guild_id, user_id);`);
 }
 
 if (require.main === module) {

@@ -35,6 +35,21 @@ const referralCommand = require('./referral');
 const tempRoleCommand = require('./tempRole');
 const achievementCommand = require('./achievement');
 const feedCommand = require('./feed');
+const utilityCommand = require('./utility');
+const purgeCommand = require('./purge');
+const userinfoCommand = require('./userinfo');
+const serverinfoCommand = require('./serverinfo');
+const roleinfoCommand = require('./roleinfo');
+const channelinfoCommand = require('./channelinfo');
+const avatarCommand = require('./avatar');
+const bannerCommand = require('./banner');
+const pollCommand = require('./poll');
+const remindCommand = require('./remind');
+const embedCommand = require('./embed');
+const afkCommand = require('./afk');
+const snipeCommand = require('./snipe');
+const userInfoContextCommand = require('./userInfoContext');
+const avatarContextCommand = require('./avatarContext');
 
 const commands = [
   pingCommand,
@@ -73,7 +88,22 @@ const commands = [
   referralCommand,
   tempRoleCommand,
   achievementCommand,
-  feedCommand
+  feedCommand,
+  utilityCommand,
+  purgeCommand,
+  userinfoCommand,
+  serverinfoCommand,
+  roleinfoCommand,
+  channelinfoCommand,
+  avatarCommand,
+  bannerCommand,
+  pollCommand,
+  remindCommand,
+  embedCommand,
+  afkCommand,
+  snipeCommand,
+  userInfoContextCommand,
+  avatarContextCommand
 ];
 
 const commandMap = new Map(commands.map((command) => [command.data.name, command]));

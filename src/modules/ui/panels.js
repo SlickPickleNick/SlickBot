@@ -55,11 +55,11 @@ const STATUS_META = Object.freeze({
 });
 
 const MODULE_CATEGORIES = Object.freeze([
-  { key: 'CORE', label: 'Core Setup', modules: [ModuleKeys.PERMISSIONS, ModuleKeys.LOGGING, ModuleKeys.STATUS, ModuleKeys.MODERATION, ModuleKeys.LOCKDOWN, ModuleKeys.TEMP_ROLES] },
+  { key: 'CORE', label: 'Core Setup', modules: [ModuleKeys.PERMISSIONS, ModuleKeys.LOGGING, ModuleKeys.STATUS, ModuleKeys.MODERATION, ModuleKeys.LOCKDOWN, ModuleKeys.TEMP_ROLES, ModuleKeys.UTILITY] },
   { key: 'SUPPORT', label: 'Support Systems', modules: [ModuleKeys.TICKETS, ModuleKeys.REPORTS, ModuleKeys.APPLICATIONS, ModuleKeys.APPEALS] },
   { key: 'COMMUNITY', label: 'Community Systems', modules: [ModuleKeys.WELCOME, ModuleKeys.REACTION_ROLES, ModuleKeys.GIVEAWAYS, ModuleKeys.BIRTHDAYS, ModuleKeys.LEVELING, ModuleKeys.COMMUNITY_GAMES, ModuleKeys.FAQ, ModuleKeys.SUGGESTIONS, ModuleKeys.REFERRALS, ModuleKeys.ACHIEVEMENTS, ModuleKeys.SERVER_STATS, ModuleKeys.CUSTOM_COMMANDS, ModuleKeys.JOIN_TO_CREATE] },
   { key: 'AUTOMATION', label: 'Automation Systems', modules: [ModuleKeys.SCHEDULED_MESSAGES, ModuleKeys.BOT_UPDATES, ModuleKeys.SOCIAL_FEEDS] },
-  { key: 'BACKLOG', label: 'Coming Soon', modules: [ModuleKeys.UTILITY] }
+  { key: 'BACKLOG', label: 'Coming Soon', modules: [] }
 ]);
 
 const MODULE_SETUP_CATALOG = Object.freeze({
@@ -220,9 +220,10 @@ const MODULE_SETUP_CATALOG = Object.freeze({
     usefulCommands: ['/feed manager', '/feed setup', '/feed add', '/feed list', '/feed edit', '/feed test', '/feed check', '/feed remove']
   },
   [ModuleKeys.UTILITY]: {
-    name: 'Utility', category: 'Coming Soon', description: 'Future utility tools module. This module is not implemented yet.',
-    managerCommand: null, setupCommand: null,
-    nextSteps: ['No setup is available yet.'], usefulCommands: []
+    name: 'Utility', category: 'Core Setup', description: 'Essential server utilities including message purge, user/server info cards, interactive polls, persistent reminders, visual embed builder, AFK auto-replies, and snipe.',
+    managerCommand: '/utility manager', setupCommand: '/utility setup',
+    nextSteps: ['Run `/utility setup` to configure default channels and limits.', 'Use `/purge` to clean up chat messages.', 'Use `/userinfo` or right-click a user to view detailed profile cards.', 'Use `/poll create` to launch interactive votes.'],
+    usefulCommands: ['/utility manager', '/utility setup', '/purge', '/userinfo', '/serverinfo', '/avatar', '/banner', '/poll create', '/remind set', '/embed create', '/afk', '/snipe']
   }
 });
 
@@ -782,6 +783,13 @@ async function getModuleStatus(guildId, row) {
     if (active > 0) return { moduleKey: row.module_key, core: false, state: 'READY', emoji: '✅', label: 'Ready', note: `${active}/${total} feed(s) active` };
     if (total > 0) return { moduleKey: row.module_key, core: false, state: 'PARTIAL', emoji: '🟠', label: 'Partially Configured', note: `${total} disabled feed(s)` };
     return { moduleKey: row.module_key, core: false, state: 'NEEDS_CONFIG', emoji: '🟣', label: 'Needs Setup', note: 'Run /feed add' };
+  }
+
+  if (row.module_key === 'UTILITY') {
+    const res = await query(`SELECT enabled, purge_enabled, polls_enabled, reminders_enabled, afk_enabled, embeds_enabled FROM utility_configs WHERE guild_id = $1 LIMIT 1`, [guildId]).catch(() => ({ rows: [] }));
+    const config = res.rows[0];
+    if (config && config.enabled === false) return { moduleKey: row.module_key, core: false, state: 'DISABLED', emoji: '⏸️', label: 'Disabled', note: 'Utility tools disabled' };
+    return { moduleKey: row.module_key, core: false, state: 'READY', emoji: '✅', label: 'Ready', note: 'Essential tools active' };
   }
 
   return { moduleKey: row.module_key, core: false, state: 'PARTIAL', emoji: '🟠', label: 'Partially Configured', note: 'Module shell only' };

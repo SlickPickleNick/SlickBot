@@ -270,7 +270,26 @@ const CustomIds = Object.freeze({
   FeedsCheckNow: 'slickbot:feeds:check-now',
   FeedsRefresh: 'slickbot:feeds:refresh',
   FeedsResetConfirmPrefix: 'slickbot:feeds:reset:confirm:',
-  FeedsResetCancelPrefix: 'slickbot:feeds:reset:cancel:'
+  FeedsResetCancelPrefix: 'slickbot:feeds:reset:cancel:',
+
+  UtilityRefresh: 'slickbot:utility:refresh',
+  UtilitySetupModal: 'slickbot:modal:utility-setup',
+  UtilityResetConfirmPrefix: 'slickbot:utility:reset:confirm:',
+  UtilityResetCancelPrefix: 'slickbot:utility:reset:cancel:',
+  UtilityToggleFeaturePrefix: 'slickbot:utility:toggle:',
+
+  PollVotePrefix: 'slickbot:poll:vote:',
+  PollSelectVotePrefix: 'slickbot:select:poll-vote:',
+  PollEndPrefix: 'slickbot:poll:end:',
+
+  ReminderCancelPrefix: 'slickbot:reminder:cancel:',
+
+  EmbedEditModalPrefix: 'slickbot:modal:embed-edit:',
+  EmbedAddFieldModalPrefix: 'slickbot:modal:embed-add-field:',
+  EmbedSendPrefix: 'slickbot:embed:send:',
+  EmbedCancelPrefix: 'slickbot:embed:cancel:',
+  EmbedEditBtnPrefix: 'slickbot:embed:edit-btn:',
+  EmbedAddFieldBtnPrefix: 'slickbot:embed:add-field-btn:'
 });
 
 module.exports = { CustomIds };
