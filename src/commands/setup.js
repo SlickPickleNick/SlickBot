@@ -29,6 +29,18 @@ module.exports = {
         .setName('moderator_role')
         .setDescription('Optional role for moderation commands.')
         .setRequired(false)
+    )
+    .addBooleanOption((option) =>
+      option
+        .setName('start_onboarding')
+        .setDescription('Launch the interactive guided setup wizard.')
+        .setRequired(false)
+    )
+    .addStringOption((option) =>
+      option
+        .setName('module')
+        .setDescription('Optionally choose a specific module key to onboard (e.g. LOGGING, WELCOME, TICKETS).')
+        .setRequired(false)
     ),
   actionKey: ActionKeys.Setup,
   moduleKey: ModuleKeys.PERMISSIONS,
@@ -124,6 +136,21 @@ module.exports = {
         moderatorRoleId: modRole?.id || null
       }
     });
+
+    const startOnboarding = interaction.options.getBoolean('start_onboarding', false);
+    const targetModule = interaction.options.getString('module', false);
+
+    if (startOnboarding || targetModule) {
+      const { OnboardingService } = require('../modules/onboarding/onboardingService');
+      const onboarding = new OnboardingService();
+      const session = targetModule
+        ? onboarding.startModuleOnboarding(interaction.guildId, interaction.user.id, targetModule.toUpperCase())
+        : onboarding.startServerOnboarding(interaction.guildId, interaction.user.id);
+
+      if (session) {
+        return replyPrivate(interaction, onboarding.buildOnboardingPayload(session));
+      }
+    }
 
     await replyPrivate(interaction, await buildSetupPanel(interaction.guildId, interaction.guild ? interaction.guild.name : null));
   }

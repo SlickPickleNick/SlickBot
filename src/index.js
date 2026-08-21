@@ -153,6 +153,18 @@ client.on(Events.GuildCreate, async (guild) => {
     targetId: guild.id,
     summary: `SlickBot joined guild ${guild.name}.`
   });
+
+  try {
+    const { OnboardingService } = require('./modules/onboarding/onboardingService');
+    const onboarding = new OnboardingService();
+    const payload = onboarding.buildGuildJoinGreetingPayload(guild);
+    const targetChannel = guild.systemChannel || guild.channels.cache.find((c) => c.isTextBased() && c.permissionsFor(guild.members.me)?.has('SendMessages'));
+    if (targetChannel && typeof targetChannel.send === 'function') {
+      await targetChannel.send(payload).catch(() => {});
+    }
+  } catch (err) {
+    console.error(`Failed to send join greeting in ${guild.name}:`, err);
+  }
 });
 
 

@@ -310,65 +310,92 @@ function categorySummary(statuses, category) {
   return `**${category.label}** — ${ready}/${items.length} ready · ${formatStateCounts(counts)}\n${compactLine(next, 110)}`;
 }
 
+async function buildCategoryPanel(guildId, categoryKey) {
+  const category = MODULE_CATEGORIES.find((cat) => cat.key === categoryKey) || MODULE_CATEGORIES[0];
+  const allStatuses = await getAllModuleStatuses(guildId);
+  const items = allStatuses.filter((item) => category.modules.includes(item.moduleKey));
+  const counts = summarizeStateCounts(items);
+
+  const lines = items.map((item) => {
+    const catalog = MODULE_SETUP_CATALOG[item.moduleKey] || {};
+    return [
+      `• ${item.emoji} **${moduleLabel(item.moduleKey)}** — \`${item.moduleKey}\` · **${item.label}**${item.note ? ` (${item.note})` : ''}`,
+      catalog.description ? `  *${catalog.description}*` : null
+    ].filter(Boolean).join('\n');
+  });
+
+  const embed = createBaseEmbed({
+    title: `SlickBot Setup Center • ${category.label}`,
+    description: [
+      `**Category:** ${category.label}`,
+      `**Category Health:** ${formatStateCounts(counts)}`,
+      '',
+      '**Modules in this Category**',
+      lines.join('\n\n') || '*No modules in this category.*',
+      '',
+      'Select any module below to open its **interactive Manager Panel**, or click **Guided Setup** for step-by-step onboarding.'
+    ].join('\n'),
+    color: SlickBotColors.PRIMARY,
+    footer: `SlickBot Setup • ${category.label}`
+  });
+
+  const selectOptions = items.map((item) => ({
+    label: moduleLabel(item.moduleKey).slice(0, 100),
+    value: item.moduleKey,
+    description: compactLine(`${item.label}${item.note ? ` · ${item.note}` : ''}`, 100),
+    emoji: item.emoji
+  }));
+
+  const selectRow = createSelectRow(CustomIds.SetupModuleSelect, `Open ${category.label} module manager...`, selectOptions.slice(0, 25));
+
+  const buttonRow = createButtonRow([
+    createPanelButton(`${CustomIds.OnboardingModulePrefix}${category.key}`, 'Guided Setup', ButtonStyle.Success, '🚀'),
+    createPanelButton(CustomIds.SetupRefresh, 'Setup Center', ButtonStyle.Secondary, '⚙️')
+  ]);
+
+  return { embeds: [embed], components: [selectRow, buttonRow] };
+}
+
 async function buildSetupPanel(guildId, guildName = null) {
   const statuses = await getAllModuleStatuses(guildId);
-  const teams = await query(
-    `SELECT COUNT(*)::int AS count FROM permission_teams WHERE guild_id = $1`,
-    [guildId]
-  ).catch(() => ({ rows: [{ count: 0 }] }));
-  const configuredLogs = await query(
-    `SELECT COUNT(*)::int AS count FROM log_module_settings WHERE guild_id = $1 AND enabled = true AND channel_id IS NOT NULL`,
-    [guildId]
-  ).catch(() => ({ rows: [{ count: 0 }] }));
-  const cases = await query(
-    `SELECT COUNT(*)::int AS count FROM moderation_cases WHERE guild_id = $1`,
-    [guildId]
-  ).catch(() => ({ rows: [{ count: 0 }] }));
-
   const counts = summarizeStateCounts(statuses);
   const needs = statuses.filter((item) => ['ERROR', 'NEEDS_CONFIG', 'PARTIAL', 'WARNING'].includes(item.state));
-  const categoryLines = MODULE_CATEGORIES.map((category) => categorySummary(statuses, category));
+  const categoryLines = MODULE_CATEGORIES.filter((c) => c.key !== 'BACKLOG').map((category) => categorySummary(statuses, category));
+
   const priorityLines = needs.length
-    ? needs.slice(0, 5).map((item) => `• ${item.emoji} **${moduleLabel(item.moduleKey)}** — ${item.note || item.label}${MODULE_SETUP_CATALOG[item.moduleKey]?.setupCommand ? ` · ${MODULE_SETUP_CATALOG[item.moduleKey].setupCommand}` : ''}`)
-    : ['• ✅ No immediate setup issues detected. Use `/bot test` for deeper diagnostics.'];
+    ? needs.slice(0, 5).map((item) => `• ${item.emoji} **${moduleLabel(item.moduleKey)}** — ${item.note || item.label}${MODULE_SETUP_CATALOG[item.moduleKey]?.setupCommand ? ` · \`${MODULE_SETUP_CATALOG[item.moduleKey].setupCommand}\`` : ''}`)
+    : ['• ✅ All configured modules are healthy and active.'];
 
   const embed = createBaseEmbed({
     title: 'SlickBot Setup Center',
     description: [
-      '**Viewing:** Main Setup Dashboard',
-      '',
       `Server: **${guildName || 'Current Server'}**`,
       '',
-      '**System Snapshot**',
-      `Module Health: ${formatStateCounts(counts)}`,
-      `Permission Teams: **${teams.rows[0]?.count || 0}**`,
-      `Configured Log Modules: **${configuredLogs.rows[0]?.count || 0}**`,
-      `Moderation Cases: **${cases.rows[0]?.count || 0}**`,
+      '**System Health Snapshot**',
+      `${formatStateCounts(counts)}`,
       '',
-      '**Setup Categories**',
+      '**Module Categories**',
       ...categoryLines,
       '',
-      '**Recommended Next Actions**',
+      '**Attention / Needs Review**',
       ...priorityLines,
       '',
-      'Open **Modules** for detailed module checklists. Use `/bot test` when something looks unhealthy or after Railway deploys.'
+      'Click a **Category** below to view and configure its modules, or launch **Guided Onboarding** for one-click setup.'
     ].join('\n'),
-    color: needs.some((item) => item.state === 'ERROR') ? SlickBotColors.ERROR : needs.length ? SlickBotColors.WARNING : SlickBotColors.PRIMARY
+    color: needs.some((item) => item.state === 'ERROR') ? SlickBotColors.ERROR : needs.length ? SlickBotColors.WARNING : SlickBotColors.PRIMARY,
+    footer: 'SlickBot Setup Center'
   });
 
   const rowOne = createButtonRow([
-    createPanelButton(CustomIds.SetupModules, 'Modules', ButtonStyle.Primary, '🧩'),
-    createPanelButton(CustomIds.SetupLogging, 'Logging', ButtonStyle.Secondary, '📋'),
-    createPanelButton(CustomIds.SetupModeration, 'Moderation', ButtonStyle.Secondary, '🛡️'),
-    createPanelButton(CustomIds.SetupSupport, 'Support', ButtonStyle.Secondary, '🎟️'),
-    createPanelButton(CustomIds.SetupStatus, 'Status', ButtonStyle.Secondary, '🟣')
+    createPanelButton(CustomIds.SetupCategoryCore, 'Core & Safety', ButtonStyle.Primary, '🛡️'),
+    createPanelButton(CustomIds.SetupCategorySupport, 'Support Systems', ButtonStyle.Primary, '🎟️'),
+    createPanelButton(CustomIds.SetupCategoryCommunity, 'Community', ButtonStyle.Primary, '✨'),
+    createPanelButton(CustomIds.SetupCategoryAutomation, 'Automation', ButtonStyle.Primary, '⚡')
   ]);
 
   const rowTwo = createButtonRow([
-    createPanelButton(CustomIds.SetupCommunity, 'Community', ButtonStyle.Secondary, '✨'),
-    createPanelButton(CustomIds.SetupTeams, 'Teams', ButtonStyle.Secondary, '👥'),
-    createPanelButton(CustomIds.SetupPermissions, 'Permissions', ButtonStyle.Secondary, '🔐'),
-    createPanelButton(CustomIds.ScheduledMessagesRefresh, 'Schedule', ButtonStyle.Secondary, '🗓️'),
+    createPanelButton(CustomIds.OnboardingStart, 'Guided Onboarding', ButtonStyle.Success, '🚀'),
+    createPanelButton(CustomIds.SetupModules, 'All Modules', ButtonStyle.Secondary, '🧩'),
     createPanelButton(CustomIds.SetupRefresh, 'Refresh', ButtonStyle.Secondary, '🔄')
   ]);
 
@@ -1096,6 +1123,7 @@ async function buildCommunityPanel(guildId) {
 module.exports = {
   ensureDefaultModules,
   buildSetupPanel,
+  buildCategoryPanel,
   buildModulesPanel,
   buildModuleDetailPanel,
   buildLoggingPanel,
@@ -1103,5 +1131,6 @@ module.exports = {
   buildPermissionsPanel,
   buildCommunityPanel,
   getModuleStatus,
-  getAllModuleStatuses
+  getAllModuleStatuses,
+  MODULE_CATEGORIES
 };

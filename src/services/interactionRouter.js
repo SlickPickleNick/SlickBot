@@ -4,7 +4,8 @@ const { ActionKeys } = require('../modules/permissions/actionKeys');
 const { ModuleKeys, isCoreModule } = require('../modules/moduleRegistry');
 const { query } = require('./db');
 const { replyPrivate, acknowledgeQuietly } = require('../utils/reply');
-const { buildSetupPanel, buildModulesPanel, buildModuleDetailPanel, buildLoggingPanel, buildTeamsPanel, buildPermissionsPanel, buildCommunityPanel } = require('../modules/ui/panels');
+const { buildSetupPanel, buildCategoryPanel, buildModulesPanel, buildModuleDetailPanel, buildLoggingPanel, buildTeamsPanel, buildPermissionsPanel, buildCommunityPanel } = require('../modules/ui/panels');
+const { OnboardingService } = require('../modules/onboarding/onboardingService');
 const { buildHelpPayload } = require('../modules/help/helpService');
 const { buildModerationPanel, buildRecentCasesPanel } = require('../modules/moderation/moderationUi');
 const { buildStatusPanel, buildStatusActivityTextModal } = require('../commands/status');
@@ -69,6 +70,7 @@ const achievements = new AchievementService();
 const lockdown = new LockdownService();
 const socialFeeds = new SocialFeedService();
 const botUpdates = new BotUpdatesService();
+const onboarding = new OnboardingService();
 
 async function handleComponentInteraction(interaction, ctx) {
   if (!interaction.guildId) {
@@ -92,7 +94,7 @@ async function handleComponentInteraction(interaction, ctx) {
   }
 
   if (interaction.isButton()) return handleButton(interaction, ctx);
-  if (interaction.isStringSelectMenu() || interaction.isUserSelectMenu()) return handleSelect(interaction, ctx);
+  if (interaction.isStringSelectMenu() || interaction.isUserSelectMenu() || interaction.isChannelSelectMenu() || interaction.isRoleSelectMenu()) return handleSelect(interaction, ctx);
   if (interaction.isModalSubmit()) return handleModal(interaction, ctx);
   return false;
 }
@@ -458,6 +460,86 @@ async function handleButton(interaction, ctx) {
     return true;
   }
 
+  if (id === CustomIds.SetupCategoryCore) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.Setup, ModuleKeys.PERMISSIONS))) return true;
+    await updatePanel(interaction, await buildCategoryPanel(interaction.guildId, 'CORE'));
+    return true;
+  }
+
+  if (id === CustomIds.SetupCategorySupport) {
+    if (!(await requireAnySupportAction(interaction, ctx))) return true;
+    await updatePanel(interaction, await buildCategoryPanel(interaction.guildId, 'SUPPORT'));
+    return true;
+  }
+
+  if (id === CustomIds.SetupCategoryCommunity) {
+    if (!(await requireAnyCommunityAction(interaction, ctx))) return true;
+    await updatePanel(interaction, await buildCategoryPanel(interaction.guildId, 'COMMUNITY'));
+    return true;
+  }
+
+  if (id === CustomIds.SetupCategoryAutomation) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.Setup, ModuleKeys.PERMISSIONS))) return true;
+    await updatePanel(interaction, await buildCategoryPanel(interaction.guildId, 'AUTOMATION'));
+    return true;
+  }
+
+  if (id === CustomIds.OnboardingStart || id === CustomIds.OnboardingServerStart) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.Setup, ModuleKeys.PERMISSIONS))) return true;
+    const session = onboarding.startServerOnboarding(interaction.guildId, interaction.user.id);
+    await updatePanel(interaction, onboarding.buildOnboardingPayload(session));
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.OnboardingModulePrefix)) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.Setup, ModuleKeys.PERMISSIONS))) return true;
+    const target = id.slice(CustomIds.OnboardingModulePrefix.length);
+    const { MODULE_CATEGORIES } = require('../modules/ui/panels');
+    const { ONBOARDING_STEPS } = require('../modules/onboarding/onboardingService');
+    const category = MODULE_CATEGORIES.find((c) => c.key === target);
+    const targetModule = category ? category.modules.find((m) => ONBOARDING_STEPS[m]) || category.modules[0] : target;
+    const session = onboarding.startModuleOnboarding(interaction.guildId, interaction.user.id, targetModule);
+    if (!session) {
+      return replyPrivate(interaction, { embeds: [createWarningEmbed('No Onboarding Available', `Guided setup is not yet configured for ${target}. Use the module manager panel instead.`)], deleteAfterSeconds: 10 });
+    }
+    await updatePanel(interaction, onboarding.buildOnboardingPayload(session));
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.OnboardingAutoCreatePrefix)) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.Setup, ModuleKeys.PERMISSIONS))) return true;
+    const sessionId = id.slice(CustomIds.OnboardingAutoCreatePrefix.length);
+    const session = onboarding.getSession(sessionId, interaction.user.id);
+    if (!session) return replyPrivate(interaction, { embeds: [createWarningEmbed('Onboarding Expired', 'This onboarding session has expired or belongs to another user. Please launch onboarding again.')], deleteAfterSeconds: 10 });
+    const currentStep = session.steps[session.stepIndex];
+    if (currentStep && typeof currentStep.autoCreate === 'function') {
+      try {
+        await currentStep.autoCreate(interaction.guild, session);
+      } catch (err) {
+        return replyPrivate(interaction, { embeds: [createWarningEmbed('Auto-Creation Failed', err instanceof Error ? err.message : String(err))] });
+      }
+    }
+    await onboarding.advanceSession(session, interaction.guild, 'AUTO_CREATE');
+    await updatePanel(interaction, onboarding.buildOnboardingPayload(session));
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.OnboardingSkipPrefix)) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.Setup, ModuleKeys.PERMISSIONS))) return true;
+    const sessionId = id.slice(CustomIds.OnboardingSkipPrefix.length);
+    const session = onboarding.getSession(sessionId, interaction.user.id);
+    if (!session) return replyPrivate(interaction, { embeds: [createWarningEmbed('Onboarding Expired', 'This onboarding session has expired or belongs to another user. Please launch onboarding again.')], deleteAfterSeconds: 10 });
+    await onboarding.advanceSession(session, interaction.guild, 'SKIP');
+    await updatePanel(interaction, onboarding.buildOnboardingPayload(session));
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.OnboardingCancelPrefix)) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.Setup, ModuleKeys.PERMISSIONS))) return true;
+    await updatePanel(interaction, await buildSetupPanel(interaction.guildId, interaction.guild ? interaction.guild.name : null));
+    return true;
+  }
+
   if (id === CustomIds.SetupModules || id === CustomIds.ModulesRefresh) {
     if (!(await requireAction(interaction, ctx, ActionKeys.ModulesManage, ModuleKeys.PERMISSIONS))) return true;
     await updatePanel(interaction, await buildModulesPanel(interaction.guildId));
@@ -475,7 +557,6 @@ async function handleButton(interaction, ctx) {
     await updatePanel(interaction, await buildTeamsPanel(interaction.guildId));
     return true;
   }
-
 
   if (id === CustomIds.SetupPermissions || id === CustomIds.PermissionsRefresh) {
     if (!(await requireAction(interaction, ctx, ActionKeys.PermissionsPanel, ModuleKeys.PERMISSIONS))) return true;
@@ -1389,6 +1470,119 @@ async function handleButton(interaction, ctx) {
 
 async function handleSelect(interaction, ctx) {
   const id = interaction.customId;
+
+  if (id === CustomIds.SetupModuleSelect) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.Setup, ModuleKeys.PERMISSIONS))) return true;
+    const moduleKey = interaction.values?.[0];
+    if (!moduleKey) return true;
+
+    switch (moduleKey) {
+      case ModuleKeys.PERMISSIONS:
+        await updatePanel(interaction, await buildPermissionsPanel(interaction.guildId));
+        break;
+      case ModuleKeys.LOGGING:
+        await updatePanel(interaction, await buildLoggingPanel(interaction.guildId));
+        break;
+      case ModuleKeys.STATUS:
+        await updatePanel(interaction, await buildStatusPanel(interaction.guildId, ctx));
+        break;
+      case ModuleKeys.MODERATION:
+        await updatePanel(interaction, await buildModerationPanel(interaction.guildId));
+        break;
+      case ModuleKeys.TEMP_ROLES:
+        await updatePanel(interaction, await tempRoles.buildManagerPanel(interaction.guildId));
+        break;
+      case ModuleKeys.LOCKDOWN:
+        await updatePanel(interaction, await lockdown.buildManagerPanel(interaction.guildId));
+        break;
+      case ModuleKeys.TICKETS:
+        await updatePanel(interaction, await buildTicketsPanel(interaction.guildId));
+        break;
+      case ModuleKeys.REPORTS:
+        await updatePanel(interaction, await buildReportsPanel(interaction.guildId));
+        break;
+      case ModuleKeys.APPLICATIONS:
+        await updatePanel(interaction, await buildApplicationsPanel(interaction.guildId));
+        break;
+      case ModuleKeys.APPEALS:
+        await updatePanel(interaction, await buildAppealsPanel(interaction.guildId));
+        break;
+      case ModuleKeys.WELCOME:
+        await updatePanel(interaction, await buildWelcomePanel(interaction.guildId));
+        break;
+      case ModuleKeys.REACTION_ROLES:
+        await updatePanel(interaction, await buildRoleManagerPanel(interaction.guildId));
+        break;
+      case ModuleKeys.GIVEAWAYS:
+        await updatePanel(interaction, await giveaways.buildManagerPanel(interaction.guildId));
+        break;
+      case ModuleKeys.BIRTHDAYS:
+        await updatePanel(interaction, await birthdays.buildManagerPanel(interaction.guildId));
+        break;
+      case ModuleKeys.LEVELING:
+        await updatePanel(interaction, await leveling.buildManagerPanel(interaction.guildId));
+        break;
+      case ModuleKeys.ACHIEVEMENTS:
+        await updatePanel(interaction, await achievements.buildManagerPanel(interaction.guildId));
+        break;
+      case ModuleKeys.COMMUNITY_GAMES:
+        await updatePanel(interaction, await communityGames.buildManagerPanel(interaction.guildId));
+        break;
+      case ModuleKeys.SUGGESTIONS:
+        await updatePanel(interaction, await suggestions.buildManagerPanel(interaction.guildId));
+        break;
+      case ModuleKeys.FAQ:
+        await updatePanel(interaction, await faq.buildManagerPanel(interaction.guildId));
+        break;
+      case ModuleKeys.REFERRALS:
+        await updatePanel(interaction, await referrals.buildManagerPanel(interaction.guildId));
+        break;
+      case ModuleKeys.SERVER_STATS:
+        await updatePanel(interaction, await serverStats.buildManagerPanel(interaction.guild));
+        break;
+      case ModuleKeys.CUSTOM_COMMANDS:
+        await updatePanel(interaction, await customCommands.buildManagerPanel(interaction.guildId));
+        break;
+      case ModuleKeys.JOIN_TO_CREATE:
+        await updatePanel(interaction, await joinCreate.buildManagerPanel(interaction.guild));
+        break;
+      case ModuleKeys.SCHEDULED_MESSAGES:
+        await updatePanel(interaction, await scheduledMessages.buildManagerPanel(interaction.guildId));
+        break;
+      case ModuleKeys.BOT_UPDATES:
+        await updatePanel(interaction, await botUpdates.buildStatusPanel(interaction.guildId));
+        break;
+      case ModuleKeys.SOCIAL_FEEDS:
+        await updatePanel(interaction, await socialFeeds.buildManagerPanel(interaction.guildId));
+        break;
+      default:
+        await updatePanel(interaction, await buildModuleDetailPanel(interaction.guildId, moduleKey));
+        break;
+    }
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.OnboardingChannelSelectPrefix) || id.startsWith(CustomIds.OnboardingRoleSelectPrefix)) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.Setup, ModuleKeys.PERMISSIONS))) return true;
+    const isChannel = id.startsWith(CustomIds.OnboardingChannelSelectPrefix);
+    const prefix = isChannel ? CustomIds.OnboardingChannelSelectPrefix : CustomIds.OnboardingRoleSelectPrefix;
+    const sessionId = id.slice(prefix.length);
+    const session = onboarding.getSession(sessionId, interaction.user.id);
+    if (!session) return replyPrivate(interaction, { embeds: [createWarningEmbed('Session Expired', 'This onboarding session has expired. Please launch onboarding again.')], deleteAfterSeconds: 10 });
+
+    const selectedValue = interaction.values?.[0];
+    const currentStep = session.steps[session.stepIndex];
+    if (currentStep && typeof currentStep.applySelection === 'function' && selectedValue) {
+      try {
+        await currentStep.applySelection(interaction.guild, selectedValue, session);
+      } catch (err) {
+        return replyPrivate(interaction, { embeds: [createWarningEmbed('Selection Failed', err instanceof Error ? err.message : String(err))] });
+      }
+    }
+    await onboarding.advanceSession(session, interaction.guild, 'SELECTION');
+    await updatePanel(interaction, onboarding.buildOnboardingPayload(session));
+    return true;
+  }
 
   if (id.startsWith(CustomIds.GamePanelOpponentSelectPrefix)) {
     if (!(await requirePublicAction(interaction, ctx, ActionKeys.GamesPlay, ModuleKeys.COMMUNITY_GAMES))) return true;
