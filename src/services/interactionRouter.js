@@ -585,6 +585,57 @@ async function handleButton(interaction, ctx) {
     return true;
   }
 
+  if (id === CustomIds.LoggingTest) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.LoggingConfigure, ModuleKeys.LOGGING))) return true;
+    const res = await ctx.logger.testAllHubs(interaction.guild, interaction.user);
+    const sentCount = res.filter((r) => r.sent).length;
+    const embed = createSuccessEmbed(
+      '🧪 Logging Test Dispatched',
+      `Sent test log embeds to **${sentCount}/${res.length}** configured logging hubs.\nCheck your server log channels for delivery!`
+    );
+    await replyPrivate(interaction, { embeds: [embed] });
+    return true;
+  }
+
+  if (id === CustomIds.LoggingReset) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.LoggingConfigure, ModuleKeys.LOGGING))) return true;
+    const confirmEmbed = createWarningEmbed(
+      '⚠️ Confirm Logging Reset',
+      'Are you sure you want to reset all logging configuration?\n\n' +
+      '• All 30 module routes across all 6 hubs will be unlinked.\n' +
+      '• All event overrides will be cleared.\n' +
+      '• Existing channels will NOT be deleted from Discord.\n\n' +
+      'You can re-run `/logging setup` or use the Quick Setup wizard at any time.'
+    );
+    const row = createButtonRow([
+      createPanelButton(CustomIds.LoggingResetConfirm, 'Confirm Reset', ButtonStyle.Danger, '⚠️'),
+      createPanelButton(CustomIds.LoggingResetCancel, 'Cancel', ButtonStyle.Secondary, '❌')
+    ]);
+    await updatePanel(interaction, { embeds: [confirmEmbed], components: [row] });
+    return true;
+  }
+
+  if (id === CustomIds.LoggingResetConfirm) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.LoggingConfigure, ModuleKeys.LOGGING))) return true;
+    await ctx.logger.resetGuildLogging(interaction.guildId);
+    await ctx.logger.writeAudit({
+      guildId: interaction.guildId,
+      actorUserId: interaction.user.id,
+      actionKey: ActionKeys.LoggingConfigure,
+      targetType: 'GuildConfig',
+      targetId: interaction.guildId,
+      summary: 'Reset all logging routes and configuration.'
+    });
+    await updatePanel(interaction, await buildLoggingPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id === CustomIds.LoggingResetCancel) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.LoggingView, ModuleKeys.LOGGING))) return true;
+    await updatePanel(interaction, await buildLoggingPanel(interaction.guildId));
+    return true;
+  }
+
   if (id === CustomIds.SetupTeams) {
     if (!(await requireAction(interaction, ctx, ActionKeys.TeamsManage, ModuleKeys.PERMISSIONS))) return true;
     await updatePanel(interaction, await buildTeamsPanel(interaction.guildId));

@@ -854,14 +854,18 @@ async function buildLoggingPanel(guildId) {
     footer: 'SlickBot Logging • Instant Delivery'
   });
 
-  const row = createButtonRow([
+  const row1 = createButtonRow([
     createPanelButton(`${CustomIds.OnboardingModulePrefix}LOGGING`, 'Quick Setup (All 6 Hubs)', ButtonStyle.Success, '🚀'),
     createPanelButton(CustomIds.LoggingTest, 'Send Test', ButtonStyle.Primary, '🧪'),
+    createPanelButton(CustomIds.LoggingReset, 'Reset All', ButtonStyle.Danger, '🗑️')
+  ]);
+
+  const row2 = createButtonRow([
     createPanelButton(CustomIds.LoggingRefresh, 'Refresh', ButtonStyle.Secondary, '🔄'),
     createPanelButton(CustomIds.SetupRefresh, 'Setup Center', ButtonStyle.Secondary, '⚙️')
   ]);
 
-  return { embeds: [embed], components: [row] };
+  return { embeds: [embed], components: [row1, row2] };
 }
 
 async function buildTeamsPanel(guildId) {

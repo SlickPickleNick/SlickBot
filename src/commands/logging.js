@@ -189,6 +189,11 @@ module.exports = {
             .setRequired(false)
             .setAutocomplete(true)
         )
+    )
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName('reset')
+        .setDescription('Reset all logging routes, channels, and event overrides.')
     ),
   actionKey: ActionKeys.LoggingConfigure,
   moduleKey: ModuleKeys.LOGGING,
@@ -196,6 +201,24 @@ module.exports = {
     const subcommand = interaction.options.getSubcommand();
 
     await ctx.permissions.ensureGuildConfig(interaction.guildId, interaction.guild ? interaction.guild.name : null);
+
+    if (subcommand === 'reset') {
+      await ctx.logger.resetGuildLogging(interaction.guildId);
+      await ctx.logger.writeAudit({
+        guildId: interaction.guildId,
+        actorUserId: interaction.user.id,
+        actionKey: ActionKeys.LoggingConfigure,
+        targetType: 'GuildConfig',
+        targetId: interaction.guildId,
+        summary: 'Reset all logging routes and configuration.'
+      });
+      const embed = createSuccessEmbed(
+        'Logging Configuration Reset',
+        'All logging channels, module routes, and event overrides have been wiped.\nYou can now configure logging from scratch using `/logging setup` or the Quick Setup wizard.'
+      );
+      await replyPrivate(interaction, { embeds: [embed] });
+      return;
+    }
 
     if (subcommand === 'panel' || subcommand === 'manager') {
       await replyPrivate(interaction, await buildLoggingPanel(interaction.guildId));
@@ -211,8 +234,7 @@ module.exports = {
       const supportChannel = interaction.options.getChannel('support_channel');
       const communityChannel = interaction.options.getChannel('community_channel');
 
-      const { LoggingService } = require('../modules/logging/loggingService');
-      const logging = new LoggingService();
+      const logging = ctx.logger;
 
       if (autoCreate) {
         if (!interaction.guild) {
@@ -223,7 +245,7 @@ module.exports = {
           `Category: **${created.category.name}**`,
           ...Object.entries(created.createdChannels).map(([k, ch]) => `• ${k}: <#${ch.id}>`),
           '',
-          '✅ All 27 tracking modules have been wired to your new logging category.'
+          `✅ All ${LogModuleCatalog.length} tracking modules have been wired to your new logging category and setup guides have been posted and pinned.`
         ];
         await replyPrivate(interaction, { embeds: [createSuccessEmbed('Server Logging Auto-Created', lines.join('\n'))] });
         return;
@@ -260,7 +282,7 @@ module.exports = {
         supportChannel ? `• 🎟️ Support & Tickets: <#${supportChannel.id}>` : null,
         communityChannel ? `• ✨ Community & Feeds: <#${communityChannel.id}>` : null,
         '',
-        'All associated event modules have been routed to these log hubs.'
+        'All associated event modules have been routed to these log hubs and setup guides have been posted.'
       ].filter(Boolean);
 
       await replyPrivate(interaction, { embeds: [createSuccessEmbed('Logging Hubs Configured', summaryLines.join('\n'))] });
@@ -272,20 +294,7 @@ module.exports = {
       const channel = interaction.options.getChannel('channel', true);
       const logModule = getLogModule(moduleKey);
 
-      await query(
-        `INSERT INTO log_module_settings (guild_id, module_key, delivery_mode, channel_id, enabled)
-         VALUES ($1, $2, $3, $4, true)
-         ON CONFLICT (guild_id, module_key)
-         DO UPDATE SET
-           channel_id = EXCLUDED.channel_id,
-           enabled = true,
-           delivery_mode = CASE
-             WHEN log_module_settings.delivery_mode = 'DISABLED' THEN EXCLUDED.delivery_mode
-             ELSE log_module_settings.delivery_mode
-           END,
-           updated_at = NOW()`,
-        [interaction.guildId, moduleKey, logModule?.defaultDelivery || LogDeliveryMode.IMMEDIATE, channel.id]
-      );
+      await ctx.logger.setModuleChannel(interaction.guildId, moduleKey, channel.id, logModule?.defaultDelivery || LogDeliveryMode.IMMEDIATE);
 
       await ctx.logger.writeAudit({
         guildId: interaction.guildId,
@@ -310,6 +319,7 @@ module.exports = {
          DO UPDATE SET channel_id = NULL, enabled = false, delivery_mode = 'DISABLED', updated_at = NOW()`,
         [interaction.guildId, moduleKey]
       );
+      ctx.logger.invalidateRouting(interaction.guildId);
 
       await ctx.logger.writeAudit({
         guildId: interaction.guildId,
@@ -338,6 +348,7 @@ module.exports = {
            updated_at = NOW()`,
         [interaction.guildId, moduleKey, delivery, delivery !== LogDeliveryMode.DISABLED]
       );
+      ctx.logger.invalidateRouting(interaction.guildId);
 
       await replyPrivate(interaction, await buildLoggingPanel(interaction.guildId));
       return;
@@ -357,6 +368,7 @@ module.exports = {
            updated_at = NOW()`,
         [interaction.guildId, eventKey, delivery, delivery !== LogDeliveryMode.DISABLED]
       );
+      ctx.logger.invalidateRouting(interaction.guildId);
 
       await replyPrivate(interaction, await buildLoggingPanel(interaction.guildId));
       return;
@@ -365,19 +377,8 @@ module.exports = {
     if (subcommand === 'event-channel') {
       const eventKey = String(interaction.options.getString('event', true)).trim().toLowerCase();
       const channel = interaction.options.getChannel('channel', true);
-      const event = getLogEvent(eventKey);
 
-      await query(
-        `INSERT INTO log_settings (guild_id, event_key, delivery_mode, channel_id, enabled)
-         VALUES ($1, $2, $3, $4, true)
-         ON CONFLICT (guild_id, event_key)
-         DO UPDATE SET
-           channel_id = EXCLUDED.channel_id,
-           enabled = true,
-           delivery_mode = COALESCE(log_settings.delivery_mode, EXCLUDED.delivery_mode),
-           updated_at = NOW()`,
-        [interaction.guildId, eventKey, event?.defaultDelivery || LogDeliveryMode.IMMEDIATE, channel.id]
-      );
+      await ctx.logger.setEventChannel(interaction.guildId, eventKey, channel.id);
 
       await replyPrivate(interaction, await buildLoggingPanel(interaction.guildId));
       return;
@@ -389,6 +390,7 @@ module.exports = {
         `DELETE FROM log_settings WHERE guild_id = $1 AND event_key = $2`,
         [interaction.guildId, eventKey]
       );
+      ctx.logger.invalidateRouting(interaction.guildId);
       await replyPrivate(interaction, await buildLoggingPanel(interaction.guildId));
       return;
     }

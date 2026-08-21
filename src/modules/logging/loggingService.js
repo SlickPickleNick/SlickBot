@@ -24,10 +24,38 @@ function resolveLogColor(eventKey, explicitColor) {
   return 0x5865f2;
 }
 
+let defaultDiscordClient = null;
+
 class LoggingService {
   constructor(client) {
-    this.client = client;
+    if (client) {
+      this.client = client;
+      defaultDiscordClient = client;
+    } else if (defaultDiscordClient) {
+      this.client = defaultDiscordClient;
+    } else {
+      this.client = null;
+    }
     this.routingCache = new Map();
+  }
+
+  setClient(client) {
+    if (client) {
+      this.client = client;
+      defaultDiscordClient = client;
+    }
+  }
+
+  static setDefaultClient(client) {
+    if (client) defaultDiscordClient = client;
+  }
+
+  async resetGuildLogging(guildId) {
+    await query(`DELETE FROM log_module_settings WHERE guild_id = $1`, [guildId]);
+    await query(`DELETE FROM log_settings WHERE guild_id = $1`, [guildId]);
+    await query(`UPDATE guild_configs SET default_log_channel_id = NULL, updated_at = NOW() WHERE guild_id = $1`, [guildId]).catch(() => {});
+    this.invalidateRouting(guildId);
+    return { success: true };
   }
 
   invalidateRouting(guildId) {
@@ -204,11 +232,29 @@ class LoggingService {
   }
 
   async fetchSendableChannel(channelId) {
-    if (!this.client?.channels?.fetch) return null;
-    const channel = await this.client.channels.fetch(channelId).catch(() => null);
+    const client = this.client || defaultDiscordClient;
+    if (!client?.channels?.fetch) return null;
+    const channel = await client.channels.fetch(channelId).catch(() => null);
     if (!channel || !channel.isTextBased || !channel.isTextBased()) return null;
     if (typeof channel.send !== 'function') return null;
     return channel;
+  }
+
+  async setEventChannel(guildId, eventKey, channelId, deliveryMode = LogDeliveryMode.IMMEDIATE) {
+    const cleanKey = String(eventKey).trim().toLowerCase();
+    const event = getLogEvent(cleanKey);
+    await query(
+      `INSERT INTO log_settings (guild_id, event_key, delivery_mode, channel_id, enabled)
+       VALUES ($1, $2, $3, $4, true)
+       ON CONFLICT (guild_id, event_key)
+       DO UPDATE SET
+         channel_id = EXCLUDED.channel_id,
+         enabled = true,
+         delivery_mode = COALESCE(log_settings.delivery_mode, EXCLUDED.delivery_mode),
+         updated_at = NOW()`,
+      [guildId, cleanKey, deliveryMode || event?.defaultDelivery || LogDeliveryMode.IMMEDIATE, channelId]
+    );
+    this.invalidateRouting(guildId);
   }
 
   buildChannelGuideEmbed({ group = null, modules = [] }) {

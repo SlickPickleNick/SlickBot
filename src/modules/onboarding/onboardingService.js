@@ -147,7 +147,7 @@ const ONBOARDING_STEPS = Object.freeze({
         const existing = guild.channels.cache.find((c) => c.name.toLowerCase().includes('log') && c.type === ChannelType.GuildText);
         if (existing) {
           const { LoggingService } = require('../logging/loggingService');
-          const logging = new LoggingService();
+          const logging = new LoggingService(guild.client);
           await logging.setModuleChannel(guild.id, 'core', existing.id);
           return { result: `Routed to <#${existing.id}>` };
         }
@@ -155,14 +155,14 @@ const ONBOARDING_STEPS = Object.freeze({
       },
       async applySelection(guild, channelId) {
         const { LoggingService } = require('../logging/loggingService');
-        const logging = new LoggingService();
+        const logging = new LoggingService(guild.client);
         await logging.setModuleChannel(guild.id, 'core', channelId);
       },
       async autoCreate(guild) {
         const botLogs = await autoCreateChannel(guild, { name: 'bot-logs', isPrivate: true, reason: 'SlickBot Audit Log Channel' });
         const modLogs = await autoCreateChannel(guild, { name: 'mod-logs', isPrivate: true, reason: 'SlickBot Moderation Log Channel' });
         const { LoggingService } = require('../logging/loggingService');
-        const logging = new LoggingService();
+        const logging = new LoggingService(guild.client);
         await logging.setModuleChannel(guild.id, 'core', botLogs.id);
         await logging.setModuleChannel(guild.id, 'moderation', modLogs.id);
         return { created: `#${botLogs.name}, #${modLogs.name}` };

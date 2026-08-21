@@ -65,6 +65,8 @@ test('LoggingService methods and cache lifecycle', () => {
   assert.equal(typeof service.getLogGroupChannels, 'function');
   assert.equal(typeof service.autoCreateAllLogChannels, 'function');
   assert.equal(typeof service.testAllHubs, 'function');
+  assert.equal(typeof service.setEventChannel, 'function');
+  assert.equal(typeof service.resetGuildLogging, 'function');
 
   // Invalidate cache
   service.routingCache.set('g1:member-join', { test: true });
