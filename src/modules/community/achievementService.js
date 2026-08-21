@@ -998,6 +998,11 @@ class AchievementService {
 
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
+        .setCustomId(`${CustomIds.OnboardingModulePrefix}ACHIEVEMENTS`)
+        .setLabel('Quick Setup')
+        .setStyle(ButtonStyle.Success)
+        .setEmoji('🚀'),
+      new ButtonBuilder()
         .setCustomId(CustomIds.AchievementsToggleDm)
         .setLabel(config.dm_enabled ? 'Disable DMs' : 'Enable DMs')
         .setStyle(config.dm_enabled ? ButtonStyle.Secondary : ButtonStyle.Primary)

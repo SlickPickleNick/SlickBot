@@ -215,6 +215,11 @@ class ScheduledMessageService {
 
     const row2 = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
+        .setCustomId(`${CustomIds.OnboardingModulePrefix}SCHEDULED_MESSAGES`)
+        .setLabel('Quick Setup')
+        .setStyle(ButtonStyle.Success)
+        .setEmoji('🚀'),
+      new ButtonBuilder()
         .setCustomId(CustomIds.ScheduledMessagesRefresh)
         .setLabel('Refresh')
         .setStyle(ButtonStyle.Secondary)

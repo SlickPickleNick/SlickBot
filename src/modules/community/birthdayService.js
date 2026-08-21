@@ -592,6 +592,63 @@ class BirthdayService {
       }
     }
   }
+
+  async buildManagerPanel(guildId) {
+    const config = await this.getConfig(guildId);
+    const countRes = await query(`SELECT COUNT(*)::int AS count FROM birthday_profiles WHERE guild_id = $1 AND active = true`, [guildId]).catch(() => ({ rows: [{ count: 0 }] }));
+    const activeCount = countRes.rows[0]?.count || 0;
+    const enabled = config?.enabled ?? false;
+
+    const embed = createBaseEmbed({
+      title: 'SlickBot Community Setup • Birthday Manager',
+      description: [
+        '**Viewing:** Birthday Automation',
+        '',
+        `Status: **${enabled ? '🟢 Enabled' : '⏸️ Disabled'}**`,
+        `Announcement Channel: ${config?.channel_id ? `<#${config.channel_id}>` : '*Not set (use `/birthday setup`)*'}`,
+        `Birthday Role: ${config?.birthday_role_id ? `<@&${config.birthday_role_id}>` : '*None*'}`,
+        `Default Timezone: \`${config?.timezone || 'America/New_York'}\``,
+        `Registered Birthdays: **${activeCount} member(s)**`,
+        '',
+        '**Announcement Template**',
+        `\`\`\`\n${config?.announcement_template || 'Happy Birthday {user}! 🎂 Hope you have a wonderful day!'}\n\`\`\``,
+        '',
+        'Use the controls below to configure announcement settings, preview the message, or launch the self-registration panel.'
+      ].join('\n'),
+      color: enabled ? SlickBotColors.SUCCESS : SlickBotColors.PRIMARY,
+      footer: 'SlickBot Birthdays'
+    });
+
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`${CustomIds.OnboardingModulePrefix}BIRTHDAYS`)
+        .setLabel('Quick Setup')
+        .setStyle(ButtonStyle.Success)
+        .setEmoji('🚀'),
+      new ButtonBuilder()
+        .setCustomId(CustomIds.BirthdaysToggle)
+        .setLabel(enabled ? 'Disable' : 'Enable')
+        .setStyle(enabled ? ButtonStyle.Danger : ButtonStyle.Success)
+        .setEmoji(enabled ? '⏸️' : '▶️'),
+      new ButtonBuilder()
+        .setCustomId(CustomIds.BirthdaysEditModal)
+        .setLabel('Edit Template')
+        .setStyle(ButtonStyle.Secondary)
+        .setEmoji('✏️'),
+      new ButtonBuilder()
+        .setCustomId(CustomIds.BirthdaysTest)
+        .setLabel('Send Test')
+        .setStyle(ButtonStyle.Secondary)
+        .setEmoji('🧪'),
+      new ButtonBuilder()
+        .setCustomId(CustomIds.SetupRefresh)
+        .setLabel('Setup Center')
+        .setStyle(ButtonStyle.Secondary)
+        .setEmoji('⚙️')
+    );
+
+    return { embeds: [embed], components: [row] };
+  }
 }
 
 function birthdaySavedEmbed(profile) {

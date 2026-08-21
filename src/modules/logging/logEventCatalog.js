@@ -297,35 +297,116 @@ const LogEventCatalog = Object.freeze([
 ]);
 
 const StarterLogModuleKeys = Object.freeze(['core', 'moderation']);
-const StarterLogEventKeys = Object.freeze(['system', 'setup', 'module-config', 'permission-team', 'status', 'moderation', 'cases', 'user-notes']);
+const StarterLogEventKeys = Object.freeze(['system-startup', 'permission-update', 'mod-case-create', 'mod-note-create']);
+const LOG_GROUPS = Object.freeze([
+  {
+    key: 'CORE_SYSTEM',
+    label: 'Core & System Logs',
+    emoji: '🛡️',
+    description: 'System startup, configuration changes, permission updates, bot status, and server stats.',
+    defaultChannelName: 'bot-logs',
+    moduleKeys: ['core', 'server-stats', 'bot-updates']
+  },
+  {
+    key: 'MODERATION_SAFETY',
+    label: 'Moderation & Safety Logs',
+    emoji: '⚖️',
+    description: 'Moderation actions, warnings, bans, case logs, user notes, lockdown emergencies, and temporary roles.',
+    defaultChannelName: 'mod-logs',
+    moduleKeys: ['moderation', 'lockdown', 'temp-roles']
+  },
+  {
+    key: 'MEMBER_MESSAGE',
+    label: 'Member & Message Activity',
+    emoji: '👥',
+    description: 'Member joins, leaves, profile updates, nickname changes, role assignments, message edits, and deletions.',
+    defaultChannelName: 'member-logs',
+    moduleKeys: ['member', 'message']
+  },
+  {
+    key: 'VOICE_ACTIVITY',
+    label: 'Voice Activity Logs',
+    emoji: '🎙️',
+    description: 'Voice joins, leaves, moves, and Join-to-Create voice session activity.',
+    defaultChannelName: 'voice-logs',
+    moduleKeys: ['voice', 'join-create']
+  },
+  {
+    key: 'SUPPORT_TICKETS',
+    label: 'Support & Tickets Logs',
+    emoji: '🎟️',
+    description: 'Support ticket opens, claims, closes, transcripts, user reports, staff applications, and punishment appeals.',
+    defaultChannelName: 'support-logs',
+    moduleKeys: ['tickets', 'reports', 'applications', 'appeals']
+  },
+  {
+    key: 'COMMUNITY_FEEDS',
+    label: 'Community & Engagement Logs',
+    emoji: '✨',
+    description: 'Welcome greetings, reaction roles, giveaways, birthdays, leveling XP, achievements, games, suggestions, FAQ, referrals, custom commands, scheduled messages, and social feeds.',
+    defaultChannelName: 'community-logs',
+    moduleKeys: [
+      'welcome',
+      'reaction-roles',
+      'giveaways',
+      'birthdays',
+      'leveling',
+      'community-games',
+      'faq',
+      'suggestions',
+      'referrals',
+      'achievements',
+      'custom-commands',
+      'scheduled-messages',
+      'social-feeds'
+    ]
+  }
+]);
 
-function getLogModule(moduleKey) {
-  return LogModuleCatalog.find((module) => module.key === moduleKey) || null;
+function getLogModule(key) {
+  if (!key) return null;
+  const lower = String(key).trim().toLowerCase();
+  return LogModuleCatalog.find((m) => m.key.toLowerCase() === lower) || null;
 }
 
-function getLogEvent(eventKey) {
-  return LogEventCatalog.find((event) => event.key === eventKey) || null;
+function getLogEvent(key) {
+  if (!key) return null;
+  const lower = String(key).trim().toLowerCase();
+  return LogEventCatalog.find((e) => e.key.toLowerCase() === lower) || null;
 }
 
 function getLogModuleChoices() {
-  return LogModuleCatalog.slice(0, 25).map((module) => ({ name: module.label, value: module.key }));
+  return LogModuleCatalog.map((m) => ({ name: `${m.label} (${m.key})`, value: m.key }));
 }
 
 function getLogEventChoices() {
-  return LogEventCatalog.slice(0, 25).map((event) => ({ name: `${event.label} (${event.moduleKey})`, value: event.key }));
+  return LogEventCatalog.slice(0, 25).map((e) => ({ name: `${e.label} (${e.key})`, value: e.key }));
 }
 
 function getEventsForModule(moduleKey) {
-  return LogEventCatalog.filter((event) => event.moduleKey === moduleKey);
+  if (!moduleKey) return [];
+  const lower = String(moduleKey).trim().toLowerCase();
+  return LogEventCatalog.filter((e) => e.moduleKey.toLowerCase() === lower);
+}
+
+function getLogGroup(groupKeyOrModuleKey) {
+  if (!groupKeyOrModuleKey) return null;
+  const target = String(groupKeyOrModuleKey).trim().toLowerCase();
+  return LOG_GROUPS.find((group) =>
+    group.key.toLowerCase() === target ||
+    group.moduleKeys.some((k) => k.toLowerCase() === target)
+  ) || null;
 }
 
 module.exports = {
   LogModuleCatalog,
   LogEventCatalog,
+  LOG_GROUPS,
   StarterLogModuleKeys,
   StarterLogEventKeys,
   getLogModule,
   getLogEvent,
+  getLogGroup,
   getLogModuleChoices,
   getLogEventChoices,
   getEventsForModule

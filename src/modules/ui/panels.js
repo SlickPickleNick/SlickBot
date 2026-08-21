@@ -788,6 +788,7 @@ async function getModuleStatus(guildId, row) {
 }
 
 async function buildLoggingPanel(guildId) {
+  const { LOG_GROUPS } = require('../logging/logEventCatalog');
   const moduleSettings = await query(
     `SELECT module_key, delivery_mode, channel_id, enabled
      FROM log_module_settings
@@ -803,20 +804,30 @@ async function buildLoggingPanel(guildId) {
     [guildId]
   );
 
-  const moduleSettingsByKey = new Map(moduleSettings.rows.map((row) => [row.module_key, row]));
+  const moduleSettingsByKey = new Map(moduleSettings.rows.map((row) => [String(row.module_key).toLowerCase(), row]));
 
-  const moduleLines = LogModuleCatalog.map((logModule) => {
-    const row = moduleSettingsByKey.get(logModule.key);
-    const eventCount = getEventsForModule(logModule.key).length;
-    if (!row || !row.channel_id || row.enabled === false || row.delivery_mode === 'DISABLED') {
-      return `• **${logModule.label}** ` + '`' + logModule.key + '`' + ` — Not configured · ${eventCount} event(s)`;
-    }
-    return `• **${logModule.label}** ` + '`' + logModule.key + '`' + ` — Instant → <#${row.channel_id}> · ${eventCount} event(s)`;
-  }).join('\n');
+  const groupBlocks = LOG_GROUPS.map((group) => {
+    const primaryKey = group.moduleKeys[0];
+    const row = moduleSettingsByKey.get(primaryKey);
+    const configuredModules = group.moduleKeys.filter((k) => {
+      const r = moduleSettingsByKey.get(k);
+      return r && r.channel_id && r.enabled !== false;
+    }).length;
+
+    const channelDisplay = row?.channel_id && row.enabled !== false ? `<#${row.channel_id}>` : '*Not configured*';
+    const subModules = group.moduleKeys.map((k) => {
+      const mod = LogModuleCatalog.find((m) => m.key === k);
+      const modRow = moduleSettingsByKey.get(k);
+      const isSet = modRow && modRow.channel_id && modRow.enabled !== false;
+      return `${isSet ? '✅' : '⚪'} ${mod?.label || k}`;
+    }).join(' · ');
+
+    return `**${group.emoji} ${group.label}** → ${channelDisplay} (${configuredModules}/${group.moduleKeys.length} active)\n└ ${subModules}`;
+  }).join('\n\n');
 
   const overrides = eventSettings.rows.filter((row) => row.channel_id || row.delivery_mode || row.enabled === false);
   const overrideLines = overrides.length
-    ? overrides.slice(0, 10).map((row) => {
+    ? overrides.slice(0, 5).map((row) => {
       const event = LogEventCatalog.find((item) => item.key === row.event_key);
       const parts = [];
       if (row.enabled === false || row.delivery_mode === 'DISABLED') parts.push('Disabled');
@@ -824,29 +835,27 @@ async function buildLoggingPanel(guildId) {
       if (row.channel_id) parts.push(`→ <#${row.channel_id}>`);
       return `• **${event?.label || row.event_key}** ` + '`' + row.event_key + '`' + ` — ${parts.join(' ') || 'Override saved'}`;
     }).join('\n')
-    : 'No event overrides configured. Events currently follow their module settings.';
+    : 'No event overrides configured. All 27 modules follow their parent group settings.';
 
   const embed = createBaseEmbed({
-    title: 'SlickBot Core Setup',
+    title: 'SlickBot Core Setup • Logging Center',
     description: [
-      '**Viewing:** Logging Center',
+      '**Viewing:** Server Event Logging (27 Tracking Modules in 6 Hubs)',
       '',
-      '**Delivery Mode**',
-      'All configured logs are sent instantly. SlickBot no longer exposes batched/queued log controls in the setup UI.',
-      '',
-      '**Log Modules**',
-      moduleLines,
+      '**Aggregated Log Groups**',
+      groupBlocks,
       '',
       '**Event Overrides**',
       overrideLines,
       '',
-      'Configure the main groups with `/logging set-channel`. Use `/logging event-channel` only when one event needs a different channel.'
+      'Click **Quick Setup** for guided onboarding across all 6 log hubs, or configure individual routes with `/logging set-channel`.'
     ].join('\n'),
-    color: SlickBotColors.INFO
+    color: SlickBotColors.INFO,
+    footer: 'SlickBot Logging • Instant Delivery'
   });
 
   const row = createButtonRow([
-    createPanelButton(`${CustomIds.OnboardingModulePrefix}LOGGING`, 'Quick Setup', ButtonStyle.Success, '🚀'),
+    createPanelButton(`${CustomIds.OnboardingModulePrefix}LOGGING`, 'Quick Setup (All 6 Hubs)', ButtonStyle.Success, '🚀'),
     createPanelButton(CustomIds.LoggingTest, 'Send Test', ButtonStyle.Primary, '🧪'),
     createPanelButton(CustomIds.LoggingRefresh, 'Refresh', ButtonStyle.Secondary, '🔄'),
     createPanelButton(CustomIds.SetupRefresh, 'Setup Center', ButtonStyle.Secondary, '⚙️')
@@ -1038,88 +1047,7 @@ function compactCommunityText(payload, fallback) {
 }
 
 async function buildCommunityPanel(guildId) {
-  const welcomePayload = await buildWelcomePanel(guildId);
-  const rolePayload = await buildRoleManagerPanel(guildId);
-  const giveawayPayload = await giveaways.buildManagerPanel(guildId);
-  const birthdayPayload = await birthdays.buildManagerPanel(guildId);
-  const gamesPayload = await communityGames.buildManagerPanel(guildId).catch(() => ({ embeds: [{ data: { description: 'Community games not configured.' } }] }));
-  const faqPayload = await faq.buildManagerPanel(guildId).catch(() => ({ embeds: [{ data: { description: 'FAQ not configured.' } }] }));
-  const suggestionPayload = await suggestions.buildManagerPanel(guildId).catch(() => ({ embeds: [{ data: { description: 'Suggestions not configured.' } }] }));
-  const referralPayload = await referrals.buildManagerPanel(guildId).catch(() => ({ embeds: [{ data: { description: 'Referrals not configured.' } }] }));
-  const achievementPayload = await achievements.buildManagerPanel(guildId).catch(() => ({ embeds: [{ data: { description: 'Achievements not configured.' } }] }));
-  const statsPayload = await serverStats.buildManagerPanel({ id: guildId, memberCount: 0, members: { fetch: async () => null, cache: { size: 0, filter: () => ({ size: 0 }) } }, channels: { cache: { filter: () => ({ reduce: () => 0 }) } } }).catch(() => ({ embeds: [{ data: { description: 'Server stats not configured.' } }] }));
-  const levelingPayload = await leveling.buildManagerPanel(guildId).catch(() => ({ embeds: [{ data: { description: 'Leveling not configured.' } }] }));
-  const customPayload = await customCommands.buildManagerPanel(guildId).catch(() => ({ embeds: [{ data: { description: 'Custom commands not configured.' } }] }));
-  const joinCreatePayload = await joinCreate.buildManagerPanel({ id: guildId }).catch(() => ({ embeds: [{ data: { description: 'Join-to-create not configured.' } }] }));
-  const embed = createBaseEmbed({
-    title: 'SlickBot Community Center',
-    description: [
-      '**Viewing:** Community Overview',
-      '',
-      '**Welcome / Auto Roles**',
-      compactCommunityText(welcomePayload, 'No welcome status available.'),
-      '',
-      '**Reaction / Button Roles**',
-      compactCommunityText(rolePayload, 'No role panel status available.'),
-      '',
-      '**Giveaways**',
-      compactCommunityText(giveawayPayload, 'No giveaway status available.'),
-      '',
-      '**Birthdays**',
-      compactCommunityText(birthdayPayload, 'No birthday status available.'),
-      '',
-      '**Leveling / XP**',
-      compactCommunityText(levelingPayload, 'No leveling status available.'),
-      '',
-      '**Community Games**',
-      compactCommunityText(gamesPayload, 'No community game status available.'),
-      '',
-      '**Knowledge Base / FAQ**',
-      compactCommunityText(faqPayload, 'No FAQ status available.'),
-      '',
-      '**Suggestions**',
-      compactCommunityText(suggestionPayload, 'No suggestion status available.'),
-      '',
-      '**Referrals**',
-      compactCommunityText(referralPayload, 'No referral status available.'),
-      '',
-      '**Achievements**',
-      compactCommunityText(achievementPayload, 'No achievement status available.'),
-      '',
-      '**Server Stats**',
-      compactCommunityText(statsPayload, 'No server stats status available.'),
-      '',
-      '**Custom Commands**',
-      compactCommunityText(customPayload, 'No custom command status available.'),
-      '',
-      '**Join-to-Create Voice**',
-      compactCommunityText(joinCreatePayload, 'No join-to-create status available.'),
-      '',
-      'Use the focused module panel commands for detailed setup. Newer modules may use `/custom-command panel` or `/join-create panel` instead of `manager`.'
-    ].join('\n'),
-    color: SlickBotColors.INFO
-  });
-  const rowOne = createButtonRow([
-    createPanelButton(CustomIds.WelcomeRefresh, 'Welcome', ButtonStyle.Secondary, '👋'),
-    createPanelButton(CustomIds.RolePanelsRefresh, 'Role Panels', ButtonStyle.Secondary, '🎛️'),
-    createPanelButton(CustomIds.GiveawaysRefresh, 'Giveaways', ButtonStyle.Secondary, '🎉'),
-    createPanelButton(CustomIds.BirthdaysRefresh, 'Birthdays', ButtonStyle.Secondary, '🎂'),
-    createPanelButton(CustomIds.LevelingRefresh, 'Leveling', ButtonStyle.Secondary, '📈')
-  ]);
-  const rowTwo = createButtonRow([
-    createPanelButton(CustomIds.ServerStatsRefresh, 'Stats', ButtonStyle.Secondary, '📊'),
-    createPanelButton(CustomIds.CustomCommandsRefresh, 'Custom Commands', ButtonStyle.Secondary, '💬'),
-    createPanelButton(CustomIds.JoinCreateRefresh, 'Join Voice', ButtonStyle.Secondary, '🔊'),
-    createPanelButton(CustomIds.GamesRefresh, 'Games', ButtonStyle.Secondary),
-    createPanelButton(CustomIds.FaqRefresh, 'FAQ', ButtonStyle.Secondary)
-  ]);
-  const rowThree = createButtonRow([
-    createPanelButton(CustomIds.SuggestionsRefresh, 'Suggestions', ButtonStyle.Secondary),
-    createPanelButton(CustomIds.ReferralsRefresh, 'Referrals', ButtonStyle.Secondary),
-    createPanelButton(CustomIds.AchievementsRefresh, 'Achievements', ButtonStyle.Secondary),
-    createPanelButton(CustomIds.SetupRefresh, 'Back to Setup', ButtonStyle.Primary, '↩️')
-  ]);
-  return { embeds: [embed], components: [rowOne, rowTwo, rowThree] };
+  return buildCategoryPanel(guildId, 'COMMUNITY');
 }
 
 module.exports = {

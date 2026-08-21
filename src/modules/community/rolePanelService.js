@@ -611,20 +611,33 @@ async function syncAllPublishedReactionPanels(client, guildId) {
 }
 
 async function buildRoleManagerPanel(guildId) {
+  const { createButtonRow, createPanelButton, ButtonStyle } = require('../ui/uiService');
+  const { CustomIds } = require('../ui/customIds');
   const panels = await listPanels(guildId);
   const lines = panels.length
     ? panels.map((panel) => `• **${panel.name}** — ${panel.option_count} option(s), ${panel.mode}, ${panel.panel_display_mode || 'BUTTONS'}`).join('\n')
-    : 'No role panels configured.';
+    : 'No role panels configured yet.';
   const embed = createBaseEmbed({
-    title: 'SlickBot Role Panel Center',
+    title: 'SlickBot Community Setup • Role Panel Center',
     description: [
+      '**Viewing:** Self-Assignable Role Panels',
+      '',
+      '**Configured Role Panels**',
       lines,
       '',
-      'Use `/roles panel-wizard`, `/roles bulk-add-wizard`, and `/roles post-panel` for guided setup-channel creation.'
+      'Use `/roles panel-wizard`, `/roles bulk-add-wizard`, and `/roles post-panel` for interactive role menus and reaction roles.'
     ].join('\n'),
-    color: panels.length ? SlickBotColors.SUCCESS : SlickBotColors.WARNING
+    color: panels.length ? SlickBotColors.SUCCESS : SlickBotColors.WARNING,
+    footer: 'SlickBot Role Panels'
   });
-  return { embeds: [embed] };
+
+  const row = createButtonRow([
+    createPanelButton(`${CustomIds.OnboardingModulePrefix}REACTION_ROLES`, 'Quick Setup', ButtonStyle.Success, '🚀'),
+    createPanelButton(CustomIds.RolePanelsRefresh, 'Refresh', ButtonStyle.Secondary, '🔄'),
+    createPanelButton(CustomIds.SetupRefresh, 'Setup Center', ButtonStyle.Secondary, '⚙️')
+  ]);
+
+  return { embeds: [embed], components: [row] };
 }
 
 module.exports = {

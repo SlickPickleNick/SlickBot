@@ -174,6 +174,11 @@ class ReferralService {
 
     const row2 = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
+        .setCustomId(`${CustomIds.OnboardingModulePrefix}REFERRALS`)
+        .setLabel('Quick Setup')
+        .setStyle(ButtonStyle.Success)
+        .setEmoji('🚀'),
+      new ButtonBuilder()
         .setCustomId(CustomIds.ReferralsRefresh)
         .setLabel('Refresh')
         .setStyle(ButtonStyle.Secondary)

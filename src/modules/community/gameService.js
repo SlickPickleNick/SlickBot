@@ -1537,6 +1537,7 @@ Next Number: **${outcome.next.toString()}**`,
     const c4Enabled = byKey.get(GAME_KEYS.CONNECT_FOUR)?.enabled ?? false;
 
     const row1 = createButtonRow([
+      createPanelButton(`${CustomIds.OnboardingModulePrefix}COMMUNITY_GAMES`, 'Quick Setup', ButtonStyle.Success, '🚀'),
       createPanelButton(CustomIds.GamesCountingToggle, countingEnabled ? 'Disable Counting' : 'Enable Counting', countingEnabled ? ButtonStyle.Danger : ButtonStyle.Success),
       createPanelButton(CustomIds.GamesTttToggle, tttEnabled ? 'Disable Tic-Tac-Toe' : 'Enable Tic-Tac-Toe', tttEnabled ? ButtonStyle.Danger : ButtonStyle.Success),
       createPanelButton(CustomIds.GamesC4Toggle, c4Enabled ? 'Disable Connect 4' : 'Enable Connect 4', c4Enabled ? ButtonStyle.Danger : ButtonStyle.Success)
@@ -1545,8 +1546,8 @@ Next Number: **${outcome.next.toString()}**`,
       createPanelButton(CustomIds.GamesCounting, 'Counting Details', ButtonStyle.Secondary),
       createPanelButton(CustomIds.GamesTicTacToe, 'Tic-Tac-Toe Details', ButtonStyle.Secondary),
       createPanelButton(CustomIds.GamesConnectFour, 'Connect 4 Details', ButtonStyle.Secondary),
-      createPanelButton(CustomIds.GamesRefresh, 'Refresh', ButtonStyle.Secondary),
-      createPanelButton(CustomIds.SetupRefresh, 'Setup Center', ButtonStyle.Secondary)
+      createPanelButton(CustomIds.GamesRefresh, 'Refresh', ButtonStyle.Secondary, '🔄'),
+      createPanelButton(CustomIds.SetupRefresh, 'Setup Center', ButtonStyle.Secondary, '⚙️')
     ]);
     return { embeds: [embed], components: [row1, row2] };
   }

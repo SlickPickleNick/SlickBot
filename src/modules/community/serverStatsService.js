@@ -269,6 +269,11 @@ class ServerStatsService {
 
     const row2 = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
+        .setCustomId(`${CustomIds.OnboardingModulePrefix}SERVER_STATS`)
+        .setLabel('Quick Setup')
+        .setStyle(ButtonStyle.Success)
+        .setEmoji('🚀'),
+      new ButtonBuilder()
         .setCustomId(CustomIds.ServerStatsRefresh)
         .setLabel('Refresh')
         .setStyle(ButtonStyle.Secondary)

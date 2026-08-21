@@ -199,6 +199,71 @@ class LoggingService {
     }
     this.invalidateRouting(guildId);
   }
+
+  async setupLogGroup(guildId, groupKey, channelId) {
+    const { getLogGroup } = require('./logEventCatalog');
+    const group = getLogGroup(groupKey);
+    if (!group) throw new Error(`Unknown log group: ${groupKey}`);
+
+    for (const moduleKey of group.moduleKeys) {
+      await this.setModuleChannel(guildId, moduleKey, channelId);
+    }
+    this.invalidateRouting(guildId);
+  }
+
+  async getLogGroupChannels(guildId) {
+    const { LOG_GROUPS } = require('./logEventCatalog');
+    const res = await query(
+      `SELECT module_key, channel_id FROM log_module_settings WHERE guild_id = $1 AND enabled = true`,
+      [guildId]
+    ).catch(() => ({ rows: [] }));
+
+    const settingsMap = new Map(res.rows.map((r) => [String(r.module_key).toLowerCase(), r.channel_id]));
+    const groupMap = new Map();
+
+    for (const group of LOG_GROUPS) {
+      const primaryKey = group.moduleKeys[0];
+      const channelId = settingsMap.get(primaryKey) || null;
+      groupMap.set(group.key, {
+        group,
+        channelId,
+        configuredCount: group.moduleKeys.filter((k) => settingsMap.has(k)).length,
+        totalModules: group.moduleKeys.length
+      });
+    }
+
+    return groupMap;
+  }
+
+  async autoCreateAllLogChannels(guild) {
+    const { ChannelType } = require('discord.js');
+    const { autoCreateChannel } = require('../onboarding/onboardingService');
+    const { LOG_GROUPS } = require('./logEventCatalog');
+
+    const category = await autoCreateChannel(guild, {
+      name: '📋 Server Logs',
+      type: ChannelType.GuildCategory,
+      isPrivate: true,
+      reason: 'SlickBot Server Logs Category'
+    });
+
+    const createdChannels = {};
+    for (const group of LOG_GROUPS) {
+      const chan = await autoCreateChannel(guild, {
+        name: group.defaultChannelName,
+        type: ChannelType.GuildText,
+        parentId: category.id,
+        isPrivate: true,
+        topic: group.description,
+        reason: `SlickBot ${group.label}`
+      });
+      await this.setupLogGroup(guild.id, group.key, chan.id);
+      createdChannels[group.key] = chan;
+    }
+
+    this.invalidateRouting(guild.id);
+    return { category, createdChannels };
+  }
 }
 
 module.exports = { LoggingService, LogDeliveryMode };

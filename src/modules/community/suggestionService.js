@@ -885,9 +885,9 @@ class SuggestionService {
     return {
       embeds: [embed],
       components: [createButtonRow([
-        createPanelButton(CustomIds.SuggestionsRefresh, 'Refresh', ButtonStyle.Secondary),
-        createPanelButton(CustomIds.SetupCommunity, 'Community', ButtonStyle.Secondary),
-        createPanelButton(CustomIds.SetupRefresh, 'Return to Setup', ButtonStyle.Secondary)
+        createPanelButton(`${CustomIds.OnboardingModulePrefix}SUGGESTIONS`, 'Quick Setup', ButtonStyle.Success, '🚀'),
+        createPanelButton(CustomIds.SuggestionsRefresh, 'Refresh', ButtonStyle.Secondary, '🔄'),
+        createPanelButton(CustomIds.SetupRefresh, 'Setup Center', ButtonStyle.Secondary, '⚙️')
       ])]
     };
   }

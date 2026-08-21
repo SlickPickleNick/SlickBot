@@ -243,9 +243,14 @@ class GiveawayService {
 
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
+        .setCustomId(`${CustomIds.OnboardingModulePrefix}GIVEAWAYS`)
+        .setLabel('Quick Setup')
+        .setStyle(ButtonStyle.Success)
+        .setEmoji('🚀'),
+      new ButtonBuilder()
         .setCustomId(CustomIds.GiveawaysQuickStart)
         .setLabel('Start Giveaway')
-        .setStyle(ButtonStyle.Success)
+        .setStyle(ButtonStyle.Primary)
         .setEmoji('🎉'),
       new ButtonBuilder()
         .setCustomId(CustomIds.GiveawaysConfigModal)

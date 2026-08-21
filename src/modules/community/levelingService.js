@@ -594,6 +594,11 @@ class LevelingService {
 
     const row2 = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
+        .setCustomId(`${CustomIds.OnboardingModulePrefix}LEVELING`)
+        .setLabel('Quick Setup')
+        .setStyle(ButtonStyle.Success)
+        .setEmoji('🚀'),
+      new ButtonBuilder()
         .setCustomId(CustomIds.LevelingRefresh)
         .setLabel('Refresh')
         .setStyle(ButtonStyle.Secondary)

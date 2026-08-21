@@ -798,9 +798,10 @@ class SocialFeedService {
     });
 
     const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`${CustomIds.OnboardingModulePrefix}SOCIAL_FEEDS`).setLabel('Quick Setup').setStyle(ButtonStyle.Success).setEmoji('🚀'),
       new ButtonBuilder().setCustomId(CustomIds.FeedsCheckNow).setLabel('Check Feeds Now').setStyle(ButtonStyle.Primary).setEmoji('🔄'),
-      new ButtonBuilder().setCustomId(CustomIds.FeedsRefresh).setLabel('Refresh Panel').setStyle(ButtonStyle.Secondary).setEmoji('📋'),
-      new ButtonBuilder().setCustomId(CustomIds.SetupRefresh).setLabel('Setup Center').setStyle(ButtonStyle.Secondary).setEmoji('🏠')
+      new ButtonBuilder().setCustomId(CustomIds.FeedsRefresh).setLabel('Refresh').setStyle(ButtonStyle.Secondary).setEmoji('📋'),
+      new ButtonBuilder().setCustomId(CustomIds.SetupRefresh).setLabel('Setup Center').setStyle(ButtonStyle.Secondary).setEmoji('⚙️')
     );
 
     return { embeds: [embed], components: [row] };

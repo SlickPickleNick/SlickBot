@@ -230,6 +230,11 @@ class BotUpdatesService {
 
     const row2 = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
+        .setCustomId(`${CustomIds.OnboardingModulePrefix}BOT_UPDATES`)
+        .setLabel('Quick Setup')
+        .setStyle(ButtonStyle.Success)
+        .setEmoji('🚀'),
+      new ButtonBuilder()
         .setCustomId(CustomIds.BotUpdatesRefresh)
         .setLabel('Refresh')
         .setStyle(ButtonStyle.Secondary)

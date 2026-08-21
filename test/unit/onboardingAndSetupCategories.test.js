@@ -50,7 +50,7 @@ test('OnboardingService advances steps and completes', async () => {
   const session = onboarding.startModuleOnboarding('guild-123', 'user-456', ModuleKeys.LOGGING);
 
   assert.ok(session, 'Module onboarding session created');
-  assert.equal(session.steps.length, 4);
+  assert.equal(session.steps.length, 6);
 
   for (let i = 0; i < session.steps.length; i++) {
     const advance = await onboarding.advanceSession(session, {}, 'SKIP');
@@ -186,3 +186,26 @@ test('buildOnboardingPayload includes Keep Current and Keep Default action butto
   assert.ok(customIds.some((id) => id.startsWith(CustomIds.OnboardingSkipPrefix)), 'Has Skip button');
   assert.ok(customIds.some((id) => id.startsWith(CustomIds.OnboardingCancelPrefix)), 'Has Exit button');
 });
+
+test('LOG_GROUPS aggregates all 27 LogModuleCatalog modules across 6 primary hubs', () => {
+  const { LOG_GROUPS, getLogGroup, LogModuleCatalog } = require('../../src/modules/logging/logEventCatalog');
+  assert.equal(LOG_GROUPS.length, 6, 'Has 6 log groups');
+
+  const allModuleKeysInGroups = LOG_GROUPS.flatMap((g) => g.moduleKeys);
+  assert.equal(allModuleKeysInGroups.length, 27, 'Covers all 27 log modules');
+  assert.equal(allModuleKeysInGroups.length, LogModuleCatalog.length, 'Matches catalog length');
+
+  for (const mod of LogModuleCatalog) {
+    const group = getLogGroup(mod.key);
+    assert.ok(group, `Module ${mod.key} has an assigned log group`);
+  }
+});
+
+test('LoggingService defines setupLogGroup, getLogGroupChannels, and autoCreateAllLogChannels', () => {
+  const { LoggingService } = require('../../src/modules/logging/loggingService');
+  const logging = new LoggingService();
+  assert.equal(typeof logging.setupLogGroup, 'function');
+  assert.equal(typeof logging.getLogGroupChannels, 'function');
+  assert.equal(typeof logging.autoCreateAllLogChannels, 'function');
+});
+

@@ -427,9 +427,10 @@ class FaqService {
     return {
       embeds: [embed],
       components: [createButtonRow([
-        createPanelButton(CustomIds.FaqRefreshIndex, 'Sync Master Post', ButtonStyle.Success),
-        createPanelButton(CustomIds.FaqRefresh, 'Refresh Panel', ButtonStyle.Secondary),
-        createPanelButton(CustomIds.SetupRefresh, 'Setup Center', ButtonStyle.Secondary)
+        createPanelButton(`${CustomIds.OnboardingModulePrefix}FAQ`, 'Quick Setup', ButtonStyle.Success, '🚀'),
+        createPanelButton(CustomIds.FaqRefreshIndex, 'Sync Master Post', ButtonStyle.Primary, '🔄'),
+        createPanelButton(CustomIds.FaqRefresh, 'Refresh', ButtonStyle.Secondary, '📋'),
+        createPanelButton(CustomIds.SetupRefresh, 'Setup Center', ButtonStyle.Secondary, '⚙️')
       ])]
     };
   }

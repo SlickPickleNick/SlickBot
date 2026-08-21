@@ -287,8 +287,8 @@ const ONBOARDING_STEPS = Object.freeze({
     {
       id: 'log_core',
       moduleKey: ModuleKeys.LOGGING,
-      title: 'Core System & Audit Log Channel',
-      description: 'Select where SlickBot logs core administrative changes, setup modifications, and permission updates.',
+      title: 'Core System & Bot Audit Logs',
+      description: 'Select where SlickBot logs administrative changes, permissions, module configuration, and server status.',
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildText],
       autoCreateLabel: 'Auto-Create #bot-logs',
@@ -298,33 +298,33 @@ const ONBOARDING_STEPS = Object.freeze({
         return res.rows[0]?.channel_id ? `<#${res.rows[0].channel_id}>` : null;
       },
       async applyDefault(guild) {
-        const existing = guild.channels.cache.find((c) => c.name.toLowerCase() === 'bot-logs' || c.name.toLowerCase() === 'logs');
+        const existing = guild.channels?.cache?.find((c) => c.name.toLowerCase() === 'bot-logs' || c.name.toLowerCase() === 'logs');
+        const { LoggingService } = require('../logging/loggingService');
+        const logging = new LoggingService();
         if (existing) {
-          const { LoggingService } = require('../logging/loggingService');
-          const logging = new LoggingService();
-          await logging.setModuleChannel(guild.id, 'core', existing.id);
-          return { result: `Assigned <#${existing.id}>` };
+          await logging.setupLogGroup(guild.id, 'CORE_SYSTEM', existing.id);
+          return { result: `Assigned existing <#${existing.id}>` };
         }
-        return { result: 'Core logging initialized' };
+        return { result: 'Core & System log group initialized' };
       },
       async applySelection(guild, channelId) {
         const { LoggingService } = require('../logging/loggingService');
         const logging = new LoggingService();
-        await logging.setModuleChannel(guild.id, 'core', channelId);
+        await logging.setupLogGroup(guild.id, 'CORE_SYSTEM', channelId);
       },
       async autoCreate(guild) {
-        const channel = await autoCreateChannel(guild, { name: 'bot-logs', isPrivate: true, reason: 'SlickBot Audit Log Channel' });
+        const channel = await autoCreateChannel(guild, { name: 'bot-logs', isPrivate: true, reason: 'SlickBot Core Audit Logs' });
         const { LoggingService } = require('../logging/loggingService');
         const logging = new LoggingService();
-        await logging.setModuleChannel(guild.id, 'core', channel.id);
+        await logging.setupLogGroup(guild.id, 'CORE_SYSTEM', channel.id);
         return { created: `#${channel.name}` };
       }
     },
     {
       id: 'log_moderation',
       moduleKey: ModuleKeys.LOGGING,
-      title: 'Moderation & Safety Log Channel',
-      description: 'Select where SlickBot logs disciplinary actions, bans, kicks, mutes, and safety events.',
+      title: 'Moderation, Safety & Lockdown Logs',
+      description: 'Select where SlickBot logs disciplinary actions, bans, warns, notes, lockdowns, and temporary roles.',
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildText],
       autoCreateLabel: 'Auto-Create #mod-logs',
@@ -334,62 +334,33 @@ const ONBOARDING_STEPS = Object.freeze({
         return res.rows[0]?.channel_id ? `<#${res.rows[0].channel_id}>` : null;
       },
       async applyDefault(guild) {
-        const existing = guild.channels.cache.find((c) => c.name.toLowerCase() === 'mod-logs');
+        const existing = guild.channels?.cache?.find((c) => c.name.toLowerCase() === 'mod-logs');
+        const { LoggingService } = require('../logging/loggingService');
+        const logging = new LoggingService();
         if (existing) {
-          const { LoggingService } = require('../logging/loggingService');
-          const logging = new LoggingService();
-          await logging.setModuleChannel(guild.id, 'moderation', existing.id);
-          return { result: `Assigned <#${existing.id}>` };
+          await logging.setupLogGroup(guild.id, 'MODERATION_SAFETY', existing.id);
+          return { result: `Assigned existing <#${existing.id}>` };
         }
-        return { result: 'Moderation logging initialized' };
+        return { result: 'Moderation & Safety log group initialized' };
       },
       async applySelection(guild, channelId) {
         const { LoggingService } = require('../logging/loggingService');
         const logging = new LoggingService();
-        await logging.setModuleChannel(guild.id, 'moderation', channelId);
+        await logging.setupLogGroup(guild.id, 'MODERATION_SAFETY', channelId);
       },
       async autoCreate(guild) {
-        const channel = await autoCreateChannel(guild, { name: 'mod-logs', isPrivate: true, reason: 'SlickBot Moderation Log Channel' });
+        const channel = await autoCreateChannel(guild, { name: 'mod-logs', isPrivate: true, reason: 'SlickBot Moderation Logs' });
         const { LoggingService } = require('../logging/loggingService');
         const logging = new LoggingService();
-        await logging.setModuleChannel(guild.id, 'moderation', channel.id);
+        await logging.setupLogGroup(guild.id, 'MODERATION_SAFETY', channel.id);
         return { created: `#${channel.name}` };
       }
     },
     {
-      id: 'log_voice',
+      id: 'log_member_message',
       moduleKey: ModuleKeys.LOGGING,
-      title: 'Voice Activity Log Channel',
-      description: 'Select where voice channel joins, leaves, and moves are logged.',
-      pickerType: 'CHANNEL',
-      channelTypes: [ChannelType.GuildText],
-      autoCreateLabel: 'Auto-Create #voice-logs',
-      autoCreateDescription: 'Creates private #voice-logs channel.',
-      async getCurrent(guild) {
-        const res = await query(`SELECT channel_id FROM log_module_settings WHERE guild_id = $1 AND module_key = 'VOICE' AND enabled = true`, [guild.id]).catch(() => ({ rows: [] }));
-        return res.rows[0]?.channel_id ? `<#${res.rows[0].channel_id}>` : null;
-      },
-      async applyDefault() {
-        return { result: 'Voice logging follows server defaults' };
-      },
-      async applySelection(guild, channelId) {
-        const { LoggingService } = require('../logging/loggingService');
-        const logging = new LoggingService();
-        await logging.setModuleChannel(guild.id, 'voice', channelId);
-      },
-      async autoCreate(guild) {
-        const channel = await autoCreateChannel(guild, { name: 'voice-logs', isPrivate: true, reason: 'SlickBot Voice Log Channel' });
-        const { LoggingService } = require('../logging/loggingService');
-        const logging = new LoggingService();
-        await logging.setModuleChannel(guild.id, 'voice', channel.id);
-        return { created: `#${channel.name}` };
-      }
-    },
-    {
-      id: 'log_member',
-      moduleKey: ModuleKeys.LOGGING,
-      title: 'Member & Message Event Log Channel',
-      description: 'Select where message edits, message deletes, and nickname changes are logged.',
+      title: 'Member & Message Activity Logs',
+      description: 'Select where member joins, leaves, role updates, nickname changes, message edits, and deletions are logged.',
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildText],
       autoCreateLabel: 'Auto-Create #member-logs',
@@ -398,19 +369,134 @@ const ONBOARDING_STEPS = Object.freeze({
         const res = await query(`SELECT channel_id FROM log_module_settings WHERE guild_id = $1 AND module_key = 'MEMBER' AND enabled = true`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.channel_id ? `<#${res.rows[0].channel_id}>` : null;
       },
-      async applyDefault() {
-        return { result: 'Member logging follows server defaults' };
+      async applyDefault(guild) {
+        const existing = guild.channels?.cache?.find((c) => c.name.toLowerCase() === 'member-logs' || c.name.toLowerCase() === 'msg-logs');
+        const { LoggingService } = require('../logging/loggingService');
+        const logging = new LoggingService();
+        if (existing) {
+          await logging.setupLogGroup(guild.id, 'MEMBER_MESSAGE', existing.id);
+          return { result: `Assigned existing <#${existing.id}>` };
+        }
+        return { result: 'Member & Message log group initialized' };
       },
       async applySelection(guild, channelId) {
         const { LoggingService } = require('../logging/loggingService');
         const logging = new LoggingService();
-        await logging.setModuleChannel(guild.id, 'member', channelId);
+        await logging.setupLogGroup(guild.id, 'MEMBER_MESSAGE', channelId);
       },
       async autoCreate(guild) {
-        const channel = await autoCreateChannel(guild, { name: 'member-logs', isPrivate: true, reason: 'SlickBot Member Log Channel' });
+        const channel = await autoCreateChannel(guild, { name: 'member-logs', isPrivate: true, reason: 'SlickBot Member Activity Logs' });
         const { LoggingService } = require('../logging/loggingService');
         const logging = new LoggingService();
-        await logging.setModuleChannel(guild.id, 'member', channel.id);
+        await logging.setupLogGroup(guild.id, 'MEMBER_MESSAGE', channel.id);
+        return { created: `#${channel.name}` };
+      }
+    },
+    {
+      id: 'log_voice',
+      moduleKey: ModuleKeys.LOGGING,
+      title: 'Voice Activity & Join-to-Create Logs',
+      description: 'Select where voice channel joins, leaves, moves, and temporary channel activity are logged.',
+      pickerType: 'CHANNEL',
+      channelTypes: [ChannelType.GuildText],
+      autoCreateLabel: 'Auto-Create #voice-logs',
+      autoCreateDescription: 'Creates private #voice-logs channel.',
+      async getCurrent(guild) {
+        const res = await query(`SELECT channel_id FROM log_module_settings WHERE guild_id = $1 AND module_key = 'VOICE' AND enabled = true`, [guild.id]).catch(() => ({ rows: [] }));
+        return res.rows[0]?.channel_id ? `<#${res.rows[0].channel_id}>` : null;
+      },
+      async applyDefault(guild) {
+        const existing = guild.channels?.cache?.find((c) => c.name.toLowerCase() === 'voice-logs');
+        const { LoggingService } = require('../logging/loggingService');
+        const logging = new LoggingService();
+        if (existing) {
+          await logging.setupLogGroup(guild.id, 'VOICE_ACTIVITY', existing.id);
+          return { result: `Assigned existing <#${existing.id}>` };
+        }
+        return { result: 'Voice log group initialized' };
+      },
+      async applySelection(guild, channelId) {
+        const { LoggingService } = require('../logging/loggingService');
+        const logging = new LoggingService();
+        await logging.setupLogGroup(guild.id, 'VOICE_ACTIVITY', channelId);
+      },
+      async autoCreate(guild) {
+        const channel = await autoCreateChannel(guild, { name: 'voice-logs', isPrivate: true, reason: 'SlickBot Voice Logs' });
+        const { LoggingService } = require('../logging/loggingService');
+        const logging = new LoggingService();
+        await logging.setupLogGroup(guild.id, 'VOICE_ACTIVITY', channel.id);
+        return { created: `#${channel.name}` };
+      }
+    },
+    {
+      id: 'log_support_tickets',
+      moduleKey: ModuleKeys.LOGGING,
+      title: 'Support, Tickets & Review Logs',
+      description: 'Select where ticket opens, claims, transcripts, user reports, applications, and appeals are logged.',
+      pickerType: 'CHANNEL',
+      channelTypes: [ChannelType.GuildText],
+      autoCreateLabel: 'Auto-Create #support-logs',
+      autoCreateDescription: 'Creates private #support-logs channel for staff.',
+      async getCurrent(guild) {
+        const res = await query(`SELECT channel_id FROM log_module_settings WHERE guild_id = $1 AND module_key = 'TICKETS' AND enabled = true`, [guild.id]).catch(() => ({ rows: [] }));
+        return res.rows[0]?.channel_id ? `<#${res.rows[0].channel_id}>` : null;
+      },
+      async applyDefault(guild) {
+        const existing = guild.channels?.cache?.find((c) => c.name.toLowerCase() === 'support-logs' || c.name.toLowerCase() === 'ticket-logs');
+        const { LoggingService } = require('../logging/loggingService');
+        const logging = new LoggingService();
+        if (existing) {
+          await logging.setupLogGroup(guild.id, 'SUPPORT_TICKETS', existing.id);
+          return { result: `Assigned existing <#${existing.id}>` };
+        }
+        return { result: 'Support & Tickets log group initialized' };
+      },
+      async applySelection(guild, channelId) {
+        const { LoggingService } = require('../logging/loggingService');
+        const logging = new LoggingService();
+        await logging.setupLogGroup(guild.id, 'SUPPORT_TICKETS', channelId);
+      },
+      async autoCreate(guild) {
+        const channel = await autoCreateChannel(guild, { name: 'support-logs', isPrivate: true, reason: 'SlickBot Support & Ticket Logs' });
+        const { LoggingService } = require('../logging/loggingService');
+        const logging = new LoggingService();
+        await logging.setupLogGroup(guild.id, 'SUPPORT_TICKETS', channel.id);
+        return { created: `#${channel.name}` };
+      }
+    },
+    {
+      id: 'log_community_feeds',
+      moduleKey: ModuleKeys.LOGGING,
+      title: 'Community, Feeds & Engagement Logs',
+      description: 'Select where giveaways, leveling, birthdays, reactions, games, suggestions, FAQ, custom commands, and social feeds are logged.',
+      pickerType: 'CHANNEL',
+      channelTypes: [ChannelType.GuildText],
+      autoCreateLabel: 'Auto-Create #community-logs',
+      autoCreateDescription: 'Creates private #community-logs channel.',
+      async getCurrent(guild) {
+        const res = await query(`SELECT channel_id FROM log_module_settings WHERE guild_id = $1 AND module_key = 'GIVEAWAYS' AND enabled = true`, [guild.id]).catch(() => ({ rows: [] }));
+        return res.rows[0]?.channel_id ? `<#${res.rows[0].channel_id}>` : null;
+      },
+      async applyDefault(guild) {
+        const existing = guild.channels?.cache?.find((c) => c.name.toLowerCase() === 'community-logs');
+        const { LoggingService } = require('../logging/loggingService');
+        const logging = new LoggingService();
+        if (existing) {
+          await logging.setupLogGroup(guild.id, 'COMMUNITY_FEEDS', existing.id);
+          return { result: `Assigned existing <#${existing.id}>` };
+        }
+        return { result: 'Community & Engagement log group initialized' };
+      },
+      async applySelection(guild, channelId) {
+        const { LoggingService } = require('../logging/loggingService');
+        const logging = new LoggingService();
+        await logging.setupLogGroup(guild.id, 'COMMUNITY_FEEDS', channelId);
+      },
+      async autoCreate(guild) {
+        const channel = await autoCreateChannel(guild, { name: 'community-logs', isPrivate: true, reason: 'SlickBot Community & Feed Logs' });
+        const { LoggingService } = require('../logging/loggingService');
+        const logging = new LoggingService();
+        await logging.setupLogGroup(guild.id, 'COMMUNITY_FEEDS', channel.id);
         return { created: `#${channel.name}` };
       }
     }

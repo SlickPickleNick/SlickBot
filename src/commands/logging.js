@@ -3,8 +3,8 @@ const { ModuleKeys } = require('../modules/moduleRegistry');
 const { ActionKeys } = require('../modules/permissions/actionKeys');
 const { LogDeliveryMode } = require('../modules/logging/loggingService');
 const {
-  getLogModuleChoices,
-  getLogEventChoices,
+  LogModuleCatalog,
+  LogEventCatalog,
   getLogModule,
   getLogEvent,
   StarterLogModuleKeys
@@ -13,9 +13,6 @@ const { replyPrivate } = require('../utils/reply');
 const { query } = require('../services/db');
 const { buildLoggingPanel } = require('../modules/ui/panels');
 const { createBaseEmbed, createSuccessEmbed, SlickBotColors } = require('../modules/ui/uiService');
-
-const moduleChoices = getLogModuleChoices();
-const eventChoices = getLogEventChoices();
 
 const deliveryChoices = [
   { name: 'Immediate', value: LogDeliveryMode.IMMEDIATE },
@@ -31,18 +28,52 @@ module.exports = {
     .addSubcommand((subcommand) =>
       subcommand
         .setName('setup')
-        .setDescription('Quick setup for starter logging channels.')
+        .setDescription('Configure aggregated logging hubs across all 27 tracking modules.')
+        .addBooleanOption((option) =>
+          option
+            .setName('auto_create')
+            .setDescription('Auto-create a private Server Logs category and all 6 log channels for you.')
+            .setRequired(false)
+        )
         .addChannelOption((option) =>
           option
             .setName('channel')
-            .setDescription('Default channel for core bot events (setup, permissions, system).')
+            .setDescription('Core & System log channel (setup, permissions, bot status).')
             .addChannelTypes(ChannelType.GuildText)
-            .setRequired(true)
+            .setRequired(false)
         )
         .addChannelOption((option) =>
           option
             .setName('moderation_channel')
-            .setDescription('Optional dedicated channel for moderation, cases, and safety logs.')
+            .setDescription('Moderation, safety, lockdown, and temporary role log channel.')
+            .addChannelTypes(ChannelType.GuildText)
+            .setRequired(false)
+        )
+        .addChannelOption((option) =>
+          option
+            .setName('member_channel')
+            .setDescription('Member joins/leaves/updates, message edits, and deletions channel.')
+            .addChannelTypes(ChannelType.GuildText)
+            .setRequired(false)
+        )
+        .addChannelOption((option) =>
+          option
+            .setName('voice_channel')
+            .setDescription('Voice activity and Join-to-Create channel.')
+            .addChannelTypes(ChannelType.GuildText)
+            .setRequired(false)
+        )
+        .addChannelOption((option) =>
+          option
+            .setName('support_channel')
+            .setDescription('Tickets, reports, applications, and appeals log channel.')
+            .addChannelTypes(ChannelType.GuildText)
+            .setRequired(false)
+        )
+        .addChannelOption((option) =>
+          option
+            .setName('community_channel')
+            .setDescription('Giveaways, leveling, birthdays, reactions, games, and feed logs.')
             .addChannelTypes(ChannelType.GuildText)
             .setRequired(false)
         )
@@ -56,7 +87,7 @@ module.exports = {
             .setName('module')
             .setDescription('Log module to route.')
             .setRequired(true)
-            .addChoices(...moduleChoices)
+            .setAutocomplete(true)
         )
         .addChannelOption((option) =>
           option
@@ -75,7 +106,7 @@ module.exports = {
             .setName('module')
             .setDescription('Log module to disable.')
             .setRequired(true)
-            .addChoices(...moduleChoices)
+            .setAutocomplete(true)
         )
     )
     .addSubcommand((subcommand) =>
@@ -87,7 +118,7 @@ module.exports = {
             .setName('module')
             .setDescription('Log module to configure.')
             .setRequired(true)
-            .addChoices(...moduleChoices)
+            .setAutocomplete(true)
         )
         .addStringOption((option) =>
           option
@@ -106,7 +137,7 @@ module.exports = {
             .setName('event')
             .setDescription('Specific log event to configure.')
             .setRequired(true)
-            .addChoices(...eventChoices)
+            .setAutocomplete(true)
         )
         .addStringOption((option) =>
           option
@@ -125,7 +156,7 @@ module.exports = {
             .setName('event')
             .setDescription('Specific log event to route.')
             .setRequired(true)
-            .addChoices(...eventChoices)
+            .setAutocomplete(true)
         )
         .addChannelOption((option) =>
           option
@@ -144,7 +175,7 @@ module.exports = {
             .setName('event')
             .setDescription('Specific log event override to remove.')
             .setRequired(true)
-            .addChoices(...eventChoices)
+            .setAutocomplete(true)
         )
     )
     .addSubcommand((subcommand) =>
@@ -156,7 +187,7 @@ module.exports = {
             .setName('event')
             .setDescription('Event to test. Defaults to System.')
             .setRequired(false)
-            .addChoices(...eventChoices)
+            .setAutocomplete(true)
         )
     ),
   actionKey: ActionKeys.LoggingConfigure,
@@ -172,52 +203,67 @@ module.exports = {
     }
 
     if (subcommand === 'setup') {
-      const defaultChannel = interaction.options.getChannel('channel', true);
+      const autoCreate = interaction.options.getBoolean('auto_create', false);
+      const defaultChannel = interaction.options.getChannel('channel');
       const modChannel = interaction.options.getChannel('moderation_channel');
+      const memberChannel = interaction.options.getChannel('member_channel');
+      const voiceChannel = interaction.options.getChannel('voice_channel');
+      const supportChannel = interaction.options.getChannel('support_channel');
+      const communityChannel = interaction.options.getChannel('community_channel');
 
-      await query(
-        `UPDATE guild_configs SET default_log_channel_id = $1, updated_at = NOW() WHERE guild_id = $2`,
-        [defaultChannel.id, interaction.guildId]
-      );
+      const { LoggingService } = require('../modules/logging/loggingService');
+      const logging = new LoggingService();
 
-      const modLogKeys = new Set(['MODERATION', 'SAFETY', 'CASES']);
-
-      for (const moduleKey of StarterLogModuleKeys) {
-        const logModule = getLogModule(moduleKey);
-        const targetChannelId = (modChannel && modLogKeys.has(moduleKey)) ? modChannel.id : defaultChannel.id;
-
-        await query(
-          `INSERT INTO log_module_settings (guild_id, module_key, delivery_mode, channel_id, enabled)
-           VALUES ($1, $2, $3, $4, true)
-           ON CONFLICT (guild_id, module_key)
-           DO UPDATE SET
-             channel_id = EXCLUDED.channel_id,
-             enabled = true,
-             delivery_mode = EXCLUDED.delivery_mode,
-             updated_at = NOW()`,
-          [interaction.guildId, moduleKey, logModule?.defaultDelivery || LogDeliveryMode.IMMEDIATE, targetChannelId]
-        );
+      if (autoCreate) {
+        if (!interaction.guild) {
+          return replyPrivate(interaction, { embeds: [createBaseEmbed({ title: 'Guild Required', description: 'Auto-creation must be run inside a Discord server.', color: SlickBotColors.ERROR })] });
+        }
+        const created = await logging.autoCreateAllLogChannels(interaction.guild);
+        const lines = [
+          `Category: **${created.category.name}**`,
+          ...Object.entries(created.createdChannels).map(([k, ch]) => `• ${k}: <#${ch.id}>`),
+          '',
+          '✅ All 27 tracking modules have been wired to your new logging category.'
+        ];
+        await replyPrivate(interaction, { embeds: [createSuccessEmbed('Server Logging Auto-Created', lines.join('\n'))] });
+        return;
       }
 
-      await ctx.logger.writeAudit({
-        guildId: interaction.guildId,
-        actorUserId: interaction.user.id,
-        actionKey: ActionKeys.LoggingConfigure,
-        targetType: 'GuildConfig',
-        targetId: interaction.guildId,
-        summary: 'Starter logging channels configured.',
-        metadata: { defaultChannelId: defaultChannel.id, moderationChannelId: modChannel?.id || null }
-      });
+      if (!defaultChannel && !modChannel && !memberChannel && !voiceChannel && !supportChannel && !communityChannel) {
+        return replyPrivate(interaction, await buildLoggingPanel(interaction.guildId));
+      }
 
-      const lines = [
-        `• Core Log Channel: <#${defaultChannel.id}>`,
-        modChannel ? `• Moderation & Safety Channel: <#${modChannel.id}>` : `• Moderation & Safety routed to: <#${defaultChannel.id}>`,
-        `• Enabled Starter Modules: **${StarterLogModuleKeys.join(', ')}**`,
+      if (defaultChannel) {
+        await logging.setupLogGroup(interaction.guildId, 'CORE_SYSTEM', defaultChannel.id);
+      }
+      if (modChannel) {
+        await logging.setupLogGroup(interaction.guildId, 'MODERATION_SAFETY', modChannel.id);
+      }
+      if (memberChannel) {
+        await logging.setupLogGroup(interaction.guildId, 'MEMBER_MESSAGE', memberChannel.id);
+      }
+      if (voiceChannel) {
+        await logging.setupLogGroup(interaction.guildId, 'VOICE_ACTIVITY', voiceChannel.id);
+      }
+      if (supportChannel) {
+        await logging.setupLogGroup(interaction.guildId, 'SUPPORT_TICKETS', supportChannel.id);
+      }
+      if (communityChannel) {
+        await logging.setupLogGroup(interaction.guildId, 'COMMUNITY_FEEDS', communityChannel.id);
+      }
+
+      const summaryLines = [
+        defaultChannel ? `• 🛡️ Core & System: <#${defaultChannel.id}>` : null,
+        modChannel ? `• ⚖️ Moderation & Safety: <#${modChannel.id}>` : null,
+        memberChannel ? `• 👥 Member & Messages: <#${memberChannel.id}>` : null,
+        voiceChannel ? `• 🎙️ Voice Activity: <#${voiceChannel.id}>` : null,
+        supportChannel ? `• 🎟️ Support & Tickets: <#${supportChannel.id}>` : null,
+        communityChannel ? `• ✨ Community & Feeds: <#${communityChannel.id}>` : null,
         '',
-        'Use `/logging manager` to customize individual event routes or delivery modes.'
-      ];
+        'All associated event modules have been routed to these log hubs.'
+      ].filter(Boolean);
 
-      await replyPrivate(interaction, { embeds: [createSuccessEmbed('Logging Configured', lines.join('\n'))] });
+      await replyPrivate(interaction, { embeds: [createSuccessEmbed('Logging Hubs Configured', summaryLines.join('\n'))] });
       return;
     }
 
@@ -372,5 +418,27 @@ module.exports = {
       return;
     }
 
+  },
+  async autocomplete(interaction) {
+    const focused = interaction.options.getFocused(true);
+    const queryText = String(focused?.value || '').toLowerCase().trim();
+
+    if (focused.name === 'module') {
+      const choices = LogModuleCatalog.map((m) => ({ name: `${m.label} (${m.key})`.slice(0, 100), value: m.key }));
+      const filtered = choices.filter(
+        (c) => c.name.toLowerCase().includes(queryText) || c.value.toLowerCase().includes(queryText)
+      ).slice(0, 25);
+      await interaction.respond(filtered).catch(() => {});
+      return;
+    }
+
+    if (focused.name === 'event') {
+      const choices = LogEventCatalog.map((e) => ({ name: `${e.label} (${e.key})`.slice(0, 100), value: e.key }));
+      const filtered = choices.filter(
+        (c) => c.name.toLowerCase().includes(queryText) || c.value.toLowerCase().includes(queryText)
+      ).slice(0, 25);
+      await interaction.respond(filtered).catch(() => {});
+      return;
+    }
   }
 };

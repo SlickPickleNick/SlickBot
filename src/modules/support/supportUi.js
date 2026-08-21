@@ -104,8 +104,10 @@ async function buildTicketsPanel(guildId) {
   });
 
   const row = createButtonRow([
+    createPanelButton(`${CustomIds.OnboardingModulePrefix}TICKETS`, 'Quick Setup', ButtonStyle.Success, '🚀'),
     createPanelButton(CustomIds.TicketsRefresh, 'Refresh', ButtonStyle.Secondary, '🔄'),
-    createPanelButton(CustomIds.SupportRefresh, 'Back to Support', ButtonStyle.Secondary, '↩️')
+    createPanelButton(CustomIds.SupportRefresh, 'Support Overview', ButtonStyle.Secondary, '🎟️'),
+    createPanelButton(CustomIds.SetupRefresh, 'Setup Center', ButtonStyle.Secondary, '⚙️')
   ]);
 
   return { embeds: [embed], components: [row] };
@@ -137,8 +139,10 @@ async function buildReportsPanel(guildId) {
   });
 
   const row = createButtonRow([
+    createPanelButton(`${CustomIds.OnboardingModulePrefix}REPORTS`, 'Quick Setup', ButtonStyle.Success, '🚀'),
     createPanelButton(CustomIds.ReportsRefresh, 'Refresh', ButtonStyle.Secondary, '🔄'),
-    createPanelButton(CustomIds.SupportRefresh, 'Back to Support', ButtonStyle.Secondary, '↩️')
+    createPanelButton(CustomIds.SupportRefresh, 'Support Overview', ButtonStyle.Secondary, '🎟️'),
+    createPanelButton(CustomIds.SetupRefresh, 'Setup Center', ButtonStyle.Secondary, '⚙️')
   ]);
 
   return { embeds: [embed], components: [row] };
@@ -171,8 +175,10 @@ async function buildApplicationsPanel(guildId) {
   });
 
   const buttons = [
+    createPanelButton(`${CustomIds.OnboardingModulePrefix}APPLICATIONS`, 'Quick Setup', ButtonStyle.Success, '🚀'),
     createPanelButton(CustomIds.ApplicationsRefresh, 'Refresh', ButtonStyle.Secondary, '🔄'),
-    createPanelButton(CustomIds.SupportRefresh, 'Back to Support', ButtonStyle.Secondary, '↩️')
+    createPanelButton(CustomIds.SupportRefresh, 'Support Overview', ButtonStyle.Secondary, '🎟️'),
+    createPanelButton(CustomIds.SetupRefresh, 'Setup Center', ButtonStyle.Secondary, '⚙️')
   ];
   return { embeds: [embed], components: [createButtonRow(buttons)] };
 }
@@ -203,8 +209,10 @@ async function buildAppealsPanel(guildId) {
   });
 
   const row = createButtonRow([
+    createPanelButton(`${CustomIds.OnboardingModulePrefix}APPEALS`, 'Quick Setup', ButtonStyle.Success, '🚀'),
     createPanelButton(CustomIds.AppealsRefresh, 'Refresh', ButtonStyle.Secondary, '🔄'),
-    createPanelButton(CustomIds.SupportRefresh, 'Back to Support', ButtonStyle.Secondary, '↩️')
+    createPanelButton(CustomIds.SupportRefresh, 'Support Overview', ButtonStyle.Secondary, '🎟️'),
+    createPanelButton(CustomIds.SetupRefresh, 'Setup Center', ButtonStyle.Secondary, '⚙️')
   ]);
 
   return { embeds: [embed], components: [row] };

@@ -392,6 +392,11 @@ class CustomCommandService {
 
     const row2 = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
+        .setCustomId(`${CustomIds.OnboardingModulePrefix}CUSTOM_COMMANDS`)
+        .setLabel('Quick Setup')
+        .setStyle(ButtonStyle.Success)
+        .setEmoji('🚀'),
+      new ButtonBuilder()
         .setCustomId(CustomIds.CustomCommandsRefresh)
         .setLabel('Refresh')
         .setStyle(ButtonStyle.Secondary)

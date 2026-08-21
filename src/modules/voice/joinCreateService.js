@@ -912,6 +912,8 @@ class JoinCreateService {
   }
 
   async buildManagerPanel(guild) {
+    const { createButtonRow, createPanelButton, ButtonStyle } = require('../ui/uiService');
+    const { CustomIds } = require('../ui/customIds');
     const hubs = await this.listHubs(guild.id).catch(() => []);
     const active = await this.listActiveTempChannels(guild.id).catch(() => []);
     const enabled = hubs.filter((hub) => hub.enabled).length;
@@ -925,13 +927,21 @@ class JoinCreateService {
       '',
       'Use `/join-create setup` to register an existing voice channel, or `/join-create create-hub` to create and register a new one.'
     ].filter(Boolean);
-    return {
-      embeds: [createBaseEmbed({
-        title: 'SlickBot Join-to-Create Center',
-        description: lines.join('\n'),
-        color: hubs.length ? SlickBotColors.SUCCESS : SlickBotColors.WARNING
-      })]
-    };
+
+    const embed = createBaseEmbed({
+      title: 'SlickBot Community Setup • Join-to-Create Center',
+      description: lines.join('\n'),
+      color: hubs.length ? SlickBotColors.SUCCESS : SlickBotColors.WARNING,
+      footer: 'SlickBot Join-to-Create'
+    });
+
+    const row = createButtonRow([
+      createPanelButton(`${CustomIds.OnboardingModulePrefix}JOIN_TO_CREATE`, 'Quick Setup', ButtonStyle.Success, '🚀'),
+      createPanelButton(CustomIds.JoinCreateRefresh, 'Refresh', ButtonStyle.Secondary, '🔄'),
+      createPanelButton(CustomIds.SetupRefresh, 'Setup Center', ButtonStyle.Secondary, '⚙️')
+    ]);
+
+    return { embeds: [embed], components: [row] };
   }
 
   async buildHubEmbed(guildId, hubId) {
