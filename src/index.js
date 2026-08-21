@@ -434,6 +434,19 @@ async function handleFaqThreadChange(thread, action) {
 
 client.on(Events.ThreadCreate, async (thread) => {
   await handleFaqThreadChange(thread, 'created');
+  if (thread.guild) {
+    await logger.log({
+      guildId: thread.guild.id,
+      eventKey: 'thread-create',
+      title: 'Thread Created',
+      body: [
+        `Thread: <#${thread.id}> (\`${thread.name}\`)`,
+        thread.parentId ? `Parent Channel: <#${thread.parentId}>` : null,
+        thread.ownerId ? `Owner: <@${thread.ownerId}>` : null
+      ].filter(Boolean).join('\n'),
+      metadata: { threadId: thread.id, name: thread.name, parentId: thread.parentId }
+    }).catch(() => {});
+  }
 });
 
 client.on(Events.ThreadUpdate, async (oldThread, newThread) => {
@@ -442,6 +455,285 @@ client.on(Events.ThreadUpdate, async (oldThread, newThread) => {
 
 client.on(Events.ThreadDelete, async (thread) => {
   await handleFaqThreadChange(thread, 'deleted');
+  if (thread.guild) {
+    await logger.log({
+      guildId: thread.guild.id,
+      eventKey: 'thread-delete',
+      title: 'Thread Deleted',
+      body: [
+        `Thread Name: **#${thread.name}**`,
+        `Thread ID: \`${thread.id}\``,
+        thread.parentId ? `Parent Channel: <#${thread.parentId}>` : null
+      ].filter(Boolean).join('\n'),
+      metadata: { threadId: thread.id, name: thread.name, parentId: thread.parentId }
+    }).catch(() => {});
+  }
+});
+
+client.on(Events.ChannelCreate, async (channel) => {
+  if (!channel.guild) return;
+  await logger.log({
+    guildId: channel.guild.id,
+    eventKey: 'channel-create',
+    title: 'Channel Created',
+    body: [
+      `Channel: <#${channel.id}> (\`${channel.name}\`)`,
+      `Type: **${channel.type}**`,
+      channel.parentId ? `Category: <#${channel.parentId}>` : null
+    ].filter(Boolean).join('\n'),
+    metadata: { channelId: channel.id, name: channel.name, type: channel.type }
+  }).catch((error) => console.error('Failed to log channel create:', error));
+});
+
+client.on(Events.ChannelDelete, async (channel) => {
+  if (!channel.guild) return;
+  await logger.log({
+    guildId: channel.guild.id,
+    eventKey: 'channel-delete',
+    title: 'Channel Deleted',
+    body: [
+      `Channel Name: **#${channel.name}**`,
+      `Channel ID: \`${channel.id}\``,
+      `Type: **${channel.type}**`
+    ].join('\n'),
+    metadata: { channelId: channel.id, name: channel.name, type: channel.type }
+  }).catch((error) => console.error('Failed to log channel delete:', error));
+});
+
+client.on(Events.ChannelUpdate, async (oldChannel, newChannel) => {
+  if (!newChannel.guild) return;
+  const changes = [];
+  if (oldChannel.name !== newChannel.name) changes.push(`Name: \`#${oldChannel.name}\` ➔ \`#${newChannel.name}\``);
+  if (oldChannel.topic !== newChannel.topic) changes.push('Topic changed');
+  if (oldChannel.rateLimitPerUser !== newChannel.rateLimitPerUser) changes.push(`Slowmode: **${oldChannel.rateLimitPerUser || 0}s** ➔ **${newChannel.rateLimitPerUser || 0}s**`);
+  if (oldChannel.parentId !== newChannel.parentId) changes.push(`Category: ${oldChannel.parentId ? `<#${oldChannel.parentId}>` : 'None'} ➔ ${newChannel.parentId ? `<#${newChannel.parentId}>` : 'None'}`);
+  if (oldChannel.nsfw !== newChannel.nsfw) changes.push(`NSFW: **${newChannel.nsfw ? 'Enabled' : 'Disabled'}**`);
+
+  if (!changes.length) return;
+
+  await logger.log({
+    guildId: newChannel.guild.id,
+    eventKey: 'channel-update',
+    title: 'Channel Updated',
+    body: [
+      `Channel: <#${newChannel.id}> (\`${newChannel.name}\`)`,
+      ...changes
+    ].join('\n'),
+    metadata: { channelId: newChannel.id, changes }
+  }).catch((error) => console.error('Failed to log channel update:', error));
+});
+
+client.on(Events.GuildRoleCreate, async (role) => {
+  await logger.log({
+    guildId: role.guild.id,
+    eventKey: 'role-create',
+    title: 'Role Created',
+    body: [
+      `Role: <@&${role.id}> (\`${role.name}\`)`,
+      `Color: \`${role.hexColor}\``,
+      `Hoisted: **${role.hoist ? 'Yes' : 'No'}**`,
+      `Mentionable: **${role.mentionable ? 'Yes' : 'No'}**`
+    ].join('\n'),
+    metadata: { roleId: role.id, name: role.name }
+  }).catch((error) => console.error('Failed to log role create:', error));
+});
+
+client.on(Events.GuildRoleDelete, async (role) => {
+  await logger.log({
+    guildId: role.guild.id,
+    eventKey: 'role-delete',
+    title: 'Role Deleted',
+    body: [
+      `Role Name: **${role.name}**`,
+      `Role ID: \`${role.id}\``
+    ].join('\n'),
+    metadata: { roleId: role.id, name: role.name }
+  }).catch((error) => console.error('Failed to log role delete:', error));
+});
+
+client.on(Events.GuildRoleUpdate, async (oldRole, newRole) => {
+  const changes = [];
+  if (oldRole.name !== newRole.name) changes.push(`Name: \`${oldRole.name}\` ➔ \`${newRole.name}\``);
+  if (oldRole.hexColor !== newRole.hexColor) changes.push(`Color: \`${oldRole.hexColor}\` ➔ \`${newRole.hexColor}\``);
+  if (oldRole.hoist !== newRole.hoist) changes.push(`Hoisted: **${newRole.hoist ? 'Yes' : 'No'}**`);
+  if (oldRole.mentionable !== newRole.mentionable) changes.push(`Mentionable: **${newRole.mentionable ? 'Yes' : 'No'}**`);
+  if (oldRole.permissions.bitfield !== newRole.permissions.bitfield) changes.push('Permissions modified');
+
+  if (!changes.length) return;
+
+  await logger.log({
+    guildId: newRole.guild.id,
+    eventKey: 'role-update',
+    title: 'Role Updated',
+    body: [
+      `Role: <@&${newRole.id}> (\`${newRole.name}\`)`,
+      ...changes
+    ].join('\n'),
+    metadata: { roleId: newRole.id, changes }
+  }).catch((error) => console.error('Failed to log role update:', error));
+});
+
+client.on(Events.GuildBanAdd, async (ban) => {
+  await logger.log({
+    guildId: ban.guild.id,
+    eventKey: 'guild-ban-add',
+    title: 'Member Banned',
+    body: [
+      `User: ${ban.user.tag} (${ban.user.id})`,
+      `Reason: ${ban.reason || '*No reason provided*'}`
+    ].join('\n'),
+    metadata: { userId: ban.user.id, reason: ban.reason }
+  }).catch((error) => console.error('Failed to log ban add:', error));
+});
+
+client.on(Events.GuildBanRemove, async (ban) => {
+  await logger.log({
+    guildId: ban.guild.id,
+    eventKey: 'guild-ban-remove',
+    title: 'Member Unbanned',
+    body: [
+      `User: ${ban.user.tag} (${ban.user.id})`
+    ].join('\n'),
+    metadata: { userId: ban.user.id }
+  }).catch((error) => console.error('Failed to log ban remove:', error));
+});
+
+client.on(Events.InviteCreate, async (invite) => {
+  if (!invite.guild) return;
+  await logger.log({
+    guildId: invite.guild.id,
+    eventKey: 'invite-create',
+    title: 'Invite Created',
+    body: [
+      `Code: \`${invite.code}\``,
+      `Channel: ${invite.channel ? `<#${invite.channel.id}>` : '*Unknown*'}`,
+      `Created By: ${invite.inviter ? `<@${invite.inviter.id}> (${invite.inviter.tag})` : 'Unknown'}`,
+      invite.maxUses ? `Max Uses: **${invite.maxUses}**` : 'Max Uses: **Unlimited**',
+      invite.maxAge ? `Expires In: **${invite.maxAge}s**` : 'Expires: **Never**'
+    ].join('\n'),
+    metadata: { code: invite.code, channelId: invite.channel?.id, inviterId: invite.inviter?.id }
+  }).catch((error) => console.error('Failed to log invite create:', error));
+});
+
+client.on(Events.InviteDelete, async (invite) => {
+  if (!invite.guild) return;
+  await logger.log({
+    guildId: invite.guild.id,
+    eventKey: 'invite-delete',
+    title: 'Invite Deleted',
+    body: [
+      `Code: \`${invite.code}\``,
+      `Channel: ${invite.channel ? `<#${invite.channel.id}>` : '*Unknown*'}`
+    ].join('\n'),
+    metadata: { code: invite.code, channelId: invite.channel?.id }
+  }).catch((error) => console.error('Failed to log invite delete:', error));
+});
+
+client.on(Events.GuildEmojiCreate, async (emoji) => {
+  await logger.log({
+    guildId: emoji.guild.id,
+    eventKey: 'emoji-create',
+    title: 'Emoji Added',
+    body: [
+      `Emoji: ${emoji} (\`:${emoji.name}:\`)`,
+      `Animated: **${emoji.animated ? 'Yes' : 'No'}**`,
+      `ID: \`${emoji.id}\``
+    ].join('\n'),
+    metadata: { emojiId: emoji.id, name: emoji.name, animated: emoji.animated }
+  }).catch((error) => console.error('Failed to log emoji create:', error));
+});
+
+client.on(Events.GuildEmojiDelete, async (emoji) => {
+  await logger.log({
+    guildId: emoji.guild.id,
+    eventKey: 'emoji-delete',
+    title: 'Emoji Deleted',
+    body: [
+      `Emoji Name: \`:${emoji.name}:\``,
+      `ID: \`${emoji.id}\``
+    ].join('\n'),
+    metadata: { emojiId: emoji.id, name: emoji.name }
+  }).catch((error) => console.error('Failed to log emoji delete:', error));
+});
+
+client.on(Events.GuildEmojiUpdate, async (oldEmoji, newEmoji) => {
+  if (oldEmoji.name === newEmoji.name) return;
+  await logger.log({
+    guildId: newEmoji.guild.id,
+    eventKey: 'emoji-update',
+    title: 'Emoji Renamed',
+    body: [
+      `Emoji: ${newEmoji}`,
+      `Before: \`:${oldEmoji.name}:\``,
+      `After: \`:${newEmoji.name}:\``
+    ].join('\n'),
+    metadata: { emojiId: newEmoji.id, before: oldEmoji.name, after: newEmoji.name }
+  }).catch((error) => console.error('Failed to log emoji update:', error));
+});
+
+client.on(Events.GuildStickerCreate, async (sticker) => {
+  if (!sticker.guild) return;
+  await logger.log({
+    guildId: sticker.guild.id,
+    eventKey: 'sticker-create',
+    title: 'Sticker Added',
+    body: [
+      `Sticker: **${sticker.name}**`,
+      `Description: ${sticker.description || '*None*'}`,
+      `ID: \`${sticker.id}\``
+    ].join('\n'),
+    metadata: { stickerId: sticker.id, name: sticker.name }
+  }).catch((error) => console.error('Failed to log sticker create:', error));
+});
+
+client.on(Events.GuildStickerDelete, async (sticker) => {
+  if (!sticker.guild) return;
+  await logger.log({
+    guildId: sticker.guild.id,
+    eventKey: 'sticker-delete',
+    title: 'Sticker Deleted',
+    body: [
+      `Sticker Name: **${sticker.name}**`,
+      `ID: \`${sticker.id}\``
+    ].join('\n'),
+    metadata: { stickerId: sticker.id, name: sticker.name }
+  }).catch((error) => console.error('Failed to log sticker delete:', error));
+});
+
+client.on(Events.GuildStickerUpdate, async (oldSticker, newSticker) => {
+  if (!newSticker.guild) return;
+  const changes = [];
+  if (oldSticker.name !== newSticker.name) changes.push(`Name: \`${oldSticker.name}\` ➔ \`${newSticker.name}\``);
+  if (oldSticker.description !== newSticker.description) changes.push(`Description: ${newSticker.description || '*None*'}`);
+  if (!changes.length) return;
+
+  await logger.log({
+    guildId: newSticker.guild.id,
+    eventKey: 'sticker-update',
+    title: 'Sticker Updated',
+    body: [
+      `Sticker: **${newSticker.name}** (\`${newSticker.id}\`)`,
+      ...changes
+    ].join('\n'),
+    metadata: { stickerId: newSticker.id, changes }
+  }).catch((error) => console.error('Failed to log sticker update:', error));
+});
+
+client.on(Events.AutoModerationActionExecution, async (execution) => {
+  await logger.log({
+    guildId: execution.guild.id,
+    eventKey: 'automod-execution',
+    title: 'AutoMod Action Triggered',
+    body: [
+      `User: <@${execution.userId}>`,
+      `Rule: **${execution.ruleTriggerType || 'AutoMod Rule'}**`,
+      `Action: **${execution.action?.type || 'Blocked'}**`,
+      execution.channelId ? `Channel: <#${execution.channelId}>` : null,
+      execution.content ? `Content: ${execution.content}` : null,
+      execution.matchedKeyword ? `Matched Keyword: \`${execution.matchedKeyword}\`` : null
+    ].filter(Boolean).join('\n'),
+    metadata: { userId: execution.userId, ruleTriggerType: execution.ruleTriggerType, action: execution.action }
+  }).catch((error) => console.error('Failed to log automod execution:', error));
 });
 
 client.on(Events.MessageReactionAdd, async (reaction, user) => {

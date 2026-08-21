@@ -140,7 +140,7 @@ const ONBOARDING_STEPS = Object.freeze({
       autoCreateLabel: 'Auto-Create #bot-logs',
       autoCreateDescription: 'Creates private #bot-logs and #mod-logs channels for staff.',
       async getCurrent(guild) {
-        const res = await query(`SELECT channel_id FROM log_module_settings WHERE guild_id = $1 AND module_key = 'CORE' AND enabled = true`, [guild.id]).catch(() => ({ rows: [] }));
+        const res = await query(`SELECT channel_id FROM log_module_settings WHERE guild_id = $1 AND LOWER(module_key) = 'core' AND enabled = true`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.channel_id ? `<#${res.rows[0].channel_id}>` : null;
       },
       async applyDefault(guild) {
@@ -294,7 +294,7 @@ const ONBOARDING_STEPS = Object.freeze({
       autoCreateLabel: 'Auto-Create #bot-logs',
       autoCreateDescription: 'Creates private #bot-logs for staff.',
       async getCurrent(guild) {
-        const res = await query(`SELECT channel_id FROM log_module_settings WHERE guild_id = $1 AND module_key = 'CORE' AND enabled = true`, [guild.id]).catch(() => ({ rows: [] }));
+        const res = await query(`SELECT channel_id FROM log_module_settings WHERE guild_id = $1 AND LOWER(module_key) = 'core' AND enabled = true`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.channel_id ? `<#${res.rows[0].channel_id}>` : null;
       },
       async applyDefault(guild) {
@@ -330,7 +330,7 @@ const ONBOARDING_STEPS = Object.freeze({
       autoCreateLabel: 'Auto-Create #mod-logs',
       autoCreateDescription: 'Creates private #mod-logs for staff.',
       async getCurrent(guild) {
-        const res = await query(`SELECT channel_id FROM log_module_settings WHERE guild_id = $1 AND module_key = 'MODERATION' AND enabled = true`, [guild.id]).catch(() => ({ rows: [] }));
+        const res = await query(`SELECT channel_id FROM log_module_settings WHERE guild_id = $1 AND LOWER(module_key) = 'moderation' AND enabled = true`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.channel_id ? `<#${res.rows[0].channel_id}>` : null;
       },
       async applyDefault(guild) {
@@ -366,7 +366,7 @@ const ONBOARDING_STEPS = Object.freeze({
       autoCreateLabel: 'Auto-Create #member-logs',
       autoCreateDescription: 'Creates private #member-logs channel.',
       async getCurrent(guild) {
-        const res = await query(`SELECT channel_id FROM log_module_settings WHERE guild_id = $1 AND module_key = 'MEMBER' AND enabled = true`, [guild.id]).catch(() => ({ rows: [] }));
+        const res = await query(`SELECT channel_id FROM log_module_settings WHERE guild_id = $1 AND LOWER(module_key) = 'member' AND enabled = true`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.channel_id ? `<#${res.rows[0].channel_id}>` : null;
       },
       async applyDefault(guild) {
@@ -402,7 +402,7 @@ const ONBOARDING_STEPS = Object.freeze({
       autoCreateLabel: 'Auto-Create #voice-logs',
       autoCreateDescription: 'Creates private #voice-logs channel.',
       async getCurrent(guild) {
-        const res = await query(`SELECT channel_id FROM log_module_settings WHERE guild_id = $1 AND module_key = 'VOICE' AND enabled = true`, [guild.id]).catch(() => ({ rows: [] }));
+        const res = await query(`SELECT channel_id FROM log_module_settings WHERE guild_id = $1 AND LOWER(module_key) = 'voice' AND enabled = true`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.channel_id ? `<#${res.rows[0].channel_id}>` : null;
       },
       async applyDefault(guild) {
@@ -438,7 +438,7 @@ const ONBOARDING_STEPS = Object.freeze({
       autoCreateLabel: 'Auto-Create #support-logs',
       autoCreateDescription: 'Creates private #support-logs channel for staff.',
       async getCurrent(guild) {
-        const res = await query(`SELECT channel_id FROM log_module_settings WHERE guild_id = $1 AND module_key = 'TICKETS' AND enabled = true`, [guild.id]).catch(() => ({ rows: [] }));
+        const res = await query(`SELECT channel_id FROM log_module_settings WHERE guild_id = $1 AND LOWER(module_key) = 'tickets' AND enabled = true`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.channel_id ? `<#${res.rows[0].channel_id}>` : null;
       },
       async applyDefault(guild) {
@@ -474,7 +474,7 @@ const ONBOARDING_STEPS = Object.freeze({
       autoCreateLabel: 'Auto-Create #community-logs',
       autoCreateDescription: 'Creates private #community-logs channel.',
       async getCurrent(guild) {
-        const res = await query(`SELECT channel_id FROM log_module_settings WHERE guild_id = $1 AND module_key = 'GIVEAWAYS' AND enabled = true`, [guild.id]).catch(() => ({ rows: [] }));
+        const res = await query(`SELECT channel_id FROM log_module_settings WHERE guild_id = $1 AND LOWER(module_key) = 'giveaways' AND enabled = true`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.channel_id ? `<#${res.rows[0].channel_id}>` : null;
       },
       async applyDefault(guild) {

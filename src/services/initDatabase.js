@@ -1567,10 +1567,13 @@ async function initDatabase() {
   
   await query(`ALTER TABLE bot_presence_settings ADD COLUMN IF NOT EXISTS stream_url TEXT;`);
 
-await query(`CREATE INDEX IF NOT EXISTS idx_bot_presence_guild ON bot_presence_settings(guild_id);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_bot_presence_guild ON bot_presence_settings(guild_id);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_moderation_cases_guild_target ON moderation_cases(guild_id, target_user_id, created_at DESC);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_moderation_cases_guild_number ON moderation_cases(guild_id, case_number);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_user_notes_guild_target ON user_notes(guild_id, target_user_id, created_at DESC);`);
+
+  await query(`UPDATE log_module_settings SET module_key = LOWER(module_key) WHERE module_key != LOWER(module_key);`).catch(() => {});
+  await query(`UPDATE log_settings SET event_key = LOWER(event_key) WHERE event_key != LOWER(event_key);`).catch(() => {});
 
 
   await query(`CREATE INDEX IF NOT EXISTS idx_ticket_types_guild ON ticket_types(guild_id, name);`);

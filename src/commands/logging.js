@@ -268,7 +268,7 @@ module.exports = {
     }
 
     if (subcommand === 'set-channel') {
-      const moduleKey = interaction.options.getString('module', true);
+      const moduleKey = String(interaction.options.getString('module', true)).trim().toLowerCase();
       const channel = interaction.options.getChannel('channel', true);
       const logModule = getLogModule(moduleKey);
 
@@ -302,7 +302,7 @@ module.exports = {
     }
 
     if (subcommand === 'clear-channel') {
-      const moduleKey = interaction.options.getString('module', true);
+      const moduleKey = String(interaction.options.getString('module', true)).trim().toLowerCase();
       await query(
         `INSERT INTO log_module_settings (guild_id, module_key, delivery_mode, channel_id, enabled)
          VALUES ($1, $2, 'DISABLED', NULL, false)
@@ -325,7 +325,7 @@ module.exports = {
     }
 
     if (subcommand === 'module-mode') {
-      const moduleKey = interaction.options.getString('module', true);
+      const moduleKey = String(interaction.options.getString('module', true)).trim().toLowerCase();
       const delivery = interaction.options.getString('delivery', true);
 
       await query(
@@ -344,7 +344,7 @@ module.exports = {
     }
 
     if (subcommand === 'event-mode') {
-      const eventKey = interaction.options.getString('event', true);
+      const eventKey = String(interaction.options.getString('event', true)).trim().toLowerCase();
       const delivery = interaction.options.getString('delivery', true);
 
       await query(
@@ -363,7 +363,7 @@ module.exports = {
     }
 
     if (subcommand === 'event-channel') {
-      const eventKey = interaction.options.getString('event', true);
+      const eventKey = String(interaction.options.getString('event', true)).trim().toLowerCase();
       const channel = interaction.options.getChannel('channel', true);
       const event = getLogEvent(eventKey);
 
@@ -384,7 +384,7 @@ module.exports = {
     }
 
     if (subcommand === 'clear-event') {
-      const eventKey = interaction.options.getString('event', true);
+      const eventKey = String(interaction.options.getString('event', true)).trim().toLowerCase();
       await query(
         `DELETE FROM log_settings WHERE guild_id = $1 AND event_key = $2`,
         [interaction.guildId, eventKey]
@@ -394,12 +394,29 @@ module.exports = {
     }
 
     if (subcommand === 'test') {
-      const eventKey = interaction.options.getString('event', false) || 'system';
+      const eventInput = String(interaction.options.getString('event', false) || 'all').trim().toLowerCase();
+
+      if (eventInput === 'all') {
+        if (!interaction.guild) {
+          return replyPrivate(interaction, { embeds: [createBaseEmbed({ title: 'Server Required', description: 'Log testing must be performed within a Discord server.', color: SlickBotColors.ERROR })] });
+        }
+        const results = await ctx.logger.testAllHubs(interaction.guild, interaction.user);
+        const lines = results.map((r) => `${r.ok ? '✅' : '⚪'} **${r.group.label}**: ${r.channelId ? `<#${r.channelId}>` : '*No channel configured*'}`);
+        await replyPrivate(interaction, {
+          embeds: [createSuccessEmbed('Logging Hubs Tested', [
+            'Test messages have been dispatched to all configured logging hubs:',
+            '',
+            ...lines
+          ].join('\n'))]
+        });
+        return;
+      }
+
       const result = await ctx.logger.log({
         guildId: interaction.guildId,
-        eventKey,
+        eventKey: eventInput,
         title: 'SlickBot Test Log',
-        body: `Test log for **${eventKey}** created by ${interaction.user.tag}.`,
+        body: `Test log for **${eventInput}** created by <@${interaction.user.id}> (${interaction.user.tag}).`,
         actorUserId: interaction.user.id
       });
 
@@ -407,14 +424,16 @@ module.exports = {
         await replyPrivate(interaction, {
           embeds: [createBaseEmbed({
             title: 'No Log Module Channel Configured',
-            description: `No Discord log was sent because **${eventKey}** does not have a configured module or event channel. Use \`/logging set-channel\` first.`,
+            description: `No Discord log was sent because **${eventInput}** does not have a configured module or event channel. Use \`/logging setup\` or \`/logging set-channel\` first.`,
             color: SlickBotColors.WARNING
           })]
         });
         return;
       }
 
-      await replyPrivate(interaction, await buildLoggingPanel(interaction.guildId));
+      await replyPrivate(interaction, {
+        embeds: [createSuccessEmbed('Test Log Sent', `Successfully sent a test log for **${eventInput}** into <#${result.channelId}>.`)]
+      });
       return;
     }
 
@@ -433,8 +452,11 @@ module.exports = {
     }
 
     if (focused.name === 'event') {
-      const choices = LogEventCatalog.map((e) => ({ name: `${e.label} (${e.key})`.slice(0, 100), value: e.key }));
-      const filtered = choices.filter(
+      const allChoices = [
+        { name: '🧪 Test All 6 Hubs (all)', value: 'all' },
+        ...LogEventCatalog.map((e) => ({ name: `${e.label} (${e.key})`.slice(0, 100), value: e.key }))
+      ];
+      const filtered = allChoices.filter(
         (c) => c.name.toLowerCase().includes(queryText) || c.value.toLowerCase().includes(queryText)
       ).slice(0, 25);
       await interaction.respond(filtered).catch(() => {});

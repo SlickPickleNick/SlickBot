@@ -9,6 +9,21 @@ const LogDeliveryMode = Object.freeze({
   DISABLED: 'DISABLED'
 });
 
+function resolveLogColor(eventKey, explicitColor) {
+  if (explicitColor !== undefined && explicitColor !== null) return explicitColor;
+  const key = String(eventKey || '').toLowerCase();
+  if (key.includes('delete') || key.includes('leave') || key.includes('remove') || key.includes('ban') || key.includes('error') || key.includes('fail') || key.includes('expired') || key.includes('ended') || key.includes('timeout')) {
+    return 0xed4245;
+  }
+  if (key.includes('join') || key.includes('create') || key.includes('add') || key.includes('unlock') || key.includes('complete') || key.includes('started') || key.includes('save') || key.includes('active') || key.includes('unban')) {
+    return 0x57f287;
+  }
+  if (key.includes('edit') || key.includes('update') || key.includes('nickname') || key.includes('role') || key.includes('reset') || key.includes('warning') || key.includes('config')) {
+    return 0xfee75c;
+  }
+  return 0x5865f2;
+}
+
 class LoggingService {
   constructor(client) {
     this.client = client;
@@ -57,26 +72,28 @@ class LoggingService {
    */
   async getLogRouting(guildId, eventKey) {
     if (!guildId || !eventKey) return null;
-    const cacheKey = `${guildId}:${eventKey}`;
+    const cleanEventKey = String(eventKey).trim().toLowerCase();
+    const cacheKey = `${guildId}:${cleanEventKey}`;
     const cached = this.routingCache.get(cacheKey);
     if (cached !== undefined) return cached;
 
-    const event = getLogEvent(eventKey) || {
-      key: eventKey,
-      moduleKey: eventKey,
-      label: eventKey,
+    const event = getLogEvent(cleanEventKey) || {
+      key: cleanEventKey,
+      moduleKey: cleanEventKey,
+      label: cleanEventKey,
       defaultDelivery: LogDeliveryMode.IMMEDIATE
     };
-    const moduleInfo = getLogModule(event.moduleKey);
+    const cleanModuleKey = String(event.moduleKey || cleanEventKey).trim().toLowerCase();
+    const moduleInfo = getLogModule(cleanModuleKey);
 
     const [moduleResult, eventResult] = await Promise.all([
       query(
-        `SELECT * FROM log_module_settings WHERE guild_id = $1 AND module_key = $2 LIMIT 1`,
-        [guildId, event.moduleKey]
+        `SELECT * FROM log_module_settings WHERE guild_id = $1 AND LOWER(module_key) = $2 LIMIT 1`,
+        [guildId, cleanModuleKey]
       ).catch(() => ({ rows: [] })),
       query(
-        `SELECT * FROM log_settings WHERE guild_id = $1 AND event_key = $2 LIMIT 1`,
-        [guildId, eventKey]
+        `SELECT * FROM log_settings WHERE guild_id = $1 AND LOWER(event_key) = $2 LIMIT 1`,
+        [guildId, cleanEventKey]
       ).catch(() => ({ rows: [] }))
     ]);
 
@@ -109,8 +126,8 @@ class LoggingService {
 
     const routing = {
       guildId,
-      eventKey,
-      moduleKey: event.moduleKey,
+      eventKey: cleanEventKey,
+      moduleKey: cleanModuleKey,
       channelId,
       deliveryMode: LogDeliveryMode.IMMEDIATE,
       event,
@@ -126,7 +143,7 @@ class LoggingService {
     if (!routing) return { sent: false, reason: 'NO_LOG_MODULE_CHANNEL' };
 
     await this.sendImmediate(input, routing);
-    return { sent: true, deliveryMode: LogDeliveryMode.IMMEDIATE, moduleKey: routing.moduleKey };
+    return { sent: true, deliveryMode: LogDeliveryMode.IMMEDIATE, moduleKey: routing.moduleKey, channelId: routing.channelId };
   }
 
   async sendImmediate(input, routing) {
@@ -135,14 +152,35 @@ class LoggingService {
     const channel = await this.fetchSendableChannel(routing.channelId);
     if (!channel) return;
 
-    const embed = new EmbedBuilder()
-      .setColor(0x7869ff)
-      .setTitle(input.title)
-      .setDescription(truncate(input.body, 4000))
-      .setFooter({ text: `${routing.module?.label || routing.moduleKey} • ${routing.event?.label || input.eventKey}` })
-      .setTimestamp(new Date());
+    const me = channel.guild?.members?.me;
+    if (me && typeof channel.permissionsFor === 'function') {
+      const perms = channel.permissionsFor(me);
+      if (perms && !perms.has(['ViewChannel', 'SendMessages', 'EmbedLinks'])) {
+        console.warn(`[LoggingService] Missing permissions to send embed in #${channel.name} (${channel.id})`);
+        return;
+      }
+    }
 
-    await channel.send({ embeds: [embed] });
+    const embed = new EmbedBuilder()
+      .setColor(resolveLogColor(input.eventKey, input.color))
+      .setTitle(input.title ? truncate(input.title, 256) : 'SlickBot Log')
+      .setDescription(input.body ? truncate(input.body, 4000) : '')
+      .setFooter({ text: `${routing.module?.label || routing.moduleKey} • ${routing.event?.label || input.eventKey}` })
+      .setTimestamp(input.timestamp ? new Date(input.timestamp) : new Date());
+
+    if (input.fields && Array.isArray(input.fields)) {
+      embed.addFields(input.fields.slice(0, 25));
+    }
+    if (input.thumbnailUrl) {
+      embed.setThumbnail(input.thumbnailUrl);
+    }
+    if (input.author) {
+      embed.setAuthor(input.author);
+    }
+
+    await channel.send({ embeds: [embed] }).catch((err) => {
+      console.error(`[LoggingService] Failed to send log to channel ${routing.channelId}:`, err);
+    });
   }
 
   async fetchSendableChannel(channelId) {
@@ -155,7 +193,7 @@ class LoggingService {
 
   async setModuleChannel(guildId, moduleKey, channelId, deliveryMode = LogDeliveryMode.IMMEDIATE) {
     const logModule = getLogModule(moduleKey);
-    const key = (logModule?.key || moduleKey).toUpperCase();
+    const key = String(logModule?.key || moduleKey).trim().toLowerCase();
     await query(
       `INSERT INTO log_module_settings (guild_id, module_key, delivery_mode, channel_id, enabled)
        VALUES ($1, $2, $3, $4, true)
@@ -179,10 +217,11 @@ class LoggingService {
     }
 
     const { StarterLogModuleKeys } = require('./logEventCatalog');
-    const modLogKeys = new Set(['MODERATION', 'SAFETY', 'CASES']);
+    const modLogKeys = new Set(['moderation', 'lockdown', 'temp-roles']);
     for (const moduleKey of StarterLogModuleKeys) {
       const logModule = getLogModule(moduleKey);
-      const targetChannelId = (moderationChannelId && modLogKeys.has(moduleKey)) ? moderationChannelId : defaultChannelId;
+      const cleanKey = String(moduleKey).trim().toLowerCase();
+      const targetChannelId = (moderationChannelId && modLogKeys.has(cleanKey)) ? moderationChannelId : defaultChannelId;
       if (targetChannelId) {
         await query(
           `INSERT INTO log_module_settings (guild_id, module_key, delivery_mode, channel_id, enabled)
@@ -193,7 +232,7 @@ class LoggingService {
              enabled = true,
              delivery_mode = EXCLUDED.delivery_mode,
              updated_at = NOW()`,
-          [guildId, moduleKey, logModule?.defaultDelivery || LogDeliveryMode.IMMEDIATE, targetChannelId]
+          [guildId, cleanKey, logModule?.defaultDelivery || LogDeliveryMode.IMMEDIATE, targetChannelId]
         );
       }
     }
@@ -264,7 +303,35 @@ class LoggingService {
     this.invalidateRouting(guild.id);
     return { category, createdChannels };
   }
+
+  async testAllHubs(guild, user) {
+    const { LOG_GROUPS } = require('./logEventCatalog');
+    const groupChannels = await this.getLogGroupChannels(guild.id);
+    const results = [];
+
+    for (const group of LOG_GROUPS) {
+      const info = groupChannels.get(group.key);
+      const primaryKey = group.moduleKeys[0];
+      const res = await this.log({
+        guildId: guild.id,
+        eventKey: primaryKey,
+        title: `${group.emoji} ${group.label} Test Log`,
+        body: [
+          `This is a test notification from the **${group.label}** logging hub.`,
+          '',
+          `• Target Log Channel: ${info?.channelId ? `<#${info.channelId}>` : '*Not configured*'}`,
+          `• Primary Module: \`${primaryKey}\``,
+          `• Underlying Modules: ${group.moduleKeys.map((k) => `\`${k}\``).join(', ')}`,
+          `• Triggered by: <@${user.id}>`
+        ].join('\n'),
+        actorUserId: user.id
+      });
+      results.push({ group, ok: Boolean(res.sent), channelId: info?.channelId || null });
+    }
+
+    return results;
+  }
 }
 
-module.exports = { LoggingService, LogDeliveryMode };
+module.exports = { LoggingService, LogDeliveryMode, resolveLogColor };
 

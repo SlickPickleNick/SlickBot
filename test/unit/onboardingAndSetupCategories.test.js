@@ -187,12 +187,12 @@ test('buildOnboardingPayload includes Keep Current and Keep Default action butto
   assert.ok(customIds.some((id) => id.startsWith(CustomIds.OnboardingCancelPrefix)), 'Has Exit button');
 });
 
-test('LOG_GROUPS aggregates all 27 LogModuleCatalog modules across 6 primary hubs', () => {
+test('LOG_GROUPS aggregates all LogModuleCatalog modules across 6 primary hubs', () => {
   const { LOG_GROUPS, getLogGroup, LogModuleCatalog } = require('../../src/modules/logging/logEventCatalog');
   assert.equal(LOG_GROUPS.length, 6, 'Has 6 log groups');
 
   const allModuleKeysInGroups = LOG_GROUPS.flatMap((g) => g.moduleKeys);
-  assert.equal(allModuleKeysInGroups.length, 27, 'Covers all 27 log modules');
+  assert.equal(allModuleKeysInGroups.length, 30, 'Covers all 30 log modules');
   assert.equal(allModuleKeysInGroups.length, LogModuleCatalog.length, 'Matches catalog length');
 
   for (const mod of LogModuleCatalog) {

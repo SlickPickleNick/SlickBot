@@ -144,6 +144,24 @@ const LogModuleCatalog = Object.freeze([
     defaultDelivery: 'IMMEDIATE'
   },
   {
+    key: 'channels',
+    label: 'Channels & Threads',
+    description: 'Channel creation, deletion, updates, and thread activity.',
+    defaultDelivery: 'IMMEDIATE'
+  },
+  {
+    key: 'roles',
+    label: 'Server Roles',
+    description: 'Role creation, deletion, and role permission/setting updates.',
+    defaultDelivery: 'IMMEDIATE'
+  },
+  {
+    key: 'server',
+    label: 'Server & Safety',
+    description: 'Server settings, invites, custom emojis, and stickers.',
+    defaultDelivery: 'IMMEDIATE'
+  },
+  {
     key: 'custom-commands',
     label: 'Custom Commands',
     description: 'Custom command configuration and trigger activity.',
@@ -173,6 +191,29 @@ const LogEventCatalog = Object.freeze([
   { key: 'moderation', moduleKey: 'moderation', label: 'Moderation Actions', description: 'Warns, timeouts, kicks, bans, and bulk actions.', defaultDelivery: 'IMMEDIATE' },
   { key: 'cases', moduleKey: 'moderation', label: 'Cases', description: 'Case creation and case status updates.', defaultDelivery: 'IMMEDIATE' },
   { key: 'user-notes', moduleKey: 'moderation', label: 'User Notes', description: 'Private staff notes for users.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'guild-ban-add', moduleKey: 'moderation', label: 'Member Banned', description: 'A member was banned from the server on Discord.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'guild-ban-remove', moduleKey: 'moderation', label: 'Member Unbanned', description: 'A member ban was revoked on Discord.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'automod-execution', moduleKey: 'moderation', label: 'AutoMod Action', description: 'Discord AutoMod rule blocked or flagged a message.', defaultDelivery: 'IMMEDIATE' },
+
+  { key: 'channel-create', moduleKey: 'channels', label: 'Channel Created', description: 'A text, voice, or category channel was created.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'channel-delete', moduleKey: 'channels', label: 'Channel Deleted', description: 'A channel or category was deleted.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'channel-update', moduleKey: 'channels', label: 'Channel Updated', description: 'Channel name, topic, permissions, or slowmode changed.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'thread-create', moduleKey: 'channels', label: 'Thread Created', description: 'A new thread or forum post was created.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'thread-delete', moduleKey: 'channels', label: 'Thread Deleted', description: 'A thread was deleted.', defaultDelivery: 'IMMEDIATE' },
+
+  { key: 'role-create', moduleKey: 'roles', label: 'Role Created', description: 'A new server role was created.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'role-delete', moduleKey: 'roles', label: 'Role Deleted', description: 'A server role was deleted.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'role-update', moduleKey: 'roles', label: 'Role Updated', description: 'Role name, color, permissions, or hoist status changed.', defaultDelivery: 'IMMEDIATE' },
+
+  { key: 'server-update', moduleKey: 'server', label: 'Server Updated', description: 'Server name, icon, banner, or server settings changed.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'invite-create', moduleKey: 'server', label: 'Invite Created', description: 'A new invite link was generated.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'invite-delete', moduleKey: 'server', label: 'Invite Deleted', description: 'An invite link was deleted or expired.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'emoji-create', moduleKey: 'server', label: 'Emoji Added', description: 'A custom emoji was added to the server.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'emoji-delete', moduleKey: 'server', label: 'Emoji Removed', description: 'A custom emoji was deleted.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'emoji-update', moduleKey: 'server', label: 'Emoji Updated', description: 'A custom emoji was renamed.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'sticker-create', moduleKey: 'server', label: 'Sticker Added', description: 'A custom sticker was added to the server.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'sticker-delete', moduleKey: 'server', label: 'Sticker Removed', description: 'A custom sticker was deleted.', defaultDelivery: 'IMMEDIATE' },
+  { key: 'sticker-update', moduleKey: 'server', label: 'Sticker Updated', description: 'A custom sticker was renamed.', defaultDelivery: 'IMMEDIATE' },
 
   { key: 'member-join', moduleKey: 'member', label: 'Member Joins', description: 'Members joining the server.', defaultDelivery: 'IMMEDIATE' },
   { key: 'member-leave', moduleKey: 'member', label: 'Member Leaves', description: 'Members leaving the server.', defaultDelivery: 'IMMEDIATE' },
@@ -303,9 +344,9 @@ const LOG_GROUPS = Object.freeze([
     key: 'CORE_SYSTEM',
     label: 'Core & System Logs',
     emoji: '🛡️',
-    description: 'System startup, configuration changes, permission updates, bot status, and server stats.',
+    description: 'System startup, configuration changes, permission updates, bot status, server stats, channel/role changes, and server updates.',
     defaultChannelName: 'bot-logs',
-    moduleKeys: ['core', 'server-stats', 'bot-updates']
+    moduleKeys: ['core', 'server-stats', 'bot-updates', 'server', 'channels', 'roles']
   },
   {
     key: 'MODERATION_SAFETY',

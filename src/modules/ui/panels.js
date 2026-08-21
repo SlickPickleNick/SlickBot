@@ -835,12 +835,12 @@ async function buildLoggingPanel(guildId) {
       if (row.channel_id) parts.push(`→ <#${row.channel_id}>`);
       return `• **${event?.label || row.event_key}** ` + '`' + row.event_key + '`' + ` — ${parts.join(' ') || 'Override saved'}`;
     }).join('\n')
-    : 'No event overrides configured. All 27 modules follow their parent group settings.';
+    : `No event overrides configured. All ${LogModuleCatalog.length} modules follow their parent group settings.`;
 
   const embed = createBaseEmbed({
     title: 'SlickBot Core Setup • Logging Center',
     description: [
-      '**Viewing:** Server Event Logging (27 Tracking Modules in 6 Hubs)',
+      `**Viewing:** Server Event Logging (${LogModuleCatalog.length} Tracking Modules in 6 Hubs)`,
       '',
       '**Aggregated Log Groups**',
       groupBlocks,
