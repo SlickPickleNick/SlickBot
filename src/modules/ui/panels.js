@@ -65,27 +65,27 @@ const MODULE_CATEGORIES = Object.freeze([
 const MODULE_SETUP_CATALOG = Object.freeze({
   [ModuleKeys.PERMISSIONS]: {
     name: 'Permissions', category: 'Core Setup', description: 'Controls SlickBot command access, permission levels, teams, public actions, and ignored users.',
-    managerCommand: '/permissions panel', setupCommand: '/permissions panel',
-    nextSteps: ['Run `/permissions apply-defaults` after new releases.', 'Use `/team create` and `/team add-role` for staff permission groups.', 'Use `/permissions panel` to review module and command locks.'],
-    usefulCommands: ['/permissions panel', '/permissions apply-defaults', '/team create', '/team add-role', '/team allow']
+    managerCommand: '/permissions manager', setupCommand: '/permissions setup',
+    nextSteps: ['Run `/permissions setup` to configure admin and mod roles.', 'Use `/team create` and `/team add-role` for staff permission groups.', 'Use `/permissions manager` to review module and command locks.'],
+    usefulCommands: ['/permissions manager', '/permissions setup', '/permissions apply-defaults', '/team create', '/team add-role', '/team allow']
   },
   [ModuleKeys.LOGGING]: {
     name: 'Logging', category: 'Core Setup', description: 'Routes SlickBot event logs to configured channels by log module or individual event override.',
-    managerCommand: '/logging panel', setupCommand: '/logging set-channel',
-    nextSteps: ['Set at least one log group with `/logging set-channel`.', 'Use `/logging test` to verify delivery.', 'Use event overrides only when a specific event needs special routing.'],
-    usefulCommands: ['/logging panel', '/logging set-channel', '/logging test']
+    managerCommand: '/logging manager', setupCommand: '/logging setup',
+    nextSteps: ['Set starter log channels with `/logging setup`.', 'Open `/logging manager` to customize event routes and delivery modes.', 'Use `/logging test` to verify delivery.'],
+    usefulCommands: ['/logging manager', '/logging setup', '/logging set-channel', '/logging test']
   },
   [ModuleKeys.STATUS]: {
     name: 'Bot Status', category: 'Core Setup', description: 'Controls SlickBot presence, activity text, diagnostics, version checks, and bot-level tools.',
-    managerCommand: '/status view', setupCommand: '/status set',
-    nextSteps: ['Use `/bot version` after Railway deploys.', 'Use `/bot test` after major setup changes.', 'Use `/status stream-url` to save a URL for the Streaming quick button.'],
-    usefulCommands: ['/status view', '/status set', '/status stream-url', '/status clear', '/bot version', '/bot test']
+    managerCommand: '/status manager', setupCommand: '/status set',
+    nextSteps: ['Use `/status manager` to toggle online status and activities.', 'Use `/bot version` after Railway deploys.', 'Use `/status stream-url` to save a URL for the Streaming quick button.'],
+    usefulCommands: ['/status manager', '/status set', '/status stream-url', '/status clear', '/bot version', '/bot test']
   },
   [ModuleKeys.MODERATION]: {
     name: 'Moderation', category: 'Core Setup', description: 'Provides moderation actions, cases, and user notes.',
-    managerCommand: '/mod panel', setupCommand: '/logging set-channel',
-    nextSteps: ['Configure moderation/case log channels in `/logging panel`.', 'Review staff access in `/permissions panel`.', 'Use `/case panel` to review recent cases.'],
-    usefulCommands: ['/mod panel', '/mod warn', '/mod timeout', '/case panel', '/note add']
+    managerCommand: '/mod manager', setupCommand: '/logging setup',
+    nextSteps: ['Configure moderation/case log channels with `/logging setup`.', 'Review staff access with `/permissions manager`.', 'Use `/case panel` to review recent cases.'],
+    usefulCommands: ['/mod manager', '/mod warn', '/mod timeout', '/case panel', '/note add']
   },
   [ModuleKeys.LOCKDOWN]: {
     name: 'Lockdown / Safety', category: 'Core Setup', description: 'Runs emergency lockdown presets that snapshot and restore @everyone channel overwrites for configured text and voice channels.',
@@ -95,9 +95,9 @@ const MODULE_SETUP_CATALOG = Object.freeze({
   },
   [ModuleKeys.TEMP_ROLES]: {
     name: 'Temporary Roles', category: 'Core Setup', description: 'Lets moderators assign roles to members for a fixed duration and automatically removes them when they expire.',
-    managerCommand: '/temp-role active', setupCommand: '/temp-role add',
-    nextSteps: ['Use `/temp-role add` to assign a temporary role.', 'Use `/temp-role list` or `/temp-role active` to review active assignments.', 'Use `/temp-role remove` to end an assignment early.'],
-    usefulCommands: ['/temp-role add', '/temp-role remove', '/temp-role list', '/temp-role active']
+    managerCommand: '/temp-role manager', setupCommand: '/temp-role add',
+    nextSteps: ['Use `/temp-role add` to assign a temporary role.', 'Use `/temp-role manager` or `/temp-role list` to review active assignments.', 'Use `/temp-role remove` to end an assignment early.'],
+    usefulCommands: ['/temp-role manager', '/temp-role add', '/temp-role remove', '/temp-role list']
   },
   [ModuleKeys.TICKETS]: {
     name: 'Tickets', category: 'Support Systems', description: 'Creates private support channels with ticket types, questions, staff assignment, escalation, transcripts, and panels.',
@@ -131,9 +131,9 @@ const MODULE_SETUP_CATALOG = Object.freeze({
   },
   [ModuleKeys.REACTION_ROLES]: {
     name: 'Role Panels', category: 'Community Systems', description: 'Creates button, dropdown, or native reaction role panels with standalone roles and bundles.',
-    managerCommand: '/roles manager', setupCommand: '/roles panel-wizard',
-    nextSteps: ['Create a panel with `/roles panel-wizard` or `/roles create-panel`.', 'Add options with `/roles add-option`, `/roles add-bundle`, or `/roles bulk-add-wizard`.', 'Customize panel design with `/panel setup` if needed.', 'Publish with `/roles post-panel`.'],
-    usefulCommands: ['/roles manager', '/roles panel-wizard', '/roles bulk-add-wizard', '/roles post-panel', '/panel setup']
+    managerCommand: '/roles manager', setupCommand: '/roles setup',
+    nextSteps: ['Create a panel with `/roles setup` or `/roles create-panel`.', 'Add options with `/roles add-option`, `/roles add-bundle`, or `/roles bulk-add-wizard`.', 'Customize panel design with `/panel setup` if needed.', 'Publish with `/roles post-panel`.'],
+    usefulCommands: ['/roles manager', '/roles setup', '/roles panel-wizard', '/roles bulk-add-wizard', '/roles post-panel', '/panel setup']
   },
   [ModuleKeys.GIVEAWAYS]: {
     name: 'Giveaways', category: 'Community Systems', description: 'Runs giveaways with entry panels, winners, rerolls, and default channel settings.',
@@ -173,9 +173,9 @@ const MODULE_SETUP_CATALOG = Object.freeze({
   },
   [ModuleKeys.CUSTOM_COMMANDS]: {
     name: 'Custom Commands', category: 'Community Systems', description: 'Allows staff-created text triggers that members can run with the configured prefix.',
-    managerCommand: '/custom-command panel', setupCommand: '/custom-command create',
-    nextSteps: ['Create a command with `/custom-command create`.', 'Use `/custom-command prefix` if you want a prefix other than `!`.', 'Test with `/custom-command test` before announcing.'],
-    usefulCommands: ['/custom-command panel', '/custom-command create', '/custom-command edit', '/custom-command test', '/custom-command prefix']
+    managerCommand: '/custom-command manager', setupCommand: '/custom-command setup',
+    nextSteps: ['Configure prefix with `/custom-command setup`.', 'Create commands with `/custom-command create`.', 'Open `/custom-command manager` to review all commands.'],
+    usefulCommands: ['/custom-command manager', '/custom-command setup', '/custom-command create', '/custom-command edit', '/custom-command test']
   },
   [ModuleKeys.COMMUNITY_GAMES]: {
     name: 'Community Games', category: 'Community Systems', description: 'Runs persistent Counting plus button-based Tic-Tac-Toe and Connect Four challenges.',
@@ -185,21 +185,21 @@ const MODULE_SETUP_CATALOG = Object.freeze({
   },
   [ModuleKeys.FAQ]: {
     name: 'Knowledge Base / FAQ', category: 'Community Systems', description: 'Maintains a forum-backed FAQ index and gives moderators quick linked FAQ replies.',
-    managerCommand: '/faq panel', setupCommand: '/faq setup',
+    managerCommand: '/faq manager', setupCommand: '/faq setup',
     nextSteps: ['Run `/faq setup` with a forum channel.', 'Create FAQ posts manually in that forum and assign forum tags for categories.', 'Use `/faq refresh` after major changes or let SlickBot update the master index from forum events.', 'Use `/faq answer` or the FAQ Reply message context command to send FAQ links to members.'],
-    usefulCommands: ['/faq setup', '/faq refresh', '/faq answer', '/faq status', 'FAQ Reply message command']
+    usefulCommands: ['/faq manager', '/faq setup', '/faq refresh', '/faq answer', '/faq status', 'FAQ Reply message command']
   },
   [ModuleKeys.SUGGESTIONS]: {
     name: 'Suggestions', category: 'Community Systems', description: 'Collects member suggestions through a public panel or command, tracks public votes, sends staff review embeds, manages review indexes, stores anonymous submitters privately, and optionally creates discussion threads.',
     managerCommand: '/suggestion manager', setupCommand: '/suggestion setup',
     nextSteps: ['Run `/suggestion setup` with a public voting channel and staff review channel.', 'Review or adjust categories with `/suggestion category list` and `/suggestion category add`.', 'Post a public launcher with `/suggestion panel post`.', 'Create a staff index with `/suggestion review-index`.', 'Use review buttons, `/suggestion review status`, and `/suggestion review add-details` to update suggestions.'],
-    usefulCommands: ['/suggestion setup', '/suggestion panel post', '/suggestion review-index', '/suggestion submit', '/suggestion review status', '/suggestion reset']
+    usefulCommands: ['/suggestion manager', '/suggestion setup', '/suggestion panel post', '/suggestion review-index', '/suggestion submit', '/suggestion review status', '/suggestion reset']
   },
   [ModuleKeys.JOIN_TO_CREATE]: {
     name: 'Join-to-Create Voice', category: 'Community Systems', description: 'Creates temporary voice rooms when members join configured hub channels.',
-    managerCommand: '/join-create panel', setupCommand: '/join-create create-hub',
+    managerCommand: '/join-create manager', setupCommand: '/join-create create-hub',
     nextSteps: ['Create a hub with `/join-create create-hub` or register an existing channel with `/join-create setup`.', 'Test by joining the hub channel.', 'Use `/join-create cleanup` if stale temporary channels remain after testing.'],
-    usefulCommands: ['/join-create panel', '/join-create create-hub', '/join-create setup', '/join-create list', '/join-create cleanup']
+    usefulCommands: ['/join-create manager', '/join-create create-hub', '/join-create setup', '/join-create list', '/join-create cleanup']
   },
   [ModuleKeys.SCHEDULED_MESSAGES]: {
     name: 'Scheduled Messages', category: 'Automation Systems', description: 'Sends one-time, daily, or weekly scheduled messages in configured channels.',
@@ -209,9 +209,9 @@ const MODULE_SETUP_CATALOG = Object.freeze({
   },
   [ModuleKeys.BOT_UPDATES]: {
     name: 'Bot Updates', category: 'Automation Systems', description: 'Announces new SlickBot versions with patch notes and optional role pings.',
-    managerCommand: '/bot-updates panel', setupCommand: '/bot-updates setup',
+    managerCommand: '/bot-updates manager', setupCommand: '/bot-updates setup',
     nextSteps: ['Run `/bot-updates setup` and set an update channel.', 'Add optional ping roles with `/bot-updates role-add`.', 'Use `/bot-updates preview` before sending.'],
-    usefulCommands: ['/bot-updates panel', '/bot-updates setup', '/bot-updates role-add', '/bot-updates preview', '/bot-updates send']
+    usefulCommands: ['/bot-updates manager', '/bot-updates setup', '/bot-updates role-add', '/bot-updates preview', '/bot-updates send']
   },
   [ModuleKeys.SOCIAL_FEEDS]: {
     name: 'Social Feeds', category: 'Automation Systems', description: 'Follows Twitch, YouTube, and TikTok channels and posts customizable announcements in designated Discord channels.',
@@ -1102,5 +1102,6 @@ module.exports = {
   buildTeamsPanel,
   buildPermissionsPanel,
   buildCommunityPanel,
-  getModuleStatus
+  getModuleStatus,
+  getAllModuleStatuses
 };

@@ -46,13 +46,14 @@ module.exports = {
       .addStringOption((option) => option.setName('question').setDescription('FAQ post title or keywords.').setRequired(true).setAutocomplete(true).setMaxLength(100))
       .addUserOption((option) => option.setName('user').setDescription('Optional member to ping in the FAQ response.').setRequired(false))
       .addStringOption((option) => option.setName('message_link').setDescription('Optional Discord message link to reply to directly.').setRequired(false).setMaxLength(300)))
+    .addSubcommand((sub) => sub.setName('manager').setDescription('Open the FAQ setup and status manager.'))
     .addSubcommand((sub) => sub.setName('panel').setDescription('Open the FAQ setup/status panel.')),
   moduleKey: ModuleKeys.FAQ,
   getActionKey(interaction) {
     const sub = interaction.options.getSubcommand();
     if (sub === 'answer') return ActionKeys.FaqAnswer;
     if (sub === 'resend-navigation') return ActionKeys.FaqConfigure;
-    if (sub === 'status' || sub === 'panel') return ActionKeys.FaqView;
+    if (sub === 'status' || sub === 'panel' || sub === 'manager') return ActionKeys.FaqView;
     return ActionKeys.FaqConfigure;
   },
   async autocomplete(interaction) {
@@ -117,7 +118,7 @@ module.exports = {
       return replyPrivate(interaction, { embeds: [createSuccessEmbed('FAQ Navigation Sent', 'The FAQ Navigation panel was posted in this FAQ post.')], deleteAfterSeconds: 10 });
     }
 
-    if (sub === 'status' || sub === 'panel') return replyPrivate(interaction, await faq.buildManagerPanel(interaction.guildId));
+    if (sub === 'status' || sub === 'panel' || sub === 'manager') return replyPrivate(interaction, await faq.buildManagerPanel(interaction.guildId));
 
     if (sub === 'answer') {
       const question = interaction.options.getString('question', true);

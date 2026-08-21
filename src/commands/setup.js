@@ -17,11 +17,25 @@ module.exports = {
         .setDescription('Optional channel for core and moderation log modules. No noisy modules are routed by default.')
         .addChannelTypes(ChannelType.GuildText)
         .setRequired(false)
+    )
+    .addRoleOption((option) =>
+      option
+        .setName('admin_role')
+        .setDescription('Optional role for bot administration.')
+        .setRequired(false)
+    )
+    .addRoleOption((option) =>
+      option
+        .setName('moderator_role')
+        .setDescription('Optional role for moderation commands.')
+        .setRequired(false)
     ),
   actionKey: ActionKeys.Setup,
   moduleKey: ModuleKeys.PERMISSIONS,
   async execute(interaction, ctx) {
     const logChannel = interaction.options.getChannel('log_channel', false);
+    const adminRole = interaction.options.getRole('admin_role', false);
+    const modRole = interaction.options.getRole('moderator_role', false);
 
     await ctx.permissions.ensureGuildConfig(interaction.guildId, interaction.guild ? interaction.guild.name : null);
 
@@ -47,6 +61,24 @@ module.exports = {
       }
     }
 
+    if (adminRole) {
+      await query(
+        `INSERT INTO role_permission_levels (guild_id, role_id, permission_level)
+         VALUES ($1, $2, 'ADMINISTRATOR')
+         ON CONFLICT (guild_id, role_id) DO UPDATE SET permission_level = 'ADMINISTRATOR', updated_at = NOW()`,
+        [interaction.guildId, adminRole.id]
+      );
+    }
+
+    if (modRole) {
+      await query(
+        `INSERT INTO role_permission_levels (guild_id, role_id, permission_level)
+         VALUES ($1, $2, 'MODERATOR')
+         ON CONFLICT (guild_id, role_id) DO UPDATE SET permission_level = 'MODERATOR', updated_at = NOW()`,
+        [interaction.guildId, modRole.id]
+      );
+    }
+
     for (const moduleConfig of defaultModules) {
       await query(
         `INSERT INTO module_configs (guild_id, module_key, enabled)
@@ -68,7 +100,11 @@ module.exports = {
       targetType: 'GuildConfig',
       targetId: interaction.guildId,
       summary: 'SlickBot setup center opened.',
-      metadata: { starterLogModuleChannelId: logChannel?.id || null }
+      metadata: {
+        starterLogModuleChannelId: logChannel?.id || null,
+        adminRoleId: adminRole?.id || null,
+        moderatorRoleId: modRole?.id || null
+      }
     });
 
     await ctx.logger.log({
@@ -77,9 +113,16 @@ module.exports = {
       title: 'SlickBot Setup Updated',
       body: [
         `Updated By: <@${interaction.user.id}>`,
-        logChannel ? `Starter Log Channel: <#${logChannel.id}>` : 'No log module channel was changed.'
-      ].join('\n'),
-      metadata: { actorUserId: interaction.user.id, starterLogModuleChannelId: logChannel?.id || null }
+        logChannel ? `Starter Log Channel: <#${logChannel.id}>` : null,
+        adminRole ? `Admin Role: <@&${adminRole.id}>` : null,
+        modRole ? `Moderator Role: <@&${modRole.id}>` : null
+      ].filter(Boolean).join('\n') || 'SlickBot setup center opened.',
+      metadata: {
+        actorUserId: interaction.user.id,
+        starterLogModuleChannelId: logChannel?.id || null,
+        adminRoleId: adminRole?.id || null,
+        moderatorRoleId: modRole?.id || null
+      }
     });
 
     await replyPrivate(interaction, await buildSetupPanel(interaction.guildId, interaction.guild ? interaction.guild.name : null));

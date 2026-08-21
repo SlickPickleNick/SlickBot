@@ -13,7 +13,16 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('permissions')
     .setDescription('Manage SlickBot command permissions and ignored users.')
+    .addSubcommand((subcommand) => subcommand.setName('manager').setDescription('Open the permission control panel.'))
     .addSubcommand((subcommand) => subcommand.setName('panel').setDescription('Open the permission control panel.'))
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName('setup')
+        .setDescription('Quick setup for admin and moderator roles with standard permissions.')
+        .addRoleOption((option) => option.setName('admin_role').setDescription('Role for full bot administration.').setRequired(false))
+        .addRoleOption((option) => option.setName('moderator_role').setDescription('Role for moderation commands.').setRequired(false))
+        .addBooleanOption((option) => option.setName('apply_defaults').setDescription('Reapply default command and module levels.').setRequired(false))
+    )
     .addSubcommand((subcommand) => subcommand.setName('apply-defaults').setDescription('Reapply SlickBot default command/module permission levels.'))
     .addSubcommand((subcommand) =>
       subcommand
@@ -98,19 +107,66 @@ module.exports = {
   getActionKey(interaction) {
     const subcommand = interaction.options.getSubcommand();
     if (subcommand.startsWith('ignore-')) return ActionKeys.PermissionsIgnore;
-    if (subcommand === 'panel') return ActionKeys.PermissionsPanel;
+    if (subcommand === 'panel' || subcommand === 'manager') return ActionKeys.PermissionsPanel;
     return ActionKeys.PermissionsManage;
   },
   async execute(interaction, ctx) {
     const subcommand = interaction.options.getSubcommand();
     await ctx.permissions.ensureGuildConfig(interaction.guildId, interaction.guild ? interaction.guild.name : null);
 
-    if (subcommand === 'panel') return replyPrivate(interaction, await buildPermissionsPanel(interaction.guildId));
+    if (subcommand === 'panel' || subcommand === 'manager') {
+      return replyPrivate(interaction, await buildPermissionsPanel(interaction.guildId));
+    }
+
+    if (subcommand === 'setup') {
+      const adminRole = interaction.options.getRole('admin_role');
+      const modRole = interaction.options.getRole('moderator_role');
+      const applyDefaults = interaction.options.getBoolean('apply_defaults') ?? true;
+
+      const summaryLines = [];
+
+      if (adminRole) {
+        await query(
+          `INSERT INTO role_permission_levels (guild_id, role_id, permission_level)
+           VALUES ($1, $2, 'ADMINISTRATOR')
+           ON CONFLICT (guild_id, role_id) DO UPDATE SET permission_level = 'ADMINISTRATOR', updated_at = NOW()`,
+          [interaction.guildId, adminRole.id]
+        );
+        summaryLines.push(`• Admin Role: ${adminRole} mapped to **ADMINISTRATOR**`);
+      }
+
+      if (modRole) {
+        await query(
+          `INSERT INTO role_permission_levels (guild_id, role_id, permission_level)
+           VALUES ($1, $2, 'MODERATOR')
+           ON CONFLICT (guild_id, role_id) DO UPDATE SET permission_level = 'MODERATOR', updated_at = NOW()`,
+          [interaction.guildId, modRole.id]
+        );
+        summaryLines.push(`• Moderator Role: ${modRole} mapped to **MODERATOR**`);
+      }
+
+      if (applyDefaults) {
+        await ctx.permissions.reapplyDefaultPermissionLevels(interaction.guildId);
+        summaryLines.push('• Reapplied built-in command and module permission levels.');
+      }
+
+      await ctx.logger.log({
+        guildId: interaction.guildId,
+        eventKey: 'permission-team',
+        title: 'Permissions Quick Setup',
+        body: summaryLines.join('\n') || 'Permissions verified.',
+        actorUserId: interaction.user.id
+      }).catch(() => {});
+
+      return replyPrivate(interaction, {
+        embeds: [createSuccessEmbed('Permissions Configured', summaryLines.length ? summaryLines.join('\n') : 'Standard permission defaults applied. Use `/permissions manager` to view current locks.')]
+      });
+    }
 
     if (subcommand === 'apply-defaults') {
       await ctx.permissions.reapplyDefaultPermissionLevels(interaction.guildId);
       await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'permission-team', title: 'Default Permissions Applied', body: `Built-in SlickBot permission levels were reapplied by ${interaction.user.tag}.`, actorUserId: interaction.user.id }).catch(() => {});
-      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Default Permissions Applied', 'SlickBot command levels, module levels, and public command defaults were reapplied. Use `/permissions panel` to review current access settings.')] });
+      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Default Permissions Applied', 'SlickBot command levels, module levels, and public command defaults were reapplied. Use `/permissions manager` to review current access settings.')] });
     }
 
     if (subcommand === 'module-allow-team') {

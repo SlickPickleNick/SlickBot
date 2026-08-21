@@ -37,7 +37,15 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('custom-command')
     .setDescription('Create and manage SlickBot custom chat commands.')
+    .addSubcommand((subcommand) => subcommand.setName('manager').setDescription('Open the custom command manager.'))
     .addSubcommand((subcommand) => subcommand.setName('panel').setDescription('View custom command module status.'))
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName('setup')
+        .setDescription('Configure custom command system settings.')
+        .addStringOption((option) => option.setName('prefix').setDescription('Prefix for chat triggers (e.g. ! or ?).').setMaxLength(8).setRequired(false))
+        .addBooleanOption((option) => option.setName('enabled').setDescription('Enable or disable custom commands.').setRequired(false))
+    )
     .addSubcommand((subcommand) => subcommand.setName('list').setDescription('List custom commands.'))
     .addSubcommand((subcommand) =>
       subcommand
@@ -109,7 +117,7 @@ module.exports = {
   moduleKey: ModuleKeys.CUSTOM_COMMANDS,
   getActionKey(interaction) {
     const subcommand = interaction.options.getSubcommand();
-    if (['panel', 'list', 'view', 'test'].includes(subcommand)) return ActionKeys.CustomCommandsView;
+    if (['panel', 'manager', 'list', 'view', 'test'].includes(subcommand)) return ActionKeys.CustomCommandsView;
     if (subcommand === 'create') return ActionKeys.CustomCommandsCreate;
     if (subcommand === 'delete') return ActionKeys.CustomCommandsDelete;
     if (['enable', 'disable'].includes(subcommand)) return ActionKeys.CustomCommandsEnable;
@@ -132,7 +140,45 @@ module.exports = {
     }
 
     try {
-      if (subcommand === 'panel') return replyPrivate(interaction, await service.buildManagerPanel(interaction.guildId));
+      if (subcommand === 'panel' || subcommand === 'manager') {
+        return replyPrivate(interaction, await service.buildManagerPanel(interaction.guildId));
+      }
+
+      if (subcommand === 'setup') {
+        const prefix = interaction.options.getString('prefix');
+        const enabled = interaction.options.getBoolean('enabled');
+
+        let config = await service.getConfig(interaction.guildId);
+        if (prefix) {
+          config = await service.setPrefix(interaction.guildId, prefix);
+        }
+
+        if (typeof enabled === 'boolean') {
+          await query(
+            `INSERT INTO module_configs (guild_id, module_key, enabled)
+             VALUES ($1, $2, $3)
+             ON CONFLICT (guild_id, module_key) DO UPDATE SET enabled = EXCLUDED.enabled, updated_at = NOW()`,
+            [interaction.guildId, ModuleKeys.CUSTOM_COMMANDS, enabled]
+          );
+        }
+
+        await ctx.logger.log({
+          guildId: interaction.guildId,
+          eventKey: 'custom-command-config',
+          title: 'Custom Commands Setup Updated',
+          body: `Prefix: \`${config.prefix || '!'}\`\nUpdated By: <@${interaction.user.id}>`,
+          actorUserId: interaction.user.id
+        }).catch(() => {});
+
+        return replyPrivate(interaction, {
+          embeds: [createSuccessEmbed('Custom Commands Configured', [
+            `• Trigger Prefix: \`${config.prefix || '!'}\``,
+            typeof enabled === 'boolean' ? `• Module Enabled: **${enabled ? 'Yes' : 'No'}**` : null,
+            '',
+            'Use `/custom-command create` to add chat commands or `/custom-command manager` to manage them.'
+          ].filter(Boolean).join('\n'))]
+        });
+      }
 
       if (subcommand === 'list') {
         const config = await service.getConfig(interaction.guildId);

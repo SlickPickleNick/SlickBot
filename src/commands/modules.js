@@ -3,7 +3,7 @@ const { ModuleKeys, defaultModules, isCoreModule, isImplementedModule } = requir
 const { ActionKeys } = require('../modules/permissions/actionKeys');
 const { replyPrivate } = require('../utils/reply');
 const { query } = require('../services/db');
-const { buildModulesPanel } = require('../modules/ui/panels');
+const { buildModulesPanel, getAllModuleStatuses } = require('../modules/ui/panels');
 const { createBaseEmbed, SlickBotColors } = require('../modules/ui/uiService');
 
 function buildModuleAutocompleteChoices(focused) {
@@ -18,8 +18,9 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('modules')
     .setDescription('Open or manage SlickBot modules.')
+    .addSubcommand((subcommand) => subcommand.setName('manager').setDescription('Open the interactive module manager.'))
     .addSubcommand((subcommand) => subcommand.setName('panel').setDescription('Open the interactive module manager.'))
-    .addSubcommand((subcommand) => subcommand.setName('list').setDescription('List all module states.'))
+    .addSubcommand((subcommand) => subcommand.setName('list').setDescription('List all module states and configurations.'))
     .addSubcommand((subcommand) =>
       subcommand
         .setName('enable')
@@ -52,9 +53,36 @@ module.exports = {
       );
     }
 
-    if (subcommand === 'panel' || subcommand === 'list') {
+    if (subcommand === 'panel' || subcommand === 'manager') {
       await replyPrivate(interaction, await buildModulesPanel(interaction.guildId));
       return;
+    }
+
+    if (subcommand === 'list') {
+      const statuses = await getAllModuleStatuses(interaction.guildId);
+      const ready = statuses.filter((s) => s.state === 'READY');
+      const needs = statuses.filter((s) => ['NEEDS_CONFIG', 'PARTIAL', 'WARNING', 'ERROR'].includes(s.state));
+      const disabled = statuses.filter((s) => s.state === 'DISABLED');
+
+      const embed = createBaseEmbed({
+        title: 'SlickBot Modules Status',
+        description: [
+          `**Total Modules:** ${statuses.length} | **Ready:** ${ready.length} | **Needs Config:** ${needs.length} | **Disabled:** ${disabled.length}`,
+          '',
+          '**🟢 Ready Modules**',
+          ready.length ? ready.map((s) => `• \`${s.moduleKey}\`${s.note ? ` — ${s.note}` : ''}`).join('\n') : '• None',
+          '',
+          '**🟣 Needs Setup / Partially Configured**',
+          needs.length ? needs.map((s) => `• \`${s.moduleKey}\` — ${s.note || s.label}`).join('\n') : '• None',
+          '',
+          '**⏸️ Disabled Modules**',
+          disabled.length ? disabled.map((s) => `• \`${s.moduleKey}\``).join('\n') : '• None',
+          '',
+          'Use `/modules manager` to toggle modules or inspect details.'
+        ].join('\n'),
+        color: SlickBotColors.PRIMARY
+      });
+      return replyPrivate(interaction, { embeds: [embed] });
     }
 
     const moduleKey = interaction.options.getString('module', true);

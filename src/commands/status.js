@@ -33,6 +33,7 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('status')
     .setDescription('View or change SlickBot status and activity.')
+    .addSubcommand((subcommand) => subcommand.setName('manager').setDescription('Open the interactive status and presence manager.'))
     .addSubcommand((subcommand) => subcommand.setName('view').setDescription('View the current saved bot presence.'))
     .addSubcommand((subcommand) =>
       subcommand
@@ -100,7 +101,7 @@ module.exports = {
     const subcommand = interaction.options.getSubcommand();
     await ctx.permissions.ensureGuildConfig(interaction.guildId, interaction.guild ? interaction.guild.name : null);
 
-    if (subcommand === 'view') {
+    if (subcommand === 'view' || subcommand === 'manager') {
       await replyPrivate(interaction, await buildStatusPanel(interaction.guildId, ctx));
       return;
     }

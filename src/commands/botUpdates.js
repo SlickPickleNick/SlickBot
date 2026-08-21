@@ -16,6 +16,7 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('bot-updates')
     .setDescription('Configure and send SlickBot update announcements.')
+    .addSubcommand((subcommand) => subcommand.setName('manager').setDescription('View Bot Updates configuration.'))
     .addSubcommand((subcommand) => subcommand.setName('panel').setDescription('View Bot Updates configuration.'))
     .addSubcommand((subcommand) =>
       subcommand
@@ -66,7 +67,7 @@ module.exports = {
   moduleKey: ModuleKeys.BOT_UPDATES,
   getActionKey(interaction) {
     const subcommand = interaction.options.getSubcommand();
-    if (['panel', 'roles', 'preview'].includes(subcommand)) return ActionKeys.BotUpdatesView;
+    if (['panel', 'manager', 'roles', 'preview'].includes(subcommand)) return ActionKeys.BotUpdatesView;
     if (subcommand === 'send') return ActionKeys.BotUpdatesSend;
     return ActionKeys.BotUpdatesConfigure;
   },
@@ -76,7 +77,7 @@ module.exports = {
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     }
 
-    if (subcommand === 'panel') {
+    if (subcommand === 'panel' || subcommand === 'manager') {
       return replyPrivate(interaction, await updates.buildStatusPanel(interaction.guildId));
     }
 

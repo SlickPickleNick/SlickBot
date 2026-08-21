@@ -35,6 +35,7 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('join-create')
     .setDescription('Configure and manage join-to-create voice channels.')
+    .addSubcommand((subcommand) => subcommand.setName('manager').setDescription('Open the join-to-create manager.'))
     .addSubcommand((subcommand) => subcommand.setName('panel').setDescription('View the join-to-create manager.'))
     .addSubcommand((subcommand) =>
       subcommand
@@ -128,7 +129,7 @@ module.exports = {
   moduleKey: ModuleKeys.JOIN_TO_CREATE,
   getActionKey(interaction) {
     const sub = interaction.options.getSubcommand();
-    if (['panel', 'list', 'view'].includes(sub)) return ActionKeys.JoinCreateView;
+    if (['panel', 'manager', 'list', 'view'].includes(sub)) return ActionKeys.JoinCreateView;
     if (['setup', 'create-hub'].includes(sub)) return ActionKeys.JoinCreateSetup;
     if (['enable', 'disable'].includes(sub)) return ActionKeys.JoinCreateEdit;
     if (sub === 'delete') return ActionKeys.JoinCreateDelete;
@@ -154,7 +155,7 @@ module.exports = {
     }
 
     try {
-      if (sub === 'panel') return replyPrivate(interaction, await service.buildManagerPanel(interaction.guild));
+      if (sub === 'panel' || sub === 'manager') return replyPrivate(interaction, await service.buildManagerPanel(interaction.guild));
 
       if (sub === 'setup') {
         const source = interaction.options.getChannel('source_channel', true);

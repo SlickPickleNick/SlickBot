@@ -29,6 +29,9 @@ module.exports = {
       .setDescription('List active temporary roles for a member or the server.')
       .addUserOption((option) => option.setName('user').setDescription('Optional member filter.').setRequired(false)))
     .addSubcommand((sub) => sub
+      .setName('manager')
+      .setDescription('Open the Temporary Roles manager.'))
+    .addSubcommand((sub) => sub
       .setName('active')
       .setDescription('Open the Temporary Roles manager.')),
   moduleKey: ModuleKeys.TEMP_ROLES,
@@ -41,7 +44,7 @@ module.exports = {
   async execute(interaction, ctx) {
     const sub = interaction.options.getSubcommand();
 
-    if (sub === 'active') return replyPrivate(interaction, await tempRoles.buildManagerPanel(interaction.guildId));
+    if (sub === 'active' || sub === 'manager') return replyPrivate(interaction, await tempRoles.buildManagerPanel(interaction.guildId));
 
     if (sub === 'list') {
       const user = interaction.options.getUser('user');

@@ -6,12 +6,13 @@ const {
   getLogModuleChoices,
   getLogEventChoices,
   getLogModule,
-  getLogEvent
+  getLogEvent,
+  StarterLogModuleKeys
 } = require('../modules/logging/logEventCatalog');
 const { replyPrivate } = require('../utils/reply');
 const { query } = require('../services/db');
 const { buildLoggingPanel } = require('../modules/ui/panels');
-const { createBaseEmbed, SlickBotColors } = require('../modules/ui/uiService');
+const { createBaseEmbed, createSuccessEmbed, SlickBotColors } = require('../modules/ui/uiService');
 
 const moduleChoices = getLogModuleChoices();
 const eventChoices = getLogEventChoices();
@@ -25,7 +26,27 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('logging')
     .setDescription('Configure or test SlickBot logging.')
+    .addSubcommand((subcommand) => subcommand.setName('manager').setDescription('Open the interactive logging center.'))
     .addSubcommand((subcommand) => subcommand.setName('panel').setDescription('Open the interactive logging center.'))
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName('setup')
+        .setDescription('Quick setup for starter logging channels.')
+        .addChannelOption((option) =>
+          option
+            .setName('channel')
+            .setDescription('Default channel for core bot events (setup, permissions, system).')
+            .addChannelTypes(ChannelType.GuildText)
+            .setRequired(true)
+        )
+        .addChannelOption((option) =>
+          option
+            .setName('moderation_channel')
+            .setDescription('Optional dedicated channel for moderation, cases, and safety logs.')
+            .addChannelTypes(ChannelType.GuildText)
+            .setRequired(false)
+        )
+    )
     .addSubcommand((subcommand) =>
       subcommand
         .setName('set-channel')
@@ -145,8 +166,58 @@ module.exports = {
 
     await ctx.permissions.ensureGuildConfig(interaction.guildId, interaction.guild ? interaction.guild.name : null);
 
-    if (subcommand === 'panel') {
+    if (subcommand === 'panel' || subcommand === 'manager') {
       await replyPrivate(interaction, await buildLoggingPanel(interaction.guildId));
+      return;
+    }
+
+    if (subcommand === 'setup') {
+      const defaultChannel = interaction.options.getChannel('channel', true);
+      const modChannel = interaction.options.getChannel('moderation_channel');
+
+      await query(
+        `UPDATE guild_configs SET default_log_channel_id = $1, updated_at = NOW() WHERE guild_id = $2`,
+        [defaultChannel.id, interaction.guildId]
+      );
+
+      const modLogKeys = new Set(['MODERATION', 'SAFETY', 'CASES']);
+
+      for (const moduleKey of StarterLogModuleKeys) {
+        const logModule = getLogModule(moduleKey);
+        const targetChannelId = (modChannel && modLogKeys.has(moduleKey)) ? modChannel.id : defaultChannel.id;
+
+        await query(
+          `INSERT INTO log_module_settings (guild_id, module_key, delivery_mode, channel_id, enabled)
+           VALUES ($1, $2, $3, $4, true)
+           ON CONFLICT (guild_id, module_key)
+           DO UPDATE SET
+             channel_id = EXCLUDED.channel_id,
+             enabled = true,
+             delivery_mode = EXCLUDED.delivery_mode,
+             updated_at = NOW()`,
+          [interaction.guildId, moduleKey, logModule?.defaultDelivery || LogDeliveryMode.IMMEDIATE, targetChannelId]
+        );
+      }
+
+      await ctx.logger.writeAudit({
+        guildId: interaction.guildId,
+        actorUserId: interaction.user.id,
+        actionKey: ActionKeys.LoggingConfigure,
+        targetType: 'GuildConfig',
+        targetId: interaction.guildId,
+        summary: 'Starter logging channels configured.',
+        metadata: { defaultChannelId: defaultChannel.id, moderationChannelId: modChannel?.id || null }
+      });
+
+      const lines = [
+        `• Core Log Channel: <#${defaultChannel.id}>`,
+        modChannel ? `• Moderation & Safety Channel: <#${modChannel.id}>` : `• Moderation & Safety routed to: <#${defaultChannel.id}>`,
+        `• Enabled Starter Modules: **${StarterLogModuleKeys.join(', ')}**`,
+        '',
+        'Use `/logging manager` to customize individual event routes or delivery modes.'
+      ];
+
+      await replyPrivate(interaction, { embeds: [createSuccessEmbed('Logging Configured', lines.join('\n'))] });
       return;
     }
 

@@ -22,6 +22,12 @@ module.exports = {
     .addSubcommand((subcommand) => subcommand.setName('manager').setDescription('Open the role panel manager.'))
     .addSubcommand((subcommand) =>
       subcommand
+        .setName('setup')
+        .setDescription('Create or update a role panel through guided setup-channel messages.')
+        .addStringOption((option) => option.setName('name').setDescription('Optional internal panel name. If blank, SlickBot will ask for it.').setRequired(false).setMaxLength(50))
+    )
+    .addSubcommand((subcommand) =>
+      subcommand
         .setName('panel-wizard')
         .setDescription('Create or update a role panel through guided setup-channel messages.')
         .addStringOption((option) => option.setName('name').setDescription('Optional internal panel name. If blank, SlickBot will ask for it.').setRequired(false).setMaxLength(50))
@@ -124,7 +130,7 @@ module.exports = {
       return;
     }
 
-    if (sub === 'panel-wizard') {
+    if (sub === 'panel-wizard' || sub === 'setup') {
       return startRolePanelCreationFlow(interaction, { logger: ctx.logger, initialName: interaction.options.getString('name') || null });
     }
 

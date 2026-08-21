@@ -12,6 +12,7 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('mod')
     .setDescription('Moderation tools for SlickBot.')
+    .addSubcommand((subcommand) => subcommand.setName('manager').setDescription('Open the moderation control panel.'))
     .addSubcommand((subcommand) => subcommand.setName('panel').setDescription('Open the moderation control panel.'))
     .addSubcommand((subcommand) =>
       subcommand
@@ -87,7 +88,7 @@ module.exports = {
     const subcommand = interaction.options.getSubcommand();
     await ctx.permissions.ensureGuildConfig(interaction.guildId, interaction.guild ? interaction.guild.name : null);
 
-    if (subcommand === 'panel') {
+    if (subcommand === 'panel' || subcommand === 'manager') {
       await replyPrivate(interaction, await buildModerationPanel(interaction.guildId));
       return;
     }
