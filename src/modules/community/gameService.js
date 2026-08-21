@@ -1527,18 +1527,28 @@ Next Number: **${outcome.next.toString()}**`,
         '**Game Configurations**',
         ...lines,
         '',
-        'Use the buttons below to view a specific game. Configuration changes are made with `/games` commands.'
+        'Click the buttons below to toggle games directly or view game details.'
       ].join('\n'),
       color: SlickBotColors.INFO
     });
-    const row = createButtonRow([
-      createPanelButton(CustomIds.GamesCounting, 'Counting', ButtonStyle.Secondary),
-      createPanelButton(CustomIds.GamesTicTacToe, 'Tic-Tac-Toe', ButtonStyle.Secondary),
-      createPanelButton(CustomIds.GamesConnectFour, 'Connect Four', ButtonStyle.Secondary),
-      createPanelButton(CustomIds.SetupCommunity, 'Community', ButtonStyle.Secondary),
-      createPanelButton(CustomIds.SetupRefresh, 'Return to Setup', ButtonStyle.Primary)
+
+    const countingEnabled = byKey.get(GAME_KEYS.COUNTING)?.enabled ?? false;
+    const tttEnabled = byKey.get(GAME_KEYS.TIC_TAC_TOE)?.enabled ?? false;
+    const c4Enabled = byKey.get(GAME_KEYS.CONNECT_FOUR)?.enabled ?? false;
+
+    const row1 = createButtonRow([
+      createPanelButton(CustomIds.GamesCountingToggle, countingEnabled ? 'Disable Counting' : 'Enable Counting', countingEnabled ? ButtonStyle.Danger : ButtonStyle.Success),
+      createPanelButton(CustomIds.GamesTttToggle, tttEnabled ? 'Disable Tic-Tac-Toe' : 'Enable Tic-Tac-Toe', tttEnabled ? ButtonStyle.Danger : ButtonStyle.Success),
+      createPanelButton(CustomIds.GamesC4Toggle, c4Enabled ? 'Disable Connect 4' : 'Enable Connect 4', c4Enabled ? ButtonStyle.Danger : ButtonStyle.Success)
     ]);
-    return { embeds: [embed], components: [row] };
+    const row2 = createButtonRow([
+      createPanelButton(CustomIds.GamesCounting, 'Counting Details', ButtonStyle.Secondary),
+      createPanelButton(CustomIds.GamesTicTacToe, 'Tic-Tac-Toe Details', ButtonStyle.Secondary),
+      createPanelButton(CustomIds.GamesConnectFour, 'Connect 4 Details', ButtonStyle.Secondary),
+      createPanelButton(CustomIds.GamesRefresh, 'Refresh', ButtonStyle.Secondary),
+      createPanelButton(CustomIds.SetupRefresh, 'Setup Center', ButtonStyle.Secondary)
+    ]);
+    return { embeds: [embed], components: [row1, row2] };
   }
 
   async buildCountingPanel(guildId) {

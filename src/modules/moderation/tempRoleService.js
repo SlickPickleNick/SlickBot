@@ -1,5 +1,7 @@
+const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { createBaseEmbed, createSuccessEmbed, createWarningEmbed, SlickBotColors } = require('../ui/uiService');
 const { query } = require('../../services/db');
+const { CustomIds } = require('../ui/customIds');
 
 const MAX_DURATION_MS = 365 * 24 * 60 * 60 * 1000;
 
@@ -164,22 +166,41 @@ class TemporaryRoleService {
   async buildManagerPanel(guildId) {
     const stats = await this.stats(guildId);
     const rows = await this.listActive(guildId, null, 8).catch(() => []);
-    return {
-      embeds: [createBaseEmbed({
-        title: 'SlickBot Temporary Roles Center',
-        description: [
-          `Active Temporary Roles: **${stats.active}**`,
-          `Completed/Removed Assignments: **${stats.inactive}**`,
-          '',
-          '**Next Expiring**',
-          rows.length ? rows.map((row) => `• <@${row.user_id}> — <@&${row.role_id}> · <t:${Math.floor(new Date(row.expires_at).getTime() / 1000)}:R>`).join('\n') : 'No active temporary roles.',
-          '',
-          'Use `/temp-role add` to assign a role for a fixed duration. SlickBot removes it automatically when it expires, including after bot restarts.'
-        ].join('\n'),
-        color: SlickBotColors.PRIMARY,
-        footer: 'SlickBot Temporary Roles'
-      })]
-    };
+
+    const embed = createBaseEmbed({
+      title: 'SlickBot Temporary Roles Center',
+      description: [
+        `Active Temporary Roles: **${stats.active} member(s)**`,
+        `Completed/Removed Assignments: **${stats.inactive}**`,
+        '',
+        '**Next Expiring Role Assignments**',
+        rows.length ? rows.map((row) => `• <@${row.user_id}> — <@&${row.role_id}> · expires <t:${Math.floor(new Date(row.expires_at).getTime() / 1000)}:R>`).join('\n') : '*No active temporary roles.*',
+        '',
+        'Moderators can assign timed roles with `/temp-role add`. SlickBot automatically strips expired roles.'
+      ].join('\n'),
+      color: stats.active > 0 ? SlickBotColors.SUCCESS : SlickBotColors.PRIMARY,
+      footer: 'SlickBot Temporary Roles'
+    });
+
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(CustomIds.TempRolesCleanup)
+        .setLabel('Check Expirations Now')
+        .setStyle(ButtonStyle.Primary)
+        .setEmoji('🧹'),
+      new ButtonBuilder()
+        .setCustomId(CustomIds.TempRolesRefresh)
+        .setLabel('Refresh')
+        .setStyle(ButtonStyle.Secondary)
+        .setEmoji('🔄'),
+      new ButtonBuilder()
+        .setCustomId(CustomIds.SetupRefresh)
+        .setLabel('Setup Center')
+        .setStyle(ButtonStyle.Secondary)
+        .setEmoji('⚙️')
+    );
+
+    return { embeds: [embed], components: [row] };
   }
 }
 

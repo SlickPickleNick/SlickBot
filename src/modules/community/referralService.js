@@ -1,7 +1,9 @@
+const { ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 const { createBaseEmbed, createSuccessEmbed, createWarningEmbed, SlickBotColors } = require('../ui/uiService');
 const { LevelingService } = require('./levelingService');
 const { AchievementService, ACHIEVEMENT_KEYS } = require('./achievementService');
 const { query } = require('../../services/db');
+const { CustomIds } = require('../ui/customIds');
 
 const DEFAULT_REFERRAL_XP = 100;
 
@@ -138,24 +140,52 @@ class ReferralService {
     const stats = await this.stats(guildId);
     const top = await this.leaderboard(guildId, 5).catch(() => []);
     const config = stats.config || { enabled: true, referral_xp: DEFAULT_REFERRAL_XP };
-    return {
-      embeds: [createBaseEmbed({
-        title: 'SlickBot Referrals Center',
-        description: [
-          `Status: **${config.enabled === false ? 'Disabled' : 'Enabled'}**`,
-          `Referral Bonus XP: **${Number(config.referral_xp || DEFAULT_REFERRAL_XP).toLocaleString()}**`,
-          `Recorded Referrals: **${Number(stats.total || 0).toLocaleString()}**`,
-          `Unique Referrers: **${Number(stats.uniqueReferrers || 0).toLocaleString()}**`,
-          '',
-          '**Top Referrers**',
-          top.length ? top.map((row, index) => `**${index + 1}.** <@${row.referrer_user_id}> — **${row.referrals}** referral(s) · **${Number(row.xp_awarded || 0).toLocaleString()} XP**`).join('\n') : 'No referrals have been recorded yet.',
-          '',
-          'Members use `/referral submit` once. Staff can use `/referral set` to retroactively record a referral for a member.'
-        ].join('\n'),
-        color: config.enabled === false ? SlickBotColors.MUTED : SlickBotColors.PRIMARY,
-        footer: 'SlickBot Referrals'
-      })]
-    };
+    const enabled = config.enabled !== false;
+
+    const embed = createBaseEmbed({
+      title: 'SlickBot Referrals Center',
+      description: [
+        `Status: **${enabled ? '🟢 Active & Tracking' : '⏸️ Disabled'}**`,
+        `Referral Bonus XP: **${Number(config.referral_xp || DEFAULT_REFERRAL_XP).toLocaleString()} XP**`,
+        `Recorded Referrals: **${Number(stats.total || 0).toLocaleString()} member(s)**`,
+        `Unique Referrers: **${Number(stats.uniqueReferrers || 0).toLocaleString()} user(s)**`,
+        '',
+        '**Top Referrers**',
+        top.length ? top.map((row, index) => `**${index + 1}.** <@${row.referrer_user_id}> — **${row.referrals}** referral(s) · **${Number(row.xp_awarded || 0).toLocaleString()} XP**`).join('\n') : '*No referrals recorded yet.*',
+        '',
+        'Members can submit who referred them once using `/referral submit`. Staff can set bonus XP via modal below.'
+      ].join('\n'),
+      color: enabled ? SlickBotColors.SUCCESS : SlickBotColors.MUTED,
+      footer: 'SlickBot Referrals'
+    });
+
+    const row1 = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(CustomIds.ReferralsToggle)
+        .setLabel(enabled ? 'Disable Referrals' : 'Enable Referrals')
+        .setStyle(enabled ? ButtonStyle.Danger : ButtonStyle.Success)
+        .setEmoji(enabled ? '⏸️' : '▶️'),
+      new ButtonBuilder()
+        .setCustomId(CustomIds.ReferralsConfigModal)
+        .setLabel('Set Bonus XP')
+        .setStyle(ButtonStyle.Secondary)
+        .setEmoji('💎')
+    );
+
+    const row2 = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(CustomIds.ReferralsRefresh)
+        .setLabel('Refresh')
+        .setStyle(ButtonStyle.Secondary)
+        .setEmoji('🔄'),
+      new ButtonBuilder()
+        .setCustomId(CustomIds.SetupRefresh)
+        .setLabel('Setup Center')
+        .setStyle(ButtonStyle.Secondary)
+        .setEmoji('⚙️')
+    );
+
+    return { embeds: [embed], components: [row1, row2] };
   }
 
   buildLeaderboardEmbed(rows) {
@@ -188,4 +218,22 @@ class ReferralService {
   }
 }
 
-module.exports = { ReferralService, DEFAULT_REFERRAL_XP };
+function buildReferralsConfigModal(config) {
+  return new ModalBuilder()
+    .setCustomId(CustomIds.ReferralsConfigModalSubmit)
+    .setTitle('Configure Referral Bonus XP')
+    .addComponents(
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('bonus_xp')
+          .setLabel('Bonus XP Awarded to Referrer')
+          .setPlaceholder('Example: 100')
+          .setStyle(TextInputStyle.Short)
+          .setMaxLength(6)
+          .setRequired(true)
+          .setValue(String(config?.referral_xp || DEFAULT_REFERRAL_XP))
+      )
+    );
+}
+
+module.exports = { ReferralService, DEFAULT_REFERRAL_XP, buildReferralsConfigModal };

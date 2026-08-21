@@ -38,7 +38,7 @@ SlickBot is being built as a modular all-in-one Discord server management bot fo
 - Referrals
 - Temporary Roles
 - Achievements
-- Social Feeds (Twitch, YouTube, TikTok)
+- Social Feeds (Twitch & YouTube)
 
 
 
@@ -49,11 +49,10 @@ SlickBot is being built as a modular all-in-one Discord server management bot fo
 ### Added
 
 - Implemented the `SOCIAL_FEEDS` module under Automation Systems.
-- Supports following unlimited creator feeds across Twitch, YouTube, and TikTok, each configured with its own announcement channel, ping role, and custom messages.
+- Supports following unlimited creator feeds across Twitch & YouTube, each configured with its own announcement channel, ping role, and custom messages.
 - Twitch live announcements show stream title, game/category, viewer count, and live since timestamp.
 - When a Twitch stream ends, SlickBot updates the original announcement embed to show offline status, exact offline timestamp, and total stream duration.
 - YouTube tracker differentiates between Shorts and regular Longform videos with distinct customizable announcement text templates.
-- TikTok tracks live streams, video uploads, and stories with distinct customizable announcement text templates.
 - Added `/feed` command group with autocomplete for managing existing feeds:
   - `/feed setup`
   - `/feed add`

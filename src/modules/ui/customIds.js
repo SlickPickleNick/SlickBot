@@ -26,23 +26,82 @@ const CustomIds = Object.freeze({
   SetupSupport: 'slickbot:setup:support',
   SetupCommunity: 'slickbot:setup:community',
   WelcomeRefresh: 'slickbot:welcome:refresh',
+  WelcomeToggle: 'slickbot:welcome:toggle',
+  WelcomeToggleDm: 'slickbot:welcome:toggle-dm',
+  WelcomeEditModal: 'slickbot:welcome:edit-modal',
+  WelcomeEditModalSubmit: 'slickbot:modal:welcome-edit',
+  WelcomeTest: 'slickbot:welcome:test',
+
   RolePanelsRefresh: 'slickbot:rolepanels:refresh',
+
   GiveawaysRefresh: 'slickbot:giveaways:refresh',
+  GiveawaysQuickStart: 'slickbot:giveaways:quick-start',
+  GiveawaysQuickStartModalSubmit: 'slickbot:modal:giveaways-start',
+  GiveawaysConfigModal: 'slickbot:giveaways:config-modal',
+  GiveawaysConfigModalSubmit: 'slickbot:modal:giveaways-config',
+
   BirthdaysRefresh: 'slickbot:birthdays:refresh',
+  BirthdaysToggle: 'slickbot:birthdays:toggle',
+  BirthdaysEditModal: 'slickbot:birthdays:edit-modal',
+  BirthdaysEditModalSubmit: 'slickbot:modal:birthdays-edit',
+  BirthdaysTest: 'slickbot:birthdays:test',
+  BirthdaysPostPanel: 'slickbot:birthdays:post-panel',
+
   ScheduledMessagesRefresh: 'slickbot:scheduled-messages:refresh',
+  ScheduledMessagesToggle: 'slickbot:scheduled-messages:toggle',
+  ScheduledMessagesCreateModal: 'slickbot:scheduled-messages:create-modal',
+  ScheduledMessagesCreateModalSubmit: 'slickbot:modal:scheduled-messages-create',
+
   ServerStatsRefresh: 'slickbot:server-stats:refresh',
+  ServerStatsToggle: 'slickbot:server-stats:toggle',
+  ServerStatsConfigModal: 'slickbot:server-stats:config-modal',
+  ServerStatsConfigModalSubmit: 'slickbot:modal:server-stats-config',
+  ServerStatsRefreshNow: 'slickbot:server-stats:refresh-now',
+
   LevelingRefresh: 'slickbot:leveling:refresh',
+  LevelingToggle: 'slickbot:leveling:toggle',
+  LevelingConfigModal: 'slickbot:leveling:config-modal',
+  LevelingConfigModalSubmit: 'slickbot:modal:leveling-config',
+  LevelingToggleMode: 'slickbot:leveling:toggle-mode',
+
   CustomCommandsRefresh: 'slickbot:custom-commands:refresh',
+  CustomCommandsToggle: 'slickbot:custom-commands:toggle',
+  CustomCommandsPrefixModal: 'slickbot:custom-commands:prefix-modal',
+  CustomCommandsPrefixModalSubmit: 'slickbot:modal:custom-commands-prefix',
+  CustomCommandsCreateModal: 'slickbot:custom-commands:create-modal',
+  CustomCommandsCreateModalSubmit: 'slickbot:modal:custom-commands-create',
+
   JoinCreateRefresh: 'slickbot:join-create:refresh',
+
   GamesRefresh: 'slickbot:games:refresh',
   GamesCounting: 'slickbot:games:counting',
+  GamesCountingToggle: 'slickbot:games:counting-toggle',
   GamesTicTacToe: 'slickbot:games:tic-tac-toe',
+  GamesTttToggle: 'slickbot:games:ttt-toggle',
   GamesConnectFour: 'slickbot:games:connect-four',
+  GamesC4Toggle: 'slickbot:games:c4-toggle',
+
   FaqRefresh: 'slickbot:faq:refresh',
+  FaqRefreshIndex: 'slickbot:faq:refresh-index',
+
   SuggestionsRefresh: 'slickbot:suggestions:refresh',
+
   ReferralsRefresh: 'slickbot:referrals:refresh',
+  ReferralsToggle: 'slickbot:referrals:toggle',
+  ReferralsConfigModal: 'slickbot:referrals:config-modal',
+  ReferralsConfigModalSubmit: 'slickbot:modal:referrals-config',
+
   TempRolesRefresh: 'slickbot:temp-roles:refresh',
+  TempRolesCleanup: 'slickbot:temp-roles:cleanup',
+
   AchievementsRefresh: 'slickbot:achievements:refresh',
+  AchievementsToggleDm: 'slickbot:achievements:toggle-dm',
+
+  BotUpdatesRefresh: 'slickbot:bot-updates:refresh',
+  BotUpdatesToggle: 'slickbot:bot-updates:toggle',
+  BotUpdatesTogglePings: 'slickbot:bot-updates:toggle-pings',
+  BotUpdatesPreview: 'slickbot:bot-updates:preview',
+  BotUpdatesSendNow: 'slickbot:bot-updates:send-now',
   AchievementsHistoryPrefix: 'slickbot:achievements:history:',
   AchievementsResetConfirmPrefix: 'slickbot:achievements-reset:confirm:',
   AchievementsResetCancelPrefix: 'slickbot:achievements-reset:cancel:',

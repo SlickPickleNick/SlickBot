@@ -1,7 +1,8 @@
-const { EmbedBuilder } = require('discord.js');
+const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require('discord.js');
 const { query } = require('../../services/db');
 const { SlickBotColors } = require('../ui/uiService');
 const { ModuleKeys } = require('../moduleRegistry');
+const { CustomIds } = require('../ui/customIds');
 const packageInfo = require('../../../package.json');
 const releases = require('../../data/releases.json');
 
@@ -183,24 +184,64 @@ class BotUpdatesService {
   async buildStatusPanel(guildId) {
     const { config, roleIds } = await this.getConfigWithRoles(guildId);
     const currentAnnouncement = await this.getAnnouncement(guildId, packageInfo.version);
+    const enabled = config?.enabled ?? false;
+    const ready = Boolean(enabled && config?.channel_id);
+
     const lines = [
-      `Status: **${config.enabled ? 'Enabled' : 'Disabled'}**`,
-      `Update Channel: ${config.channel_id ? `<#${config.channel_id}>` : 'Not set'}`,
-      `Role Pings: **${config.ping_roles_enabled ? 'Enabled' : 'Disabled'}**`,
-      `Ping Roles: ${roleIds.length ? roleIds.map((roleId) => `<@&${roleId}>`).join(', ') : 'None'}`,
-      `Current Version: **v${packageInfo.version}**`,
-      `Current Version Announced: **${currentAnnouncement ? 'Yes' : 'No'}**${currentAnnouncement ? ` · ${formatDate(currentAnnouncement.announced_at)}` : ''}`,
+      `Status: **${ready ? '🟢 Active & Ready' : !enabled ? '⏸️ Disabled' : '⚠️ Needs Update Channel'}**`,
+      `Update Channel: ${config.channel_id ? `<#${config.channel_id}>` : '*Not configured (use `/bot-updates setup`)*'}`,
+      `Role Pings: **${config.ping_roles_enabled ? '🟢 Enabled' : '⏸️ Disabled'}**`,
+      `Ping Roles: ${roleIds.length ? roleIds.map((roleId) => `<@&${roleId}>`).join(', ') : '*None*'}`,
+      `Running Version: **v${packageInfo.version}**`,
+      `Current Version Announced: **${currentAnnouncement ? '🟢 Yes' : '⚪ Not yet'}**${currentAnnouncement ? ` · ${formatDate(currentAnnouncement.announced_at)}` : ''}`,
       '',
-      'Use `/bot-updates setup` to set the update channel and optional ping roles. Use `/bot-updates preview` before sending a release message manually.'
+      'Click the buttons below to toggle update announcements, preview release notes, or send the update now.'
     ];
-    return {
-      embeds: [new EmbedBuilder()
-        .setColor(config.enabled && config.channel_id ? SlickBotColors.SUCCESS : SlickBotColors.WARNING)
-        .setTitle('SlickBot Updates Center')
-        .setDescription(lines.join('\n'))
-        .setFooter({ text: 'SlickBot Control Panel' })
-        .setTimestamp(new Date())]
-    };
+
+    const embed = new EmbedBuilder()
+      .setColor(ready ? SlickBotColors.SUCCESS : SlickBotColors.PRIMARY)
+      .setTitle('SlickBot Updates Center')
+      .setDescription(lines.join('\n'))
+      .setFooter({ text: 'SlickBot Control Panel' })
+      .setTimestamp(new Date());
+
+    const row1 = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(CustomIds.BotUpdatesToggle)
+        .setLabel(enabled ? 'Disable Updates' : 'Enable Updates')
+        .setStyle(enabled ? ButtonStyle.Danger : ButtonStyle.Success)
+        .setEmoji(enabled ? '⏸️' : '▶️'),
+      new ButtonBuilder()
+        .setCustomId(CustomIds.BotUpdatesTogglePings)
+        .setLabel(config.ping_roles_enabled ? 'Disable Pings' : 'Enable Pings')
+        .setStyle(config.ping_roles_enabled ? ButtonStyle.Secondary : ButtonStyle.Primary)
+        .setEmoji('🔔'),
+      new ButtonBuilder()
+        .setCustomId(CustomIds.BotUpdatesPreview)
+        .setLabel('Preview Update')
+        .setStyle(ButtonStyle.Secondary)
+        .setEmoji('👁️'),
+      new ButtonBuilder()
+        .setCustomId(CustomIds.BotUpdatesSendNow)
+        .setLabel('Send Update Now')
+        .setStyle(ButtonStyle.Primary)
+        .setEmoji('🚀')
+    );
+
+    const row2 = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(CustomIds.BotUpdatesRefresh)
+        .setLabel('Refresh')
+        .setStyle(ButtonStyle.Secondary)
+        .setEmoji('🔄'),
+      new ButtonBuilder()
+        .setCustomId(CustomIds.SetupRefresh)
+        .setLabel('Setup Center')
+        .setStyle(ButtonStyle.Secondary)
+        .setEmoji('⚙️')
+    );
+
+    return { embeds: [embed], components: [row1, row2] };
   }
 
   async sendUpdate(guild, logger = null, options = {}) {

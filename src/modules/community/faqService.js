@@ -427,9 +427,9 @@ class FaqService {
     return {
       embeds: [embed],
       components: [createButtonRow([
-        createPanelButton(CustomIds.FaqRefresh, 'Refresh FAQ', ButtonStyle.Primary),
-        createPanelButton(CustomIds.SetupCommunity, 'Community', ButtonStyle.Secondary),
-        createPanelButton(CustomIds.SetupRefresh, 'Return to Setup', ButtonStyle.Secondary)
+        createPanelButton(CustomIds.FaqRefreshIndex, 'Sync Master Post', ButtonStyle.Success),
+        createPanelButton(CustomIds.FaqRefresh, 'Refresh Panel', ButtonStyle.Secondary),
+        createPanelButton(CustomIds.SetupRefresh, 'Setup Center', ButtonStyle.Secondary)
       ])]
     };
   }

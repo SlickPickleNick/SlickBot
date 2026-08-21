@@ -1,5 +1,7 @@
+const { ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 const { createBaseEmbed, createSuccessEmbed, createWarningEmbed, SlickBotColors } = require('../ui/uiService');
 const { query } = require('../../services/db');
+const { CustomIds } = require('../ui/customIds');
 
 function parseDelay(value) {
   const raw = String(value || '').trim().toLowerCase();
@@ -175,24 +177,99 @@ class ScheduledMessageService {
   }
 
   async buildManagerPanel(guildId) {
-    const [config, schedules] = await Promise.all([this.getConfig(guildId), this.listScheduled(guildId, 10)]);
+    const [config, schedules] = await Promise.all([this.getConfig(guildId), this.listScheduled(guildId, 8)]);
+    const enabled = config?.enabled ?? false;
+    const ready = Boolean(enabled && (config?.default_channel_id || schedules.length));
+
     const lines = schedules.length
-      ? schedules.map((schedule) => `• **#${schedule.schedule_number}** → <#${schedule.channel_id}> · ${formatTimestamp(schedule.send_at)}${schedule.repeat_mode && schedule.repeat_mode !== 'NONE' ? ` · ${schedule.repeat_mode}` : ''}`).join('\n')
-      : 'No active scheduled messages.';
-    return { embeds: [createBaseEmbed({
+      ? schedules.map((schedule) => `• **#${schedule.schedule_number}** → <#${schedule.channel_id}> · ${formatTimestamp(schedule.send_at)}${schedule.repeat_mode && schedule.repeat_mode !== 'NONE' ? ` · \`${schedule.repeat_mode}\`` : ''}`).join('\n')
+      : '*No active scheduled messages.*';
+
+    const embed = createBaseEmbed({
       title: 'SlickBot Scheduled Messages',
       description: [
-        `Status: **${config.enabled ? 'Enabled' : 'Disabled'}**`,
-        `Default Channel: ${config.default_channel_id ? `<#${config.default_channel_id}>` : 'Not set'}`,
+        `Status: **${ready ? '🟢 Active & Running' : !enabled ? '⏸️ Disabled' : '⚠️ Needs Default Channel'}**`,
+        `Default Channel: ${config.default_channel_id ? `<#${config.default_channel_id}>` : '*Not set (use `/schedule setup`)*'}`,
+        `Upcoming Messages: **${schedules.length} scheduled**`,
         '',
-        '**Upcoming Messages**',
+        '**Upcoming Schedules**',
         lines,
         '',
-        'Use `/schedule create` to schedule a message. Use `/schedule cancel` to cancel one.'
+        'Click **Schedule Message** to create an automated scheduled or recurring message.'
       ].join('\n'),
-      color: config.default_channel_id || schedules.length ? SlickBotColors.SUCCESS : SlickBotColors.WARNING
-    })] };
+      color: ready ? SlickBotColors.SUCCESS : SlickBotColors.PRIMARY
+    });
+
+    const row1 = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(CustomIds.ScheduledMessagesCreateModal)
+        .setLabel('Schedule Message')
+        .setStyle(ButtonStyle.Success)
+        .setEmoji('📅'),
+      new ButtonBuilder()
+        .setCustomId(CustomIds.ScheduledMessagesToggle)
+        .setLabel(enabled ? 'Disable Scheduler' : 'Enable Scheduler')
+        .setStyle(enabled ? ButtonStyle.Danger : ButtonStyle.Success)
+        .setEmoji(enabled ? '⏸️' : '▶️')
+    );
+
+    const row2 = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(CustomIds.ScheduledMessagesRefresh)
+        .setLabel('Refresh')
+        .setStyle(ButtonStyle.Secondary)
+        .setEmoji('🔄'),
+      new ButtonBuilder()
+        .setCustomId(CustomIds.SetupRefresh)
+        .setLabel('Setup Center')
+        .setStyle(ButtonStyle.Secondary)
+        .setEmoji('⚙️')
+    );
+
+    return { embeds: [embed], components: [row1, row2] };
   }
 }
 
-module.exports = { ScheduledMessageService, parseDelay, formatTimestamp, repeatSeconds };
+function buildScheduledMessageCreateModal() {
+  return new ModalBuilder()
+    .setCustomId(CustomIds.ScheduledMessagesCreateModalSubmit)
+    .setTitle('Schedule a Message')
+    .addComponents(
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('content')
+          .setLabel('Message Content')
+          .setPlaceholder('Example: Community reminder! Event starting soon.')
+          .setStyle(TextInputStyle.Paragraph)
+          .setMaxLength(2000)
+          .setRequired(true)
+      ),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('delay')
+          .setLabel('Send In (Delay from now)')
+          .setPlaceholder('Example: 30m, 2h, 1d, 1w')
+          .setStyle(TextInputStyle.Short)
+          .setMaxLength(32)
+          .setRequired(true)
+      ),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('repeat')
+          .setLabel('Repeat Mode (NONE, DAILY, WEEKLY)')
+          .setPlaceholder('NONE')
+          .setStyle(TextInputStyle.Short)
+          .setMaxLength(10)
+          .setRequired(false)
+          .setValue('NONE')
+      )
+    );
+}
+
+module.exports = {
+  ScheduledMessageService,
+  parseDelay,
+  formatTimestamp,
+  repeatSeconds,
+  buildScheduledMessageCreateModal
+};

@@ -995,7 +995,24 @@ class AchievementService {
       ].join('\n'),
       color: config.enabled === false ? SlickBotColors.MUTED : SlickBotColors.PRIMARY
     });
-    const row = new ActionRowBuilder().addComponents(refreshButton());
+
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(CustomIds.AchievementsToggleDm)
+        .setLabel(config.dm_enabled ? 'Disable DMs' : 'Enable DMs')
+        .setStyle(config.dm_enabled ? ButtonStyle.Secondary : ButtonStyle.Primary)
+        .setEmoji('✉️'),
+      new ButtonBuilder()
+        .setCustomId(CustomIds.AchievementsRefresh)
+        .setLabel('Refresh')
+        .setStyle(ButtonStyle.Secondary)
+        .setEmoji('🔄'),
+      new ButtonBuilder()
+        .setCustomId(CustomIds.SetupRefresh)
+        .setLabel('Setup Center')
+        .setStyle(ButtonStyle.Secondary)
+        .setEmoji('⚙️')
+    );
     return { embeds: [embed], components: [row] };
   }
 

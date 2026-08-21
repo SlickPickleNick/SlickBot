@@ -1,6 +1,7 @@
-const { ChannelType, PermissionsBitField } = require('discord.js');
+const { ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, ModalBuilder, PermissionsBitField, TextInputBuilder, TextInputStyle } = require('discord.js');
 const { query } = require('../../services/db');
 const { createBaseEmbed, SlickBotColors } = require('../ui/uiService');
+const { CustomIds } = require('../ui/customIds');
 
 function renderTemplate(template, counts) {
   return String(template || '')
@@ -225,21 +226,110 @@ class ServerStatsService {
   async buildManagerPanel(guild) {
     const config = await this.getConfig(guild.id);
     const counts = await this.counts(guild, { config }).catch(() => ({ members: guild.memberCount || 0, humans: 0, bots: 0, voice: 0 }));
+    const enabled = config?.enabled ?? false;
+    const hasAnyChannel = Boolean(config?.member_channel_id || config?.human_channel_id || config?.bot_channel_id || config?.voice_channel_id);
+
     const lines = [
-      `Status: **${config.enabled ? 'Enabled' : 'Disabled'}**`,
-      `Member Counter: ${config.member_channel_id ? `<#${config.member_channel_id}>` : 'Not set'} · \`${config.member_template || 'Members: {members}'}\``,
-      `Human Counter: ${config.human_channel_id ? `<#${config.human_channel_id}>` : 'Not set'} · \`${config.human_template || 'Humans: {humans}'}\``,
-      `Bot Counter: ${config.bot_channel_id ? `<#${config.bot_channel_id}>` : 'Not set'} · \`${config.bot_template || 'Bots: {bots}'}\``,
-      `Voice Counter: ${config.voice_channel_id ? `<#${config.voice_channel_id}>` : 'Not set'} · \`${config.voice_template || 'In Voice: {voice}'}\``,
-      `Last Update Error: ${config.last_error ? `\`${String(config.last_error).slice(0, 200)}\`` : 'None'}`,
+      `Status: **${enabled && hasAnyChannel ? '🟢 Active & Updating' : !enabled ? '⏸️ Disabled' : '⚠️ Needs Counter Channels'}**`,
+      `Member Counter: ${config.member_channel_id ? `<#${config.member_channel_id}>` : '*Not configured*'} · \`${config.member_template || 'Members: {members}'}\``,
+      `Human Counter: ${config.human_channel_id ? `<#${config.human_channel_id}>` : '*Not configured*'} · \`${config.human_template || 'Humans: {humans}'}\``,
+      `Bot Counter: ${config.bot_channel_id ? `<#${config.bot_channel_id}>` : '*Not configured*'} · \`${config.bot_template || 'Bots: {bots}'}\``,
+      `Voice Counter: ${config.voice_channel_id ? `<#${config.voice_channel_id}>` : '*Not configured*'} · \`${config.voice_template || 'In Voice: {voice}'}\``,
+      `Last Error: ${config.last_error ? `\`${String(config.last_error).slice(0, 150)}\`` : 'None'}`,
       '',
-      '**Current Counts**',
+      '**Current Live Counts**',
       `Members: **${counts.members}** · Humans: **${counts.humans}** · Bots: **${counts.bots}** · In Voice: **${counts.voice}**`,
       '',
-      'Use `/stats setup` to configure channel counters and `/stats refresh` to update them now.'
+      'Click the buttons below to toggle updates, edit channel name templates, or update now.'
     ];
-    return { embeds: [createBaseEmbed({ title: 'SlickBot Server Stats Center', description: lines.join('\n'), color: (config.member_channel_id || config.voice_channel_id) ? SlickBotColors.SUCCESS : SlickBotColors.WARNING })] };
+
+    const embed = createBaseEmbed({
+      title: 'SlickBot Server Stats Center',
+      description: lines.join('\n'),
+      color: (enabled && hasAnyChannel) ? SlickBotColors.SUCCESS : SlickBotColors.PRIMARY
+    });
+
+    const row1 = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(CustomIds.ServerStatsToggle)
+        .setLabel(enabled ? 'Disable Stats' : 'Enable Stats')
+        .setStyle(enabled ? ButtonStyle.Danger : ButtonStyle.Success)
+        .setEmoji(enabled ? '⏸️' : '▶️'),
+      new ButtonBuilder()
+        .setCustomId(CustomIds.ServerStatsConfigModal)
+        .setLabel('Edit Counter Templates')
+        .setStyle(ButtonStyle.Secondary)
+        .setEmoji('📝'),
+      new ButtonBuilder()
+        .setCustomId(CustomIds.ServerStatsRefreshNow)
+        .setLabel('Update Channels Now')
+        .setStyle(ButtonStyle.Primary)
+        .setEmoji('⚡')
+    );
+
+    const row2 = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(CustomIds.ServerStatsRefresh)
+        .setLabel('Refresh')
+        .setStyle(ButtonStyle.Secondary)
+        .setEmoji('🔄'),
+      new ButtonBuilder()
+        .setCustomId(CustomIds.SetupRefresh)
+        .setLabel('Setup Center')
+        .setStyle(ButtonStyle.Secondary)
+        .setEmoji('⚙️')
+    );
+
+    return { embeds: [embed], components: [row1, row2] };
   }
 }
 
-module.exports = { ServerStatsService };
+function buildServerStatsConfigModal(config) {
+  return new ModalBuilder()
+    .setCustomId(CustomIds.ServerStatsConfigModalSubmit)
+    .setTitle('Customize Counter Channel Templates')
+    .addComponents(
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('member_template')
+          .setLabel('Member Counter Template')
+          .setPlaceholder('Members: {members}')
+          .setStyle(TextInputStyle.Short)
+          .setMaxLength(100)
+          .setRequired(false)
+          .setValue(config?.member_template || 'Members: {members}')
+      ),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('human_template')
+          .setLabel('Human Counter Template')
+          .setPlaceholder('Humans: {humans}')
+          .setStyle(TextInputStyle.Short)
+          .setMaxLength(100)
+          .setRequired(false)
+          .setValue(config?.human_template || 'Humans: {humans}')
+      ),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('bot_template')
+          .setLabel('Bot Counter Template')
+          .setPlaceholder('Bots: {bots}')
+          .setStyle(TextInputStyle.Short)
+          .setMaxLength(100)
+          .setRequired(false)
+          .setValue(config?.bot_template || 'Bots: {bots}')
+      ),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('voice_template')
+          .setLabel('Voice Counter Template')
+          .setPlaceholder('In Voice: {voice}')
+          .setStyle(TextInputStyle.Short)
+          .setMaxLength(100)
+          .setRequired(false)
+          .setValue(config?.voice_template || 'In Voice: {voice}')
+      )
+    );
+}
+
+module.exports = { ServerStatsService, buildServerStatsConfigModal };

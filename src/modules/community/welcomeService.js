@@ -1,6 +1,7 @@
-const { ChannelType } = require('discord.js');
+const { ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 const { query } = require('../../services/db');
 const { createBaseEmbed, createSuccessEmbed, createWarningEmbed, SlickBotColors } = require('../ui/uiService');
+const { CustomIds } = require('../ui/customIds');
 
 function applyPlaceholders(template, member) {
   const guild = member.guild;
@@ -120,20 +121,114 @@ async function handleMemberJoin(member, logger) {
 async function buildWelcomePanel(guildId) {
   const [config, roles] = await Promise.all([getWelcomeConfig(guildId), listAutoRoles(guildId)]);
   const ready = Boolean(config?.enabled && config?.channel_id);
+  const enabled = config?.enabled ?? false;
+  const dmEnabled = config?.dm_enabled ?? false;
+
   const embed = createBaseEmbed({
     title: 'SlickBot Welcome Center',
     description: [
-      `Status: **${ready ? 'Configured' : config?.enabled === false ? 'Disabled' : 'Needs Configuration'}**`,
-      `Welcome Channel: ${config?.channel_id ? `<#${config.channel_id}>` : 'Not set'}`,
-      `DM Welcome: **${config?.dm_enabled ? 'Enabled' : 'Disabled'}**`,
-      `Auto Roles: **${roles.length}**`,
-      roles.length ? roles.map((roleId) => `• <@&${roleId}>`).join('\n') : 'No auto roles configured.',
+      `Status: **${ready ? '🟢 Active & Configured' : !enabled ? '⏸️ Disabled' : '⚠️ Needs Welcome Channel'}**`,
+      `Welcome Channel: ${config?.channel_id ? `<#${config.channel_id}>` : '*Not configured (use `/welcome setup`)*'}`,
+      `DM Welcome: **${dmEnabled ? '🟢 Enabled' : '⏸️ Disabled'}**`,
+      `Auto Roles: **${roles.length} role(s)**`,
+      roles.length ? roles.map((roleId) => `• <@&${roleId}>`).join('\n') : '*No auto roles configured.*',
       '',
-      'Use `/welcome setup`, `/welcome auto-role-add`, and `/welcome test` to configure this module.'
+      '**Custom Embed / Templates**',
+      `Embed Title: \`${config?.embed_title || 'Welcome to {server}'}\``,
+      `Embed Description: \`${(config?.embed_description || 'Glad to have you here, {user}.').slice(0, 100)}\``,
+      `Accent Color: \`${config?.embed_color || '#7869ff'}\``,
+      `DM Message: \`${(config?.dm_message_template || 'Welcome to {server}!').slice(0, 80)}\``,
+      '',
+      'Click the buttons below to toggle features, edit templates, or test your welcome message.'
     ].join('\n'),
-    color: ready ? SlickBotColors.SUCCESS : SlickBotColors.WARNING
+    color: ready ? SlickBotColors.SUCCESS : SlickBotColors.PRIMARY
   });
-  return { embeds: [embed] };
+
+  const row1 = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(CustomIds.WelcomeToggle)
+      .setLabel(enabled ? 'Disable Welcome' : 'Enable Welcome')
+      .setStyle(enabled ? ButtonStyle.Danger : ButtonStyle.Success)
+      .setEmoji(enabled ? '⏸️' : '▶️'),
+    new ButtonBuilder()
+      .setCustomId(CustomIds.WelcomeToggleDm)
+      .setLabel(dmEnabled ? 'Disable DMs' : 'Enable DMs')
+      .setStyle(dmEnabled ? ButtonStyle.Secondary : ButtonStyle.Primary)
+      .setEmoji('✉️'),
+    new ButtonBuilder()
+      .setCustomId(CustomIds.WelcomeEditModal)
+      .setLabel('Edit Messages & Embed')
+      .setStyle(ButtonStyle.Secondary)
+      .setEmoji('📝'),
+    new ButtonBuilder()
+      .setCustomId(CustomIds.WelcomeTest)
+      .setLabel('Test Welcome')
+      .setStyle(ButtonStyle.Secondary)
+      .setEmoji('🧪')
+  );
+
+  const row2 = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(CustomIds.WelcomeRefresh)
+      .setLabel('Refresh')
+      .setStyle(ButtonStyle.Secondary)
+      .setEmoji('🔄'),
+    new ButtonBuilder()
+      .setCustomId(CustomIds.SetupRefresh)
+      .setLabel('Setup Center')
+      .setStyle(ButtonStyle.Secondary)
+      .setEmoji('⚙️')
+  );
+
+  return { embeds: [embed], components: [row1, row2] };
+}
+
+function buildWelcomeEditModal(config) {
+  return new ModalBuilder()
+    .setCustomId(CustomIds.WelcomeEditModalSubmit)
+    .setTitle('Customize Welcome Embed & DMs')
+    .addComponents(
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('embed_title')
+          .setLabel('Embed Title')
+          .setPlaceholder('Example: Welcome to {server}!')
+          .setStyle(TextInputStyle.Short)
+          .setMaxLength(256)
+          .setRequired(false)
+          .setValue(config?.embed_title || '')
+      ),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('embed_description')
+          .setLabel('Embed Description')
+          .setPlaceholder('Example: Glad to have you here, {user}. Check out the rules!')
+          .setStyle(TextInputStyle.Paragraph)
+          .setMaxLength(1000)
+          .setRequired(false)
+          .setValue(config?.embed_description || '')
+      ),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('embed_color')
+          .setLabel('Embed Color Hex')
+          .setPlaceholder('Example: #7869ff')
+          .setStyle(TextInputStyle.Short)
+          .setMaxLength(10)
+          .setRequired(false)
+          .setValue(config?.embed_color || '')
+      ),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('dm_message')
+          .setLabel('Direct Message (DM) Text')
+          .setPlaceholder('Example: Welcome to {server}! Feel free to introduce yourself.')
+          .setStyle(TextInputStyle.Paragraph)
+          .setMaxLength(1000)
+          .setRequired(false)
+          .setValue(config?.dm_message_template || '')
+      )
+    );
 }
 
 function normalizeHexColor(color) {
@@ -159,6 +254,7 @@ module.exports = {
   listAutoRoles,
   handleMemberJoin,
   buildWelcomePanel,
+  buildWelcomeEditModal,
   applyPlaceholders,
   parseColor
 };

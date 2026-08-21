@@ -1,6 +1,7 @@
-const { EmbedBuilder } = require('discord.js');
+const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 const { query } = require('../../services/db');
 const { SlickBotColors, createBaseEmbed } = require('../ui/uiService');
+const { CustomIds } = require('../ui/customIds');
 
 const DEFAULT_PREFIX = '!';
 const cooldowns = new Map();
@@ -347,31 +348,62 @@ class CustomCommandService {
        FROM custom_commands
        WHERE guild_id = $1
        ORDER BY COALESCE(last_used_at, created_at) DESC
-       LIMIT 8`,
+       LIMIT 6`,
       [guildId]
     ).catch(() => ({ rows: [] }));
 
     const commandLines = recent.rows.length
-      ? recent.rows.map((row) => `• **${config.prefix}${row.name}** — ${row.enabled ? 'Enabled' : 'Disabled'} · ${row.embed_enabled ? 'Embed' : 'Text'} · ${row.usage_count || 0} use(s) · Last used ${formatRelative(row.last_used_at)}`).join('\n')
-      : 'No custom commands created yet.';
+      ? recent.rows.map((row) => `• **${config.prefix}${row.name}** — ${row.enabled ? '🟢' : '⏸️'} ${row.embed_enabled ? 'Embed' : 'Text'} · ${row.usage_count || 0} use(s) · Last used ${formatRelative(row.last_used_at)}`).join('\n')
+      : '*No custom commands created yet.*';
 
-    return {
-      embeds: [createBaseEmbed({
-        title: 'Custom Commands Center',
-        description: [
-          `Status: **${config.enabled ? 'Enabled' : 'Disabled'}**`,
-          `Prefix: \`${config.prefix || DEFAULT_PREFIX}\``,
-          `Commands: **${enabled.rows[0]?.count || 0}/${total.rows[0]?.count || 0} enabled**`,
-          `Total Uses: **${used.rows[0]?.count || 0}**`,
-          '',
-          '**Recent Commands**',
-          commandLines,
-          '',
-          'Staff can create and edit commands with `/custom-command create` and `/custom-command edit`. Members can trigger enabled commands by typing the configured prefix and trigger, such as `!rules`.'
-        ].join('\n'),
-        color: config.enabled ? SlickBotColors.INFO : SlickBotColors.WARNING
-      })]
-    };
+    const embed = createBaseEmbed({
+      title: 'Custom Commands Center',
+      description: [
+        `Status: **${config.enabled ? '🟢 Active & Responding' : '⏸️ Disabled'}**`,
+        `Trigger Prefix: \`${config.prefix || DEFAULT_PREFIX}\``,
+        `Commands: **${enabled.rows[0]?.count || 0} enabled** (${total.rows[0]?.count || 0} total)`,
+        `Total Uses: **${used.rows[0]?.count || 0} triggers**`,
+        '',
+        '**Recent / Active Commands**',
+        commandLines,
+        '',
+        'Click **Create Command** to add a new command instantly via modal, or **Set Prefix** to customize the chat trigger prefix.'
+      ].join('\n'),
+      color: config.enabled ? SlickBotColors.INFO : SlickBotColors.WARNING
+    });
+
+    const row1 = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(CustomIds.CustomCommandsCreateModal)
+        .setLabel('Create Command')
+        .setStyle(ButtonStyle.Success)
+        .setEmoji('✨'),
+      new ButtonBuilder()
+        .setCustomId(CustomIds.CustomCommandsPrefixModal)
+        .setLabel('Set Prefix')
+        .setStyle(ButtonStyle.Secondary)
+        .setEmoji('⌨️'),
+      new ButtonBuilder()
+        .setCustomId(CustomIds.CustomCommandsToggle)
+        .setLabel(config.enabled ? 'Disable Module' : 'Enable Module')
+        .setStyle(config.enabled ? ButtonStyle.Danger : ButtonStyle.Success)
+        .setEmoji(config.enabled ? '⏸️' : '▶️')
+    );
+
+    const row2 = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(CustomIds.CustomCommandsRefresh)
+        .setLabel('Refresh')
+        .setStyle(ButtonStyle.Secondary)
+        .setEmoji('🔄'),
+      new ButtonBuilder()
+        .setCustomId(CustomIds.SetupRefresh)
+        .setLabel('Setup Center')
+        .setStyle(ButtonStyle.Secondary)
+        .setEmoji('⚙️')
+    );
+
+    return { embeds: [embed], components: [row1, row2] };
   }
 
   async buildCommandEmbed(guildId, name) {
@@ -402,9 +434,73 @@ class CustomCommandService {
   }
 }
 
+function buildCustomCommandCreateModal(prefix = DEFAULT_PREFIX) {
+  return new ModalBuilder()
+    .setCustomId(CustomIds.CustomCommandsCreateModalSubmit)
+    .setTitle('Create Custom Command')
+    .addComponents(
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('trigger')
+          .setLabel('Command Trigger (Without Prefix)')
+          .setPlaceholder('Example: rules, website, discord')
+          .setStyle(TextInputStyle.Short)
+          .setMaxLength(32)
+          .setRequired(true)
+      ),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('response')
+          .setLabel('Response Message')
+          .setPlaceholder('Example: Welcome! Check our rules in #rules or visit our website.')
+          .setStyle(TextInputStyle.Paragraph)
+          .setMaxLength(2000)
+          .setRequired(true)
+      ),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('title')
+          .setLabel('Optional Embed Title')
+          .setPlaceholder('Example: Server Rules (Leave empty for plain text response)')
+          .setStyle(TextInputStyle.Short)
+          .setMaxLength(256)
+          .setRequired(false)
+      ),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('color')
+          .setLabel('Optional Embed Color Hex')
+          .setPlaceholder('Example: #7869ff')
+          .setStyle(TextInputStyle.Short)
+          .setMaxLength(10)
+          .setRequired(false)
+      )
+    );
+}
+
+function buildCustomCommandPrefixModal(currentPrefix = DEFAULT_PREFIX) {
+  return new ModalBuilder()
+    .setCustomId(CustomIds.CustomCommandsPrefixModalSubmit)
+    .setTitle('Set Command Prefix')
+    .addComponents(
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('prefix')
+          .setLabel('Trigger Prefix')
+          .setPlaceholder('Example: !, ?, ., -')
+          .setStyle(TextInputStyle.Short)
+          .setMaxLength(8)
+          .setRequired(true)
+          .setValue(currentPrefix || DEFAULT_PREFIX)
+      )
+    );
+}
+
 module.exports = {
   CustomCommandService,
   cleanTrigger,
   normalizePrefix,
-  replaceVariables
+  replaceVariables,
+  buildCustomCommandCreateModal,
+  buildCustomCommandPrefixModal
 };

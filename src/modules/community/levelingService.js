@@ -1,5 +1,7 @@
+const { ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 const { query } = require('../../services/db');
 const { createBaseEmbed, SlickBotColors } = require('../ui/uiService');
+const { CustomIds } = require('../ui/customIds');
 
 function safeArray(value) {
   if (Array.isArray(value)) return value.map(String);
@@ -549,27 +551,61 @@ class LevelingService {
       this.listRoleRewards(guildId),
       this.listMultiplierRoles(guildId)
     ]);
-    return {
-      embeds: [createBaseEmbed({
-        title: 'SlickBot Leveling Center',
-        description: config
-          ? [
-              `Status: **${config.enabled ? 'Enabled' : 'Disabled'}**`,
-              `XP Range: **${config.xp_min}–${config.xp_max}** per eligible message`,
-              `Cooldown: **${config.cooldown_seconds}s**`,
-              `Minimum Message Length: **${config.minimum_message_length}**`,
-              `Level-Up Channel: ${config.level_up_channel_id ? `<#${config.level_up_channel_id}>` : 'Not configured'}`,
-              `Announcement Mode: **${normalizeAnnouncementMode(config.level_up_announce_mode) === 'ROLE_REWARDS_ONLY' ? 'Reward levels only' : 'All levels'}**`,
-              `Profiles: **${profiles.rows[0]?.count || 0}**`,
-              `Role Rewards: **${rewards.length}**`,
-              `Multiplier Roles: **${multipliers.length}**`,
-              '',
-              'Use `/level setup`, `/level role-add`, `/level multiplier-add`, and `/level analyze` to configure and review this module.'
-            ].join('\n')
-          : 'Leveling has not been configured. Run `/level setup` to create the default configuration.',
-        color: config ? SlickBotColors.PRIMARY : SlickBotColors.WARNING
-      })]
-    };
+
+    const enabled = config?.enabled ?? false;
+    const announceMode = normalizeAnnouncementMode(config?.level_up_announce_mode);
+    const announceModeLabel = announceMode === 'ROLE_REWARDS_ONLY' ? 'Reward levels only' : 'All levels';
+
+    const embed = createBaseEmbed({
+      title: 'SlickBot Leveling Center',
+      description: [
+        `Status: **${enabled ? '🟢 Active & Tracking XP' : '⏸️ Disabled'}**`,
+        `XP Range: **${config?.xp_min || 15}–${config?.xp_max || 25} XP** per eligible message`,
+        `Cooldown: **${config?.cooldown_seconds || 60}s**`,
+        `Minimum Message Length: **${config?.minimum_message_length || 1} chars**`,
+        `Level-Up Channel: ${config?.level_up_channel_id ? `<#${config.level_up_channel_id}>` : '*Same channel as message*'}`,
+        `Announcement Mode: **${announceModeLabel}**`,
+        `Member Profiles: **${profiles.rows[0]?.count || 0}**`,
+        `Role Rewards: **${rewards.length} role(s)**`,
+        `Multiplier Roles: **${multipliers.length} role(s)**`,
+        '',
+        'Click the buttons below to toggle XP tracking, edit rates/cooldowns, or change announcement mode.'
+      ].join('\n'),
+      color: enabled ? SlickBotColors.SUCCESS : SlickBotColors.PRIMARY
+    });
+
+    const row1 = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(CustomIds.LevelingToggle)
+        .setLabel(enabled ? 'Disable XP' : 'Enable XP')
+        .setStyle(enabled ? ButtonStyle.Danger : ButtonStyle.Success)
+        .setEmoji(enabled ? '⏸️' : '▶️'),
+      new ButtonBuilder()
+        .setCustomId(CustomIds.LevelingConfigModal)
+        .setLabel('Edit XP Rate & Cooldown')
+        .setStyle(ButtonStyle.Secondary)
+        .setEmoji('⚡'),
+      new ButtonBuilder()
+        .setCustomId(CustomIds.LevelingToggleMode)
+        .setLabel(`Mode: ${announceMode === 'ROLE_REWARDS_ONLY' ? 'Rewards Only' : 'All Levels'}`)
+        .setStyle(ButtonStyle.Primary)
+        .setEmoji('📢')
+    );
+
+    const row2 = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(CustomIds.LevelingRefresh)
+        .setLabel('Refresh')
+        .setStyle(ButtonStyle.Secondary)
+        .setEmoji('🔄'),
+      new ButtonBuilder()
+        .setCustomId(CustomIds.SetupRefresh)
+        .setLabel('Setup Center')
+        .setStyle(ButtonStyle.Secondary)
+        .setEmoji('⚙️')
+    );
+
+    return { embeds: [embed], components: [row1, row2] };
   }
 
   buildRankEmbed(user, rankData) {
@@ -599,11 +635,60 @@ class LevelingService {
   }
 }
 
+function buildLevelingConfigModal(config) {
+  return new ModalBuilder()
+    .setCustomId(CustomIds.LevelingConfigModalSubmit)
+    .setTitle('Configure XP Rates & Cooldown')
+    .addComponents(
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('xp_min')
+          .setLabel('Minimum XP Per Message')
+          .setPlaceholder('15')
+          .setStyle(TextInputStyle.Short)
+          .setMaxLength(5)
+          .setRequired(true)
+          .setValue(String(config?.xp_min || 15))
+      ),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('xp_max')
+          .setLabel('Maximum XP Per Message')
+          .setPlaceholder('25')
+          .setStyle(TextInputStyle.Short)
+          .setMaxLength(5)
+          .setRequired(true)
+          .setValue(String(config?.xp_max || 25))
+      ),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('cooldown')
+          .setLabel('Cooldown Between XP Awards (Seconds)')
+          .setPlaceholder('60')
+          .setStyle(TextInputStyle.Short)
+          .setMaxLength(5)
+          .setRequired(true)
+          .setValue(String(config?.cooldown_seconds || 60))
+      ),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('min_length')
+          .setLabel('Minimum Message Length (Characters)')
+          .setPlaceholder('1')
+          .setStyle(TextInputStyle.Short)
+          .setMaxLength(4)
+          .setRequired(true)
+          .setValue(String(config?.minimum_message_length || 1))
+      )
+    );
+}
+
 module.exports = {
   LevelingService,
   totalXpForLevel,
   levelFromXp,
   progressForProfile,
   normalizeAnnouncementMode,
-  formatMultiplier
+  formatMultiplier,
+  buildLevelingConfigModal
 };

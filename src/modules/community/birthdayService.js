@@ -395,30 +395,73 @@ class BirthdayService {
   async buildManagerPanel(guildId) {
     const [config, profiles] = await Promise.all([
       this.getConfig(guildId),
-      this.listBirthdays(guildId, 10)
+      this.listBirthdays(guildId, 8)
     ]);
+
+    const enabled = config?.enabled ?? false;
+    const ready = Boolean(enabled && (config?.channel_id || config?.birthday_role_id));
 
     const lines = profiles.length
       ? profiles.map((profile) => `• <@${profile.user_id}> — **${formatBirthday(profile.birth_month, profile.birth_day)}**${profile.timezone ? ` · ${profile.timezone}` : ''}`).join('\n')
-      : 'No birthdays have been configured by users yet.';
+      : '*No birthdays saved by members yet.*';
 
     const embed = createBaseEmbed({
       title: 'SlickBot Birthday Center',
       description: [
-        `Status: **${config.enabled ? 'Enabled' : 'Disabled'}**`,
-        `Announcement Channel: ${config.channel_id ? `<#${config.channel_id}>` : 'Not set'}`,
-        `Birthday Role: ${config.birthday_role_id ? `<@&${config.birthday_role_id}>` : 'Not set'}`,
-        `Default Timezone: **${config.timezone || 'America/New_York'}**`,
+        `Status: **${ready ? '🟢 Active & Configured' : !enabled ? '⏸️ Disabled' : '⚠️ Needs Channel or Role'}**`,
+        `Announcement Channel: ${config?.channel_id ? `<#${config.channel_id}>` : '*Not configured (use `/birthday setup`)*'}`,
+        `Birthday Role: ${config?.birthday_role_id ? `<@&${config.birthday_role_id}>` : '*No temporary birthday role set*'}`,
+        `Default Timezone: **${config?.timezone || 'America/New_York'}**`,
+        `Saved Birthdays: **${profiles.length} total**`,
         '',
-        '**Upcoming / Saved Birthdays**',
+        '**Announcement Template**',
+        `\`${(config?.announcement_template || 'Happy Birthday {user}! 🎂 Hope you have a wonderful day!').slice(0, 120)}\``,
+        '',
+        '**Recent / Saved Member Birthdays**',
         lines,
         '',
-        'Users can run `/birthday set` or use a birthday panel to save their birthday.'
+        'Click the buttons below to toggle automation, edit templates, or post a public setup panel.'
       ].join('\n'),
-      color: config.channel_id || config.birthday_role_id ? SlickBotColors.SUCCESS : SlickBotColors.WARNING
+      color: ready ? SlickBotColors.SUCCESS : SlickBotColors.PRIMARY
     });
 
-    return { embeds: [embed] };
+    const row1 = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(CustomIds.BirthdaysToggle)
+        .setLabel(enabled ? 'Disable Birthdays' : 'Enable Birthdays')
+        .setStyle(enabled ? ButtonStyle.Danger : ButtonStyle.Success)
+        .setEmoji(enabled ? '⏸️' : '▶️'),
+      new ButtonBuilder()
+        .setCustomId(CustomIds.BirthdaysEditModal)
+        .setLabel('Edit Template')
+        .setStyle(ButtonStyle.Secondary)
+        .setEmoji('📝'),
+      new ButtonBuilder()
+        .setCustomId(CustomIds.BirthdaysTest)
+        .setLabel('Test Announcement')
+        .setStyle(ButtonStyle.Secondary)
+        .setEmoji('🧪'),
+      new ButtonBuilder()
+        .setCustomId(CustomIds.BirthdaysPostPanel)
+        .setLabel('Post Public Panel')
+        .setStyle(ButtonStyle.Primary)
+        .setEmoji('📌')
+    );
+
+    const row2 = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(CustomIds.BirthdaysRefresh)
+        .setLabel('Refresh')
+        .setStyle(ButtonStyle.Secondary)
+        .setEmoji('🔄'),
+      new ButtonBuilder()
+        .setCustomId(CustomIds.SetupRefresh)
+        .setLabel('Setup Center')
+        .setStyle(ButtonStyle.Secondary)
+        .setEmoji('⚙️')
+    );
+
+    return { embeds: [embed], components: [row1, row2] };
   }
 
   async buildListPanel(guildId, selected = 'ALL') {
@@ -559,6 +602,34 @@ function birthdayNotFoundEmbed() {
   return createWarningEmbed('Birthday Not Found', 'No active birthday is saved for that user.');
 }
 
+function buildBirthdayEditModal(config) {
+  return new ModalBuilder()
+    .setCustomId(CustomIds.BirthdaysEditModalSubmit)
+    .setTitle('Customize Birthday Announcement')
+    .addComponents(
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('template')
+          .setLabel('Announcement Message Template')
+          .setPlaceholder('Example: Happy Birthday {user}! 🎂 Hope you have a wonderful day!')
+          .setStyle(TextInputStyle.Paragraph)
+          .setMaxLength(1000)
+          .setRequired(false)
+          .setValue(config?.announcement_template || '')
+      ),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('timezone')
+          .setLabel('Default Server Timezone')
+          .setPlaceholder('Example: America/New_York')
+          .setStyle(TextInputStyle.Short)
+          .setMaxLength(64)
+          .setRequired(false)
+          .setValue(config?.timezone || 'America/New_York')
+      )
+    );
+}
+
 module.exports = {
   BirthdayService,
   birthdaySavedEmbed,
@@ -572,6 +643,7 @@ module.exports = {
   timezoneOffsetLabel,
   buildBirthdayDayModal,
   buildBirthdayTimezoneModal,
+  buildBirthdayEditModal,
   isValidDate,
   MONTH_NAMES
 };

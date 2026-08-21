@@ -14,23 +14,24 @@ const { refreshPublishedPanel, refreshPublishedPanelFromResult, formatRefreshSum
 const { parsePanelDesignModalId } = require('../modules/panels/panelModals');
 const { ActivityTypeNames, PresenceStatus } = require('../modules/status/statusService');
 const { buildSupportPanel, buildTicketsPanel, buildReportsPanel, buildApplicationsPanel, buildAppealsPanel } = require('../modules/support/supportUi');
-const { buildWelcomePanel } = require('../modules/community/welcomeService');
-const { GiveawayService } = require('../modules/community/giveawayService');
-const { BirthdayService, buildBirthdayDayModal, buildBirthdayTimezoneModal, isValidDate } = require('../modules/community/birthdayService');
-const { ScheduledMessageService } = require('../modules/automation/scheduledMessageService');
-const { ServerStatsService } = require('../modules/community/serverStatsService');
-const { LevelingService } = require('../modules/community/levelingService');
+const { buildWelcomePanel, buildWelcomeEditModal, getWelcomeConfig, upsertWelcomeConfig } = require('../modules/community/welcomeService');
+const { GiveawayService, buildGiveawayStartModal, buildGiveawayConfigModal, parseDurationToMs } = require('../modules/community/giveawayService');
+const { BirthdayService, buildBirthdayDayModal, buildBirthdayTimezoneModal, buildBirthdayEditModal, isValidDate } = require('../modules/community/birthdayService');
+const { ScheduledMessageService, buildScheduledMessageCreateModal, parseDelay } = require('../modules/automation/scheduledMessageService');
+const { ServerStatsService, buildServerStatsConfigModal } = require('../modules/community/serverStatsService');
+const { LevelingService, buildLevelingConfigModal } = require('../modules/community/levelingService');
 const { CommunityGameService, GAME_KEYS } = require('../modules/community/gameService');
 const { FaqService } = require('../modules/community/faqService');
 const { SuggestionService } = require('../modules/community/suggestionService');
-const { ReferralService } = require('../modules/community/referralService');
+const { ReferralService, buildReferralsConfigModal } = require('../modules/community/referralService');
 const { TemporaryRoleService } = require('../modules/moderation/tempRoleService');
 const { AchievementService, ACHIEVEMENT_KEYS } = require('../modules/community/achievementService');
 const { LockdownService } = require('../modules/safety/lockdownService');
 const { SocialFeedService } = require('../modules/automation/socialFeedService');
+const { BotUpdatesService } = require('../modules/status/botUpdatesService');
 const { buildRoleManagerPanel, toggleRole } = require('../modules/community/rolePanelService');
 const { JoinCreateService } = require('../modules/voice/joinCreateService');
-const { CustomCommandService } = require('../modules/custom/customCommandService');
+const { CustomCommandService, buildCustomCommandCreateModal, buildCustomCommandPrefixModal } = require('../modules/custom/customCommandService');
 const {
   TicketService,
   ReportService,
@@ -67,6 +68,7 @@ const tempRoles = new TemporaryRoleService();
 const achievements = new AchievementService();
 const lockdown = new LockdownService();
 const socialFeeds = new SocialFeedService();
+const botUpdates = new BotUpdatesService();
 
 async function handleComponentInteraction(interaction, ctx) {
   if (!interaction.guildId) {
@@ -594,50 +596,359 @@ async function handleButton(interaction, ctx) {
 
   if (id === CustomIds.WelcomeRefresh) {
     if (!(await requireAction(interaction, ctx, ActionKeys.WelcomeView, ModuleKeys.WELCOME))) return true;
-    await updatePanel(interaction, withSetupSubheader(await buildWelcomePanel(interaction.guildId), 'SlickBot Community Center', 'Welcome / Auto Roles'));
+    await updatePanel(interaction, await buildWelcomePanel(interaction.guildId));
+    return true;
+  }
+
+  if (id === CustomIds.WelcomeToggle) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.WelcomeConfigure, ModuleKeys.WELCOME))) return true;
+    const config = await getWelcomeConfig(interaction.guildId);
+    const nextEnabled = !(config?.enabled ?? false);
+    await upsertWelcomeConfig({ guildId: interaction.guildId, enabled: nextEnabled });
+    await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'welcome-config', title: 'Welcome Module Toggled', body: `Welcome enabled: **${nextEnabled}**\nUpdated By: <@${interaction.user.id}>`, actorUserId: interaction.user.id }).catch(() => {});
+    await updatePanel(interaction, await buildWelcomePanel(interaction.guildId));
+    return true;
+  }
+
+  if (id === CustomIds.WelcomeToggleDm) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.WelcomeConfigure, ModuleKeys.WELCOME))) return true;
+    const config = await getWelcomeConfig(interaction.guildId);
+    const nextDmEnabled = !(config?.dm_enabled ?? false);
+    await upsertWelcomeConfig({ guildId: interaction.guildId, dmEnabled: nextDmEnabled });
+    await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'welcome-config', title: 'Welcome DM Toggled', body: `DM Welcome enabled: **${nextDmEnabled}**\nUpdated By: <@${interaction.user.id}>`, actorUserId: interaction.user.id }).catch(() => {});
+    await updatePanel(interaction, await buildWelcomePanel(interaction.guildId));
+    return true;
+  }
+
+  if (id === CustomIds.WelcomeEditModal) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.WelcomeConfigure, ModuleKeys.WELCOME))) return true;
+    const config = await getWelcomeConfig(interaction.guildId);
+    await interaction.showModal(buildWelcomeEditModal(config));
+    return true;
+  }
+
+  if (id === CustomIds.WelcomeTest) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.WelcomeConfigure, ModuleKeys.WELCOME))) return true;
+    const config = await getWelcomeConfig(interaction.guildId);
+    const member = interaction.member || { id: interaction.user.id, user: interaction.user, guild: interaction.guild };
+    const embed = createBaseEmbed({
+      title: (config?.embed_title || 'Welcome to {server}').replaceAll('{server}', interaction.guild?.name || 'Server').replaceAll('{user}', `<@${interaction.user.id}>`),
+      description: (config?.embed_description || 'Glad to have you here, {user}.').replaceAll('{server}', interaction.guild?.name || 'Server').replaceAll('{user}', `<@${interaction.user.id}>`),
+      color: SlickBotColors.PRIMARY,
+      footer: 'SlickBot Welcome Preview'
+    });
+    await replyPrivate(interaction, { embeds: [createSuccessEmbed('Welcome Preview', 'Here is how your welcome embed looks:'), embed] });
     return true;
   }
 
   if (id === CustomIds.RolePanelsRefresh) {
     if (!(await requireAction(interaction, ctx, ActionKeys.RolePanelsView, ModuleKeys.REACTION_ROLES))) return true;
-    await updatePanel(interaction, withSetupSubheader(await buildRoleManagerPanel(interaction.guildId), 'SlickBot Community Center', 'Role Panels'));
+    await updatePanel(interaction, await buildRoleManagerPanel(interaction.guildId));
     return true;
   }
 
   if (id === CustomIds.GiveawaysRefresh) {
     if (!(await requireAction(interaction, ctx, ActionKeys.GiveawaysView, ModuleKeys.GIVEAWAYS))) return true;
-    await updatePanel(interaction, withSetupSubheader(await giveaways.buildManagerPanel(interaction.guildId), 'SlickBot Community Center', 'Giveaways'));
+    await updatePanel(interaction, await giveaways.buildManagerPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id === CustomIds.GiveawaysQuickStart) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.GiveawaysManage, ModuleKeys.GIVEAWAYS))) return true;
+    await interaction.showModal(buildGiveawayStartModal());
+    return true;
+  }
+
+  if (id === CustomIds.GiveawaysConfigModal) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.GiveawaysManage, ModuleKeys.GIVEAWAYS))) return true;
+    const config = await giveaways.getConfig(interaction.guildId);
+    await interaction.showModal(buildGiveawayConfigModal(config));
     return true;
   }
 
   if (id === CustomIds.BirthdaysRefresh) {
     if (!(await requireAction(interaction, ctx, ActionKeys.BirthdaysView, ModuleKeys.BIRTHDAYS))) return true;
-    await updatePanel(interaction, withSetupSubheader(await birthdays.buildManagerPanel(interaction.guildId), 'SlickBot Community Center', 'Birthdays'));
+    await updatePanel(interaction, await birthdays.buildManagerPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id === CustomIds.BirthdaysToggle) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.BirthdaysConfigure, ModuleKeys.BIRTHDAYS))) return true;
+    const config = await birthdays.getConfig(interaction.guildId);
+    const nextEnabled = !(config?.enabled ?? false);
+    await birthdays.setup(interaction.guildId, { enabled: nextEnabled });
+    await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'birthday-config', title: 'Birthdays Toggled', body: `Birthday automation enabled: **${nextEnabled}**\nUpdated By: <@${interaction.user.id}>`, actorUserId: interaction.user.id }).catch(() => {});
+    await updatePanel(interaction, await birthdays.buildManagerPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id === CustomIds.BirthdaysEditModal) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.BirthdaysConfigure, ModuleKeys.BIRTHDAYS))) return true;
+    const config = await birthdays.getConfig(interaction.guildId);
+    await interaction.showModal(buildBirthdayEditModal(config));
+    return true;
+  }
+
+  if (id === CustomIds.BirthdaysTest) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.BirthdaysConfigure, ModuleKeys.BIRTHDAYS))) return true;
+    const config = await birthdays.getConfig(interaction.guildId);
+    const text = (config?.announcement_template || 'Happy Birthday {user}! 🎂 Hope you have a wonderful day!').replaceAll('{user}', `<@${interaction.user.id}>`).replaceAll('{username}', interaction.user.username).replaceAll('{server}', interaction.guild?.name || 'Server').replaceAll('{date}', 'Today');
+    await replyPrivate(interaction, { embeds: [createSuccessEmbed('Birthday Announcement Preview', text)] });
+    return true;
+  }
+
+  if (id === CustomIds.BirthdaysPostPanel) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.BirthdaysConfigure, ModuleKeys.BIRTHDAYS))) return true;
+    const session = birthdays.createSetupSession({ guildId: interaction.guildId, userId: interaction.user.id });
+    const payload = birthdays.buildSetupPayload(session);
+    await interaction.channel.send(payload);
+    await replyPrivate(interaction, { embeds: [createSuccessEmbed('Birthday Panel Posted', 'The public birthday self-registration panel was posted to this channel.')] });
     return true;
   }
 
   if (id === CustomIds.ScheduledMessagesRefresh) {
     if (!(await requireAction(interaction, ctx, ActionKeys.ScheduledMessagesView, ModuleKeys.SCHEDULED_MESSAGES))) return true;
-    await updatePanel(interaction, withSetupSubheader(await scheduledMessages.buildManagerPanel(interaction.guildId), 'SlickBot Automation Center', 'Scheduled Messages'));
+    await updatePanel(interaction, await scheduledMessages.buildManagerPanel(interaction.guildId));
     return true;
   }
 
+  if (id === CustomIds.ScheduledMessagesToggle) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.ScheduledMessagesConfigure, ModuleKeys.SCHEDULED_MESSAGES))) return true;
+    const config = await scheduledMessages.getConfig(interaction.guildId);
+    const nextEnabled = !(config?.enabled ?? false);
+    await scheduledMessages.setup(interaction.guildId, { enabled: nextEnabled });
+    await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'scheduled-messages', title: 'Scheduled Messages Toggled', body: `Scheduler enabled: **${nextEnabled}**\nUpdated By: <@${interaction.user.id}>`, actorUserId: interaction.user.id }).catch(() => {});
+    await updatePanel(interaction, await scheduledMessages.buildManagerPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id === CustomIds.ScheduledMessagesCreateModal) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.ScheduledMessagesConfigure, ModuleKeys.SCHEDULED_MESSAGES))) return true;
+    await interaction.showModal(buildScheduledMessageCreateModal());
+    return true;
+  }
 
   if (id === CustomIds.LevelingRefresh) {
     if (!(await requireAction(interaction, ctx, ActionKeys.LevelingView, ModuleKeys.LEVELING))) return true;
-    await updatePanel(interaction, withSetupSubheader(await leveling.buildManagerPanel(interaction.guildId), 'SlickBot Community Center', 'Leveling / XP'));
+    await updatePanel(interaction, await leveling.buildManagerPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id === CustomIds.LevelingToggle) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.LevelingConfigure, ModuleKeys.LEVELING))) return true;
+    const config = await leveling.getConfig(interaction.guildId);
+    const nextEnabled = !(config?.enabled ?? false);
+    await leveling.saveConfig(interaction.guildId, { enabled: nextEnabled });
+    await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'level-config', title: 'Leveling XP Toggled', body: `XP awards enabled: **${nextEnabled}**\nUpdated By: <@${interaction.user.id}>`, actorUserId: interaction.user.id }).catch(() => {});
+    await updatePanel(interaction, await leveling.buildManagerPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id === CustomIds.LevelingConfigModal) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.LevelingConfigure, ModuleKeys.LEVELING))) return true;
+    const config = await leveling.getConfig(interaction.guildId);
+    await interaction.showModal(buildLevelingConfigModal(config));
+    return true;
+  }
+
+  if (id === CustomIds.LevelingToggleMode) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.LevelingConfigure, ModuleKeys.LEVELING))) return true;
+    const config = await leveling.getConfig(interaction.guildId);
+    const currentMode = config?.level_up_announce_mode === 'ROLE_REWARDS_ONLY' ? 'ALL' : 'ROLE_REWARDS_ONLY';
+    await leveling.saveConfig(interaction.guildId, { levelUpAnnounceMode: currentMode });
+    await updatePanel(interaction, await leveling.buildManagerPanel(interaction.guildId));
     return true;
   }
 
   if (id === CustomIds.ServerStatsRefresh) {
     if (!(await requireAction(interaction, ctx, ActionKeys.ServerStatsView, ModuleKeys.SERVER_STATS))) return true;
-    await updatePanel(interaction, withSetupSubheader(await serverStats.buildManagerPanel(interaction.guild), 'SlickBot Community Center', 'Server Stats'));
+    await updatePanel(interaction, await serverStats.buildManagerPanel(interaction.guild));
+    return true;
+  }
+
+  if (id === CustomIds.ServerStatsToggle) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.ServerStatsConfigure, ModuleKeys.SERVER_STATS))) return true;
+    const config = await serverStats.getConfig(interaction.guild.id);
+    const nextEnabled = !(config?.enabled ?? false);
+    await serverStats.upsertConfig(interaction.guild.id, { enabled: nextEnabled });
+    await ctx.logger.log({ guildId: interaction.guild.id, eventKey: 'server-stats-config', title: 'Server Stats Toggled', body: `Stats updates enabled: **${nextEnabled}**\nUpdated By: <@${interaction.user.id}>`, actorUserId: interaction.user.id }).catch(() => {});
+    await updatePanel(interaction, await serverStats.buildManagerPanel(interaction.guild));
+    return true;
+  }
+
+  if (id === CustomIds.ServerStatsConfigModal) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.ServerStatsConfigure, ModuleKeys.SERVER_STATS))) return true;
+    const config = await serverStats.getConfig(interaction.guild.id);
+    await interaction.showModal(buildServerStatsConfigModal(config));
+    return true;
+  }
+
+  if (id === CustomIds.ServerStatsRefreshNow) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.ServerStatsConfigure, ModuleKeys.SERVER_STATS))) return true;
+    await interaction.deferUpdate().catch(() => {});
+    await serverStats.sync(interaction.guild, { force: true, logger: ctx.logger }).catch(() => {});
+    await updatePanel(interaction, await serverStats.buildManagerPanel(interaction.guild));
     return true;
   }
 
   if (id === CustomIds.CustomCommandsRefresh) {
     if (!(await requireAction(interaction, ctx, ActionKeys.CustomCommandsView, ModuleKeys.CUSTOM_COMMANDS))) return true;
-    await updatePanel(interaction, withSetupSubheader(await customCommands.buildManagerPanel(interaction.guildId), 'SlickBot Community Center', 'Custom Commands'));
+    await updatePanel(interaction, await customCommands.buildManagerPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id === CustomIds.CustomCommandsToggle) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.CustomCommandsConfigure, ModuleKeys.CUSTOM_COMMANDS))) return true;
+    const config = await customCommands.getConfig(interaction.guildId);
+    const nextEnabled = !(config?.enabled ?? false);
+    await customCommands.setEnabled(interaction.guildId, nextEnabled);
+    await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'custom-command-config', title: 'Custom Commands Toggled', body: `Module enabled: **${nextEnabled}**\nUpdated By: <@${interaction.user.id}>`, actorUserId: interaction.user.id }).catch(() => {});
+    await updatePanel(interaction, await customCommands.buildManagerPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id === CustomIds.CustomCommandsCreateModal) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.CustomCommandsConfigure, ModuleKeys.CUSTOM_COMMANDS))) return true;
+    const config = await customCommands.getConfig(interaction.guildId);
+    await interaction.showModal(buildCustomCommandCreateModal(config?.prefix));
+    return true;
+  }
+
+  if (id === CustomIds.CustomCommandsPrefixModal) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.CustomCommandsConfigure, ModuleKeys.CUSTOM_COMMANDS))) return true;
+    const config = await customCommands.getConfig(interaction.guildId);
+    await interaction.showModal(buildCustomCommandPrefixModal(config?.prefix));
+    return true;
+  }
+
+  if (id === CustomIds.ReferralsRefresh) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.ReferralsView, ModuleKeys.REFERRALS))) return true;
+    await updatePanel(interaction, await referrals.buildManagerPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id === CustomIds.ReferralsToggle) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.ReferralsConfigure, ModuleKeys.REFERRALS))) return true;
+    const stats = await referrals.stats(interaction.guildId);
+    const nextEnabled = stats.config?.enabled === false;
+    await referrals.setup(interaction.guildId, { enabled: nextEnabled });
+    await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'referral-config', title: 'Referrals Toggled', body: `Referrals enabled: **${nextEnabled}**\nUpdated By: <@${interaction.user.id}>`, actorUserId: interaction.user.id }).catch(() => {});
+    await updatePanel(interaction, await referrals.buildManagerPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id === CustomIds.ReferralsConfigModal) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.ReferralsConfigure, ModuleKeys.REFERRALS))) return true;
+    const stats = await referrals.stats(interaction.guildId);
+    await interaction.showModal(buildReferralsConfigModal(stats.config));
+    return true;
+  }
+
+  if (id === CustomIds.BotUpdatesRefresh) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.BotUpdatesView, ModuleKeys.BOT_UPDATES))) return true;
+    await updatePanel(interaction, await botUpdates.buildStatusPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id === CustomIds.BotUpdatesToggle) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.BotUpdatesConfigure, ModuleKeys.BOT_UPDATES))) return true;
+    const { config } = await botUpdates.getConfigWithRoles(interaction.guildId);
+    const nextEnabled = !(config?.enabled ?? false);
+    await botUpdates.setEnabled(interaction.guildId, nextEnabled);
+    await updatePanel(interaction, await botUpdates.buildStatusPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id === CustomIds.BotUpdatesTogglePings) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.BotUpdatesConfigure, ModuleKeys.BOT_UPDATES))) return true;
+    const { config } = await botUpdates.getConfigWithRoles(interaction.guildId);
+    const nextPings = !(config?.ping_roles_enabled ?? false);
+    await botUpdates.setup(interaction.guildId, { pingRolesEnabled: nextPings });
+    await updatePanel(interaction, await botUpdates.buildStatusPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id === CustomIds.BotUpdatesPreview) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.BotUpdatesView, ModuleKeys.BOT_UPDATES))) return true;
+    const { config, roleIds } = await botUpdates.getConfigWithRoles(interaction.guildId);
+    const payload = botUpdates.buildPayload({ preview: true, config, roleIds });
+    await replyPrivate(interaction, payload);
+    return true;
+  }
+
+  if (id === CustomIds.BotUpdatesSendNow) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.BotUpdatesSend, ModuleKeys.BOT_UPDATES))) return true;
+    const result = await botUpdates.sendUpdate(interaction.guild, ctx.logger, { force: true });
+    if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Update Not Sent', result.reason)] });
+    await replyPrivate(interaction, { embeds: [createSuccessEmbed('Update Announcement Sent', `SlickBot v${result.version} update announcement was posted in <#${result.channelId}>.`)] });
+    return true;
+  }
+
+  if (id === CustomIds.AchievementsRefresh) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.AchievementsView, ModuleKeys.ACHIEVEMENTS))) return true;
+    await updatePanel(interaction, await achievements.buildManagerPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id === CustomIds.AchievementsToggleDm) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.AchievementsConfigure, ModuleKeys.ACHIEVEMENTS))) return true;
+    const config = await achievements.getConfig(interaction.guildId);
+    const nextDm = !(config?.dm_enabled ?? false);
+    await achievements.setup(interaction.guildId, { dmEnabled: nextDm });
+    await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'achievement-config', title: 'Achievement DMs Toggled', body: `DM unlock notifications enabled: **${nextDm}**\nUpdated By: <@${interaction.user.id}>`, actorUserId: interaction.user.id }).catch(() => {});
+    await updatePanel(interaction, await achievements.buildManagerPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id === CustomIds.TempRolesRefresh) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.TempRolesView, ModuleKeys.TEMP_ROLES))) return true;
+    await updatePanel(interaction, await tempRoles.buildManagerPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id === CustomIds.TempRolesCleanup) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.TempRolesManage, ModuleKeys.TEMP_ROLES))) return true;
+    await tempRoles.cleanupExpired(ctx.client, ctx.logger);
+    await updatePanel(interaction, await tempRoles.buildManagerPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id === CustomIds.FaqRefreshIndex) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.FaqConfigure, ModuleKeys.FAQ))) return true;
+    await interaction.deferUpdate().catch(() => {});
+    const result = await faq.refreshMasterPost(interaction.guild);
+    if (!result.ok) {
+      await interaction.followUp({ embeds: [createWarningEmbed('FAQ Refresh Failed', result.reason)], flags: MessageFlags.Ephemeral }).catch(() => {});
+      return true;
+    }
+    await updatePanel(interaction, await faq.buildManagerPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id === CustomIds.GamesCountingToggle) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.GamesConfigure, ModuleKeys.COMMUNITY_GAMES))) return true;
+    const counting = await communityGames.getCountingConfig(interaction.guildId);
+    const nextEnabled = !(counting?.enabled ?? false);
+    await communityGames.updateCountingConfig(interaction.guildId, { enabled: nextEnabled });
+    await updatePanel(interaction, await communityGames.buildManagerPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id === CustomIds.GamesTttToggle) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.GamesConfigure, ModuleKeys.COMMUNITY_GAMES))) return true;
+    const ttt = await communityGames.getGameConfig(interaction.guildId, GAME_KEYS.TIC_TAC_TOE);
+    const nextEnabled = !(ttt?.enabled ?? false);
+    await communityGames.updateGameConfig(interaction.guildId, GAME_KEYS.TIC_TAC_TOE, { enabled: nextEnabled });
+    await updatePanel(interaction, await communityGames.buildManagerPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id === CustomIds.GamesC4Toggle) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.GamesConfigure, ModuleKeys.COMMUNITY_GAMES))) return true;
+    const c4 = await communityGames.getGameConfig(interaction.guildId, GAME_KEYS.CONNECT_FOUR);
+    const nextEnabled = !(c4?.enabled ?? false);
+    await communityGames.updateGameConfig(interaction.guildId, GAME_KEYS.CONNECT_FOUR, { enabled: nextEnabled });
+    await updatePanel(interaction, await communityGames.buildManagerPanel(interaction.guildId));
     return true;
   }
 
@@ -1562,6 +1873,166 @@ async function handleModal(interaction, ctx) {
     await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'setup', title: 'Panel Design Updated', body: `${result.target} was updated by ${interaction.user.tag}.`, actorUserId: interaction.user.id }).catch(() => {});
     const refresh = await refreshPublishedPanelFromResult(ctx.client, interaction.guildId, result).catch(() => null);
     await replyPrivate(interaction, { embeds: [createSuccessEmbed('Panel Design Updated', `${result.target} design settings were updated.${formatRefreshSummary(refresh) || '\nFuture posted panels will use the new design.'}`)] });
+    return true;
+  }
+
+  if (id === CustomIds.WelcomeEditModalSubmit) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.WelcomeConfigure, ModuleKeys.WELCOME))) return true;
+    const embedTitle = interaction.fields.getTextInputValue('embed_title')?.trim() || null;
+    const embedDescription = interaction.fields.getTextInputValue('embed_description')?.trim() || null;
+    const embedColor = interaction.fields.getTextInputValue('embed_color')?.trim() || null;
+    const dmMessage = interaction.fields.getTextInputValue('dm_message')?.trim() || null;
+    await upsertWelcomeConfig({
+      guildId: interaction.guildId,
+      embedTitle,
+      embedDescription,
+      embedColor,
+      dmMessage
+    });
+    await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'welcome-config', title: 'Welcome Messages Updated', body: `Welcome configuration updated via interactive modal by <@${interaction.user.id}>.`, actorUserId: interaction.user.id }).catch(() => {});
+    await replyPrivate(interaction, { embeds: [createSuccessEmbed('Welcome Config Saved', 'Your welcome messages and styling settings were updated successfully!')] });
+    return true;
+  }
+
+  if (id === CustomIds.GiveawaysQuickStartModalSubmit) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.GiveawaysManage, ModuleKeys.GIVEAWAYS))) return true;
+    const prize = interaction.fields.getTextInputValue('prize')?.trim();
+    const duration = interaction.fields.getTextInputValue('duration')?.trim();
+    const winners = Number(interaction.fields.getTextInputValue('winners') || 1);
+    const description = interaction.fields.getTextInputValue('description')?.trim() || null;
+    const result = await giveaways.startGiveaway({
+      interaction,
+      client: ctx.client,
+      logger: ctx.logger,
+      prize,
+      duration,
+      winnerCount: Math.max(1, Math.min(winners || 1, 50)),
+      description
+    });
+    if (!result.ok) {
+      return replyPrivate(interaction, { embeds: [createWarningEmbed('Giveaway Not Started', result.reason || 'Could not start giveaway.')] });
+    }
+    await replyPrivate(interaction, { embeds: [createSuccessEmbed('Giveaway Started', `Your giveaway for **${prize}** has begun in <#${result.channel.id}>!`)] });
+    return true;
+  }
+
+  if (id === CustomIds.GiveawaysConfigModalSubmit) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.GiveawaysManage, ModuleKeys.GIVEAWAYS))) return true;
+    const panelColor = interaction.fields.getTextInputValue('panel_color')?.trim() || null;
+    const headerImageUrl = interaction.fields.getTextInputValue('header_image')?.trim() || null;
+    await giveaways.updateConfig(interaction.guildId, { panelColor, panelHeaderImageUrl: headerImageUrl });
+    await replyPrivate(interaction, { embeds: [createSuccessEmbed('Giveaway Styling Saved', 'Default giveaway embed styling updated!')] });
+    return true;
+  }
+
+  if (id === CustomIds.BirthdaysEditModalSubmit) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.BirthdaysConfigure, ModuleKeys.BIRTHDAYS))) return true;
+    const template = interaction.fields.getTextInputValue('template')?.trim() || null;
+    const timezone = interaction.fields.getTextInputValue('timezone')?.trim() || null;
+    await birthdays.setup(interaction.guildId, {
+      announcementTemplate: template,
+      timezone: timezone || 'America/New_York'
+    });
+    await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'birthday-config', title: 'Birthday Settings Updated', body: `Birthday template & timezone updated by <@${interaction.user.id}>.`, actorUserId: interaction.user.id }).catch(() => {});
+    await replyPrivate(interaction, { embeds: [createSuccessEmbed('Birthday Settings Saved', 'Birthday announcement template and default timezone updated!')] });
+    return true;
+  }
+
+  if (id === CustomIds.LevelingConfigModalSubmit) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.LevelingConfigure, ModuleKeys.LEVELING))) return true;
+    const xpMin = Number(interaction.fields.getTextInputValue('xp_min') || 15);
+    const xpMax = Number(interaction.fields.getTextInputValue('xp_max') || 25);
+    const cooldown = Number(interaction.fields.getTextInputValue('cooldown') || 60);
+    const minLength = Number(interaction.fields.getTextInputValue('min_length') || 3);
+    if (xpMin <= 0 || xpMax < xpMin) {
+      return replyPrivate(interaction, { embeds: [createWarningEmbed('Invalid XP Range', 'Max XP must be greater than or equal to Min XP, and both must be positive numbers.')] });
+    }
+    await leveling.saveConfig(interaction.guildId, {
+      xpMin,
+      xpMax,
+      cooldownSeconds: cooldown,
+      minimumMessageLength: minLength
+    });
+    await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'level-config', title: 'Leveling Rates Updated', body: `XP Range: ${xpMin}-${xpMax} · Cooldown: ${cooldown}s · Min Length: ${minLength} chars\nUpdated By: <@${interaction.user.id}>`, actorUserId: interaction.user.id }).catch(() => {});
+    await replyPrivate(interaction, { embeds: [createSuccessEmbed('Leveling Rates Saved', `XP rate set to **${xpMin}–${xpMax} XP** per message with a **${cooldown}s** cooldown.`)] });
+    return true;
+  }
+
+  if (id === CustomIds.ServerStatsConfigModalSubmit) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.ServerStatsConfigure, ModuleKeys.SERVER_STATS))) return true;
+    const memberTemplate = interaction.fields.getTextInputValue('member_template')?.trim() || '👥 Total Members: {count}';
+    const humanTemplate = interaction.fields.getTextInputValue('human_template')?.trim() || '👤 Members: {count}';
+    const botTemplate = interaction.fields.getTextInputValue('bot_template')?.trim() || '🤖 Bots: {count}';
+    const voiceTemplate = interaction.fields.getTextInputValue('voice_template')?.trim() || '🎙️ In Voice: {count}';
+    await serverStats.upsertConfig(interaction.guild.id, {
+      memberTemplate,
+      humanTemplate,
+      botTemplate,
+      voiceTemplate
+    });
+    await replyPrivate(interaction, { embeds: [createSuccessEmbed('Stats Templates Saved', 'Server counter templates have been updated!')] });
+    return true;
+  }
+
+  if (id === CustomIds.CustomCommandsCreateModalSubmit) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.CustomCommandsConfigure, ModuleKeys.CUSTOM_COMMANDS))) return true;
+    const trigger = interaction.fields.getTextInputValue('trigger')?.trim();
+    const response = interaction.fields.getTextInputValue('response')?.trim();
+    const title = interaction.fields.getTextInputValue('title')?.trim() || null;
+    const color = interaction.fields.getTextInputValue('color')?.trim() || null;
+    try {
+      const created = await customCommands.createCommand(interaction.guildId, {
+        name: trigger,
+        response,
+        embedEnabled: Boolean(title || color),
+        embedTitle: title,
+        embedColor: color,
+        actorUserId: interaction.user.id
+      });
+      await replyPrivate(interaction, { embeds: [createSuccessEmbed('Custom Command Created', `Created command \`${created.prefix || '!'}${created.name}\` successfully!`)] });
+    } catch (err) {
+      return replyPrivate(interaction, { embeds: [createWarningEmbed('Command Not Created', err.message || 'Could not create command.')] });
+    }
+    return true;
+  }
+
+  if (id === CustomIds.CustomCommandsPrefixModalSubmit) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.CustomCommandsConfigure, ModuleKeys.CUSTOM_COMMANDS))) return true;
+    const prefix = interaction.fields.getTextInputValue('prefix')?.trim() || '!';
+    await customCommands.setPrefix(interaction.guildId, prefix);
+    await replyPrivate(interaction, { embeds: [createSuccessEmbed('Prefix Updated', `Custom command trigger prefix is now \`${prefix}\`.`)] });
+    return true;
+  }
+
+  if (id === CustomIds.ReferralsConfigModalSubmit) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.ReferralsConfigure, ModuleKeys.REFERRALS))) return true;
+    const bonusXp = Number(interaction.fields.getTextInputValue('bonus_xp') || 100);
+    if (!Number.isFinite(bonusXp) || bonusXp < 0) {
+      return replyPrivate(interaction, { embeds: [createWarningEmbed('Invalid XP', 'Bonus XP must be a positive number.')] });
+    }
+    await referrals.setup(interaction.guildId, { referralXp: bonusXp });
+    await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'referral-config', title: 'Referral Bonus XP Updated', body: `Bonus XP set to **${bonusXp}**\nUpdated By: <@${interaction.user.id}>`, actorUserId: interaction.user.id }).catch(() => {});
+    await replyPrivate(interaction, { embeds: [createSuccessEmbed('Referral Settings Saved', `Referrers will now receive **${bonusXp.toLocaleString()} XP** per valid referral.`)] });
+    return true;
+  }
+
+  if (id === CustomIds.ScheduledMessagesCreateModalSubmit) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.ScheduledMessagesConfigure, ModuleKeys.SCHEDULED_MESSAGES))) return true;
+    const content = interaction.fields.getTextInputValue('content')?.trim();
+    const delay = interaction.fields.getTextInputValue('delay')?.trim();
+    const repeat = (interaction.fields.getTextInputValue('repeat')?.trim() || 'NONE').toUpperCase();
+    const result = await scheduledMessages.createScheduledMessage({
+      guildId: interaction.guildId,
+      channelId: interaction.channelId,
+      actorUserId: interaction.user.id,
+      content,
+      delay,
+      repeat
+    });
+    if (!result.ok) {
+      return replyPrivate(interaction, { embeds: [createWarningEmbed('Schedule Failed', result.reason || 'Could not schedule message.')] });
+    }
+    await replyPrivate(interaction, { embeds: [createSuccessEmbed('Message Scheduled', `Schedule **#${result.schedule.schedule_number}** set for <t:${Math.floor(new Date(result.schedule.send_at).getTime() / 1000)}:f> in <#${interaction.channelId}>.`)] });
     return true;
   }
 

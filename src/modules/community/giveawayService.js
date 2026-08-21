@@ -1,6 +1,7 @@
-const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 const { query } = require('../../services/db');
 const { createBaseEmbed, createSuccessEmbed, createWarningEmbed, SlickBotColors, withPanelHeaderImage } = require('../ui/uiService');
+const { CustomIds } = require('../ui/customIds');
 
 function parseHexColor(color, fallback = SlickBotColors.PRIMARY) {
   const value = String(color || '').trim();
@@ -218,30 +219,133 @@ class GiveawayService {
   async buildManagerPanel(guildId) {
     const config = await this.getConfig(guildId);
     const active = await this.listActive(guildId);
+    const ready = Boolean(config?.default_channel_id);
     const lines = active.length
       ? active.map((item) => `• **#${item.giveaway_number}** — ${item.prize} · ${item.entry_count} entries · ends ${formatDiscordTimestamp(item.ends_at, 'R')}`).join('\n')
-      : 'No active giveaways.';
-    return {
-      embeds: [createBaseEmbed({
-        title: 'SlickBot Giveaway Center',
-        description: [
-          `Default Channel: ${config?.default_channel_id ? `<#${config.default_channel_id}>` : 'Not configured'}`,
-          `Ping Role: ${config?.ping_role_id ? `<@&${config.ping_role_id}>` : 'Not configured'}`,
-          '',
-          '**Active Giveaways**',
-          lines,
-          '',
-          'Use `/giveaway start` to create a giveaway with automatic winner selection.'
-        ].join('\n'),
-        color: active.length ? SlickBotColors.SUCCESS : SlickBotColors.INFO
-      })]
-    };
+      : '*No active giveaways currently running.*';
+
+    const embed = createBaseEmbed({
+      title: 'SlickBot Giveaway Center',
+      description: [
+        `Status: **${ready ? '🟢 Configured' : '⚠️ Default Channel Not Set'}**`,
+        `Default Channel: ${config?.default_channel_id ? `<#${config.default_channel_id}>` : '*Not configured (use `/giveaway setup`)*'}`,
+        `Ping Role: ${config?.ping_role_id ? `<@&${config.ping_role_id}>` : '*No role pinged on start*'}`,
+        `Panel Accent Color: \`${config?.panel_color || '#7869ff'}\``,
+        `Header Image: ${config?.header_image_url ? `[Image URL](${config.header_image_url})` : '*None*'}`,
+        '',
+        '**Active Giveaways**',
+        lines,
+        '',
+        'Click **Start Giveaway** to launch a new giveaway instantly via modal.'
+      ].join('\n'),
+      color: active.length ? SlickBotColors.SUCCESS : SlickBotColors.INFO
+    });
+
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(CustomIds.GiveawaysQuickStart)
+        .setLabel('Start Giveaway')
+        .setStyle(ButtonStyle.Success)
+        .setEmoji('🎉'),
+      new ButtonBuilder()
+        .setCustomId(CustomIds.GiveawaysConfigModal)
+        .setLabel('Edit Styling')
+        .setStyle(ButtonStyle.Secondary)
+        .setEmoji('🎨'),
+      new ButtonBuilder()
+        .setCustomId(CustomIds.GiveawaysRefresh)
+        .setLabel('Refresh')
+        .setStyle(ButtonStyle.Secondary)
+        .setEmoji('🔄'),
+      new ButtonBuilder()
+        .setCustomId(CustomIds.SetupRefresh)
+        .setLabel('Setup Center')
+        .setStyle(ButtonStyle.Secondary)
+        .setEmoji('⚙️')
+    );
+
+    return { embeds: [embed], components: [row] };
   }
+}
+
+function buildGiveawayStartModal() {
+  return new ModalBuilder()
+    .setCustomId(CustomIds.GiveawaysQuickStartModalSubmit)
+    .setTitle('Start a New Giveaway')
+    .addComponents(
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('prize')
+          .setLabel('Giveaway Prize')
+          .setPlaceholder('Example: Discord Nitro 1 Month')
+          .setStyle(TextInputStyle.Short)
+          .setMaxLength(256)
+          .setRequired(true)
+      ),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('duration')
+          .setLabel('Duration')
+          .setPlaceholder('Example: 1h, 1d, 30m, 3d')
+          .setStyle(TextInputStyle.Short)
+          .setMaxLength(32)
+          .setRequired(true)
+      ),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('winners')
+          .setLabel('Number of Winners')
+          .setPlaceholder('1')
+          .setStyle(TextInputStyle.Short)
+          .setMaxLength(3)
+          .setRequired(false)
+          .setValue('1')
+      ),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('description')
+          .setLabel('Optional Description')
+          .setPlaceholder('Example: Must be a member for 7 days to claim.')
+          .setStyle(TextInputStyle.Paragraph)
+          .setMaxLength(1000)
+          .setRequired(false)
+      )
+    );
+}
+
+function buildGiveawayConfigModal(config) {
+  return new ModalBuilder()
+    .setCustomId(CustomIds.GiveawaysConfigModalSubmit)
+    .setTitle('Giveaway Styling & Defaults')
+    .addComponents(
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('panel_color')
+          .setLabel('Accent Color Hex')
+          .setPlaceholder('Example: #7869ff')
+          .setStyle(TextInputStyle.Short)
+          .setMaxLength(10)
+          .setRequired(false)
+          .setValue(config?.panel_color || '')
+      ),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('header_image_url')
+          .setLabel('Header Banner Image URL')
+          .setPlaceholder('Example: https://example.com/banner.png')
+          .setStyle(TextInputStyle.Short)
+          .setMaxLength(500)
+          .setRequired(false)
+          .setValue(config?.header_image_url || '')
+      )
+    );
 }
 
 module.exports = {
   GiveawayService,
   buildGiveawayPayload,
+  buildGiveawayStartModal,
+  buildGiveawayConfigModal,
   parseDurationToMs,
   formatDiscordTimestamp
 };
