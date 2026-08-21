@@ -7,7 +7,12 @@ const packageInfo = require('../../../package.json');
 const releases = require('../../data/releases.json');
 
 function normalizeVersion(version) {
-  return String(version || packageInfo.version || '').trim().replace(/^v/i, '');
+  let v = String(version || packageInfo.version || '').trim().replace(/^v/i, '');
+  if (!v) return packageInfo.version;
+  if (releases[v]) return v;
+  const fixed = v.replace(/^9\./, '0.');
+  if (releases[fixed]) return fixed;
+  return v;
 }
 
 function normalizeRoleIds(roleIds = []) {
@@ -50,9 +55,46 @@ class BotUpdatesService {
     return { config, roleIds };
   }
 
+  autocompleteVersions(focusedValue = '') {
+    const query = String(focusedValue || '').toLowerCase().trim().replace(/^v/i, '');
+    const current = packageInfo.version;
+    return Object.entries(releases)
+      .filter(([ver, data]) => {
+        if (!query) return true;
+        return (
+          ver.toLowerCase().includes(query) ||
+          (data.title && data.title.toLowerCase().includes(query)) ||
+          (data.summary && data.summary.toLowerCase().includes(query))
+        );
+      })
+      .slice(0, 25)
+      .map(([ver, data]) => {
+        const isCurrent = ver === current;
+        const shortSummary = data.title ? ` (${data.title.replace(/^SlickBot\s*/i, '')})` : '';
+        return {
+          name: `v${ver}${isCurrent ? ' • Current' : ''}${shortSummary}`.slice(0, 100),
+          value: ver
+        };
+      });
+  }
+
   getRelease(version = packageInfo.version) {
     const normalized = normalizeVersion(version);
-    return releases[normalized] || {
+    if (releases[normalized]) return releases[normalized];
+
+    const fixed = normalized.replace(/^9\./, '0.');
+    if (releases[fixed]) return releases[fixed];
+
+    const matchKey = Object.keys(releases).find(
+      (k) => k.toLowerCase() === normalized.toLowerCase() || k.toLowerCase() === fixed.toLowerCase()
+    );
+    if (matchKey && releases[matchKey]) return releases[matchKey];
+
+    if (releases[packageInfo.version]) {
+      return releases[packageInfo.version];
+    }
+
+    return {
       title: `SlickBot v${normalized}`,
       summary: 'SlickBot has been updated to a new version.',
       notes: ['No structured patch notes were found for this version.'],

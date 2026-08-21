@@ -55,16 +55,23 @@ module.exports = {
       subcommand
         .setName('preview')
         .setDescription('Preview the bot update message without posting it publicly.')
-        .addStringOption((option) => option.setName('version').setDescription('Version to preview. Defaults to current version.').setRequired(false).setMaxLength(32))
+        .addStringOption((option) => option.setName('version').setDescription('Version to preview. Defaults to current version.').setRequired(false).setMaxLength(32).setAutocomplete(true))
     )
     .addSubcommand((subcommand) =>
       subcommand
         .setName('send')
         .setDescription('Send the current bot update announcement now.')
-        .addStringOption((option) => option.setName('version').setDescription('Version to send. Defaults to current version.').setRequired(false).setMaxLength(32))
+        .addStringOption((option) => option.setName('version').setDescription('Version to send. Defaults to current version.').setRequired(false).setMaxLength(32).setAutocomplete(true))
         .addBooleanOption((option) => option.setName('force').setDescription('Send even if this version was already announced.').setRequired(false))
     ),
   moduleKey: ModuleKeys.BOT_UPDATES,
+  async autocomplete(interaction) {
+    const focused = interaction.options.getFocused(true);
+    if (focused.name === 'version') {
+      const choices = updates.autocompleteVersions(focused.value);
+      await interaction.respond(choices).catch(() => {});
+    }
+  },
   getActionKey(interaction) {
     const subcommand = interaction.options.getSubcommand();
     if (['panel', 'manager', 'roles', 'preview'].includes(subcommand)) return ActionKeys.BotUpdatesView;
