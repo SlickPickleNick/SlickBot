@@ -732,12 +732,27 @@ class SocialFeedService {
              last_announcement_channel_id = $3,
              live_started_at = $4,
              last_item_id = $5,
+             last_viewer_count = $6,
+             last_game_name = $7,
+             last_title = $8,
              last_checked_at = NOW(),
              last_error = NULL,
              updated_at = NOW()
          WHERE id = $1`,
-        [feed.id, sentMessage.id, channel.id, (updateData.startedAt || new Date()).toISOString(), updateData.itemId || updateData.streamId || 'live']
+        [
+          feed.id,
+          sentMessage.id,
+          channel.id,
+          (updateData.startedAt || new Date()).toISOString(),
+          updateData.itemId || updateData.streamId || 'live',
+          updateData.viewerCount !== undefined ? updateData.viewerCount : null,
+          updateData.gameName || null,
+          updateData.title || null
+        ]
       );
+      feed.last_viewer_count = updateData.viewerCount !== undefined ? updateData.viewerCount : null;
+      feed.last_game_name = updateData.gameName || null;
+      feed.last_title = updateData.title || null;
     } else {
       await query(
         `UPDATE social_feeds
@@ -811,11 +826,17 @@ class SocialFeedService {
        SET last_status = 'OFFLINE',
            last_announcement_message_id = NULL,
            last_announcement_channel_id = NULL,
+           last_viewer_count = NULL,
+           last_game_name = NULL,
+           last_title = NULL,
            last_checked_at = NOW(),
            updated_at = NOW()
        WHERE id = $1`,
       [feed.id]
     );
+    feed.last_viewer_count = null;
+    feed.last_game_name = null;
+    feed.last_title = null;
 
     if (logger) {
       await logger.log({
@@ -826,6 +847,105 @@ class SocialFeedService {
         metadata: { feedId: feed.id, platform: feed.platform, duration: durationText }
       }).catch(() => {});
     }
+  }
+
+  async updateLiveStreamAnnouncement(client, feed, status, logger = null) {
+    await query(
+      `UPDATE social_feeds
+       SET last_viewer_count = $2,
+           last_game_name = $3,
+           last_title = $4,
+           last_checked_at = NOW(),
+           last_error = NULL,
+           updated_at = NOW()
+       WHERE id = $1`,
+      [feed.id, status.viewerCount !== undefined ? status.viewerCount : null, status.gameName || null, status.title || null]
+    );
+
+    feed.last_viewer_count = status.viewerCount !== undefined ? status.viewerCount : feed.last_viewer_count;
+    feed.last_game_name = status.gameName || feed.last_game_name;
+    feed.last_title = status.title || feed.last_title;
+
+    if (!feed.last_announcement_message_id || !feed.last_announcement_channel_id) return;
+
+    const guild = client?.guilds?.cache?.get(feed.guild_id);
+    if (!guild) return;
+
+    const channel = guild.channels?.cache?.get(feed.last_announcement_channel_id)
+      || await guild.channels?.fetch?.(feed.last_announcement_channel_id).catch(() => null);
+    if (!channel || !channel.isTextBased()) return;
+
+    const message = await channel.messages?.fetch(feed.last_announcement_message_id).catch(() => null);
+    if (!message) return;
+
+    const platformMeta = PLATFORM_META[feed.platform] || { label: feed.platform, color: SlickBotColors.PRIMARY };
+    let memberAvatarUrl = null;
+    let memberDisplayName = null;
+
+    if (feed.discord_user_id) {
+      try {
+        let member = guild.members?.cache?.get(feed.discord_user_id);
+        if (!member && guild.members?.fetch) {
+          member = await guild.members.fetch(feed.discord_user_id).catch(() => null);
+        }
+        if (member) {
+          memberAvatarUrl = member.user?.displayAvatarURL?.({ size: 256 }) || member.displayAvatarURL?.({ size: 256 });
+          memberDisplayName = member.displayName || member.user?.username;
+        } else if (client?.users) {
+          const user = client.users.cache?.get(feed.discord_user_id) || await client.users.fetch(feed.discord_user_id).catch(() => null);
+          if (user) {
+            memberAvatarUrl = user.displayAvatarURL?.({ size: 256 });
+            memberDisplayName = user.username;
+          }
+        }
+      } catch (_) {}
+    }
+
+    const embed = new EmbedBuilder()
+      .setColor(platformMeta.color || SlickBotColors.PRIMARY)
+      .setAuthor({
+        name: `${status.authorName || feed.account_name} (${platformMeta.label})`,
+        url: status.streamUrl || feed.account_url || platformMeta.defaultUrl(feed.account_id),
+        iconURL: status.avatarUrl || undefined
+      })
+      .setTitle(status.title ? status.title.slice(0, 256) : `${status.authorName || feed.account_name} on ${platformMeta.label}`)
+      .setURL(status.streamUrl || feed.account_url || platformMeta.defaultUrl(feed.account_id))
+      .setTimestamp(feed.live_started_at ? new Date(feed.live_started_at) : new Date())
+      .setFooter({
+        text: `SlickBot Social Feeds · ${platformMeta.label}${memberDisplayName ? ` · Member: @${memberDisplayName}` : ''}`,
+        iconURL: memberAvatarUrl || undefined
+      });
+
+    if (memberAvatarUrl) {
+      embed.setThumbnail(memberAvatarUrl);
+    } else if (status.avatarUrl) {
+      embed.setThumbnail(status.avatarUrl);
+    }
+
+    embed.addFields(
+      { name: 'Status', value: '🔴 **LIVE NOW**', inline: true },
+      { name: 'Game / Category', value: status.gameName || 'General', inline: true }
+    );
+    if (status.viewerCount !== undefined) {
+      embed.addFields({ name: 'Viewers', value: status.viewerCount.toLocaleString(), inline: true });
+    }
+
+    if (feed.discord_user_id) {
+      embed.addFields({
+        name: 'Community Member',
+        value: `<@${feed.discord_user_id}>${memberDisplayName ? ` (${memberDisplayName})` : ''}`,
+        inline: true
+      });
+    }
+
+    if (status.thumbnailUrl) {
+      const bustUrl = status.thumbnailUrl.includes('?')
+        ? `${status.thumbnailUrl}&t=${Date.now()}`
+        : `${status.thumbnailUrl}?t=${Date.now()}`;
+      embed.setImage(bustUrl);
+    }
+
+    await message.edit({ embeds: [embed] }).catch(() => {});
   }
 
   async testFeedAnnouncement(client, feed, customType = null, logger = null) {
@@ -895,6 +1015,9 @@ class SocialFeedService {
           } else if (!status.isLive && feed.last_status === 'LIVE') {
             await this.handleStreamOffline(client, feed, logger);
             statusNote = '⚫ Stream ended / updated offline';
+          } else if (status.isLive && feed.last_status === 'LIVE') {
+            await this.updateLiveStreamAnnouncement(client, feed, status, logger);
+            statusNote = `🔴 Live · ${status.viewerCount !== undefined ? `${status.viewerCount.toLocaleString()} viewers` : 'Streaming'}`;
           } else {
             statusNote = status.isLive ? 'Currently live (already announced)' : 'Stream is offline';
           }
@@ -968,10 +1091,14 @@ class SocialFeedService {
       const memberText = f.discord_user_id ? ` · <@${f.discord_user_id}>` : '';
       const startedTimestamp = f.live_started_at ? Math.floor(new Date(f.live_started_at).getTime() / 1000) : null;
       const timeText = startedTimestamp ? `<t:${startedTimestamp}:R>` : 'Just now';
+      const gameText = f.last_game_name ? `🎮 **${f.last_game_name}**` : '';
+      const viewerText = f.last_viewer_count !== null && f.last_viewer_count !== undefined ? `👥 **${Number(f.last_viewer_count).toLocaleString()} viewers**` : '';
+
+      const details = [gameText, viewerText, `⏱️ Live: ${timeText}`].filter(Boolean).join(' · ');
 
       return [
         `**${idx + 1}.** ${meta.icon} **[${f.account_name}](${f.account_url || meta.defaultUrl(f.account_id)})** (${meta.label})${memberText}`,
-        `   ↳ ⏱️ Live: ${timeText} · [Watch Stream](${f.account_url || meta.defaultUrl(f.account_id)})`
+        `   ↳ ${details} · [Watch Stream](${f.account_url || meta.defaultUrl(f.account_id)})`
       ].join('\n');
     });
 

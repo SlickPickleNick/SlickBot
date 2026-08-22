@@ -1842,6 +1842,9 @@ async function initDatabase() {
   await query(`UPDATE social_feed_configs SET live_directory_auto_sticky = true WHERE live_directory_auto_sticky IS NULL;`).catch(() => {});
 
   await query(`ALTER TABLE social_feeds ADD COLUMN IF NOT EXISTS discord_user_id TEXT;`);
+  await query(`ALTER TABLE social_feeds ADD COLUMN IF NOT EXISTS last_viewer_count INTEGER;`);
+  await query(`ALTER TABLE social_feeds ADD COLUMN IF NOT EXISTS last_game_name TEXT;`);
+  await query(`ALTER TABLE social_feeds ADD COLUMN IF NOT EXISTS last_title TEXT;`);
 
   await query(`
     CREATE TABLE IF NOT EXISTS social_feed_subscribers (

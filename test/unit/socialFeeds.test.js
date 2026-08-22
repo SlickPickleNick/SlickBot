@@ -346,6 +346,8 @@ test('Social Feeds Subscriptions and Live Directory System', async (t) => {
           account_url: 'https://twitch.tv/shroud',
           channel_id: '300000000000000001',
           discord_user_id: '500000000000000001',
+          last_game_name: 'VALORANT',
+          last_viewer_count: 24500,
           enabled: true,
           last_status: 'LIVE',
           live_started_at: new Date(Date.now() - 1800000)
@@ -357,8 +359,65 @@ test('Social Feeds Subscriptions and Live Directory System', async (t) => {
     const livePayload = await service.buildLiveDirectoryPayload(guildId, mockClient);
     assert.ok(livePayload.embeds[0].data.title.includes('1 Online'));
     assert.ok(livePayload.embeds[0].data.description.includes('Shroud'));
+    assert.ok(livePayload.embeds[0].data.description.includes('VALORANT'));
+    assert.ok(livePayload.embeds[0].data.description.includes('24,500 viewers'));
     assert.ok(livePayload.embeds[0].data.description.includes('500000000000000001'));
     assert.ok(livePayload.components.length > 0);
+  });
+
+  await t.test('updateLiveStreamAnnouncement updates message embed and database with latest viewers', async () => {
+    let updatedEmbeds = null;
+    db.addHandler('UPDATE social_feeds SET last_viewer_count', () => ({ rows: [], rowCount: 1 }));
+
+    const mockMessage = {
+      id: 'announcement-msg-1',
+      edit: async (payload) => {
+        updatedEmbeds = payload.embeds;
+        return mockMessage;
+      }
+    };
+
+    const mockChannel = {
+      id: '300000000000000001',
+      isTextBased: () => true,
+      messages: {
+        fetch: async () => mockMessage
+      }
+    };
+
+    const mockGuild = createMockGuild({ id: guildId });
+    mockGuild.channels = {
+      cache: new Map([[mockChannel.id, mockChannel]])
+    };
+
+    const mockClient = { guilds: { cache: new Map([[guildId, mockGuild]]) } };
+
+    const feed = {
+      id: feedId,
+      guild_id: guildId,
+      platform: 'TWITCH',
+      account_id: 'shroud',
+      account_name: 'Shroud',
+      last_announcement_channel_id: mockChannel.id,
+      last_announcement_message_id: mockMessage.id,
+      live_started_at: new Date(Date.now() - 1800000)
+    };
+
+    const status = {
+      isLive: true,
+      title: 'Rank 1 Push',
+      gameName: 'VALORANT',
+      viewerCount: 28900,
+      streamUrl: 'https://twitch.tv/shroud',
+      thumbnailUrl: 'https://static-cdn.jtvnw.net/preview.jpg'
+    };
+
+    await service.updateLiveStreamAnnouncement(mockClient, feed, status, null);
+    assert.ok(updatedEmbeds);
+    const fields = updatedEmbeds[0].data.fields;
+    const viewersField = fields.find((f) => f.name === 'Viewers');
+    assert.ok(viewersField);
+    assert.equal(viewersField.value, '28,900');
   });
 
   await t.test('handleStickyDirectoryRepost deletes old message and sends new sticky message', async () => {
