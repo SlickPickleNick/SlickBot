@@ -169,10 +169,20 @@ async function buildWelcomePanel(guildId) {
 
   const row2 = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
+      .setCustomId(`${CustomIds.OnboardingModulePrefix}WELCOME`)
+      .setLabel('Quick Setup')
+      .setStyle(ButtonStyle.Success)
+      .setEmoji('🚀'),
+    new ButtonBuilder()
       .setCustomId(CustomIds.WelcomeRefresh)
       .setLabel('Refresh')
       .setStyle(ButtonStyle.Secondary)
       .setEmoji('🔄'),
+    new ButtonBuilder()
+      .setCustomId(CustomIds.SetupCategoryCommunity)
+      .setLabel('Community')
+      .setStyle(ButtonStyle.Primary)
+      .setEmoji('✨'),
     new ButtonBuilder()
       .setCustomId(CustomIds.SetupRefresh)
       .setLabel('Setup Center')

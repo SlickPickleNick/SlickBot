@@ -619,7 +619,7 @@ class BirthdayService {
       footer: 'SlickBot Birthdays'
     });
 
-    const row = new ActionRowBuilder().addComponents(
+    const row1 = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId(`${CustomIds.OnboardingModulePrefix}BIRTHDAYS`)
         .setLabel('Quick Setup')
@@ -639,7 +639,20 @@ class BirthdayService {
         .setCustomId(CustomIds.BirthdaysTest)
         .setLabel('Send Test')
         .setStyle(ButtonStyle.Secondary)
-        .setEmoji('🧪'),
+        .setEmoji('🧪')
+    );
+
+    const row2 = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(CustomIds.BirthdaysRefresh)
+        .setLabel('Refresh')
+        .setStyle(ButtonStyle.Secondary)
+        .setEmoji('🔄'),
+      new ButtonBuilder()
+        .setCustomId(CustomIds.SetupCategoryCommunity)
+        .setLabel('Community')
+        .setStyle(ButtonStyle.Primary)
+        .setEmoji('✨'),
       new ButtonBuilder()
         .setCustomId(CustomIds.SetupRefresh)
         .setLabel('Setup Center')
@@ -647,7 +660,7 @@ class BirthdayService {
         .setEmoji('⚙️')
     );
 
-    return { embeds: [embed], components: [row] };
+    return { embeds: [embed], components: [row1, row2] };
   }
 }
 

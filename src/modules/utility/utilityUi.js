@@ -119,7 +119,25 @@ async function buildUtilityManagerPanel(guildId) {
       .setEmoji('🔄')
   );
 
-  return { embeds: [embed], components: [row1, row2] };
+  const row3 = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`${CustomIds.OnboardingModulePrefix}UTILITY`)
+      .setLabel('Quick Setup')
+      .setStyle(ButtonStyle.Success)
+      .setEmoji('🚀'),
+    new ButtonBuilder()
+      .setCustomId(CustomIds.SetupCategoryCore)
+      .setLabel('Core & Safety')
+      .setStyle(ButtonStyle.Primary)
+      .setEmoji('🛡️'),
+    new ButtonBuilder()
+      .setCustomId(CustomIds.SetupRefresh)
+      .setLabel('Setup Center')
+      .setStyle(ButtonStyle.Secondary)
+      .setEmoji('⚙️')
+  );
+
+  return { embeds: [embed], components: [row1, row2, row3] };
 }
 
 function buildUtilitySetupModal(config) {

@@ -177,7 +177,8 @@ class ScheduledMessageService {
   }
 
   async buildManagerPanel(guildId) {
-    const [config, schedules] = await Promise.all([this.getConfig(guildId), this.listScheduled(guildId, 8)]);
+    const [rawConfig, schedules] = await Promise.all([this.getConfig(guildId), this.listScheduled(guildId, 8)]);
+    const config = rawConfig || {};
     const enabled = config?.enabled ?? false;
     const ready = Boolean(enabled && (config?.default_channel_id || schedules.length));
 
@@ -224,6 +225,11 @@ class ScheduledMessageService {
         .setLabel('Refresh')
         .setStyle(ButtonStyle.Secondary)
         .setEmoji('🔄'),
+      new ButtonBuilder()
+        .setCustomId(CustomIds.SetupCategoryAutomation)
+        .setLabel('Automation')
+        .setStyle(ButtonStyle.Primary)
+        .setEmoji('⚡'),
       new ButtonBuilder()
         .setCustomId(CustomIds.SetupRefresh)
         .setLabel('Setup Center')

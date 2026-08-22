@@ -224,7 +224,8 @@ class BotUpdatesService {
   }
 
   async buildStatusPanel(guildId) {
-    const { config, roleIds } = await this.getConfigWithRoles(guildId);
+    const { config: rawConfig, roleIds = [] } = (await this.getConfigWithRoles(guildId)) || {};
+    const config = rawConfig || {};
     const currentAnnouncement = await this.getAnnouncement(guildId, packageInfo.version);
     const enabled = config?.enabled ?? false;
     const ready = Boolean(enabled && config?.channel_id);
@@ -281,6 +282,11 @@ class BotUpdatesService {
         .setLabel('Refresh')
         .setStyle(ButtonStyle.Secondary)
         .setEmoji('🔄'),
+      new ButtonBuilder()
+        .setCustomId(CustomIds.SetupCategoryAutomation)
+        .setLabel('Automation')
+        .setStyle(ButtonStyle.Primary)
+        .setEmoji('⚡'),
       new ButtonBuilder()
         .setCustomId(CustomIds.SetupRefresh)
         .setLabel('Setup Center')

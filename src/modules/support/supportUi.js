@@ -1,4 +1,10 @@
 const {
+  ActionRowBuilder,
+  ChannelSelectMenuBuilder,
+  RoleSelectMenuBuilder,
+  ChannelType
+} = require('discord.js');
+const {
   createBaseEmbed,
   createButtonRow,
   createPanelButton,
@@ -51,15 +57,20 @@ async function buildSupportPanel(guildId) {
     color: SlickBotColors.PRIMARY
   });
 
-  const row = createButtonRow([
+  const row1 = createButtonRow([
     createPanelButton(CustomIds.TicketsRefresh, 'Tickets', ButtonStyle.Secondary, '🎟️'),
     createPanelButton(CustomIds.ReportsRefresh, 'Reports', ButtonStyle.Secondary, '🚩'),
     createPanelButton(CustomIds.ApplicationsRefresh, 'Applications', ButtonStyle.Secondary, '📝'),
-    createPanelButton(CustomIds.AppealsRefresh, 'Appeals', ButtonStyle.Secondary, '⚖️'),
-    createPanelButton(CustomIds.SetupRefresh, 'Back to Setup', ButtonStyle.Secondary, '↩️')
+    createPanelButton(CustomIds.AppealsRefresh, 'Appeals', ButtonStyle.Secondary, '⚖️')
   ]);
 
-  return { embeds: [embed], components: [row] };
+  const row2 = createButtonRow([
+    createPanelButton(`${CustomIds.OnboardingModulePrefix}SUPPORT`, 'Guided Setup', ButtonStyle.Success, '🚀'),
+    createPanelButton(CustomIds.SetupCategorySupport, 'Support Systems', ButtonStyle.Primary, '🎟️'),
+    createPanelButton(CustomIds.SetupRefresh, 'Setup Center', ButtonStyle.Secondary, '⚙️')
+  ]);
+
+  return { embeds: [embed], components: [row1, row2] };
 }
 
 async function buildTicketsPanel(guildId) {
@@ -103,14 +114,18 @@ async function buildTicketsPanel(guildId) {
     color: SlickBotColors.INFO
   });
 
-  const row = createButtonRow([
+  const row1 = createButtonRow([
     createPanelButton(`${CustomIds.OnboardingModulePrefix}TICKETS`, 'Quick Setup', ButtonStyle.Success, '🚀'),
-    createPanelButton(CustomIds.TicketsRefresh, 'Refresh', ButtonStyle.Secondary, '🔄'),
     createPanelButton(CustomIds.SupportRefresh, 'Support Overview', ButtonStyle.Secondary, '🎟️'),
+    createPanelButton(CustomIds.TicketsRefresh, 'Refresh', ButtonStyle.Secondary, '🔄')
+  ]);
+
+  const row2 = createButtonRow([
+    createPanelButton(CustomIds.SetupCategorySupport, 'Support Systems', ButtonStyle.Primary, '🎟️'),
     createPanelButton(CustomIds.SetupRefresh, 'Setup Center', ButtonStyle.Secondary, '⚙️')
   ]);
 
-  return { embeds: [embed], components: [row] };
+  return { embeds: [embed], components: [row1, row2] };
 }
 
 async function buildReportsPanel(guildId) {
@@ -138,14 +153,31 @@ async function buildReportsPanel(guildId) {
     color: SlickBotColors.INFO
   });
 
-  const row = createButtonRow([
+  const channelSelect = new ActionRowBuilder().addComponents(
+    new ChannelSelectMenuBuilder()
+      .setCustomId(CustomIds.ReportSetReviewChannel)
+      .setPlaceholder('📜 Select Report Review Channel...')
+      .setChannelTypes([ChannelType.GuildText])
+  );
+
+  const roleSelect = new ActionRowBuilder().addComponents(
+    new RoleSelectMenuBuilder()
+      .setCustomId(CustomIds.ReportSetPingRole)
+      .setPlaceholder('🔔 Select Staff Ping Role...')
+  );
+
+  const row1 = createButtonRow([
     createPanelButton(`${CustomIds.OnboardingModulePrefix}REPORTS`, 'Quick Setup', ButtonStyle.Success, '🚀'),
-    createPanelButton(CustomIds.ReportsRefresh, 'Refresh', ButtonStyle.Secondary, '🔄'),
     createPanelButton(CustomIds.SupportRefresh, 'Support Overview', ButtonStyle.Secondary, '🎟️'),
+    createPanelButton(CustomIds.ReportsRefresh, 'Refresh', ButtonStyle.Secondary, '🔄')
+  ]);
+
+  const row2 = createButtonRow([
+    createPanelButton(CustomIds.SetupCategorySupport, 'Support Systems', ButtonStyle.Primary, '🎟️'),
     createPanelButton(CustomIds.SetupRefresh, 'Setup Center', ButtonStyle.Secondary, '⚙️')
   ]);
 
-  return { embeds: [embed], components: [row] };
+  return { embeds: [embed], components: [channelSelect, roleSelect, row1, row2] };
 }
 
 async function buildApplicationsPanel(guildId) {
@@ -174,13 +206,25 @@ async function buildApplicationsPanel(guildId) {
     color: SlickBotColors.INFO
   });
 
-  const buttons = [
+  const channelSelect = new ActionRowBuilder().addComponents(
+    new ChannelSelectMenuBuilder()
+      .setCustomId(CustomIds.ApplicationSetReviewChannel)
+      .setPlaceholder('📜 Select Applications Review Channel...')
+      .setChannelTypes([ChannelType.GuildText])
+  );
+
+  const row1 = createButtonRow([
     createPanelButton(`${CustomIds.OnboardingModulePrefix}APPLICATIONS`, 'Quick Setup', ButtonStyle.Success, '🚀'),
-    createPanelButton(CustomIds.ApplicationsRefresh, 'Refresh', ButtonStyle.Secondary, '🔄'),
     createPanelButton(CustomIds.SupportRefresh, 'Support Overview', ButtonStyle.Secondary, '🎟️'),
+    createPanelButton(CustomIds.ApplicationsRefresh, 'Refresh', ButtonStyle.Secondary, '🔄')
+  ]);
+
+  const row2 = createButtonRow([
+    createPanelButton(CustomIds.SetupCategorySupport, 'Support Systems', ButtonStyle.Primary, '🎟️'),
     createPanelButton(CustomIds.SetupRefresh, 'Setup Center', ButtonStyle.Secondary, '⚙️')
-  ];
-  return { embeds: [embed], components: [createButtonRow(buttons)] };
+  ]);
+
+  return { embeds: [embed], components: [channelSelect, row1, row2] };
 }
 
 async function buildAppealsPanel(guildId) {
@@ -208,14 +252,26 @@ async function buildAppealsPanel(guildId) {
     color: SlickBotColors.INFO
   });
 
-  const row = createButtonRow([
+  const channelSelect = new ActionRowBuilder().addComponents(
+    new ChannelSelectMenuBuilder()
+      .setCustomId(CustomIds.AppealSetReviewChannel)
+      .setPlaceholder('📜 Select Appeals Review Channel...')
+      .setChannelTypes([ChannelType.GuildText])
+  );
+
+  const row1 = createButtonRow([
     createPanelButton(`${CustomIds.OnboardingModulePrefix}APPEALS`, 'Quick Setup', ButtonStyle.Success, '🚀'),
-    createPanelButton(CustomIds.AppealsRefresh, 'Refresh', ButtonStyle.Secondary, '🔄'),
+    createPanelButton(CustomIds.AppealToggleDmDecisions, cfg?.dm_decision_enabled ? 'Disable DM Decisions' : 'Enable DM Decisions', cfg?.dm_decision_enabled ? ButtonStyle.Secondary : ButtonStyle.Primary, '✉️'),
     createPanelButton(CustomIds.SupportRefresh, 'Support Overview', ButtonStyle.Secondary, '🎟️'),
+    createPanelButton(CustomIds.AppealsRefresh, 'Refresh', ButtonStyle.Secondary, '🔄')
+  ]);
+
+  const row2 = createButtonRow([
+    createPanelButton(CustomIds.SetupCategorySupport, 'Support Systems', ButtonStyle.Primary, '🎟️'),
     createPanelButton(CustomIds.SetupRefresh, 'Setup Center', ButtonStyle.Secondary, '⚙️')
   ]);
 
-  return { embeds: [embed], components: [row] };
+  return { embeds: [embed], components: [channelSelect, row1, row2] };
 }
 
 async function buildPublicTicketPanel(types = [], config = null) {

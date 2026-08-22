@@ -279,8 +279,7 @@ async function buildStatusPanel(guildId, ctx, notice = null) {
     createPanelButton(CustomIds.StatusQuickOnline, 'Online', activeStyle(savedStatus === PresenceStatus.ONLINE), '🟢'),
     createPanelButton(CustomIds.StatusQuickIdle, 'Idle', activeStyle(savedStatus === PresenceStatus.IDLE), '🌙'),
     createPanelButton(CustomIds.StatusQuickDnd, 'DND', activeStyle(savedStatus === PresenceStatus.DND), '⛔'),
-    createPanelButton(CustomIds.StatusRefresh, 'Refresh', ButtonStyle.Secondary, '🔄'),
-    createPanelButton(CustomIds.SetupRefresh, 'Back to Setup', ButtonStyle.Secondary, '↩️')
+    createPanelButton(CustomIds.StatusRefresh, 'Refresh', ButtonStyle.Secondary, '🔄')
   ]);
 
   const activityControls = createButtonRow([
@@ -293,7 +292,9 @@ async function buildStatusPanel(guildId, ctx, notice = null) {
 
   const utilityControls = createButtonRow([
     createPanelButton(CustomIds.StatusActivityText, 'Activity Text', ButtonStyle.Secondary, '✏️'),
-    createPanelButton(CustomIds.StatusClear, 'Clear Activity', activeStyle(savedActivityType === ActivityTypeNames.NONE), '🧹')
+    createPanelButton(CustomIds.StatusClear, 'Clear Activity', activeStyle(savedActivityType === ActivityTypeNames.NONE), '🧹'),
+    createPanelButton(CustomIds.SetupCategoryCore, 'Core & Safety', ButtonStyle.Primary, '🛡️'),
+    createPanelButton(CustomIds.SetupRefresh, 'Setup Center', ButtonStyle.Secondary, '⚙️')
   ]);
 
   return { embeds: [embed], components: [statusControls, activityControls, utilityControls] };

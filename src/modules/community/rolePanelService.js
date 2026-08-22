@@ -634,6 +634,7 @@ async function buildRoleManagerPanel(guildId) {
   const row = createButtonRow([
     createPanelButton(`${CustomIds.OnboardingModulePrefix}REACTION_ROLES`, 'Quick Setup', ButtonStyle.Success, '🚀'),
     createPanelButton(CustomIds.RolePanelsRefresh, 'Refresh', ButtonStyle.Secondary, '🔄'),
+    createPanelButton(CustomIds.SetupCategoryCommunity, 'Community', ButtonStyle.Primary, '✨'),
     createPanelButton(CustomIds.SetupRefresh, 'Setup Center', ButtonStyle.Secondary, '⚙️')
   ]);
 

@@ -854,7 +854,7 @@ class SuggestionService {
   }
 
   async buildManagerPanel(guildId) {
-    const config = await this.ensureConfig(guildId);
+    const config = (await this.getConfig(guildId)) || {};
     const [categoryCount, suggestionCount, indexCount] = await Promise.all([
       query(`SELECT COUNT(*)::int AS count FROM suggestion_categories WHERE guild_id = $1 AND active = true`, [guildId]).catch(() => ({ rows: [{ count: 0 }] })),
       query(`SELECT COUNT(*)::int AS count FROM suggestions WHERE guild_id = $1`, [guildId]).catch(() => ({ rows: [{ count: 0 }] })),
@@ -887,6 +887,7 @@ class SuggestionService {
       components: [createButtonRow([
         createPanelButton(`${CustomIds.OnboardingModulePrefix}SUGGESTIONS`, 'Quick Setup', ButtonStyle.Success, '🚀'),
         createPanelButton(CustomIds.SuggestionsRefresh, 'Refresh', ButtonStyle.Secondary, '🔄'),
+        createPanelButton(CustomIds.SetupCategoryCommunity, 'Community', ButtonStyle.Primary, '✨'),
         createPanelButton(CustomIds.SetupRefresh, 'Setup Center', ButtonStyle.Secondary, '⚙️')
       ])]
     };

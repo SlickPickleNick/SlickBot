@@ -1,3 +1,4 @@
+const { ActionRowBuilder, ChannelSelectMenuBuilder, ChannelType } = require('discord.js');
 const { query } = require('../../services/db');
 const { formatCaseLine, formatNoteLine } = require('./moderationService');
 const {
@@ -76,7 +77,7 @@ async function buildModerationPanel(guildId) {
       'Use `/temp-role add` to assign a role for a fixed duration.',
       '',
       '**Setup Checklist**',
-      logReady ? '• Logging is configured for moderation events.' : '• Set moderation logs with `/logging set-channel module:moderation channel:#logs`.',
+      logReady ? '• Logging is configured for moderation events.' : '• Select a channel below to assign your moderation log hub.',
       '• Review staff command access in `/permissions panel`.',
       '• Use `/case panel` to review recent cases and `/note add` for private staff notes.',
       '',
@@ -94,15 +95,27 @@ async function buildModerationPanel(guildId) {
     color: logReady ? SlickBotColors.PRIMARY : SlickBotColors.WARNING
   });
 
-  const row = createButtonRow([
-    createPanelButton(CustomIds.ModerationRefresh, 'Refresh', ButtonStyle.Primary, '🔄'),
+  const channelSelect = new ActionRowBuilder().addComponents(
+    new ChannelSelectMenuBuilder()
+      .setCustomId(CustomIds.ModerationSetLogChannel)
+      .setPlaceholder('📜 Select Moderation Log Channel...')
+      .setChannelTypes([ChannelType.GuildText])
+  );
+
+  const row1 = createButtonRow([
+    createPanelButton(`${CustomIds.OnboardingModulePrefix}MODERATION`, 'Quick Setup', ButtonStyle.Success, '🚀'),
     createPanelButton(CustomIds.CasesRefresh, 'Recent Cases', ButtonStyle.Secondary, '🗂️'),
-    createPanelButton(CustomIds.LockdownRefresh, 'Lockdown', ButtonStyle.Secondary),
-    createPanelButton(CustomIds.TempRolesRefresh, 'Temp Roles', ButtonStyle.Secondary),
-    createPanelButton(CustomIds.SetupRefresh, 'Back to Setup', ButtonStyle.Secondary, '↩️')
+    createPanelButton(CustomIds.LockdownRefresh, 'Lockdown', ButtonStyle.Secondary, '🔒'),
+    createPanelButton(CustomIds.TempRolesRefresh, 'Temp Roles', ButtonStyle.Secondary, '⏳')
   ]);
 
-  return { embeds: [embed], components: [row] };
+  const row2 = createButtonRow([
+    createPanelButton(CustomIds.ModerationRefresh, 'Refresh', ButtonStyle.Secondary, '🔄'),
+    createPanelButton(CustomIds.SetupCategoryCore, 'Core & Safety', ButtonStyle.Primary, '🛡️'),
+    createPanelButton(CustomIds.SetupRefresh, 'Setup Center', ButtonStyle.Secondary, '⚙️')
+  ]);
+
+  return { embeds: [embed], components: [channelSelect, row1, row2] };
 }
 
 async function buildRecentCasesPanel(guildId) {

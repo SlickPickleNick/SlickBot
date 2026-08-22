@@ -757,10 +757,12 @@ class SocialFeedService {
   }
 
   async buildManagerPanel(guildId) {
-    const [config, feeds] = await Promise.all([
+    const [rawConfig, rawFeeds] = await Promise.all([
       this.getConfig(guildId),
       this.listFeeds(guildId)
     ]);
+    const config = rawConfig || {};
+    const feeds = rawFeeds || [];
 
     const byPlatform = feeds.reduce((acc, f) => {
       acc[f.platform] = (acc[f.platform] || 0) + 1;
@@ -801,6 +803,7 @@ class SocialFeedService {
       new ButtonBuilder().setCustomId(`${CustomIds.OnboardingModulePrefix}SOCIAL_FEEDS`).setLabel('Quick Setup').setStyle(ButtonStyle.Success).setEmoji('🚀'),
       new ButtonBuilder().setCustomId(CustomIds.FeedsCheckNow).setLabel('Check Feeds Now').setStyle(ButtonStyle.Primary).setEmoji('🔄'),
       new ButtonBuilder().setCustomId(CustomIds.FeedsRefresh).setLabel('Refresh').setStyle(ButtonStyle.Secondary).setEmoji('📋'),
+      new ButtonBuilder().setCustomId(CustomIds.SetupCategoryAutomation).setLabel('Automation').setStyle(ButtonStyle.Primary).setEmoji('⚡'),
       new ButtonBuilder().setCustomId(CustomIds.SetupRefresh).setLabel('Setup Center').setStyle(ButtonStyle.Secondary).setEmoji('⚙️')
     );
 

@@ -966,7 +966,7 @@ class AchievementService {
   }
 
   async buildManagerPanel(guildId) {
-    const config = await this.getConfig(guildId);
+    const config = (await this.getConfig(guildId)) || {};
     const definitions = await this.listDefinitions(guildId);
     const tiers = await this.listTiers(guildId);
     const ignored = await this.listIgnoredChannels(guildId);
@@ -1012,6 +1012,11 @@ class AchievementService {
         .setLabel('Refresh')
         .setStyle(ButtonStyle.Secondary)
         .setEmoji('🔄'),
+      new ButtonBuilder()
+        .setCustomId(CustomIds.SetupCategoryCommunity)
+        .setLabel('Community')
+        .setStyle(ButtonStyle.Primary)
+        .setEmoji('✨'),
       new ButtonBuilder()
         .setCustomId(CustomIds.SetupRefresh)
         .setLabel('Setup Center')

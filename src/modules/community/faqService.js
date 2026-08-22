@@ -430,6 +430,7 @@ class FaqService {
         createPanelButton(`${CustomIds.OnboardingModulePrefix}FAQ`, 'Quick Setup', ButtonStyle.Success, '🚀'),
         createPanelButton(CustomIds.FaqRefreshIndex, 'Sync Master Post', ButtonStyle.Primary, '🔄'),
         createPanelButton(CustomIds.FaqRefresh, 'Refresh', ButtonStyle.Secondary, '📋'),
+        createPanelButton(CustomIds.SetupCategoryCommunity, 'Community', ButtonStyle.Primary, '✨'),
         createPanelButton(CustomIds.SetupRefresh, 'Setup Center', ButtonStyle.Secondary, '⚙️')
       ])]
     };

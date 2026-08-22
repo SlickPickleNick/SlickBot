@@ -337,7 +337,7 @@ class CustomCommandService {
   }
 
   async buildManagerPanel(guildId) {
-    const config = await this.getConfig(guildId);
+    const config = (await this.getConfig(guildId)) || {};
     const [total, enabled, used] = await Promise.all([
       query(`SELECT COUNT(*)::int AS count FROM custom_commands WHERE guild_id = $1`, [guildId]).catch(() => ({ rows: [{ count: 0 }] })),
       query(`SELECT COUNT(*)::int AS count FROM custom_commands WHERE guild_id = $1 AND enabled = true`, [guildId]).catch(() => ({ rows: [{ count: 0 }] })),
@@ -401,6 +401,11 @@ class CustomCommandService {
         .setLabel('Refresh')
         .setStyle(ButtonStyle.Secondary)
         .setEmoji('🔄'),
+      new ButtonBuilder()
+        .setCustomId(CustomIds.SetupCategoryCommunity)
+        .setLabel('Community')
+        .setStyle(ButtonStyle.Primary)
+        .setEmoji('✨'),
       new ButtonBuilder()
         .setCustomId(CustomIds.SetupRefresh)
         .setLabel('Setup Center')

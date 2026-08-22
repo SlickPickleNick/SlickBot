@@ -35,6 +35,9 @@ const CustomIds = Object.freeze({
   PermissionsModuleSelect: 'slickbot:permissions:module-select',
   PermissionsCommandSelect: 'slickbot:permissions:command-select',
   PermissionsTeamSelect: 'slickbot:permissions:team-select',
+  PermissionsSetAdminRole: 'slickbot:permissions:set-admin-role',
+  PermissionsSetModRole: 'slickbot:permissions:set-mod-role',
+  PermissionsApplyDefaults: 'slickbot:permissions:apply-defaults',
 
 
   HelpRefresh: 'slickbot:help:refresh',
@@ -174,6 +177,7 @@ const CustomIds = Object.freeze({
   StatusClear: 'slickbot:status:clear',
 
   ModerationRefresh: 'slickbot:moderation:refresh',
+  ModerationSetLogChannel: 'slickbot:moderation:set-log-channel',
   LockdownRefresh: 'slickbot:lockdown:refresh',
   LockdownResetConfirmPrefix: 'slickbot:lockdown-reset:confirm:',
   LockdownResetCancelPrefix: 'slickbot:lockdown-reset:cancel:',
@@ -193,6 +197,8 @@ const CustomIds = Object.freeze({
   TicketReviewIndexFilterPrefix: 'slickbot:ticket:index-filter:',
 
   ReportsRefresh: 'slickbot:reports:refresh',
+  ReportSetReviewChannel: 'slickbot:reports:set-review-channel',
+  ReportSetPingRole: 'slickbot:reports:set-ping-role',
   ReportOpen: 'slickbot:report:open',
   ReportSelect: 'slickbot:report:select',
   ReportUserSelect: 'slickbot:report:user-select',
@@ -207,6 +213,7 @@ const CustomIds = Object.freeze({
   ReportReviewIndexFilterPrefix: 'slickbot:report:index-filter:',
 
   ApplicationsRefresh: 'slickbot:applications:refresh',
+  ApplicationSetReviewChannel: 'slickbot:applications:set-review-channel',
   ApplicationApplyPrefix: 'slickbot:application:apply:',
   ApplicationSelectPrefix: 'slickbot:application:select:',
   ApplicationApprovePrefix: 'slickbot:application:approve:',
@@ -215,6 +222,8 @@ const CustomIds = Object.freeze({
   ApplicationReviewIndexFilterPrefix: 'slickbot:application:index-filter:',
 
   AppealsRefresh: 'slickbot:appeals:refresh',
+  AppealSetReviewChannel: 'slickbot:appeals:set-review-channel',
+  AppealToggleDmDecisions: 'slickbot:appeals:toggle-dm',
   AppealOpen: 'slickbot:appeal:open',
   AppealSelect: 'slickbot:appeal:select',
   AppealApprovePrefix: 'slickbot:appeal:approve:',

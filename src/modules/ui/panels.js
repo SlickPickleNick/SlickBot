@@ -1,3 +1,4 @@
+const { ActionRowBuilder, RoleSelectMenuBuilder } = require('discord.js');
 const { ModuleKeys, defaultModules, isCoreModule, isImplementedModule } = require('../moduleRegistry');
 const { query } = require('../../services/db');
 const {
@@ -314,7 +315,10 @@ function categorySummary(statuses, category) {
 async function buildCategoryPanel(guildId, categoryKey) {
   const category = MODULE_CATEGORIES.find((cat) => cat.key === categoryKey) || MODULE_CATEGORIES[0];
   const allStatuses = await getAllModuleStatuses(guildId);
-  const items = allStatuses.filter((item) => category.modules.includes(item.moduleKey));
+  let items = allStatuses.filter((item) => category.modules.includes(item.moduleKey));
+  if (!items.length) {
+    items = category.modules.map((m) => normalizeStatusPayload({ moduleKey: m, core: isCoreModule(m), state: 'READY', label: 'Ready' }));
+  }
   const counts = summarizeStateCounts(items);
 
   const lines = items.map((item) => {
@@ -347,11 +351,12 @@ async function buildCategoryPanel(guildId, categoryKey) {
     emoji: item.emoji
   }));
 
-  const selectRow = createSelectRow(CustomIds.SetupModuleSelect, `Open ${category.label} module manager...`, selectOptions.slice(0, 25));
+  const selectRow = createSelectRow(CustomIds.SetupModuleSelect, `Open ${category.label} module dashboard...`, selectOptions.slice(0, 25));
 
   const buttonRow = createButtonRow([
-    createPanelButton(`${CustomIds.OnboardingModulePrefix}${category.key}`, 'Guided Setup', ButtonStyle.Success, '🚀'),
-    createPanelButton(CustomIds.SetupRefresh, 'Setup Center', ButtonStyle.Secondary, '⚙️')
+    createPanelButton(`${CustomIds.OnboardingModulePrefix}${category.key}`, `Guided ${category.label} Setup`, ButtonStyle.Success, '🚀'),
+    createPanelButton(CustomIds.SetupRefresh, 'Setup Center', ButtonStyle.Secondary, '⚙️'),
+    createPanelButton(category.key === 'CORE' ? CustomIds.SetupCategoryCore : category.key === 'SUPPORT' ? CustomIds.SetupCategorySupport : category.key === 'COMMUNITY' ? CustomIds.SetupCategoryCommunity : CustomIds.SetupCategoryAutomation, 'Refresh', ButtonStyle.Secondary, '🔄')
   ]);
 
   return { embeds: [embed], components: [selectRow, buttonRow] };
@@ -870,6 +875,7 @@ async function buildLoggingPanel(guildId) {
 
   const row2 = createButtonRow([
     createPanelButton(CustomIds.LoggingRefresh, 'Refresh', ButtonStyle.Secondary, '🔄'),
+    createPanelButton(CustomIds.SetupCategoryCore, 'Core & Safety', ButtonStyle.Primary, '🛡️'),
     createPanelButton(CustomIds.SetupRefresh, 'Setup Center', ButtonStyle.Secondary, '⚙️')
   ]);
 
@@ -923,7 +929,8 @@ async function buildTeamsPanel(guildId) {
 
   const row = createButtonRow([
     createPanelButton(CustomIds.SetupPermissions, 'Permission Center', ButtonStyle.Secondary, '🔐'),
-    createPanelButton(CustomIds.SetupRefresh, 'Back to Setup', ButtonStyle.Primary, '↩️')
+    createPanelButton(CustomIds.SetupCategoryCore, 'Core & Safety', ButtonStyle.Primary, '🛡️'),
+    createPanelButton(CustomIds.SetupRefresh, 'Setup Center', ButtonStyle.Secondary, '⚙️')
   ]);
 
   return { embeds: [embed], components: [row] };
@@ -1028,6 +1035,17 @@ async function buildPermissionsPanel(guildId, selectedTeamId = null) {
   });
 
   const components = [];
+
+  const adminSelect = new RoleSelectMenuBuilder()
+    .setCustomId(CustomIds.PermissionsSetAdminRole)
+    .setPlaceholder('👑 Select Administrator Role...');
+  components.push(new ActionRowBuilder().addComponents(adminSelect));
+
+  const modSelect = new RoleSelectMenuBuilder()
+    .setCustomId(CustomIds.PermissionsSetModRole)
+    .setPlaceholder('🛡️ Select Moderator Role...');
+  components.push(new ActionRowBuilder().addComponents(modSelect));
+
   if (teams.rows.length) {
     components.push(createSelectRow(CustomIds.PermissionsTeamSelect, 'View a permission team...', teams.rows.slice(0, 25).map((team) => ({
       label: team.name.slice(0, 100),
@@ -1038,9 +1056,15 @@ async function buildPermissionsPanel(guildId, selectedTeamId = null) {
   }
 
   components.push(createButtonRow([
-    createPanelButton(CustomIds.PermissionsRefresh, 'Refresh', ButtonStyle.Secondary, '🔄'),
+    createPanelButton(`${CustomIds.OnboardingModulePrefix}PERMISSIONS`, 'Quick Setup', ButtonStyle.Success, '🚀'),
+    createPanelButton(CustomIds.PermissionsApplyDefaults, 'Apply Defaults', ButtonStyle.Primary, '⚡'),
     createPanelButton(CustomIds.SetupTeams, 'Teams', ButtonStyle.Secondary, '👥'),
-    createPanelButton(CustomIds.SetupRefresh, 'Back to Setup', ButtonStyle.Primary, '↩️')
+    createPanelButton(CustomIds.PermissionsRefresh, 'Refresh', ButtonStyle.Secondary, '🔄')
+  ]));
+
+  components.push(createButtonRow([
+    createPanelButton(CustomIds.SetupCategoryCore, 'Core & Safety', ButtonStyle.Primary, '🛡️'),
+    createPanelButton(CustomIds.SetupRefresh, 'Setup Center', ButtonStyle.Secondary, '⚙️')
   ]));
 
   return { embeds: [embed], components };

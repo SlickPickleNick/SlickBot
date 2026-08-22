@@ -604,6 +604,11 @@ class LevelingService {
         .setStyle(ButtonStyle.Secondary)
         .setEmoji('🔄'),
       new ButtonBuilder()
+        .setCustomId(CustomIds.SetupCategoryCommunity)
+        .setLabel('Community')
+        .setStyle(ButtonStyle.Primary)
+        .setEmoji('✨'),
+      new ButtonBuilder()
         .setCustomId(CustomIds.SetupRefresh)
         .setLabel('Setup Center')
         .setStyle(ButtonStyle.Secondary)

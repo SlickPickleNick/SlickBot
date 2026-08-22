@@ -182,7 +182,12 @@ class TemporaryRoleService {
       footer: 'SlickBot Temporary Roles'
     });
 
-    const row = new ActionRowBuilder().addComponents(
+    const row1 = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`${CustomIds.OnboardingModulePrefix}TEMP_ROLES`)
+        .setLabel('Quick Setup')
+        .setStyle(ButtonStyle.Success)
+        .setEmoji('🚀'),
       new ButtonBuilder()
         .setCustomId(CustomIds.TempRolesCleanup)
         .setLabel('Check Expirations Now')
@@ -192,7 +197,15 @@ class TemporaryRoleService {
         .setCustomId(CustomIds.TempRolesRefresh)
         .setLabel('Refresh')
         .setStyle(ButtonStyle.Secondary)
-        .setEmoji('🔄'),
+        .setEmoji('🔄')
+    );
+
+    const row2 = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(CustomIds.SetupCategoryCore)
+        .setLabel('Core & Safety')
+        .setStyle(ButtonStyle.Primary)
+        .setEmoji('🛡️'),
       new ButtonBuilder()
         .setCustomId(CustomIds.SetupRefresh)
         .setLabel('Setup Center')
@@ -200,7 +213,7 @@ class TemporaryRoleService {
         .setEmoji('⚙️')
     );
 
-    return { embeds: [embed], components: [row] };
+    return { embeds: [embed], components: [row1, row2] };
   }
 }
 

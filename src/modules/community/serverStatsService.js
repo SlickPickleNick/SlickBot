@@ -224,7 +224,7 @@ class ServerStatsService {
   }
 
   async buildManagerPanel(guild) {
-    const config = await this.getConfig(guild.id);
+    const config = (await this.getConfig(guild.id)) || {};
     const counts = await this.counts(guild, { config }).catch(() => ({ members: guild.memberCount || 0, humans: 0, bots: 0, voice: 0 }));
     const enabled = config?.enabled ?? false;
     const hasAnyChannel = Boolean(config?.member_channel_id || config?.human_channel_id || config?.bot_channel_id || config?.voice_channel_id);
@@ -278,6 +278,11 @@ class ServerStatsService {
         .setLabel('Refresh')
         .setStyle(ButtonStyle.Secondary)
         .setEmoji('🔄'),
+      new ButtonBuilder()
+        .setCustomId(CustomIds.SetupCategoryCommunity)
+        .setLabel('Community')
+        .setStyle(ButtonStyle.Primary)
+        .setEmoji('✨'),
       new ButtonBuilder()
         .setCustomId(CustomIds.SetupRefresh)
         .setLabel('Setup Center')

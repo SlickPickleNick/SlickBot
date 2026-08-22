@@ -938,6 +938,7 @@ class JoinCreateService {
     const row = createButtonRow([
       createPanelButton(`${CustomIds.OnboardingModulePrefix}JOIN_TO_CREATE`, 'Quick Setup', ButtonStyle.Success, '🚀'),
       createPanelButton(CustomIds.JoinCreateRefresh, 'Refresh', ButtonStyle.Secondary, '🔄'),
+      createPanelButton(CustomIds.SetupCategoryCommunity, 'Community', ButtonStyle.Primary, '✨'),
       createPanelButton(CustomIds.SetupRefresh, 'Setup Center', ButtonStyle.Secondary, '⚙️')
     ]);
 

@@ -647,17 +647,36 @@ async function handleButton(interaction, ctx) {
   if (id.startsWith(CustomIds.OnboardingModulePrefix)) {
     if (!(await requireAction(interaction, ctx, ActionKeys.Setup, ModuleKeys.PERMISSIONS))) return true;
     const target = id.slice(CustomIds.OnboardingModulePrefix.length);
-    const { MODULE_CATEGORIES } = require('../modules/ui/panels');
-    const { ONBOARDING_STEPS } = require('../modules/onboarding/onboardingService');
-    const category = MODULE_CATEGORIES.find((c) => c.key === target);
-    const targetModule = category ? category.modules.find((m) => ONBOARDING_STEPS[m]) || category.modules[0] : target;
-    const session = onboarding.startModuleOnboarding(interaction.guildId, interaction.user.id, targetModule);
+    const session = onboarding.startModuleOnboarding(interaction.guildId, interaction.user.id, target);
     if (!session) {
       return replyPrivate(interaction, { embeds: [createWarningEmbed('No Onboarding Available', `Guided setup is not yet configured for ${target}. Use the module manager panel instead.`)], deleteAfterSeconds: 10 });
     }
     const firstStep = session.steps[0];
     const currentVal = firstStep && typeof firstStep.getCurrent === 'function' ? await firstStep.getCurrent(interaction.guild).catch(() => null) : null;
     await updatePanel(interaction, onboarding.buildOnboardingPayload(session, currentVal));
+    return true;
+  }
+
+  if (id === CustomIds.PermissionsApplyDefaults) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.PermissionsSetup, ModuleKeys.PERMISSIONS))) return true;
+    await ctx.permissions.applyDefaults(interaction.guildId);
+    await ctx.logger.log({
+      guildId: interaction.guildId,
+      eventKey: 'permissions',
+      title: 'Default Permissions Applied',
+      body: `Standard default permission levels and access rules applied by <@${interaction.user.id}>.`,
+      actorUserId: interaction.user.id
+    }).catch(() => {});
+    await updatePanel(interaction, await buildPermissionsPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id === CustomIds.AppealToggleDmDecisions) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.AppealsConfig, ModuleKeys.APPEALS))) return true;
+    const curr = await query(`SELECT dm_decision_enabled FROM appeal_configs WHERE guild_id = $1`, [interaction.guildId]).catch(() => ({ rows: [] }));
+    const nextVal = !(curr.rows[0]?.dm_decision_enabled ?? true);
+    await query(`INSERT INTO appeal_configs (guild_id, dm_decision_enabled) VALUES ($1, $2) ON CONFLICT (guild_id) DO UPDATE SET dm_decision_enabled = EXCLUDED.dm_decision_enabled, updated_at = NOW()`, [interaction.guildId, nextVal]);
+    await updatePanel(interaction, await buildAppealsPanel(interaction.guildId));
     return true;
   }
 
@@ -1797,6 +1816,104 @@ async function handleSelect(interaction, ctx) {
         await updatePanel(interaction, await buildModuleDetailPanel(interaction.guildId, moduleKey));
         break;
     }
+    return true;
+  }
+
+  if (id === CustomIds.PermissionsSetAdminRole) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.PermissionsSetup, ModuleKeys.PERMISSIONS))) return true;
+    const roleId = interaction.values?.[0];
+    if (roleId) {
+      await ctx.permissions.setupRoles(interaction.guildId, { adminRoleId: roleId });
+      await ctx.logger.log({
+        guildId: interaction.guildId,
+        eventKey: 'permissions',
+        title: 'Admin Role Updated',
+        body: `Administrator role set to <@&${roleId}> by <@${interaction.user.id}>.`,
+        actorUserId: interaction.user.id
+      }).catch(() => {});
+    }
+    await updatePanel(interaction, await buildPermissionsPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id === CustomIds.PermissionsSetModRole) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.PermissionsSetup, ModuleKeys.PERMISSIONS))) return true;
+    const roleId = interaction.values?.[0];
+    if (roleId) {
+      await ctx.permissions.setupRoles(interaction.guildId, { modRoleId: roleId });
+      await ctx.logger.log({
+        guildId: interaction.guildId,
+        eventKey: 'permissions',
+        title: 'Moderator Role Updated',
+        body: `Moderator role set to <@&${roleId}> by <@${interaction.user.id}>.`,
+        actorUserId: interaction.user.id
+      }).catch(() => {});
+    }
+    await updatePanel(interaction, await buildPermissionsPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id === CustomIds.ModerationSetLogChannel) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.LoggingSetup, ModuleKeys.LOGGING))) return true;
+    const channelId = interaction.values?.[0];
+    if (channelId) {
+      const { LoggingService } = require('../modules/logging/loggingService');
+      const logging = new LoggingService();
+      await logging.setupLogGroup(interaction.guildId, 'MODERATION_SAFETY', channelId);
+      await ctx.logger.log({
+        guildId: interaction.guildId,
+        eventKey: 'setup',
+        title: 'Moderation Log Channel Configured',
+        body: `Moderation logs mapped to <#${channelId}> by <@${interaction.user.id}>.`,
+        actorUserId: interaction.user.id
+      }).catch(() => {});
+    }
+    await updatePanel(interaction, await buildModerationPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id === CustomIds.ReportSetReviewChannel) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.ReportsSetup, ModuleKeys.REPORTS))) return true;
+    const channelId = interaction.values?.[0];
+    if (channelId) {
+      await query(`INSERT INTO report_configs (guild_id, review_channel_id) VALUES ($1, $2) ON CONFLICT (guild_id) DO UPDATE SET review_channel_id = EXCLUDED.review_channel_id, updated_at = NOW()`, [interaction.guildId, channelId]);
+    }
+    await updatePanel(interaction, await buildReportsPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id === CustomIds.ReportSetPingRole) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.ReportsSetup, ModuleKeys.REPORTS))) return true;
+    const roleId = interaction.values?.[0];
+    if (roleId) {
+      await query(`INSERT INTO report_configs (guild_id, ping_role_id) VALUES ($1, $2) ON CONFLICT (guild_id) DO UPDATE SET ping_role_id = EXCLUDED.ping_role_id, updated_at = NOW()`, [interaction.guildId, roleId]);
+    }
+    await updatePanel(interaction, await buildReportsPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id === CustomIds.ApplicationSetReviewChannel) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.ApplicationsSetup, ModuleKeys.APPLICATIONS))) return true;
+    const channelId = interaction.values?.[0];
+    if (channelId) {
+      const types = await query(`SELECT id FROM application_types WHERE guild_id = $1 ORDER BY id ASC LIMIT 1`, [interaction.guildId]).catch(() => ({ rows: [] }));
+      if (types.rows.length) {
+        await query(`UPDATE application_types SET review_channel_id = $1 WHERE guild_id = $2`, [channelId, interaction.guildId]);
+      } else {
+        await query(`INSERT INTO application_types (guild_id, name, review_channel_id, enabled) VALUES ($1, 'Staff Application', $2, true)`, [interaction.guildId, channelId]);
+      }
+    }
+    await updatePanel(interaction, await buildApplicationsPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id === CustomIds.AppealSetReviewChannel) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.AppealsConfig, ModuleKeys.APPEALS))) return true;
+    const channelId = interaction.values?.[0];
+    if (channelId) {
+      await query(`INSERT INTO appeal_configs (guild_id, review_channel_id, dm_decision_enabled) VALUES ($1, $2, true) ON CONFLICT (guild_id) DO UPDATE SET review_channel_id = EXCLUDED.review_channel_id, updated_at = NOW()`, [interaction.guildId, channelId]);
+    }
+    await updatePanel(interaction, await buildAppealsPanel(interaction.guildId));
     return true;
   }
 

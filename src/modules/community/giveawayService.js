@@ -241,7 +241,7 @@ class GiveawayService {
       color: active.length ? SlickBotColors.SUCCESS : SlickBotColors.INFO
     });
 
-    const row = new ActionRowBuilder().addComponents(
+    const row1 = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId(`${CustomIds.OnboardingModulePrefix}GIVEAWAYS`)
         .setLabel('Quick Setup')
@@ -256,12 +256,20 @@ class GiveawayService {
         .setCustomId(CustomIds.GiveawaysConfigModal)
         .setLabel('Edit Styling')
         .setStyle(ButtonStyle.Secondary)
-        .setEmoji('🎨'),
+        .setEmoji('🎨')
+    );
+
+    const row2 = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId(CustomIds.GiveawaysRefresh)
         .setLabel('Refresh')
         .setStyle(ButtonStyle.Secondary)
         .setEmoji('🔄'),
+      new ButtonBuilder()
+        .setCustomId(CustomIds.SetupCategoryCommunity)
+        .setLabel('Community')
+        .setStyle(ButtonStyle.Primary)
+        .setEmoji('✨'),
       new ButtonBuilder()
         .setCustomId(CustomIds.SetupRefresh)
         .setLabel('Setup Center')
@@ -269,7 +277,7 @@ class GiveawayService {
         .setEmoji('⚙️')
     );
 
-    return { embeds: [embed], components: [row] };
+    return { embeds: [embed], components: [row1, row2] };
   }
 }
 

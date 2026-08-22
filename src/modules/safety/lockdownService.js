@@ -469,12 +469,16 @@ class LockdownService {
       color: active ? SlickBotColors.ERROR : SlickBotColors.INFO,
       footer: 'SlickBot Lockdown'
     });
-    const row = createButtonRow([
-      createPanelButton(CustomIds.LockdownRefresh, 'Refresh', ButtonStyle.Primary, '🔄'),
-      createPanelButton(CustomIds.ModerationRefresh, 'Moderation', ButtonStyle.Secondary),
-      createPanelButton(CustomIds.SetupRefresh, 'Back to Setup', ButtonStyle.Secondary, '↩️')
+    const row1 = createButtonRow([
+      createPanelButton(`${CustomIds.OnboardingModulePrefix}LOCKDOWN`, 'Quick Setup', ButtonStyle.Success, '🚀'),
+      createPanelButton(CustomIds.ModerationRefresh, 'Moderation', ButtonStyle.Secondary, '🛡️'),
+      createPanelButton(CustomIds.LockdownRefresh, 'Refresh', ButtonStyle.Secondary, '🔄')
     ]);
-    return { embeds: [embed], components: [row] };
+    const row2 = createButtonRow([
+      createPanelButton(CustomIds.SetupCategoryCore, 'Core & Safety', ButtonStyle.Primary, '🛡️'),
+      createPanelButton(CustomIds.SetupRefresh, 'Setup Center', ButtonStyle.Secondary, '⚙️')
+    ]);
+    return { embeds: [embed], components: [row1, row2] };
   }
 
   buildStartSummary(result) {

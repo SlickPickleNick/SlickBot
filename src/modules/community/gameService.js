@@ -1545,11 +1545,14 @@ Next Number: **${outcome.next.toString()}**`,
     const row2 = createButtonRow([
       createPanelButton(CustomIds.GamesCounting, 'Counting Details', ButtonStyle.Secondary),
       createPanelButton(CustomIds.GamesTicTacToe, 'Tic-Tac-Toe Details', ButtonStyle.Secondary),
-      createPanelButton(CustomIds.GamesConnectFour, 'Connect 4 Details', ButtonStyle.Secondary),
+      createPanelButton(CustomIds.GamesConnectFour, 'Connect 4 Details', ButtonStyle.Secondary)
+    ]);
+    const row3 = createButtonRow([
       createPanelButton(CustomIds.GamesRefresh, 'Refresh', ButtonStyle.Secondary, '🔄'),
+      createPanelButton(CustomIds.SetupCategoryCommunity, 'Community', ButtonStyle.Primary, '✨'),
       createPanelButton(CustomIds.SetupRefresh, 'Setup Center', ButtonStyle.Secondary, '⚙️')
     ]);
-    return { embeds: [embed], components: [row1, row2] };
+    return { embeds: [embed], components: [row1, row2, row3] };
   }
 
   async buildCountingPanel(guildId) {
