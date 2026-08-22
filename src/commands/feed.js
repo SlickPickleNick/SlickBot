@@ -367,6 +367,9 @@ module.exports = {
         metadata: { feed: result.feed }
       }).catch(() => {});
 
+      // Asynchronously trigger check so live status and Creator Hub directory update immediately
+      feeds.checkGuildFeeds(interaction.guildId, ctx.client, ctx.logger).catch(() => {});
+
       return replyPrivate(interaction, {
         embeds: [createSuccessEmbed(
           'Social Feed Added',
@@ -392,6 +395,8 @@ module.exports = {
       if (!removed) {
         return replyPrivate(interaction, { embeds: [createWarningEmbed('Feed Not Found', 'Could not find the requested social feed to remove.')] });
       }
+
+      feeds.updateLiveDirectory(interaction.guildId, ctx.client).catch(() => {});
 
       const meta = PLATFORM_META[removed.platform] || { label: removed.platform, icon: '🌐' };
 

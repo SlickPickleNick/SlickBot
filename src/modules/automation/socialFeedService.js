@@ -711,12 +711,6 @@ class SocialFeedService {
 
     if (!sentMessage) return { ok: false, reason: 'Failed to send message to Discord channel' };
 
-    // If announcement was sent to the sticky directory channel, immediately reposition directory below it
-    const config = await this.getConfig(feed.guild_id).catch(() => null);
-    if (config && config.live_directory_channel_id === channel.id && config.live_directory_auto_sticky !== false) {
-      await this.executeStickyRepost(feed.guild_id, channel, client).catch(() => {});
-    }
-
     // Record in history
     await query(
       `INSERT INTO social_feed_posts_history (guild_id, feed_id, platform, item_id, item_type, title, url, message_id, channel_id)
@@ -752,9 +746,11 @@ class SocialFeedService {
           updateData.title || null
         ]
       );
+      feed.last_status = 'LIVE';
       feed.last_viewer_count = updateData.viewerCount !== undefined ? updateData.viewerCount : null;
       feed.last_game_name = updateData.gameName || null;
       feed.last_title = updateData.title || null;
+      feed.live_started_at = (updateData.startedAt || new Date()).toISOString();
     } else {
       await query(
         `UPDATE social_feeds
@@ -765,6 +761,16 @@ class SocialFeedService {
          WHERE id = $1`,
         [feed.id, updateData.itemId || 'item']
       );
+    }
+
+    // Update or repost Live Directory immediately after DB state is committed
+    const config = await this.getConfig(feed.guild_id).catch(() => null);
+    if (config && config.live_directory_channel_id) {
+      if (config.live_directory_channel_id === channel.id && config.live_directory_auto_sticky !== false) {
+        await this.executeStickyRepost(feed.guild_id, client).catch(() => {});
+      } else {
+        await this.updateLiveDirectory(feed.guild_id, client).catch(() => {});
+      }
     }
 
     if (logger) {
@@ -836,9 +842,13 @@ class SocialFeedService {
        WHERE id = $1`,
       [feed.id]
     );
+    feed.last_status = 'OFFLINE';
     feed.last_viewer_count = null;
     feed.last_game_name = null;
     feed.last_title = null;
+
+    // Immediately update Live Directory so offline stream is removed
+    await this.updateLiveDirectory(feed.guild_id, client).catch(() => {});
 
     if (logger) {
       await logger.log({
@@ -948,6 +958,9 @@ class SocialFeedService {
     }
 
     await message.edit({ embeds: [embed] }).catch(() => {});
+
+    // Immediately update Live Directory if category or status changed
+    await this.updateLiveDirectory(feed.guild_id, client).catch(() => {});
   }
 
   async testFeedAnnouncement(client, feed, customType = null, logger = null) {
@@ -1088,30 +1101,23 @@ class SocialFeedService {
       return { embeds: [embed], components: [row] };
     }
 
-    const lines = liveFeeds.map((f, idx) => {
+    const lines = liveFeeds.map((f) => {
       const meta = PLATFORM_META[f.platform] || { icon: '🎮', label: f.platform };
-      const memberText = f.discord_user_id ? ` · <@${f.discord_user_id}>` : '';
-      const startedTimestamp = f.live_started_at ? Math.floor(new Date(f.live_started_at).getTime() / 1000) : null;
-      const timeText = startedTimestamp ? `<t:${startedTimestamp}:R>` : 'Just now';
-      const gameText = f.last_game_name ? `🎮 **${f.last_game_name}**` : '';
-      const viewerText = f.last_viewer_count !== null && f.last_viewer_count !== undefined ? `👥 **${Number(f.last_viewer_count).toLocaleString()} viewers**` : '';
+      const category = f.last_game_name ? `**${f.last_game_name}**` : '*General*';
+      const channelLink = `**[${f.account_name}](${f.account_url || meta.defaultUrl(f.account_id)})**`;
+      const memberInfo = f.discord_user_id ? ` · <@${f.discord_user_id}>` : '';
 
-      const details = [gameText, viewerText, `⏱️ Live: ${timeText}`].filter(Boolean).join(' · ');
-
-      return [
-        `**${idx + 1}.** ${meta.icon} **[${f.account_name}](${f.account_url || meta.defaultUrl(f.account_id)})** (${meta.label})${memberText}`,
-        `   ↳ ${details} · [Watch Stream](${f.account_url || meta.defaultUrl(f.account_id)})`
-      ].join('\n');
+      return `• ${meta.icon} ${channelLink}${memberInfo} — 🎮 ${category}`;
     });
 
     const embed = createBaseEmbed({
       title: `🔴 Live Creator Hub • ${guildName} (${liveFeeds.length} Online)`,
       description: [
-        '**Currently Streaming:**',
+        '**Currently Live:**',
         '',
         ...lines,
         '',
-        'Click the buttons below to tune in and support our community creators!'
+        'Click below to tune in and support our community creators!'
       ].join('\n'),
       color: SlickBotColors.PRIMARY,
       footer: 'SlickBot Live Hub • Auto-updates when streams go live / offline'
@@ -1270,7 +1276,7 @@ class SocialFeedService {
         this.stickyRepostLocks.set(channelId, true);
         setTimeout(async () => {
           this.stickyRepostLocks.delete(channelId);
-          await this.executeStickyRepost(guildId, message.channel, client).catch(() => {});
+          await this.executeStickyRepost(guildId, client).catch(() => {});
         }, 3500);
       }
       return;
@@ -1280,16 +1286,22 @@ class SocialFeedService {
     this.lastRepostTimestamp.set(channelId, now);
 
     try {
-      await this.executeStickyRepost(guildId, message.channel, client);
+      await this.executeStickyRepost(guildId, client);
     } finally {
       this.stickyRepostLocks.delete(channelId);
     }
   }
 
-  async executeStickyRepost(guildId, channel, client) {
+  async executeStickyRepost(guildId, client) {
     const config = await this.getConfig(guildId);
     if (!config || !config.live_directory_channel_id || config.live_directory_auto_sticky === false) return;
-    if (channel.id !== config.live_directory_channel_id) return;
+
+    const guild = client?.guilds?.cache?.get(guildId);
+    if (!guild) return;
+
+    const channel = guild.channels?.cache?.get(config.live_directory_channel_id)
+      || await guild.channels?.fetch?.(config.live_directory_channel_id).catch(() => null);
+    if (!channel || !channel.isTextBased()) return;
 
     const oldMessageId = config.live_directory_message_id;
 

@@ -360,7 +360,6 @@ test('Social Feeds Subscriptions and Live Directory System', async (t) => {
     assert.ok(livePayload.embeds[0].data.title.includes('1 Online'));
     assert.ok(livePayload.embeds[0].data.description.includes('Shroud'));
     assert.ok(livePayload.embeds[0].data.description.includes('VALORANT'));
-    assert.ok(livePayload.embeds[0].data.description.includes('24,500 viewers'));
     assert.ok(livePayload.embeds[0].data.description.includes('500000000000000001'));
     assert.ok(livePayload.components.length > 0);
   });
@@ -421,6 +420,7 @@ test('Social Feeds Subscriptions and Live Directory System', async (t) => {
   });
 
   await t.test('handleStickyDirectoryRepost deletes old message and sends new sticky message', async () => {
+    service.configCache.clear();
     const config = {
       guild_id: guildId,
       live_directory_channel_id: '300000000000000001',
@@ -443,6 +443,7 @@ test('Social Feeds Subscriptions and Live Directory System', async (t) => {
 
     const mockChannel = {
       id: '300000000000000001',
+      isTextBased: () => true,
       messages: {
         fetch: async (id) => {
           if (id === 'msg-old-1') {
@@ -461,6 +462,10 @@ test('Social Feeds Subscriptions and Live Directory System', async (t) => {
     };
 
     const mockGuild = createMockGuild({ id: guildId, name: 'SlickBot Server' });
+    mockGuild.channels = {
+      cache: new Map([[mockChannel.id, mockChannel]])
+    };
+
     const mockMessage = {
       id: 'chat-msg-1',
       guild: mockGuild,
