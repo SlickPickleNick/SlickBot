@@ -419,46 +419,19 @@ test('Social Feeds Subscriptions and Live Directory System', async (t) => {
     assert.equal(viewersField.value, '28,900');
   });
 
-  await t.test('handleStickyDirectoryRepost deletes old message and sends new sticky message', async () => {
+  await t.test('postLiveDirectory posts message, pins, and saves config', async () => {
     service.configCache.clear();
-    const config = {
-      guild_id: guildId,
-      live_directory_channel_id: '300000000000000001',
-      live_directory_message_id: 'msg-old-1',
-      live_directory_auto_sticky: true
-    };
+    let sentPinned = false;
 
-    db.addHandler('SELECT * FROM social_feed_configs', () => ({
-      rows: [config],
-      rowCount: 1
-    }));
-
-    db.addHandler('UPDATE social_feed_configs SET live_directory_message_id', (sql, params) => {
-      config.live_directory_message_id = params[1];
-      return { rows: [], rowCount: 1 };
-    });
-
-    let oldMessageDeleted = false;
-    let newMessageSent = false;
+    db.addHandler('INSERT INTO social_feed_configs', () => ({ rows: [], rowCount: 1 }));
 
     const mockChannel = {
       id: '300000000000000001',
       isTextBased: () => true,
-      messages: {
-        fetch: async (id) => {
-          if (id === 'msg-old-1') {
-            return {
-              id: 'msg-old-1',
-              delete: async () => { oldMessageDeleted = true; }
-            };
-          }
-          return null;
-        }
-      },
-      send: async (payload) => {
-        newMessageSent = true;
-        return { id: 'msg-new-2' };
-      }
+      send: async () => ({
+        id: 'dir-msg-1',
+        pin: async () => { sentPinned = true; }
+      })
     };
 
     const mockGuild = createMockGuild({ id: guildId, name: 'SlickBot Server' });
@@ -466,24 +439,76 @@ test('Social Feeds Subscriptions and Live Directory System', async (t) => {
       cache: new Map([[mockChannel.id, mockChannel]])
     };
 
-    const mockMessage = {
-      id: 'chat-msg-1',
-      guild: mockGuild,
-      channel: mockChannel,
-      author: { id: 'user-1', bot: false }
-    };
     const mockClient = { guilds: { cache: new Map([[guildId, mockGuild]]) } };
-
-    await service.handleStickyDirectoryRepost(mockMessage, mockClient);
-    assert.equal(oldMessageDeleted, true);
-    assert.equal(newMessageSent, true);
-    assert.equal(config.live_directory_message_id, 'msg-new-2');
+    const res = await service.postLiveDirectory(guildId, mockChannel.id, mockClient);
+    assert.equal(res.ok, true);
+    assert.equal(res.messageId, 'dir-msg-1');
+    assert.equal(sentPinned, true);
   });
 
-  await t.test('sendAnnouncement applies member avatar as thumbnail when discord_user_id is linked', async () => {
+  await t.test('updateLiveDirectory edits existing message in place', async () => {
+    service.configCache.clear();
+    let editedEmbeds = null;
+
+    const directoryConfig = {
+      guild_id: guildId,
+      live_directory_channel_id: '300000000000000001',
+      live_directory_message_id: 'dir-msg-1'
+    };
+
+    db.addHandler('SELECT * FROM social_feed_configs', () => ({
+      rows: [directoryConfig],
+      rowCount: 1
+    }));
+
+    const mockDirectoryMsg = {
+      id: 'dir-msg-1',
+      edit: async (payload) => {
+        editedEmbeds = payload.embeds;
+        return mockDirectoryMsg;
+      }
+    };
+
+    const mockChannel = {
+      id: '300000000000000001',
+      isTextBased: () => true,
+      messages: {
+        fetch: async (id) => {
+          if (id === 'dir-msg-1') return mockDirectoryMsg;
+          return null;
+        }
+      }
+    };
+
+    const mockGuild = createMockGuild({ id: guildId });
+    mockGuild.channels = {
+      cache: new Map([[mockChannel.id, mockChannel]])
+    };
+
+    const mockClient = { guilds: { cache: new Map([[guildId, mockGuild]]) } };
+    const updated = await service.updateLiveDirectory(guildId, mockClient);
+    assert.equal(updated, true);
+    assert.ok(editedEmbeds);
+  });
+
+  await t.test('sendAnnouncement applies member avatar as thumbnail and auto-updates directory', async () => {
+    service.configCache.clear();
+    let directoryEdited = false;
+
     db.addHandler('INSERT INTO social_feed_posts_history', () => ({ rows: [], rowCount: 1 }));
     db.addHandler('UPDATE social_feeds', () => ({ rows: [], rowCount: 1 }));
     db.addHandler('SELECT id FROM social_feed_subscribers', () => ({ rows: [], rowCount: 0 }));
+
+    const directoryConfig = {
+      guild_id: guildId,
+      live_directory_channel_id: '300000000000000001',
+      live_directory_message_id: 'dir-msg-1'
+    };
+
+    db.addHandler('SELECT * FROM social_feed_configs', () => ({
+      rows: [directoryConfig],
+      rowCount: 1
+    }));
 
     let sentPayload = null;
     const mockGuild = createMockGuild({ id: guildId });
@@ -499,10 +524,24 @@ test('Social Feeds Subscriptions and Live Directory System', async (t) => {
       ])
     };
 
+    const mockDirectoryMsg = {
+      id: 'dir-msg-1',
+      edit: async () => {
+        directoryEdited = true;
+        return mockDirectoryMsg;
+      }
+    };
+
     const mockChannel = {
       id: '300000000000000001',
       guild: mockGuild,
       isTextBased: () => true,
+      messages: {
+        fetch: async (id) => {
+          if (id === 'dir-msg-1') return mockDirectoryMsg;
+          return null;
+        }
+      },
       send: async (payload) => {
         sentPayload = payload;
         return { id: 'announcement-msg-1' };
@@ -540,83 +579,6 @@ test('Social Feeds Subscriptions and Live Directory System', async (t) => {
     assert.ok(sentPayload);
     assert.ok(sentPayload.embeds[0].data.thumbnail.url.includes('avatar.png'));
     assert.ok(sentPayload.embeds[0].data.footer.text.includes('StreamerNick'));
-  });
-
-  await t.test('sendAnnouncement automatically repositions sticky directory below announcement when posted to directory channel', async () => {
-    service.configCache.clear();
-    let oldDirectoryDeleted = false;
-    let directorySentCount = 0;
-
-    const directoryConfig = {
-      guild_id: guildId,
-      live_directory_channel_id: '300000000000000001',
-      live_directory_message_id: 'dir-old-1',
-      live_directory_auto_sticky: true
-    };
-
-    db.addHandler('SELECT * FROM social_feed_configs', () => ({
-      rows: [directoryConfig],
-      rowCount: 1
-    }));
-
-    db.addHandler('UPDATE social_feed_configs SET live_directory_message_id', (sql, params) => {
-      directoryConfig.live_directory_message_id = params[1];
-      return { rows: [], rowCount: 1 };
-    });
-
-    const mockDirectoryMsg = {
-      id: 'dir-old-1',
-      delete: async () => { oldDirectoryDeleted = true; }
-    };
-
-    const mockGuild = createMockGuild({ id: guildId });
-    const mockChannel = {
-      id: '300000000000000001',
-      guild: mockGuild,
-      isTextBased: () => true,
-      messages: {
-        fetch: async (id) => {
-          if (id === 'dir-old-1') return mockDirectoryMsg;
-          return null;
-        }
-      },
-      send: async (payload) => {
-        if (payload.embeds?.[0]?.data?.title?.includes('Live Creator Hub')) {
-          directorySentCount++;
-          return { id: `dir-new-${directorySentCount}` };
-        }
-        return { id: 'announcement-msg-99' };
-      }
-    };
-
-    mockGuild.channels = {
-      cache: new Map([[mockChannel.id, mockChannel]])
-    };
-
-    const feed = {
-      id: feedId,
-      guild_id: guildId,
-      platform: 'TWITCH',
-      account_id: 'ninja',
-      account_name: 'Ninja',
-      channel_id: mockChannel.id,
-      enabled: true
-    };
-
-    const updateData = {
-      itemType: 'LIVE',
-      title: 'Stream Going Live',
-      url: 'https://twitch.tv/ninja',
-      gameName: 'Fortnite',
-      viewerCount: 12000,
-      thumbnailUrl: 'https://static-cdn.jtvnw.net/preview.jpg'
-    };
-
-    const mockClient = { guilds: { cache: new Map([[guildId, mockGuild]]) } };
-    const result = await service.sendAnnouncement(mockClient, feed, updateData, null);
-    assert.equal(result.ok, true);
-    assert.equal(oldDirectoryDeleted, true);
-    assert.equal(directorySentCount, 1);
-    assert.equal(directoryConfig.live_directory_message_id, 'dir-new-1');
+    assert.equal(directoryEdited, true);
   });
 });

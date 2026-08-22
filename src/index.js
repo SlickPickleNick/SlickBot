@@ -517,13 +517,6 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
 
 
 client.on(Events.MessageCreate, async (message) => {
-  if (message.guild && message.author?.id !== client.user?.id) {
-    const socialFeedsEnabled = await permissions.isModuleEnabled(message.guild.id, ModuleKeys.SOCIAL_FEEDS).catch(() => false);
-    if (socialFeedsEnabled) {
-      await socialFeeds.handleStickyDirectoryRepost(message, client).catch((error) => console.error('Failed to handle sticky directory repost:', error));
-    }
-  }
-
   if (message.author?.bot) return;
 
   if (message.guild) {
