@@ -14,8 +14,9 @@ const PLATFORM_META = Object.freeze({
     key: PLATFORM_KEYS.TWITCH,
     label: 'Twitch',
     color: 0x9146FF,
-    icon: '🟣',
-    emoji: '🎮',
+    icon: '<:Twitch:1518149495404232795>',
+    emoji: '<:Twitch:1518149495404232795>',
+    buttonEmoji: '1518149495404232795',
     defaultUrl: (handle) => `https://twitch.tv/${handle}`,
     supportsLive: true
   },
@@ -23,8 +24,9 @@ const PLATFORM_META = Object.freeze({
     key: PLATFORM_KEYS.YOUTUBE,
     label: 'YouTube',
     color: 0xFF0000,
-    icon: '🔴',
-    emoji: '▶️',
+    icon: '<:YouTube:1518149530661425272>',
+    emoji: '<:YouTube:1518149530661425272>',
+    buttonEmoji: '1518149530661425272',
     defaultUrl: (handle) => handle.startsWith('UC') ? `https://youtube.com/channel/${handle}` : `https://youtube.com/@${handle.replace(/^@/, '')}`,
     supportsShorts: true
   }
@@ -122,6 +124,7 @@ class SocialFeedService {
   constructor() {
     this.configCache = new Map();
     this.tokenCache = new Map();
+    this.stickyRepostLocks = new Map();
   }
 
   async getConfig(guildId) {
@@ -593,14 +596,49 @@ class SocialFeedService {
       duration: updateData.duration
     });
 
+    let memberAvatarUrl = null;
+    let memberDisplayName = null;
+    if (feed.discord_user_id) {
+      try {
+        const guild = channel?.guild || client?.guilds?.cache?.get(feed.guild_id);
+        let member = guild?.members?.cache?.get(feed.discord_user_id);
+        if (!member && guild?.members?.fetch) {
+          member = await guild.members.fetch(feed.discord_user_id).catch(() => null);
+        }
+        if (member) {
+          memberAvatarUrl = member.user?.displayAvatarURL?.({ size: 256 }) || member.displayAvatarURL?.({ size: 256 });
+          memberDisplayName = member.displayName || member.user?.username;
+        } else if (client?.users) {
+          const user = client.users.cache?.get(feed.discord_user_id) || await client.users.fetch(feed.discord_user_id).catch(() => null);
+          if (user) {
+            memberAvatarUrl = user.displayAvatarURL?.({ size: 256 });
+            memberDisplayName = user.username;
+          }
+        }
+      } catch (_) {}
+    }
+
     const isLive = updateData.itemType === 'LIVE';
     const embed = new EmbedBuilder()
       .setColor(platformMeta.color || SlickBotColors.PRIMARY)
-      .setAuthor({ name: `${updateData.authorName || feed.account_name} (${platformMeta.label})`, url: updateData.url, iconURL: updateData.avatarUrl || undefined })
+      .setAuthor({
+        name: `${updateData.authorName || feed.account_name} (${platformMeta.label})`,
+        url: updateData.url,
+        iconURL: updateData.avatarUrl || undefined
+      })
       .setTitle(updateData.title ? updateData.title.slice(0, 256) : `${updateData.authorName || feed.account_name} on ${platformMeta.label}`)
       .setURL(updateData.url)
       .setTimestamp(updateData.publishedAt || new Date())
-      .setFooter({ text: `SlickBot Social Feeds · ${platformMeta.label}` });
+      .setFooter({
+        text: `SlickBot Social Feeds · ${platformMeta.label}${memberDisplayName ? ` · Member: @${memberDisplayName}` : ''}`,
+        iconURL: memberAvatarUrl || undefined
+      });
+
+    if (memberAvatarUrl) {
+      embed.setThumbnail(memberAvatarUrl);
+    } else if (updateData.avatarUrl) {
+      embed.setThumbnail(updateData.avatarUrl);
+    }
 
     if (updateData.description) {
       embed.setDescription(updateData.description.slice(0, 1000));
@@ -617,7 +655,11 @@ class SocialFeedService {
     }
 
     if (feed.discord_user_id) {
-      embed.addFields({ name: 'Community Member', value: `<@${feed.discord_user_id}>`, inline: true });
+      embed.addFields({
+        name: 'Community Member',
+        value: `<@${feed.discord_user_id}>${memberDisplayName ? ` (${memberDisplayName})` : ''}`,
+        inline: true
+      });
     }
 
     if (updateData.thumbnailUrl) {
@@ -626,7 +668,7 @@ class SocialFeedService {
 
     const buttonRow = new ActionRowBuilder();
     const watchLabel = isLive ? 'Watch Stream' : (updateData.itemType === 'SHORT' ? 'Watch Short' : 'Watch Video');
-    const watchEmoji = isLive ? '🎮' : '▶️';
+    const watchEmoji = platformMeta.buttonEmoji || (isLive ? '🎮' : '▶️');
 
     buttonRow.addComponents(
       new ButtonBuilder()
@@ -666,6 +708,12 @@ class SocialFeedService {
     });
 
     if (!sentMessage) return { ok: false, reason: 'Failed to send message to Discord channel' };
+
+    // If announcement was sent to the sticky directory channel, immediately reposition directory below it
+    const config = await this.getConfig(feed.guild_id).catch(() => null);
+    if (config && config.live_directory_channel_id === channel.id && config.live_directory_auto_sticky !== false) {
+      await this.handleStickyDirectoryRepost(sentMessage, client).catch(() => {});
+    }
 
     // Record in history
     await query(
@@ -948,7 +996,7 @@ class SocialFeedService {
           .setLabel(`Watch ${f.account_name.slice(0, 20)}`)
           .setURL(f.account_url || meta.defaultUrl(f.account_id))
           .setStyle(ButtonStyle.Link)
-          .setEmoji(meta.icon)
+          .setEmoji(meta.buttonEmoji || meta.icon || '🎮')
       );
     }
     buttonRow.addComponents(
@@ -979,19 +1027,21 @@ class SocialFeedService {
     }
 
     await query(
-      `UPDATE social_feed_configs
-       SET live_directory_channel_id = $2,
-           live_directory_message_id = $3,
-           updated_at = NOW()
-       WHERE guild_id = $1`,
+      `INSERT INTO social_feed_configs (guild_id, live_directory_channel_id, live_directory_message_id, live_directory_auto_sticky)
+       VALUES ($1, $2, $3, true)
+       ON CONFLICT (guild_id) DO UPDATE SET
+         live_directory_channel_id = EXCLUDED.live_directory_channel_id,
+         live_directory_message_id = EXCLUDED.live_directory_message_id,
+         live_directory_auto_sticky = true,
+         updated_at = NOW()`,
       [guildId, channel.id, sentMessage.id]
     );
 
-    const cached = this.configCache.get(guildId);
-    if (cached) {
-      cached.live_directory_channel_id = channel.id;
-      cached.live_directory_message_id = sentMessage.id;
-    }
+    const cached = this.configCache.get(guildId) || {};
+    cached.live_directory_channel_id = channel.id;
+    cached.live_directory_message_id = sentMessage.id;
+    cached.live_directory_auto_sticky = true;
+    this.configCache.set(guildId, cached);
 
     return { ok: true, channelId: channel.id, messageId: sentMessage.id };
   }
@@ -1016,14 +1066,16 @@ class SocialFeedService {
       return true;
     }
 
-    if (config.live_directory_auto_sticky) {
+    if (config.live_directory_auto_sticky !== false) {
       const newMessage = await channel.send(payload).catch(() => null);
       if (newMessage) {
         await query(
-          `UPDATE social_feed_configs SET live_directory_message_id = $2 WHERE guild_id = $1`,
+          `UPDATE social_feed_configs SET live_directory_message_id = $2, updated_at = NOW() WHERE guild_id = $1`,
           [guildId, newMessage.id]
         );
         config.live_directory_message_id = newMessage.id;
+        const cached = this.configCache.get(guildId);
+        if (cached) cached.live_directory_message_id = newMessage.id;
       }
     }
     return true;
@@ -1060,30 +1112,61 @@ class SocialFeedService {
   }
 
   async handleStickyDirectoryRepost(message, client) {
-    if (!message.guild || message.author.bot) return;
+    if (!message || !message.guild || !message.channel) return;
     const guildId = message.guild.id;
     const config = await this.getConfig(guildId);
-    if (!config.live_directory_channel_id || !config.live_directory_auto_sticky) return;
+    if (!config || !config.live_directory_channel_id || config.live_directory_auto_sticky === false) return;
     if (message.channel.id !== config.live_directory_channel_id) return;
 
-    const channel = message.channel;
-    const oldMessageId = config.live_directory_message_id;
+    // Never delete or re-trigger on the live directory message itself
+    if (message.id === config.live_directory_message_id) return;
 
-    if (oldMessageId) {
-      const oldMessage = await channel.messages.fetch(oldMessageId).catch(() => null);
-      if (oldMessage) {
-        await oldMessage.delete().catch(() => {});
-      }
+    const channelId = message.channel.id;
+    if (this.stickyRepostLocks.has(channelId)) {
+      this.stickyRepostLocks.set(channelId, 'PENDING');
+      return;
     }
 
-    const payload = await this.buildLiveDirectoryPayload(guildId, client);
-    const newMessage = await channel.send(payload).catch(() => null);
-    if (newMessage) {
-      await query(
-        `UPDATE social_feed_configs SET live_directory_message_id = $2 WHERE guild_id = $1`,
-        [guildId, newMessage.id]
-      );
-      config.live_directory_message_id = newMessage.id;
+    this.stickyRepostLocks.set(channelId, 'RUNNING');
+
+    try {
+      let shouldRerun = false;
+      do {
+        shouldRerun = false;
+        const channel = message.channel;
+        const latestConfig = await this.getConfig(guildId);
+        const oldMessageId = latestConfig.live_directory_message_id;
+
+        if (oldMessageId) {
+          const oldMessage = await channel.messages.fetch(oldMessageId).catch(() => null);
+          if (oldMessage) {
+            await oldMessage.delete().catch(() => {});
+          }
+        }
+
+        const payload = await this.buildLiveDirectoryPayload(guildId, client);
+        const newMessage = await channel.send(payload).catch((err) => {
+          console.error('Failed to repost sticky directory message:', err);
+          return null;
+        });
+
+        if (newMessage) {
+          await query(
+            `UPDATE social_feed_configs SET live_directory_message_id = $2, updated_at = NOW() WHERE guild_id = $1`,
+            [guildId, newMessage.id]
+          );
+          latestConfig.live_directory_message_id = newMessage.id;
+          const cached = this.configCache.get(guildId);
+          if (cached) cached.live_directory_message_id = newMessage.id;
+        }
+
+        if (this.stickyRepostLocks.get(channelId) === 'PENDING') {
+          this.stickyRepostLocks.set(channelId, 'RUNNING');
+          shouldRerun = true;
+        }
+      } while (shouldRerun);
+    } finally {
+      this.stickyRepostLocks.delete(channelId);
     }
   }
 

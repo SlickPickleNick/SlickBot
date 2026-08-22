@@ -360,4 +360,121 @@ test('Social Feeds Subscriptions and Live Directory System', async (t) => {
     assert.ok(livePayload.embeds[0].data.description.includes('500000000000000001'));
     assert.ok(livePayload.components.length > 0);
   });
+
+  await t.test('handleStickyDirectoryRepost deletes old message and sends new sticky message', async () => {
+    const config = {
+      guild_id: guildId,
+      live_directory_channel_id: '300000000000000001',
+      live_directory_message_id: 'msg-old-1',
+      live_directory_auto_sticky: true
+    };
+
+    db.addHandler('SELECT * FROM social_feed_configs', () => ({
+      rows: [config],
+      rowCount: 1
+    }));
+
+    db.addHandler('UPDATE social_feed_configs SET live_directory_message_id', (sql, params) => {
+      config.live_directory_message_id = params[1];
+      return { rows: [], rowCount: 1 };
+    });
+
+    let oldMessageDeleted = false;
+    let newMessageSent = false;
+
+    const mockChannel = {
+      id: '300000000000000001',
+      messages: {
+        fetch: async (id) => {
+          if (id === 'msg-old-1') {
+            return {
+              id: 'msg-old-1',
+              delete: async () => { oldMessageDeleted = true; }
+            };
+          }
+          return null;
+        }
+      },
+      send: async (payload) => {
+        newMessageSent = true;
+        return { id: 'msg-new-2' };
+      }
+    };
+
+    const mockGuild = createMockGuild({ id: guildId, name: 'SlickBot Server' });
+    const mockMessage = {
+      id: 'chat-msg-1',
+      guild: mockGuild,
+      channel: mockChannel,
+      author: { id: 'user-1', bot: false }
+    };
+    const mockClient = { guilds: { cache: new Map([[guildId, mockGuild]]) } };
+
+    await service.handleStickyDirectoryRepost(mockMessage, mockClient);
+    assert.equal(oldMessageDeleted, true);
+    assert.equal(newMessageSent, true);
+    assert.equal(config.live_directory_message_id, 'msg-new-2');
+  });
+
+  await t.test('sendAnnouncement applies member avatar as thumbnail when discord_user_id is linked', async () => {
+    db.addHandler('INSERT INTO social_feed_posts_history', () => ({ rows: [], rowCount: 1 }));
+    db.addHandler('UPDATE social_feeds', () => ({ rows: [], rowCount: 1 }));
+    db.addHandler('SELECT id FROM social_feed_subscribers', () => ({ rows: [], rowCount: 0 }));
+
+    let sentPayload = null;
+    const mockGuild = createMockGuild({ id: guildId });
+    mockGuild.members = {
+      cache: new Map([
+        ['500000000000000001', {
+          displayName: 'StreamerNick',
+          user: {
+            username: 'StreamerNick',
+            displayAvatarURL: () => 'https://cdn.discordapp.com/avatars/500/avatar.png'
+          }
+        }]
+      ])
+    };
+
+    const mockChannel = {
+      id: '300000000000000001',
+      guild: mockGuild,
+      isTextBased: () => true,
+      send: async (payload) => {
+        sentPayload = payload;
+        return { id: 'announcement-msg-1' };
+      }
+    };
+
+    mockGuild.channels = {
+      cache: new Map([[mockChannel.id, mockChannel]])
+    };
+
+    const feed = {
+      id: feedId,
+      guild_id: guildId,
+      platform: 'TWITCH',
+      account_id: 'ninja',
+      account_name: 'Ninja',
+      channel_id: mockChannel.id,
+      discord_user_id: '500000000000000001',
+      ping_role_id: null,
+      enabled: true
+    };
+
+    const updateData = {
+      itemType: 'LIVE',
+      title: 'Late Night Stream',
+      url: 'https://twitch.tv/ninja',
+      gameName: 'Fortnite',
+      viewerCount: 15000,
+      thumbnailUrl: 'https://static-cdn.jtvnw.net/preview.jpg'
+    };
+
+    const mockClient = { guilds: { cache: new Map([[guildId, mockGuild]]) } };
+    const result = await service.sendAnnouncement(mockClient, feed, updateData, null);
+    assert.equal(result.ok, true);
+    assert.ok(sentPayload);
+    assert.ok(sentPayload.embeds[0].data.thumbnail.url.includes('avatar.png'));
+    assert.ok(sentPayload.embeds[0].data.footer.text.includes('StreamerNick'));
+  });
 });

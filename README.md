@@ -24,6 +24,12 @@ Current package: **v0.9.8**
 - **Server Member-to-Feed Pairing:**
   - Added `[member:@User]` option in `/feed add` and `/feed edit` linking external channels to Discord members.
   - Added `{member}` placeholder token in custom announcement templates and community member attribution badges on announcements and directory embeds.
+- **Custom Twitch & YouTube Emoji Buttons:**
+  - Integrated custom guild emojis `<:Twitch:1518149495404232795>` and `<:YouTube:1518149530661425272>` onto all live stream / video action buttons and directory cards.
+- **Server Emoji & Sticker Showcase Utility:**
+  - Added `/emojis [page]` to browse all uploaded custom static and animated emojis with live slot usage (`X/100`), boost tier info, and interactive pagination.
+  - Added `/stickers [page]` to inspect all custom server stickers with formats (PNG, APNG, Lottie, GIF), tags, descriptions, direct CDN asset links, and interactive pagination.
+  - Added cross-navigation buttons (`🖼️ View Stickers` / `😀 View Emojis`) on showcase cards.
 - **Twitch Developer API Diagnostics:**
   - Added clear credential diagnostics in `SocialFeedService` and `/feed manager` to immediately detect and report missing `TWITCH_CLIENT_ID` or `TWITCH_CLIENT_SECRET` environment variables.
 
@@ -37,9 +43,10 @@ Updated commands:
 /feed unsubscribe feed:<feed>
 /feed my-alerts
 /feed list
-/feed check
-/feed test
-/feed manager
+/emojis [page:<num>]
+/stickers [page:<num>]
+/utility emojis [page:<num>]
+/utility stickers [page:<num>]
 ```
 
 

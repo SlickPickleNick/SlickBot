@@ -967,6 +967,150 @@ class UtilityService {
     const list = this.snipeCache.get(channelId);
     return list && list.length ? list[0] : null;
   }
+
+  async buildEmojiListPayload(guild, page = 1) {
+    if (!guild) {
+      return { embeds: [createWarningEmbed('Server Not Found', 'Could not locate server information.')] };
+    }
+
+    let emojiCollection = guild.emojis?.cache;
+    if (!emojiCollection || emojiCollection.size === 0) {
+      emojiCollection = await guild.emojis?.fetch().catch(() => new Map()) || new Map();
+    }
+
+    const allEmojis = Array.from(emojiCollection.values());
+    const staticEmojis = allEmojis.filter((e) => !e.animated);
+    const animatedEmojis = allEmojis.filter((e) => e.animated);
+
+    const tier = guild.premiumTier || 0;
+    const maxStatic = tier === 3 ? 250 : tier === 2 ? 150 : tier === 1 ? 100 : 50;
+    const maxAnimated = maxStatic;
+    const totalMax = maxStatic + maxAnimated;
+
+    const pageSize = 25;
+    const totalPages = Math.max(1, Math.ceil(allEmojis.length / pageSize));
+    const currentPage = Math.max(1, Math.min(page, totalPages));
+    const startIdx = (currentPage - 1) * pageSize;
+    const pageEmojis = allEmojis.slice(startIdx, startIdx + pageSize);
+
+    const emojiLines = pageEmojis.map((e) => {
+      return `${e.toString()} \`:${e.name}:\` — \`${e.id}\``;
+    });
+
+    const description = [
+      `**Server Boost:** Tier ${tier} (${guild.premiumSubscriptionCount || 0} boosts)`,
+      `**Total Slots:** **${allEmojis.length}** / ${totalMax}`,
+      `• Static Emojis: **${staticEmojis.length}** / ${maxStatic}`,
+      `• Animated Emojis: **${animatedEmojis.length}** / ${maxAnimated}`,
+      '',
+      '**Custom Server Emojis:**',
+      emojiLines.length ? emojiLines.join('\n') : '*No custom emojis uploaded on this server.*'
+    ].join('\n');
+
+    const embed = createBaseEmbed({
+      title: `😀 Server Emojis • ${guild.name} (${allEmojis.length})`,
+      description,
+      color: SlickBotColors.PRIMARY,
+      footer: `Page ${currentPage} of ${totalPages} · SlickBot Utility`
+    });
+
+    const navRow = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`${CustomIds.UtilityEmojiPagePrefix}${currentPage - 1}`)
+        .setLabel('Previous')
+        .setStyle(ButtonStyle.Secondary)
+        .setEmoji('◀️')
+        .setDisabled(currentPage <= 1),
+      new ButtonBuilder()
+        .setCustomId('slickbot:util:emojis:noop')
+        .setLabel(`Page ${currentPage}/${totalPages}`)
+        .setStyle(ButtonStyle.Secondary)
+        .setDisabled(true),
+      new ButtonBuilder()
+        .setCustomId(`${CustomIds.UtilityEmojiPagePrefix}${currentPage + 1}`)
+        .setLabel('Next')
+        .setStyle(ButtonStyle.Secondary)
+        .setEmoji('▶️')
+        .setDisabled(currentPage >= totalPages),
+      new ButtonBuilder()
+        .setCustomId(CustomIds.UtilityShowStickers)
+        .setLabel('View Stickers')
+        .setStyle(ButtonStyle.Primary)
+        .setEmoji('🖼️')
+    );
+
+    return { embeds: [embed], components: [navRow] };
+  }
+
+  async buildStickerListPayload(guild, page = 1) {
+    if (!guild) {
+      return { embeds: [createWarningEmbed('Server Not Found', 'Could not locate server information.')] };
+    }
+
+    let stickerCollection = guild.stickers?.cache;
+    if (!stickerCollection || stickerCollection.size === 0) {
+      stickerCollection = await guild.stickers?.fetch().catch(() => new Map()) || new Map();
+    }
+
+    const allStickers = Array.from(stickerCollection.values());
+
+    const tier = guild.premiumTier || 0;
+    const maxStickers = tier === 3 ? 60 : tier === 2 ? 30 : tier === 1 ? 15 : 5;
+
+    const pageSize = 8;
+    const totalPages = Math.max(1, Math.ceil(allStickers.length / pageSize));
+    const currentPage = Math.max(1, Math.min(page, totalPages));
+    const startIdx = (currentPage - 1) * pageSize;
+    const pageStickers = allStickers.slice(startIdx, startIdx + pageSize);
+
+    const stickerLines = pageStickers.map((s, idx) => {
+      const format = s.format === 1 ? 'PNG' : s.format === 2 ? 'APNG' : s.format === 3 ? 'LOTTIE' : s.format === 4 ? 'GIF' : 'STICKER';
+      const desc = s.description ? `\n   ↳ *${s.description}*` : '';
+      return `**${startIdx + idx + 1}.** [**${s.name}**](${s.url}) (${format}) · Tag: \`:${s.tags || 'none'}:\`${desc}`;
+    });
+
+    const description = [
+      `**Server Boost:** Tier ${tier} (${guild.premiumSubscriptionCount || 0} boosts)`,
+      `**Sticker Slots:** **${allStickers.length}** / ${maxStickers}`,
+      '',
+      '**Custom Server Stickers:**',
+      stickerLines.length ? stickerLines.join('\n') : '*No custom stickers uploaded on this server.*'
+    ].join('\n');
+
+    const embed = createBaseEmbed({
+      title: `🖼️ Server Stickers • ${guild.name} (${allStickers.length})`,
+      description,
+      color: SlickBotColors.PRIMARY,
+      footer: `Page ${currentPage} of ${totalPages} · SlickBot Utility`
+    });
+
+    const navRow = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`${CustomIds.UtilityStickerPagePrefix}${currentPage - 1}`)
+        .setLabel('Previous')
+        .setStyle(ButtonStyle.Secondary)
+        .setEmoji('◀️')
+        .setDisabled(currentPage <= 1),
+      new ButtonBuilder()
+        .setCustomId('slickbot:util:stickers:noop')
+        .setLabel(`Page ${currentPage}/${totalPages}`)
+        .setStyle(ButtonStyle.Secondary)
+        .setDisabled(true),
+      new ButtonBuilder()
+        .setCustomId(`${CustomIds.UtilityStickerPagePrefix}${currentPage + 1}`)
+        .setLabel('Next')
+        .setStyle(ButtonStyle.Secondary)
+        .setEmoji('▶️')
+        .setDisabled(currentPage >= totalPages),
+      new ButtonBuilder()
+        .setCustomId(CustomIds.UtilityShowEmojis)
+        .setLabel('View Emojis')
+        .setStyle(ButtonStyle.Primary)
+        .setEmoji('😀')
+    );
+
+    return { embeds: [embed], components: [navRow] };
+  }
 }
 
 module.exports = {

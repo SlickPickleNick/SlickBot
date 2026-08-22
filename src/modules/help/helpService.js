@@ -335,6 +335,28 @@ const HELP_CATALOG = Object.freeze([
     level: PermissionLevels.EVERYONE,
     examples: ['/serverinfo']
   },
+  {
+    name: 'emojis',
+    command: '/emojis',
+    syntax: '/emojis [page]',
+    description: 'Browse all static and animated custom emojis available on this server with slot stats.',
+    category: 'MEMBER',
+    moduleKey: ModuleKeys.UTILITY,
+    actionKey: ActionKeys.UtilityInfo,
+    level: PermissionLevels.EVERYONE,
+    examples: ['/emojis', '/emojis page:2']
+  },
+  {
+    name: 'stickers',
+    command: '/stickers',
+    syntax: '/stickers [page]',
+    description: 'Browse all custom server stickers with format types, descriptions, tags, and asset previews.',
+    category: 'MEMBER',
+    moduleKey: ModuleKeys.UTILITY,
+    actionKey: ActionKeys.UtilityInfo,
+    level: PermissionLevels.EVERYONE,
+    examples: ['/stickers', '/stickers page:2']
+  },
 
   // Support
   {

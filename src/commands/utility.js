@@ -30,6 +30,18 @@ module.exports = {
     )
     .addSubcommand((subcommand) =>
       subcommand.setName('reset').setDescription('Reset utility settings and active data (Owner only).')
+    )
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName('emojis')
+        .setDescription('View all custom emojis uploaded on this server.')
+        .addIntegerOption((opt) => opt.setName('page').setDescription('Page number to view').setRequired(false).setMinValue(1))
+    )
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName('stickers')
+        .setDescription('View all custom stickers uploaded on this server.')
+        .addIntegerOption((opt) => opt.setName('page').setDescription('Page number to view').setRequired(false).setMinValue(1))
     ),
   actionKey: ActionKeys.UtilityView,
   moduleKey: ModuleKeys.UTILITY,
@@ -38,6 +50,10 @@ module.exports = {
     if (sub === 'reset') return ActionKeys.UtilityReset;
     if (sub === 'setup') return ActionKeys.UtilityManage;
     return ActionKeys.UtilityView;
+  },
+  isPublic(interaction) {
+    const sub = interaction.options.getSubcommand();
+    return sub === 'emojis' || sub === 'stickers';
   },
   async execute(interaction, ctx) {
     const sub = interaction.options.getSubcommand();
@@ -94,6 +110,18 @@ module.exports = {
       );
 
       return replyPrivate(interaction, { embeds: [embed], components: [row] });
+    }
+
+    if (sub === 'emojis') {
+      const page = interaction.options.getInteger('page', false) || 1;
+      const payload = await utility.buildEmojiListPayload(interaction.guild, page);
+      return replyPrivate(interaction, payload);
+    }
+
+    if (sub === 'stickers') {
+      const page = interaction.options.getInteger('page', false) || 1;
+      const payload = await utility.buildStickerListPayload(interaction.guild, page);
+      return replyPrivate(interaction, payload);
     }
   }
 };

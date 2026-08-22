@@ -517,6 +517,13 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
 
 
 client.on(Events.MessageCreate, async (message) => {
+  if (message.guild) {
+    const socialFeedsEnabled = await permissions.isModuleEnabled(message.guild.id, ModuleKeys.SOCIAL_FEEDS).catch(() => false);
+    if (socialFeedsEnabled) {
+      await socialFeeds.handleStickyDirectoryRepost(message, client).catch((error) => console.error('Failed to handle sticky directory repost:', error));
+    }
+  }
+
   if (message.author?.bot) return;
 
   if (message.guild) {
@@ -569,11 +576,6 @@ client.on(Events.MessageCreate, async (message) => {
     const utilityEnabled = await permissions.isModuleEnabled(message.guild.id, ModuleKeys.UTILITY).catch(() => false);
     if (utilityEnabled) {
       await utility.handleMessageAfkCheck(message).catch((error) => console.error('Failed to process AFK check:', error));
-    }
-
-    const socialFeedsEnabled = await permissions.isModuleEnabled(message.guild.id, ModuleKeys.SOCIAL_FEEDS).catch(() => false);
-    if (socialFeedsEnabled) {
-      await socialFeeds.handleStickyDirectoryRepost(message, client).catch((error) => console.error('Failed to handle sticky directory repost:', error));
     }
 
     const levelingEnabled = await permissions.isModuleEnabled(message.guild.id, 'LEVELING').catch(() => false);

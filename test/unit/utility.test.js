@@ -23,6 +23,8 @@ const remindCmd = require('../../src/commands/remind');
 const embedCmd = require('../../src/commands/embed');
 const afkCmd = require('../../src/commands/afk');
 const snipeCmd = require('../../src/commands/snipe');
+const emojisCmd = require('../../src/commands/emojis');
+const stickersCmd = require('../../src/commands/stickers');
 const userInfoContextCmd = require('../../src/commands/userInfoContext');
 const avatarContextCmd = require('../../src/commands/avatarContext');
 
@@ -195,6 +197,39 @@ test('Utility Service & Helper Tests', async (t) => {
     assert.ok(payload.embeds[0].data.description.includes('80%'));
     assert.ok(payload.embeds[0].data.description.includes('20%'));
   });
+
+  await t.test('UtilityService buildEmojiListPayload and buildStickerListPayload format payloads accurately', async () => {
+    const utility = new UtilityService();
+    const mockGuild = createMockGuild({ id: 'guild_123', name: 'Test Guild', premiumTier: 2, premiumSubscriptionCount: 7 });
+
+    mockGuild.emojis = {
+      cache: new Map([
+        ['e1', { id: 'e1', name: 'cool', animated: false, toString: () => '<:cool:e1>' }],
+        ['e2', { id: 'e2', name: 'hype', animated: true, toString: () => '<a:hype:e2>' }]
+      ])
+    };
+
+    mockGuild.stickers = {
+      cache: new Map([
+        ['s1', { id: 's1', name: 'Popcat', format: 1, tags: 'cat', description: 'Popcat sticker', url: 'https://cdn.discordapp.com/stickers/s1.png' }]
+      ])
+    };
+
+    const emojiPayload = await utility.buildEmojiListPayload(mockGuild, 1);
+    assert.ok(emojiPayload.embeds);
+    assert.ok(emojiPayload.embeds[0].data.title.includes('Server Emojis'));
+    assert.ok(emojiPayload.embeds[0].data.description.includes('Tier 2'));
+    assert.ok(emojiPayload.embeds[0].data.description.includes('<:cool:e1>'));
+    assert.ok(emojiPayload.embeds[0].data.description.includes('<a:hype:e2>'));
+    assert.ok(emojiPayload.components.length > 0);
+
+    const stickerPayload = await utility.buildStickerListPayload(mockGuild, 1);
+    assert.ok(stickerPayload.embeds);
+    assert.ok(stickerPayload.embeds[0].data.title.includes('Server Stickers'));
+    assert.ok(stickerPayload.embeds[0].data.description.includes('Popcat'));
+    assert.ok(stickerPayload.embeds[0].data.description.includes('PNG'));
+    assert.ok(stickerPayload.components.length > 0);
+  });
 });
 
 test('Utility Slash Commands Metadata & ActionKeys', () => {
@@ -211,6 +246,8 @@ test('Utility Slash Commands Metadata & ActionKeys', () => {
   assert.equal(embedCmd.moduleKey, ModuleKeys.UTILITY);
   assert.equal(afkCmd.moduleKey, ModuleKeys.UTILITY);
   assert.equal(snipeCmd.moduleKey, ModuleKeys.UTILITY);
+  assert.equal(emojisCmd.moduleKey, ModuleKeys.UTILITY);
+  assert.equal(stickersCmd.moduleKey, ModuleKeys.UTILITY);
   assert.equal(userInfoContextCmd.moduleKey, ModuleKeys.UTILITY);
   assert.equal(avatarContextCmd.moduleKey, ModuleKeys.UTILITY);
 
@@ -220,6 +257,10 @@ test('Utility Slash Commands Metadata & ActionKeys', () => {
   assert.equal(embedCmd.actionKey, ActionKeys.UtilityEmbedCreate);
   assert.equal(afkCmd.actionKey, ActionKeys.UtilityAfkUse);
   assert.equal(snipeCmd.actionKey, ActionKeys.UtilitySnipeView);
+  assert.equal(emojisCmd.actionKey, ActionKeys.UtilityView);
+  assert.equal(stickersCmd.actionKey, ActionKeys.UtilityView);
+  assert.equal(emojisCmd.isPublic, true);
+  assert.equal(stickersCmd.isPublic, true);
 
   // Check poll input_style option choices
   const pollJson = pollCmd.data.toJSON();

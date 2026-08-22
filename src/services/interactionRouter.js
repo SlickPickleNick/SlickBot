@@ -514,6 +514,40 @@ async function handleButton(interaction, ctx) {
     return true;
   }
 
+  if (id.startsWith(CustomIds.UtilityEmojiPagePrefix)) {
+    const pageNum = parseInt(id.slice(CustomIds.UtilityEmojiPagePrefix.length), 10) || 1;
+    const payload = await utility.buildEmojiListPayload(interaction.guild, pageNum);
+    await interaction.update(payload).catch(async () => {
+      await replyPrivate(interaction, payload);
+    });
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.UtilityStickerPagePrefix)) {
+    const pageNum = parseInt(id.slice(CustomIds.UtilityStickerPagePrefix.length), 10) || 1;
+    const payload = await utility.buildStickerListPayload(interaction.guild, pageNum);
+    await interaction.update(payload).catch(async () => {
+      await replyPrivate(interaction, payload);
+    });
+    return true;
+  }
+
+  if (id === CustomIds.UtilityShowStickers) {
+    const payload = await utility.buildStickerListPayload(interaction.guild, 1);
+    await interaction.update(payload).catch(async () => {
+      await replyPrivate(interaction, payload);
+    });
+    return true;
+  }
+
+  if (id === CustomIds.UtilityShowEmojis) {
+    const payload = await utility.buildEmojiListPayload(interaction.guild, 1);
+    await interaction.update(payload).catch(async () => {
+      await replyPrivate(interaction, payload);
+    });
+    return true;
+  }
+
   if (id.startsWith(CustomIds.PollVotePrefix)) {
     if (!(await requirePublicAction(interaction, ctx, ActionKeys.UtilityPollVote, ModuleKeys.UTILITY))) return true;
     const payload = id.slice(CustomIds.PollVotePrefix.length);

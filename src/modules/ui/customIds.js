@@ -297,6 +297,10 @@ const CustomIds = Object.freeze({
   UtilityResetConfirmPrefix: 'slickbot:utility:reset:confirm:',
   UtilityResetCancelPrefix: 'slickbot:utility:reset:cancel:',
   UtilityToggleFeaturePrefix: 'slickbot:utility:toggle:',
+  UtilityEmojiPagePrefix: 'slickbot:util:emojis:page:',
+  UtilityStickerPagePrefix: 'slickbot:util:stickers:page:',
+  UtilityShowStickers: 'slickbot:util:show-stickers',
+  UtilityShowEmojis: 'slickbot:util:show-emojis',
 
   PollVotePrefix: 'slickbot:poll:vote:',
   PollSelectVotePrefix: 'slickbot:select:poll-vote:',
