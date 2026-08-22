@@ -339,34 +339,62 @@ class SocialFeedService {
     const clientId = env.TWITCH_CLIENT_ID;
     const clientSecret = env.TWITCH_CLIENT_SECRET;
 
-    if (clientId && clientSecret) {
-      try {
-        const token = await this.getTwitchAppToken(clientId, clientSecret);
-        if (token) {
-          const res = await fetch(`https://api.twitch.tv/helix/streams?user_login=${encodeURIComponent(handle)}`, {
-            headers: { 'Client-ID': clientId, 'Authorization': `Bearer ${token}` }
-          });
-          if (res.ok) {
-            const data = await res.json();
-            const stream = data.data?.[0];
-            if (stream) {
-              return {
-                isLive: true,
-                streamId: stream.id,
-                title: stream.title || 'Live Stream',
-                gameName: stream.game_name || 'General',
-                viewerCount: stream.viewer_count || 0,
-                startedAt: stream.started_at ? new Date(stream.started_at) : new Date(),
-                thumbnailUrl: (stream.thumbnail_url || '').replace('{width}', '1280').replace('{height}', '720'),
-                streamUrl: `https://twitch.tv/${handle}`,
-                authorName: stream.user_name || feed.account_name
-              };
-            }
-          }
-        }
-      } catch (err) {
-        // Fallback
+    if (!clientId || !clientSecret) {
+      return {
+        isLive: false,
+        error: 'Missing TWITCH_CLIENT_ID or TWITCH_CLIENT_SECRET in bot environment variables. Twitch API requires developer credentials.',
+        streamUrl: `https://twitch.tv/${handle}`,
+        authorName: feed.account_name
+      };
+    }
+
+    try {
+      const token = await this.getTwitchAppToken(clientId, clientSecret);
+      if (!token) {
+        return {
+          isLive: false,
+          error: 'Failed to obtain Twitch API access token. Please verify TWITCH_CLIENT_ID and TWITCH_CLIENT_SECRET.',
+          streamUrl: `https://twitch.tv/${handle}`,
+          authorName: feed.account_name
+        };
       }
+
+      const res = await fetch(`https://api.twitch.tv/helix/streams?user_login=${encodeURIComponent(handle)}`, {
+        headers: { 'Client-ID': clientId, 'Authorization': `Bearer ${token}` }
+      });
+
+      if (!res.ok) {
+        const errBody = await res.text().catch(() => '');
+        return {
+          isLive: false,
+          error: `Twitch API HTTP ${res.status}: ${errBody || res.statusText}`,
+          streamUrl: `https://twitch.tv/${handle}`,
+          authorName: feed.account_name
+        };
+      }
+
+      const data = await res.json();
+      const stream = data.data?.[0];
+      if (stream) {
+        return {
+          isLive: true,
+          streamId: stream.id,
+          title: stream.title || 'Live Stream',
+          gameName: stream.game_name || 'General',
+          viewerCount: stream.viewer_count || 0,
+          startedAt: stream.started_at ? new Date(stream.started_at) : new Date(),
+          thumbnailUrl: (stream.thumbnail_url || '').replace('{width}', '1280').replace('{height}', '720'),
+          streamUrl: `https://twitch.tv/${handle}`,
+          authorName: stream.user_name || feed.account_name
+        };
+      }
+    } catch (err) {
+      return {
+        isLive: false,
+        error: `Twitch network error: ${err.message}`,
+        streamUrl: `https://twitch.tv/${handle}`,
+        authorName: feed.account_name
+      };
     }
 
     return {
@@ -696,6 +724,11 @@ class SocialFeedService {
       try {
         if (feed.platform === PLATFORM_KEYS.TWITCH) {
           const status = await this.fetchTwitchStream(feed);
+          if (status.error) {
+            await query(`UPDATE social_feeds SET last_error = $2, last_checked_at = NOW() WHERE id = $1`, [feed.id, status.error]);
+            results.push({ feed, ok: false, note: `⚠️ ${status.error}`, announced: 0 });
+            continue;
+          }
           if (status.isLive && feed.last_status !== 'LIVE') {
             const res = await this.sendAnnouncement(client, feed, {
               itemId: status.streamId || `stream-${Date.now()}`,
@@ -772,30 +805,43 @@ class SocialFeedService {
     const activeCount = feeds.filter((f) => f.enabled).length;
     const twitchCount = byPlatform[PLATFORM_KEYS.TWITCH] || 0;
     const ytCount = byPlatform[PLATFORM_KEYS.YOUTUBE] || 0;
+    const missingTwitchCredentials = twitchCount > 0 && (!env.TWITCH_CLIENT_ID || !env.TWITCH_CLIENT_SECRET);
+
+    const descriptionLines = [
+      '**Viewing:** Social Media Announcement Center',
+      '',
+      `Module Enabled: **${config.enabled ? '✅ Enabled' : '⏸️ Disabled'}**`,
+      `Default Channel: ${config.default_channel_id ? `<#${config.default_channel_id}>` : '*None (Configured per feed)*'}`,
+      `Default Ping Role: ${config.default_ping_role_id ? `<@&${config.default_ping_role_id}>` : '*None*'}`,
+      '',
+      '**Tracked Channels Summary**',
+      `• Total Feeds: **${feeds.length}** (${activeCount} active)`,
+      `• 🟣 Twitch: **${twitchCount}**`,
+      `• 🔴 YouTube: **${ytCount}**`
+    ];
+
+    if (missingTwitchCredentials) {
+      descriptionLines.push(
+        '',
+        '⚠️ **Twitch API Incomplete:** `TWITCH_CLIENT_ID` or `TWITCH_CLIENT_SECRET` are missing in environment variables. Twitch streams cannot be polled without developer credentials.'
+      );
+    }
+
+    descriptionLines.push(
+      '',
+      '**Quick Commands**',
+      '• `/feed add` — Follow a new creator or channel',
+      '• `/feed remove` — Unfollow a channel',
+      '• `/feed edit` — Change notification channels or custom messages',
+      '• `/feed list` — View all followed social accounts',
+      '• `/feed test` — Send a test announcement embed',
+      '• `/feed check` — Force an immediate feed refresh'
+    );
 
     const embed = createBaseEmbed({
       title: 'SlickBot Social Feeds Manager',
-      description: [
-        '**Viewing:** Social Media Announcement Center',
-        '',
-        `Module Enabled: **${config.enabled ? '✅ Enabled' : '⏸️ Disabled'}**`,
-        `Default Channel: ${config.default_channel_id ? `<#${config.default_channel_id}>` : '*None (Configured per feed)*'}`,
-        `Default Ping Role: ${config.default_ping_role_id ? `<@&${config.default_ping_role_id}>` : '*None*'}`,
-        '',
-        '**Tracked Channels Summary**',
-        `• Total Feeds: **${feeds.length}** (${activeCount} active)`,
-        `• 🟣 Twitch: **${twitchCount}**`,
-        `• 🔴 YouTube: **${ytCount}**`,
-        '',
-        '**Quick Commands**',
-        '• `/feed add` — Follow a new creator or channel',
-        '• `/feed remove` — Unfollow a channel',
-        '• `/feed edit` — Change notification channels or custom messages',
-        '• `/feed list` — View all followed social accounts',
-        '• `/feed test` — Send a test announcement embed',
-        '• `/feed check` — Force an immediate feed refresh'
-      ].join('\n'),
-      color: config.enabled ? SlickBotColors.PRIMARY : SlickBotColors.MUTED,
+      description: descriptionLines.join('\n'),
+      color: missingTwitchCredentials ? SlickBotColors.WARNING : config.enabled ? SlickBotColors.PRIMARY : SlickBotColors.MUTED,
       footer: 'SlickBot Social Feeds'
     });
 
