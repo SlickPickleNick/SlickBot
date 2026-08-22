@@ -424,15 +424,23 @@ class FaqService {
       color: config?.forum_channel_id && config?.master_thread_id ? SlickBotColors.SUCCESS : SlickBotColors.WARNING,
       footer: 'SlickBot Knowledge Base'
     });
+    const moduleCfg = await query(`SELECT enabled FROM module_configs WHERE guild_id = $1 AND module_key = 'FAQ' LIMIT 1`, [guildId]).catch(() => ({ rows: [] }));
+    const faqEnabled = moduleCfg.rows[0]?.enabled ?? true;
+
     return {
       embeds: [embed],
-      components: [createButtonRow([
-        createPanelButton(`${CustomIds.OnboardingModulePrefix}FAQ`, 'Quick Setup', ButtonStyle.Success, '🚀'),
-        createPanelButton(CustomIds.FaqRefreshIndex, 'Sync Master Post', ButtonStyle.Primary, '🔄'),
-        createPanelButton(CustomIds.FaqRefresh, 'Refresh', ButtonStyle.Secondary, '📋'),
-        createPanelButton(CustomIds.SetupCategoryCommunity, 'Community', ButtonStyle.Primary, '✨'),
-        createPanelButton(CustomIds.SetupRefresh, 'Setup Center', ButtonStyle.Secondary, '⚙️')
-      ])]
+      components: [
+        createButtonRow([
+          createPanelButton(`${CustomIds.OnboardingModulePrefix}FAQ`, 'Quick Setup', ButtonStyle.Success, '🚀'),
+          createPanelButton(`${CustomIds.ModuleTogglePrefix}FAQ`, faqEnabled ? 'Disable Module' : 'Enable Module', faqEnabled ? ButtonStyle.Danger : ButtonStyle.Success, faqEnabled ? '⏸️' : '▶️'),
+          createPanelButton(CustomIds.FaqRefreshIndex, 'Sync Master Post', ButtonStyle.Primary, '🔄')
+        ]),
+        createButtonRow([
+          createPanelButton(CustomIds.FaqRefresh, 'Refresh', ButtonStyle.Secondary, '📋'),
+          createPanelButton(CustomIds.SetupCategoryCommunity, 'Community', ButtonStyle.Primary, '✨'),
+          createPanelButton(CustomIds.SetupRefresh, 'Setup Center', ButtonStyle.Secondary, '⚙️')
+        ])
+      ]
     };
   }
 }

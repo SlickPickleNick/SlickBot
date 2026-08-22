@@ -469,12 +469,16 @@ class LockdownService {
       color: active ? SlickBotColors.ERROR : SlickBotColors.INFO,
       footer: 'SlickBot Lockdown'
     });
+    const moduleCfg = await query(`SELECT enabled FROM module_configs WHERE guild_id = $1 AND module_key = 'LOCKDOWN' LIMIT 1`, [guildId]).catch(() => ({ rows: [] }));
+    const enabled = moduleCfg.rows[0]?.enabled ?? true;
+
     const row1 = createButtonRow([
       createPanelButton(`${CustomIds.OnboardingModulePrefix}LOCKDOWN`, 'Quick Setup', ButtonStyle.Success, '🚀'),
-      createPanelButton(CustomIds.ModerationRefresh, 'Moderation', ButtonStyle.Secondary, '🛡️'),
-      createPanelButton(CustomIds.LockdownRefresh, 'Refresh', ButtonStyle.Secondary, '🔄')
+      createPanelButton(`${CustomIds.ModuleTogglePrefix}LOCKDOWN`, enabled ? 'Disable Module' : 'Enable Module', enabled ? ButtonStyle.Danger : ButtonStyle.Success, enabled ? '⏸️' : '▶️'),
+      createPanelButton(CustomIds.ModerationRefresh, 'Moderation', ButtonStyle.Secondary, '🛡️')
     ]);
     const row2 = createButtonRow([
+      createPanelButton(CustomIds.LockdownRefresh, 'Refresh', ButtonStyle.Secondary, '🔄'),
       createPanelButton(CustomIds.SetupCategoryCore, 'Core & Safety', ButtonStyle.Primary, '🛡️'),
       createPanelButton(CustomIds.SetupRefresh, 'Setup Center', ButtonStyle.Secondary, '⚙️')
     ]);

@@ -799,15 +799,19 @@ class SocialFeedService {
       footer: 'SlickBot Social Feeds'
     });
 
-    const row = new ActionRowBuilder().addComponents(
+    const row1 = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId(`${CustomIds.OnboardingModulePrefix}SOCIAL_FEEDS`).setLabel('Quick Setup').setStyle(ButtonStyle.Success).setEmoji('🚀'),
-      new ButtonBuilder().setCustomId(CustomIds.FeedsCheckNow).setLabel('Check Feeds Now').setStyle(ButtonStyle.Primary).setEmoji('🔄'),
+      new ButtonBuilder().setCustomId(`${CustomIds.ModuleTogglePrefix}SOCIAL_FEEDS`).setLabel(config.enabled ? 'Disable Module' : 'Enable Module').setStyle(config.enabled ? ButtonStyle.Danger : ButtonStyle.Success).setEmoji(config.enabled ? '⏸️' : '▶️'),
+      new ButtonBuilder().setCustomId(CustomIds.FeedsCheckNow).setLabel('Check Feeds Now').setStyle(ButtonStyle.Primary).setEmoji('🔄')
+    );
+
+    const row2 = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId(CustomIds.FeedsRefresh).setLabel('Refresh').setStyle(ButtonStyle.Secondary).setEmoji('📋'),
       new ButtonBuilder().setCustomId(CustomIds.SetupCategoryAutomation).setLabel('Automation').setStyle(ButtonStyle.Primary).setEmoji('⚡'),
       new ButtonBuilder().setCustomId(CustomIds.SetupRefresh).setLabel('Setup Center').setStyle(ButtonStyle.Secondary).setEmoji('⚙️')
     );
 
-    return { embeds: [embed], components: [row] };
+    return { embeds: [embed], components: [row1, row2] };
   }
 }
 

@@ -935,8 +935,12 @@ class JoinCreateService {
       footer: 'SlickBot Join-to-Create'
     });
 
+    const moduleCfg = await query(`SELECT enabled FROM module_configs WHERE guild_id = $1 AND module_key = 'JOIN_TO_CREATE' LIMIT 1`, [guild.id]).catch(() => ({ rows: [] }));
+    const jtcEnabled = moduleCfg.rows[0]?.enabled ?? true;
+
     const row = createButtonRow([
       createPanelButton(`${CustomIds.OnboardingModulePrefix}JOIN_TO_CREATE`, 'Quick Setup', ButtonStyle.Success, '🚀'),
+      createPanelButton(`${CustomIds.ModuleTogglePrefix}JOIN_TO_CREATE`, jtcEnabled ? 'Disable Module' : 'Enable Module', jtcEnabled ? ButtonStyle.Danger : ButtonStyle.Success, jtcEnabled ? '⏸️' : '▶️'),
       createPanelButton(CustomIds.JoinCreateRefresh, 'Refresh', ButtonStyle.Secondary, '🔄'),
       createPanelButton(CustomIds.SetupCategoryCommunity, 'Community', ButtonStyle.Primary, '✨'),
       createPanelButton(CustomIds.SetupRefresh, 'Setup Center', ButtonStyle.Secondary, '⚙️')

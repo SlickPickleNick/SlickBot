@@ -241,12 +241,20 @@ class GiveawayService {
       color: active.length ? SlickBotColors.SUCCESS : SlickBotColors.INFO
     });
 
+    const moduleCfg = await query(`SELECT enabled FROM module_configs WHERE guild_id = $1 AND module_key = 'GIVEAWAYS' LIMIT 1`, [guildId]).catch(() => ({ rows: [] }));
+    const giveawaysEnabled = moduleCfg.rows[0]?.enabled ?? true;
+
     const row1 = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId(`${CustomIds.OnboardingModulePrefix}GIVEAWAYS`)
         .setLabel('Quick Setup')
         .setStyle(ButtonStyle.Success)
         .setEmoji('🚀'),
+      new ButtonBuilder()
+        .setCustomId(`${CustomIds.ModuleTogglePrefix}GIVEAWAYS`)
+        .setLabel(giveawaysEnabled ? 'Disable Module' : 'Enable Module')
+        .setStyle(giveawaysEnabled ? ButtonStyle.Danger : ButtonStyle.Success)
+        .setEmoji(giveawaysEnabled ? '⏸️' : '▶️'),
       new ButtonBuilder()
         .setCustomId(CustomIds.GiveawaysQuickStart)
         .setLabel('Start Giveaway')

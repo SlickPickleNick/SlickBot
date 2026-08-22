@@ -680,6 +680,101 @@ async function handleButton(interaction, ctx) {
     return true;
   }
 
+  if (id.startsWith(CustomIds.ModuleTogglePrefix)) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.ModulesManage, ModuleKeys.PERMISSIONS))) return true;
+    const moduleKey = id.slice(CustomIds.ModuleTogglePrefix.length);
+    if (!isImplementedModuleSafe(moduleKey)) {
+      return replyPrivate(interaction, { embeds: [createWarningEmbed('Module Coming Soon', `**${moduleKey}** has not been built yet.`)] });
+    }
+    if (isCoreModule(moduleKey)) {
+      return replyPrivate(interaction, { embeds: [createWarningEmbed('Core Module Locked', `**${moduleKey}** is a core SlickBot module and cannot be disabled.`)] });
+    }
+    const current = await query(`SELECT enabled FROM module_configs WHERE guild_id = $1 AND module_key = $2 LIMIT 1`, [interaction.guildId, moduleKey]);
+    const nextEnabled = !(current.rows[0]?.enabled);
+    await ctx.permissions.setModuleEnabled(interaction.guildId, moduleKey, nextEnabled);
+    await ctx.logger.writeAudit({ guildId: interaction.guildId, actorUserId: interaction.user.id, actionKey: ActionKeys.ModulesManage, targetType: 'ModuleConfig', targetId: moduleKey, summary: `${moduleKey} module ${nextEnabled ? 'enabled' : 'disabled'} via button.` });
+    await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'module-config', title: `Module ${nextEnabled ? 'Enabled' : 'Disabled'}`, body: [`Module: **${moduleKey}**`, `Updated By: <@${interaction.user.id}>`, `Status: **${nextEnabled ? '🟢 Enabled' : '⏸️ Disabled'}**`].join('\n'), metadata: { moduleKey, enabled: nextEnabled, actorUserId: interaction.user.id } });
+
+    switch (moduleKey) {
+      case ModuleKeys.MODERATION:
+        await updatePanel(interaction, await buildModerationPanel(interaction.guildId));
+        break;
+      case ModuleKeys.TEMP_ROLES:
+        await updatePanel(interaction, await tempRoles.buildManagerPanel(interaction.guildId));
+        break;
+      case ModuleKeys.LOCKDOWN:
+        await updatePanel(interaction, await lockdown.buildManagerPanel(interaction.guildId));
+        break;
+      case ModuleKeys.UTILITY:
+        await updatePanel(interaction, await buildUtilityManagerPanel(interaction.guildId));
+        break;
+      case ModuleKeys.TICKETS:
+        await updatePanel(interaction, await buildTicketsPanel(interaction.guildId));
+        break;
+      case ModuleKeys.REPORTS:
+        await updatePanel(interaction, await buildReportsPanel(interaction.guildId));
+        break;
+      case ModuleKeys.APPLICATIONS:
+        await updatePanel(interaction, await buildApplicationsPanel(interaction.guildId));
+        break;
+      case ModuleKeys.APPEALS:
+        await updatePanel(interaction, await buildAppealsPanel(interaction.guildId));
+        break;
+      case ModuleKeys.WELCOME:
+        await updatePanel(interaction, await buildWelcomePanel(interaction.guildId));
+        break;
+      case ModuleKeys.REACTION_ROLES:
+        await updatePanel(interaction, await buildRoleManagerPanel(interaction.guildId));
+        break;
+      case ModuleKeys.GIVEAWAYS:
+        await updatePanel(interaction, await giveaways.buildManagerPanel(interaction.guildId));
+        break;
+      case ModuleKeys.BIRTHDAYS:
+        await updatePanel(interaction, await birthdays.buildManagerPanel(interaction.guildId));
+        break;
+      case ModuleKeys.LEVELING:
+        await updatePanel(interaction, await leveling.buildManagerPanel(interaction.guildId));
+        break;
+      case ModuleKeys.COMMUNITY_GAMES:
+        await updatePanel(interaction, await communityGames.buildManagerPanel(interaction.guildId));
+        break;
+      case ModuleKeys.FAQ:
+        await updatePanel(interaction, await faq.buildManagerPanel(interaction.guildId));
+        break;
+      case ModuleKeys.SUGGESTIONS:
+        await updatePanel(interaction, await suggestions.buildManagerPanel(interaction.guildId));
+        break;
+      case ModuleKeys.REFERRALS:
+        await updatePanel(interaction, await referrals.buildManagerPanel(interaction.guildId));
+        break;
+      case ModuleKeys.ACHIEVEMENTS:
+        await updatePanel(interaction, await achievements.buildManagerPanel(interaction.guildId));
+        break;
+      case ModuleKeys.SERVER_STATS:
+        await updatePanel(interaction, await serverStats.buildManagerPanel(interaction.guild));
+        break;
+      case ModuleKeys.CUSTOM_COMMANDS:
+        await updatePanel(interaction, await customCommands.buildManagerPanel(interaction.guildId));
+        break;
+      case ModuleKeys.JOIN_TO_CREATE:
+        await updatePanel(interaction, await joinCreate.buildManagerPanel(interaction.guild));
+        break;
+      case ModuleKeys.SCHEDULED_MESSAGES:
+        await updatePanel(interaction, await scheduledMessages.buildManagerPanel(interaction.guildId));
+        break;
+      case ModuleKeys.BOT_UPDATES:
+        await updatePanel(interaction, await botUpdates.buildStatusPanel(interaction.guildId));
+        break;
+      case ModuleKeys.SOCIAL_FEEDS:
+        await updatePanel(interaction, await socialFeeds.buildManagerPanel(interaction.guildId));
+        break;
+      default:
+        await updatePanel(interaction, await buildModulesPanel(interaction.guildId));
+        break;
+    }
+    return true;
+  }
+
   if (id.startsWith(CustomIds.OnboardingAutoCreatePrefix)) {
     if (!(await requireAction(interaction, ctx, ActionKeys.Setup, ModuleKeys.PERMISSIONS))) return true;
     const sessionId = id.slice(CustomIds.OnboardingAutoCreatePrefix.length);
@@ -2000,6 +2095,25 @@ async function handleSelect(interaction, ctx) {
     return true;
   }
 
+  if (id.startsWith(CustomIds.CategoryToggleSelectPrefix)) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.ModulesManage, ModuleKeys.PERMISSIONS))) return true;
+    const categoryKey = id.slice(CustomIds.CategoryToggleSelectPrefix.length);
+    const moduleKey = interaction.values[0];
+    if (!isImplementedModuleSafe(moduleKey)) {
+      return replyPrivate(interaction, { embeds: [createWarningEmbed('Module Coming Soon', `**${moduleKey}** has not been built yet.`)] });
+    }
+    if (isCoreModule(moduleKey)) {
+      return replyPrivate(interaction, { embeds: [createWarningEmbed('Core Module Locked', `**${moduleKey}** is a core SlickBot module and cannot be disabled.`)] });
+    }
+    const current = await query(`SELECT enabled FROM module_configs WHERE guild_id = $1 AND module_key = $2 LIMIT 1`, [interaction.guildId, moduleKey]);
+    const nextEnabled = !(current.rows[0]?.enabled);
+    await ctx.permissions.setModuleEnabled(interaction.guildId, moduleKey, nextEnabled);
+    await ctx.logger.writeAudit({ guildId: interaction.guildId, actorUserId: interaction.user.id, actionKey: ActionKeys.ModulesManage, targetType: 'ModuleConfig', targetId: moduleKey, summary: `${moduleKey} module ${nextEnabled ? 'enabled' : 'disabled'} from category panel.` });
+    await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'module-config', title: `Module ${nextEnabled ? 'Enabled' : 'Disabled'}`, body: [`Module: **${moduleKey}**`, `Category: **${categoryKey}**`, `Updated By: <@${interaction.user.id}>`, `Status: **${nextEnabled ? '🟢 Enabled' : '⏸️ Disabled'}**`].join('\n'), metadata: { moduleKey, enabled: nextEnabled, actorUserId: interaction.user.id } });
+    await updatePanel(interaction, await buildCategoryPanel(interaction.guildId, categoryKey));
+    return true;
+  }
+
   if (id === CustomIds.ModulesSelect) {
     if (!(await requireAction(interaction, ctx, ActionKeys.ModulesManage, ModuleKeys.PERMISSIONS))) return true;
     const moduleKey = interaction.values[0];
@@ -2013,7 +2127,7 @@ async function handleSelect(interaction, ctx) {
     }
     const current = await query(`SELECT enabled FROM module_configs WHERE guild_id = $1 AND module_key = $2 LIMIT 1`, [interaction.guildId, moduleKey]);
     const nextEnabled = !(current.rows[0]?.enabled);
-    await query(`INSERT INTO module_configs (guild_id, module_key, enabled) VALUES ($1, $2, $3) ON CONFLICT (guild_id, module_key) DO UPDATE SET enabled = EXCLUDED.enabled, updated_at = NOW()`, [interaction.guildId, moduleKey, nextEnabled]);
+    await ctx.permissions.setModuleEnabled(interaction.guildId, moduleKey, nextEnabled);
     await ctx.logger.writeAudit({ guildId: interaction.guildId, actorUserId: interaction.user.id, actionKey: ActionKeys.ModulesManage, targetType: 'ModuleConfig', targetId: moduleKey, summary: `${moduleKey} module ${nextEnabled ? 'enabled' : 'disabled'} from interactive panel.` });
     await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'module-config', title: `Module ${nextEnabled ? 'Enabled' : 'Disabled'}`, body: [`Module: **${moduleKey}**`, `Updated By: <@${interaction.user.id}>`, 'Source: Interactive panel'].join('\n'), metadata: { moduleKey, enabled: nextEnabled, actorUserId: interaction.user.id } });
     await updatePanel(interaction, await buildModulesPanel(interaction.guildId));

@@ -119,12 +119,20 @@ async function buildUtilityManagerPanel(guildId) {
       .setEmoji('🔄')
   );
 
+  const moduleCfg = await query(`SELECT enabled FROM module_configs WHERE guild_id = $1 AND module_key = 'UTILITY' LIMIT 1`, [guildId]).catch(() => ({ rows: [] }));
+  const utilEnabled = moduleCfg.rows[0]?.enabled ?? true;
+
   const row3 = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(`${CustomIds.OnboardingModulePrefix}UTILITY`)
       .setLabel('Quick Setup')
       .setStyle(ButtonStyle.Success)
       .setEmoji('🚀'),
+    new ButtonBuilder()
+      .setCustomId(`${CustomIds.ModuleTogglePrefix}UTILITY`)
+      .setLabel(utilEnabled ? 'Disable Module' : 'Enable Module')
+      .setStyle(utilEnabled ? ButtonStyle.Danger : ButtonStyle.Success)
+      .setEmoji(utilEnabled ? '⏸️' : '▶️'),
     new ButtonBuilder()
       .setCustomId(CustomIds.SetupCategoryCore)
       .setLabel('Core & Safety')

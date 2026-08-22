@@ -351,15 +351,37 @@ async function buildCategoryPanel(guildId, categoryKey) {
     emoji: item.emoji
   }));
 
+  const nonCoreItems = items.filter((item) => !isCoreModule(item.moduleKey));
+  const toggleOptions = nonCoreItems.map((item) => {
+    const isEnabled = item.state !== 'DISABLED';
+    return {
+      label: `${isEnabled ? 'Disable' : 'Enable'} ${moduleLabel(item.moduleKey)}`.slice(0, 100),
+      value: item.moduleKey,
+      description: compactLine(`Currently ${isEnabled ? 'Enabled (select to turn OFF)' : 'Disabled (select to turn ON)'}`, 100),
+      emoji: isEnabled ? '⏸️' : '▶️'
+    };
+  });
+
   const selectRow = createSelectRow(CustomIds.SetupModuleSelect, `Open ${category.label} module dashboard...`, selectOptions.slice(0, 25));
+  const components = [selectRow];
+
+  if (toggleOptions.length > 0) {
+    const toggleRow = createSelectRow(
+      `${CustomIds.CategoryToggleSelectPrefix}${category.key}`,
+      `⚡ Quick Toggle: Enable / Disable ${category.label} module...`,
+      toggleOptions.slice(0, 25)
+    );
+    components.push(toggleRow);
+  }
 
   const buttonRow = createButtonRow([
     createPanelButton(`${CustomIds.OnboardingModulePrefix}${category.key}`, `Guided ${category.label} Setup`, ButtonStyle.Success, '🚀'),
     createPanelButton(CustomIds.SetupRefresh, 'Setup Center', ButtonStyle.Secondary, '⚙️'),
     createPanelButton(category.key === 'CORE' ? CustomIds.SetupCategoryCore : category.key === 'SUPPORT' ? CustomIds.SetupCategorySupport : category.key === 'COMMUNITY' ? CustomIds.SetupCategoryCommunity : CustomIds.SetupCategoryAutomation, 'Refresh', ButtonStyle.Secondary, '🔄')
   ]);
+  components.push(buttonRow);
 
-  return { embeds: [embed], components: [selectRow, buttonRow] };
+  return { embeds: [embed], components };
 }
 
 async function buildSetupPanel(guildId, guildName = null) {

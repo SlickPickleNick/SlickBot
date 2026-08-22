@@ -137,6 +137,23 @@ class PermissionService {
     return false;
   }
 
+  invalidateModuleCache(guildId) {
+    if (guildId) {
+      this.moduleEnabledCache.delete(guildId);
+    }
+  }
+
+  async setModuleEnabled(guildId, moduleKey, enabled) {
+    await query(
+      `INSERT INTO module_configs (guild_id, module_key, enabled)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (guild_id, module_key)
+       DO UPDATE SET enabled = EXCLUDED.enabled, updated_at = NOW()`,
+      [guildId, moduleKey, Boolean(enabled)]
+    );
+    this.invalidateModuleCache(guildId);
+  }
+
   getInteractionRoleIds(interaction) {
     const member = interaction?.member;
     if (!member || typeof member !== 'object') return [];

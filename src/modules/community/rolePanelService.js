@@ -631,8 +631,12 @@ async function buildRoleManagerPanel(guildId) {
     footer: 'SlickBot Role Panels'
   });
 
+  const moduleCfg = await query(`SELECT enabled FROM module_configs WHERE guild_id = $1 AND module_key = 'REACTION_ROLES' LIMIT 1`, [guildId]).catch(() => ({ rows: [] }));
+  const enabled = moduleCfg.rows[0]?.enabled ?? true;
+
   const row = createButtonRow([
     createPanelButton(`${CustomIds.OnboardingModulePrefix}REACTION_ROLES`, 'Quick Setup', ButtonStyle.Success, '🚀'),
+    createPanelButton(`${CustomIds.ModuleTogglePrefix}REACTION_ROLES`, enabled ? 'Disable Module' : 'Enable Module', enabled ? ButtonStyle.Danger : ButtonStyle.Success, enabled ? '⏸️' : '▶️'),
     createPanelButton(CustomIds.RolePanelsRefresh, 'Refresh', ButtonStyle.Secondary, '🔄'),
     createPanelButton(CustomIds.SetupCategoryCommunity, 'Community', ButtonStyle.Primary, '✨'),
     createPanelButton(CustomIds.SetupRefresh, 'Setup Center', ButtonStyle.Secondary, '⚙️')

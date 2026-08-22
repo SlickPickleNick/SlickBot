@@ -882,10 +882,14 @@ class SuggestionService {
       color: config.channel_id ? SlickBotColors.SUCCESS : SlickBotColors.WARNING,
       footer: 'SlickBot Suggestions'
     });
+    const moduleCfg = await query(`SELECT enabled FROM module_configs WHERE guild_id = $1 AND module_key = 'SUGGESTIONS' LIMIT 1`, [guildId]).catch(() => ({ rows: [] }));
+    const suggestionsEnabled = moduleCfg.rows[0]?.enabled ?? true;
+
     return {
       embeds: [embed],
       components: [createButtonRow([
         createPanelButton(`${CustomIds.OnboardingModulePrefix}SUGGESTIONS`, 'Quick Setup', ButtonStyle.Success, '🚀'),
+        createPanelButton(`${CustomIds.ModuleTogglePrefix}SUGGESTIONS`, suggestionsEnabled ? 'Disable Module' : 'Enable Module', suggestionsEnabled ? ButtonStyle.Danger : ButtonStyle.Success, suggestionsEnabled ? '⏸️' : '▶️'),
         createPanelButton(CustomIds.SuggestionsRefresh, 'Refresh', ButtonStyle.Secondary, '🔄'),
         createPanelButton(CustomIds.SetupCategoryCommunity, 'Community', ButtonStyle.Primary, '✨'),
         createPanelButton(CustomIds.SetupRefresh, 'Setup Center', ButtonStyle.Secondary, '⚙️')

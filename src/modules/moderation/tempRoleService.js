@@ -182,6 +182,9 @@ class TemporaryRoleService {
       footer: 'SlickBot Temporary Roles'
     });
 
+    const moduleCfg = await query(`SELECT enabled FROM module_configs WHERE guild_id = $1 AND module_key = 'TEMP_ROLES' LIMIT 1`, [guildId]).catch(() => ({ rows: [] }));
+    const enabled = moduleCfg.rows[0]?.enabled ?? true;
+
     const row1 = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId(`${CustomIds.OnboardingModulePrefix}TEMP_ROLES`)
@@ -189,18 +192,23 @@ class TemporaryRoleService {
         .setStyle(ButtonStyle.Success)
         .setEmoji('🚀'),
       new ButtonBuilder()
+        .setCustomId(`${CustomIds.ModuleTogglePrefix}TEMP_ROLES`)
+        .setLabel(enabled ? 'Disable Module' : 'Enable Module')
+        .setStyle(enabled ? ButtonStyle.Danger : ButtonStyle.Success)
+        .setEmoji(enabled ? '⏸️' : '▶️'),
+      new ButtonBuilder()
         .setCustomId(CustomIds.TempRolesCleanup)
-        .setLabel('Check Expirations Now')
+        .setLabel('Check Expirations')
         .setStyle(ButtonStyle.Primary)
-        .setEmoji('🧹'),
+        .setEmoji('🧹')
+    );
+
+    const row2 = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId(CustomIds.TempRolesRefresh)
         .setLabel('Refresh')
         .setStyle(ButtonStyle.Secondary)
-        .setEmoji('🔄')
-    );
-
-    const row2 = new ActionRowBuilder().addComponents(
+        .setEmoji('🔄'),
       new ButtonBuilder()
         .setCustomId(CustomIds.SetupCategoryCore)
         .setLabel('Core & Safety')

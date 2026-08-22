@@ -996,17 +996,28 @@ class AchievementService {
       color: config.enabled === false ? SlickBotColors.MUTED : SlickBotColors.PRIMARY
     });
 
-    const row = new ActionRowBuilder().addComponents(
+    const moduleCfg = await query(`SELECT enabled FROM module_configs WHERE guild_id = $1 AND module_key = 'ACHIEVEMENTS' LIMIT 1`, [guildId]).catch(() => ({ rows: [] }));
+    const achievementsEnabled = moduleCfg.rows[0]?.enabled ?? (config.enabled !== false);
+
+    const row1 = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId(`${CustomIds.OnboardingModulePrefix}ACHIEVEMENTS`)
         .setLabel('Quick Setup')
         .setStyle(ButtonStyle.Success)
         .setEmoji('🚀'),
       new ButtonBuilder()
+        .setCustomId(`${CustomIds.ModuleTogglePrefix}ACHIEVEMENTS`)
+        .setLabel(achievementsEnabled ? 'Disable Module' : 'Enable Module')
+        .setStyle(achievementsEnabled ? ButtonStyle.Danger : ButtonStyle.Success)
+        .setEmoji(achievementsEnabled ? '⏸️' : '▶️'),
+      new ButtonBuilder()
         .setCustomId(CustomIds.AchievementsToggleDm)
         .setLabel(config.dm_enabled ? 'Disable DMs' : 'Enable DMs')
         .setStyle(config.dm_enabled ? ButtonStyle.Secondary : ButtonStyle.Primary)
-        .setEmoji('✉️'),
+        .setEmoji('✉️')
+    );
+
+    const row2 = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId(CustomIds.AchievementsRefresh)
         .setLabel('Refresh')
@@ -1023,7 +1034,7 @@ class AchievementService {
         .setStyle(ButtonStyle.Secondary)
         .setEmoji('⚙️')
     );
-    return { embeds: [embed], components: [row] };
+    return { embeds: [embed], components: [row1, row2] };
   }
 
   async buildListEmbed(guildId) {

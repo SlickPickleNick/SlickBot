@@ -1547,7 +1547,11 @@ Next Number: **${outcome.next.toString()}**`,
       createPanelButton(CustomIds.GamesTicTacToe, 'Tic-Tac-Toe Details', ButtonStyle.Secondary),
       createPanelButton(CustomIds.GamesConnectFour, 'Connect 4 Details', ButtonStyle.Secondary)
     ]);
+    const moduleCfg = await query(`SELECT enabled FROM module_configs WHERE guild_id = $1 AND module_key = 'COMMUNITY_GAMES' LIMIT 1`, [guildId]).catch(() => ({ rows: [] }));
+    const gamesEnabled = moduleCfg.rows[0]?.enabled ?? true;
+
     const row3 = createButtonRow([
+      createPanelButton(`${CustomIds.ModuleTogglePrefix}COMMUNITY_GAMES`, gamesEnabled ? 'Disable Module' : 'Enable Module', gamesEnabled ? ButtonStyle.Danger : ButtonStyle.Success, gamesEnabled ? '⏸️' : '▶️'),
       createPanelButton(CustomIds.GamesRefresh, 'Refresh', ButtonStyle.Secondary, '🔄'),
       createPanelButton(CustomIds.SetupCategoryCommunity, 'Community', ButtonStyle.Primary, '✨'),
       createPanelButton(CustomIds.SetupRefresh, 'Setup Center', ButtonStyle.Secondary, '⚙️')

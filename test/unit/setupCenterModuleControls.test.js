@@ -59,8 +59,8 @@ test('Setup Center: Category Panels render with interactive module selects and c
     assert.equal(customId, CustomIds.SetupModuleSelect);
     assert.ok(options.length > 0, `Category ${cat} should have module options`);
 
-    // Second component should have Guided Setup button with category key
-    const buttons = panel.components[1]?.components?.map((b) => b.data.custom_id);
+    // Last component should have Guided Setup button with category key
+    const buttons = panel.components[panel.components.length - 1]?.components?.map((b) => b.data.custom_id);
     assert.ok(buttons.includes(`${CustomIds.OnboardingModulePrefix}${cat}`), `Category ${cat} should have Guided Setup button`);
     assert.ok(buttons.includes(CustomIds.SetupRefresh), `Category ${cat} should have Setup Center button`);
   }
@@ -306,4 +306,98 @@ test('Community & Automation Panels: Include category return navigation and func
   const fedIds = feedPanel.components.flatMap((r) => r.components.map((c) => c.data.custom_id));
   assert.ok(fedIds.includes(CustomIds.SetupCategoryAutomation));
   assert.ok(fedIds.includes(CustomIds.SetupRefresh));
+});
+
+test('Setup Center: Category Panels include quick toggle select menus for non-core modules', async (t) => {
+  mockDb.install();
+  t.after(() => mockDb.uninstall());
+
+  const categories = ['SUPPORT', 'COMMUNITY', 'AUTOMATION'];
+  for (const cat of categories) {
+    const panel = await buildCategoryPanel('guild-123', cat);
+    // Should have at least 3 rows: module select, toggle select, button row
+    assert.ok(panel.components.length >= 3, `Category ${cat} should have quick toggle select row`);
+    const toggleSelect = panel.components[1]?.components?.[0];
+    const customId = toggleSelect?.data?.custom_id || toggleSelect?.customId;
+    assert.equal(customId, `${CustomIds.CategoryToggleSelectPrefix}${cat}`);
+    const options = toggleSelect?.options || toggleSelect?.data?.options || [];
+    assert.ok(options.length > 0, `Category ${cat} toggle menu should have options`);
+  }
+});
+
+test('Setup Center: Module dashboards include direct enable/disable toggle buttons', async (t) => {
+  mockDb.install();
+  t.after(() => mockDb.uninstall());
+
+  // Moderation toggle
+  const modPanel = await buildModerationPanel('guild-123');
+  const modIds = modPanel.components.flatMap((r) => r.components.map((c) => c.data.custom_id));
+  assert.ok(modIds.includes(`${CustomIds.ModuleTogglePrefix}MODERATION`));
+
+  // Tickets toggle
+  const ticketsPanel = await buildTicketsPanel('guild-123');
+  const tktIds = ticketsPanel.components.flatMap((r) => r.components.map((c) => c.data.custom_id));
+  assert.ok(tktIds.includes(`${CustomIds.ModuleTogglePrefix}TICKETS`));
+
+  // Reports toggle
+  const reportsPanel = await buildReportsPanel('guild-123');
+  const rptIds = reportsPanel.components.flatMap((r) => r.components.map((c) => c.data.custom_id));
+  assert.ok(rptIds.includes(`${CustomIds.ModuleTogglePrefix}REPORTS`));
+
+  // Applications toggle
+  const appPanel = await buildApplicationsPanel('guild-123');
+  const appIds = appPanel.components.flatMap((r) => r.components.map((c) => c.data.custom_id));
+  assert.ok(appIds.includes(`${CustomIds.ModuleTogglePrefix}APPLICATIONS`));
+
+  // Appeals toggle
+  const appealPanel = await buildAppealsPanel('guild-123');
+  const aplIds = appealPanel.components.flatMap((r) => r.components.map((c) => c.data.custom_id));
+  assert.ok(aplIds.includes(`${CustomIds.ModuleTogglePrefix}APPEALS`));
+
+  // Reaction Roles toggle
+  const rolePanel = await buildRoleManagerPanel('guild-123');
+  const rolIds = rolePanel.components.flatMap((r) => r.components.map((c) => c.data.custom_id));
+  assert.ok(rolIds.includes(`${CustomIds.ModuleTogglePrefix}REACTION_ROLES`));
+
+  // Giveaways toggle
+  const giveaways = new GiveawayService();
+  const giveawayPanel = await giveaways.buildManagerPanel('guild-123');
+  const givIds = giveawayPanel.components.flatMap((r) => r.components.map((c) => c.data.custom_id));
+  assert.ok(givIds.includes(`${CustomIds.ModuleTogglePrefix}GIVEAWAYS`));
+
+  // Community Games toggle
+  const games = new CommunityGameService();
+  const gamePanel = await games.buildManagerPanel('guild-123');
+  const gmeIds = gamePanel.components.flatMap((r) => r.components.map((c) => c.data.custom_id));
+  assert.ok(gmeIds.includes(`${CustomIds.ModuleTogglePrefix}COMMUNITY_GAMES`));
+
+  // FAQ toggle
+  const faq = new FaqService();
+  const faqPanel = await faq.buildManagerPanel('guild-123');
+  const faqIds = faqPanel.components.flatMap((r) => r.components.map((c) => c.data.custom_id));
+  assert.ok(faqIds.includes(`${CustomIds.ModuleTogglePrefix}FAQ`));
+
+  // Suggestions toggle
+  const suggestions = new SuggestionService();
+  const sugPanel = await suggestions.buildManagerPanel('guild-123');
+  const sugIds = sugPanel.components.flatMap((r) => r.components.map((c) => c.data.custom_id));
+  assert.ok(sugIds.includes(`${CustomIds.ModuleTogglePrefix}SUGGESTIONS`));
+
+  // Achievements toggle
+  const achievements = new AchievementService();
+  const achPanel = await achievements.buildManagerPanel('guild-123');
+  const achIds = achPanel.components.flatMap((r) => r.components.map((c) => c.data.custom_id));
+  assert.ok(achIds.includes(`${CustomIds.ModuleTogglePrefix}ACHIEVEMENTS`));
+
+  // Join to Create toggle
+  const joinCreate = new JoinCreateService();
+  const jtcPanel = await joinCreate.buildManagerPanel({ id: 'guild-123' });
+  const jtcIds = jtcPanel.components.flatMap((r) => r.components.map((c) => c.data.custom_id));
+  assert.ok(jtcIds.includes(`${CustomIds.ModuleTogglePrefix}JOIN_TO_CREATE`));
+
+  // Social Feeds toggle
+  const socialFeeds = new SocialFeedService();
+  const feedPanel = await socialFeeds.buildManagerPanel('guild-123');
+  const fedIds = feedPanel.components.flatMap((r) => r.components.map((c) => c.data.custom_id));
+  assert.ok(fedIds.includes(`${CustomIds.ModuleTogglePrefix}SOCIAL_FEEDS`));
 });

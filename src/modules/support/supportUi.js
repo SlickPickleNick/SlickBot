@@ -114,13 +114,17 @@ async function buildTicketsPanel(guildId) {
     color: SlickBotColors.INFO
   });
 
+  const moduleCfg = await query(`SELECT enabled FROM module_configs WHERE guild_id = $1 AND module_key = 'TICKETS' LIMIT 1`, [guildId]).catch(() => ({ rows: [] }));
+  const ticketsEnabled = moduleCfg.rows[0]?.enabled ?? true;
+
   const row1 = createButtonRow([
     createPanelButton(`${CustomIds.OnboardingModulePrefix}TICKETS`, 'Quick Setup', ButtonStyle.Success, '🚀'),
-    createPanelButton(CustomIds.SupportRefresh, 'Support Overview', ButtonStyle.Secondary, '🎟️'),
-    createPanelButton(CustomIds.TicketsRefresh, 'Refresh', ButtonStyle.Secondary, '🔄')
+    createPanelButton(`${CustomIds.ModuleTogglePrefix}TICKETS`, ticketsEnabled ? 'Disable Tickets' : 'Enable Tickets', ticketsEnabled ? ButtonStyle.Danger : ButtonStyle.Success, ticketsEnabled ? '⏸️' : '▶️'),
+    createPanelButton(CustomIds.SupportRefresh, 'Support Overview', ButtonStyle.Secondary, '🎟️')
   ]);
 
   const row2 = createButtonRow([
+    createPanelButton(CustomIds.TicketsRefresh, 'Refresh', ButtonStyle.Secondary, '🔄'),
     createPanelButton(CustomIds.SetupCategorySupport, 'Support Systems', ButtonStyle.Primary, '🎟️'),
     createPanelButton(CustomIds.SetupRefresh, 'Setup Center', ButtonStyle.Secondary, '⚙️')
   ]);
@@ -166,13 +170,17 @@ async function buildReportsPanel(guildId) {
       .setPlaceholder('🔔 Select Staff Ping Role...')
   );
 
+  const moduleCfg = await query(`SELECT enabled FROM module_configs WHERE guild_id = $1 AND module_key = 'REPORTS' LIMIT 1`, [guildId]).catch(() => ({ rows: [] }));
+  const reportsEnabled = moduleCfg.rows[0]?.enabled ?? true;
+
   const row1 = createButtonRow([
     createPanelButton(`${CustomIds.OnboardingModulePrefix}REPORTS`, 'Quick Setup', ButtonStyle.Success, '🚀'),
-    createPanelButton(CustomIds.SupportRefresh, 'Support Overview', ButtonStyle.Secondary, '🎟️'),
-    createPanelButton(CustomIds.ReportsRefresh, 'Refresh', ButtonStyle.Secondary, '🔄')
+    createPanelButton(`${CustomIds.ModuleTogglePrefix}REPORTS`, reportsEnabled ? 'Disable Reports' : 'Enable Reports', reportsEnabled ? ButtonStyle.Danger : ButtonStyle.Success, reportsEnabled ? '⏸️' : '▶️'),
+    createPanelButton(CustomIds.SupportRefresh, 'Support Overview', ButtonStyle.Secondary, '🎟️')
   ]);
 
   const row2 = createButtonRow([
+    createPanelButton(CustomIds.ReportsRefresh, 'Refresh', ButtonStyle.Secondary, '🔄'),
     createPanelButton(CustomIds.SetupCategorySupport, 'Support Systems', ButtonStyle.Primary, '🎟️'),
     createPanelButton(CustomIds.SetupRefresh, 'Setup Center', ButtonStyle.Secondary, '⚙️')
   ]);
@@ -213,13 +221,17 @@ async function buildApplicationsPanel(guildId) {
       .setChannelTypes([ChannelType.GuildText])
   );
 
+  const moduleCfg = await query(`SELECT enabled FROM module_configs WHERE guild_id = $1 AND module_key = 'APPLICATIONS' LIMIT 1`, [guildId]).catch(() => ({ rows: [] }));
+  const applicationsEnabled = moduleCfg.rows[0]?.enabled ?? true;
+
   const row1 = createButtonRow([
     createPanelButton(`${CustomIds.OnboardingModulePrefix}APPLICATIONS`, 'Quick Setup', ButtonStyle.Success, '🚀'),
-    createPanelButton(CustomIds.SupportRefresh, 'Support Overview', ButtonStyle.Secondary, '🎟️'),
-    createPanelButton(CustomIds.ApplicationsRefresh, 'Refresh', ButtonStyle.Secondary, '🔄')
+    createPanelButton(`${CustomIds.ModuleTogglePrefix}APPLICATIONS`, applicationsEnabled ? 'Disable Applications' : 'Enable Applications', applicationsEnabled ? ButtonStyle.Danger : ButtonStyle.Success, applicationsEnabled ? '⏸️' : '▶️'),
+    createPanelButton(CustomIds.SupportRefresh, 'Support Overview', ButtonStyle.Secondary, '🎟️')
   ]);
 
   const row2 = createButtonRow([
+    createPanelButton(CustomIds.ApplicationsRefresh, 'Refresh', ButtonStyle.Secondary, '🔄'),
     createPanelButton(CustomIds.SetupCategorySupport, 'Support Systems', ButtonStyle.Primary, '🎟️'),
     createPanelButton(CustomIds.SetupRefresh, 'Setup Center', ButtonStyle.Secondary, '⚙️')
   ]);
@@ -259,14 +271,17 @@ async function buildAppealsPanel(guildId) {
       .setChannelTypes([ChannelType.GuildText])
   );
 
+  const moduleCfg = await query(`SELECT enabled FROM module_configs WHERE guild_id = $1 AND module_key = 'APPEALS' LIMIT 1`, [guildId]).catch(() => ({ rows: [] }));
+  const appealsEnabled = moduleCfg.rows[0]?.enabled ?? true;
+
   const row1 = createButtonRow([
     createPanelButton(`${CustomIds.OnboardingModulePrefix}APPEALS`, 'Quick Setup', ButtonStyle.Success, '🚀'),
-    createPanelButton(CustomIds.AppealToggleDmDecisions, cfg?.dm_decision_enabled ? 'Disable DM Decisions' : 'Enable DM Decisions', cfg?.dm_decision_enabled ? ButtonStyle.Secondary : ButtonStyle.Primary, '✉️'),
-    createPanelButton(CustomIds.SupportRefresh, 'Support Overview', ButtonStyle.Secondary, '🎟️'),
-    createPanelButton(CustomIds.AppealsRefresh, 'Refresh', ButtonStyle.Secondary, '🔄')
+    createPanelButton(`${CustomIds.ModuleTogglePrefix}APPEALS`, appealsEnabled ? 'Disable Appeals' : 'Enable Appeals', appealsEnabled ? ButtonStyle.Danger : ButtonStyle.Success, appealsEnabled ? '⏸️' : '▶️'),
+    createPanelButton(CustomIds.AppealToggleDmDecisions, cfg?.dm_decision_enabled ? 'Disable DM Decisions' : 'Enable DM Decisions', cfg?.dm_decision_enabled ? ButtonStyle.Secondary : ButtonStyle.Primary, '✉️')
   ]);
 
   const row2 = createButtonRow([
+    createPanelButton(CustomIds.AppealsRefresh, 'Refresh', ButtonStyle.Secondary, '🔄'),
     createPanelButton(CustomIds.SetupCategorySupport, 'Support Systems', ButtonStyle.Primary, '🎟️'),
     createPanelButton(CustomIds.SetupRefresh, 'Setup Center', ButtonStyle.Secondary, '⚙️')
   ]);

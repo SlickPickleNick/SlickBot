@@ -109,7 +109,11 @@ async function buildModerationPanel(guildId) {
     createPanelButton(CustomIds.TempRolesRefresh, 'Temp Roles', ButtonStyle.Secondary, '⏳')
   ]);
 
+  const modConfig = await query(`SELECT enabled FROM module_configs WHERE guild_id = $1 AND module_key = 'MODERATION' LIMIT 1`, [guildId]).catch(() => ({ rows: [] }));
+  const enabled = modConfig.rows[0]?.enabled ?? true;
+
   const row2 = createButtonRow([
+    createPanelButton(`${CustomIds.ModuleTogglePrefix}MODERATION`, enabled ? 'Disable Mod' : 'Enable Mod', enabled ? ButtonStyle.Danger : ButtonStyle.Success, enabled ? '⏸️' : '▶️'),
     createPanelButton(CustomIds.ModerationRefresh, 'Refresh', ButtonStyle.Secondary, '🔄'),
     createPanelButton(CustomIds.SetupCategoryCore, 'Core & Safety', ButtonStyle.Primary, '🛡️'),
     createPanelButton(CustomIds.SetupRefresh, 'Setup Center', ButtonStyle.Secondary, '⚙️')
