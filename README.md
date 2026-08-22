@@ -4,9 +4,157 @@ SlickBot is an all-in-one Discord server management bot built for the SlickPickl
 
 ## Version
 
-Current package: **v0.9.4**
+Current package: **v0.9.7**
 
 
+
+## v0.9.7 Updates
+
+### Setup Center, TaskScheduler & Interactive Help Center
+
+- **Setup Center Module Controls:**
+  - Added dedicated quick-toggle select menus (`⚡ Quick Toggle: Enable / Disable [Category] module...`) to all category dashboards (`CORE`, `SUPPORT`, `COMMUNITY`, `AUTOMATION`).
+  - Added direct `▶️ Enable Module` / `⏸️ Disable Module` buttons across all individual module manager dashboards.
+  - Added `🧩 All Modules` button on the `/setup` overview screen.
+  - Implemented `setModuleEnabled` with automatic permission cache invalidation and live badge refreshes.
+- **Centralized Background TaskScheduler:**
+  - Replaced 10 uncoordinated `setInterval` timers with a unified `TaskScheduler` (`src/services/taskScheduler.js`).
+  - Added concurrency locks to prevent task pileups during long-running background operations.
+  - Staggered background task initial start delays on startup to prevent database query spikes.
+  - Added error boundaries per task so exceptions in one background job cannot crash the bot.
+  - Clean graceful shutdown hooks on `SIGINT` / `SIGTERM`.
+- **Consolidated Shared Utilities:**
+  - Unified duration parsing (`parseDurationToMs`), human-readable formatting (`formatDuration`), and Discord relative timestamps (`formatDiscordTimestamp`) in `src/utils/time.js`.
+  - Unified hex and color parsers (`normalizeHexColor`, `parseColor`) in `src/modules/ui/uiService.js`.
+  - Removed duplicated parsing logic across moderation, utility, giveaways, role panels, custom commands, and welcome services.
+- **Interactive `/help` Knowledge Center Overhaul:**
+  - Added `/help command:<name>` and `/help module:<key>` with live Discord slash autocomplete (`getHelpAutocomplete`).
+  - Detailed command cards with syntax codeblocks, required permission rank badges, option breakdowns with required/optional flags, copy-paste examples, and quick setup launch buttons.
+  - Audience-aware filtering (`✨ Member View`, `🛡️ Staff View`, `📚 All Commands`).
+  - Category selector dropdown and interactive keyword search modal (`🔍 Search Commands`).
+  - Complete documentation coverage across all 26 modules and 53 slash/context commands.
+- **Server Stats Memory & Rate-Limit Optimization:**
+  - Updated scheduled 15-minute background stats runner and startup updates to use cached member counts (`forceMemberFetch: false`), preventing Discord API 429 rate limits.
+
+Updated commands:
+
+```text
+/help
+/help command:<name>
+/help module:<key>
+/setup
+/modules panel
+/modules enable
+/modules disable
+```
+
+## v0.9.6 Updates
+
+### Utility & Server Essentials
+
+- Added the **Utility & Server Essentials** module (`UTILITY`) under Core Setup / Server Essentials.
+- Added `/purge` bulk message deletion command with granular filters:
+  - Amount (1–100 messages)
+  - Target user filter
+  - Bots only / humans only filters
+  - Substring search (`contains`)
+  - Attachment and link filters
+  - Pinned message protection (`keep_pinned`, defaults to true)
+  - Audit logging to configured logging channel
+- Added rich information and profile inspection commands:
+  - `/userinfo` with cross-module statistics (Leveling XP/Rank, Achievements unlocked, Referrals made, Moderation Cases & Notes count).
+  - `/serverinfo` with complete server overview, member/bot breakdown, boost tier, channel types breakdown, and role/emoji counts.
+  - `/roleinfo` with hierarchy position, member count, and key permissions breakdown.
+  - `/channelinfo` with type, slowmode, topic, thread count, and voice bitrate/limits.
+  - `/avatar` with full-resolution global and server avatar download links (PNG, JPG, WEBP, GIF).
+  - `/banner` with user/server banner viewer and direct download links.
+  - Context menu Apps commands: Right-click User → `User Information` and `View Avatar`.
+- Added interactive community polling engine (`/poll`):
+  - Up to 10 customizable options with emoji support.
+  - Optional expiration duration with live countdown timestamp (`Ends in <t:...:R>`).
+  - Single-choice vs multiple-choice voting modes.
+  - Anonymous voting toggle.
+  - Selectable interface style: `Automatic` (buttons for ≤5 options, dropdown for 6–10), `Buttons`, or `Dropdown Menu`.
+  - Dynamic embed with live visual percentage progress bars (`[████████░░] 80% (16 votes)`).
+  - `/poll end` and End Poll button for staff/author with final winner announcement.
+  - `/poll list` for active server polls.
+- Added persistent reminder scheduling engine (`/remind`):
+  - `/remind set duration: "2h" reminder: "Text" [destination: DM/CHANNEL]` with natural duration parsing (`10m`, `2h`, `1d`, `1w`).
+  - `/remind list` to view upcoming reminders with Discord timestamps.
+  - `/remind cancel` to remove scheduled reminders.
+  - Background interval runner dispatches reminders on time with message context jump links.
+- Added visual embed builder & composer (`/embed`):
+  - Modal editor for Title, Description, Color, Thumbnail, Image, and up to 25 custom Fields.
+  - Interactive ephemeral preview with Send Embed, Edit Content, Add Field, and Cancel controls.
+  - Optional role ping on embed publishing.
+  - `/embed edit message_id: ...` to update existing embeds posted by SlickBot.
+- Added member AFK auto-reply system (`/afk`):
+  - Sets custom AFK message and alerts members who mention the user in chat with relative timestamps.
+  - Automatically welcomes the user back and clears AFK status upon their next message.
+- Added staff snipe cache (`/snipe`):
+  - In-memory cache of deleted messages and attachments per channel for moderation reference.
+- Added Utility Manager panel with `/utility manager`, `/utility setup`, feature toggles, and `/utility reset`.
+- Added database schema (`utility_configs`, `utility_reminders`, `utility_polls`, `utility_poll_options`, `utility_poll_votes`, `utility_afk_users`), background intervals, action keys, permission defaults, diagnostic checks in `/bot test`, and release documentation.
+
+Updated commands:
+
+```text
+/utility manager
+/utility setup
+/utility reset
+/purge
+/userinfo
+/serverinfo
+/roleinfo
+/channelinfo
+/avatar
+/banner
+/poll create
+/poll end
+/poll list
+/remind set
+/remind list
+/remind cancel
+/embed create
+/embed edit
+/afk
+/snipe
+```
+
+## v0.9.5 Updates
+
+### Social Feeds
+
+- Added the **Social Feeds** module (`SOCIAL_FEEDS`) under Automation Systems.
+- Supports following creator feeds across Twitch & YouTube, each configured with its own announcement channel, ping role, and custom messages.
+- Twitch live announcements show stream title, game/category, viewer count, and live since timestamp.
+- When a Twitch stream ends, SlickBot updates the original announcement embed to show offline status, exact offline timestamp, and total stream duration.
+- YouTube tracker differentiates between Shorts and regular Longform videos with distinct customizable announcement text templates.
+- Added `/feed` command group with autocomplete for managing existing feeds:
+  - `/feed setup`
+  - `/feed add`
+  - `/feed remove`
+  - `/feed edit`
+  - `/feed list`
+  - `/feed test`
+  - `/feed check`
+  - `/feed manager`
+  - `/feed reset`
+- Added database schema (`social_feed_configs`, `social_feeds`, `social_feed_posts_history`), background polling interval, permission defaults, event logging, diagnostics in `/bot test`, and manager panel.
+
+Updated commands:
+
+```text
+/feed setup
+/feed add
+/feed remove
+/feed edit
+/feed list
+/feed test
+/feed check
+/feed manager
+/feed reset
+```
 
 ## v0.9.4 Updates
 

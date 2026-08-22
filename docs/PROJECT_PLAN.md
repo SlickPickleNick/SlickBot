@@ -566,19 +566,48 @@ Deferred larger work:
 - Added XP curve analysis with CSV export for every selected level.
 - Added the public `/level info` panel explaining the server leveling system.
 
-## Future Modules
+## Roadmap & Future Modules
 
-- Utility tools
-- Full onboarding wizard
+### 1. New Modules
+
+- **Auto-Mod & Anti-Raid Engine (`AUTOMOD`):**
+  - **Exemptions & Whitelist Engine:** Granular configuration to allow specific users, roles, and channels to bypass AutoMod checks.
+  - **Anti-Invite Links:** Automated deletion of unauthorized Discord invite links with whitelisted server/vanity exceptions.
+  - **Anti-Spam & Repetition:** Fast detection and cleanup of duplicate messages, rapid chat flooding, and copypasta.
+  - **Anti-Mass-Mention:** Configurable thresholds for user and role mentions (e.g. max 5 pings) with instant timeout action.
+  - **Word Blacklist & Regex Filters:** Pattern matching for blocked terms with private alert logs sent to staff review channels.
+  - **Automated Case Logging:** Violations automatically create cases in the moderation log.
+
+- **Starboard / Community Hall of Fame (`STARBOARD`):**
+  - **Reaction Threshold:** Configurable star requirement (e.g. 5 ⭐) to promote high-quality or funny community messages.
+  - **Dedicated Showcase Channel:** Automatic embed generation with original message content, image attachments, jump link, author info, and live star count updates.
+  - **Staff Controls & Blacklists:** Ability to blacklist specific channels (e.g. staff channels) and manual staff star/unstar override buttons.
+  - **Starboard Leaderboard:** Tracks most-starred users and messages across the server.
+
+- **Sticky Messages (`STICKY_MESSAGES`):**
+  - **Persistent Channel Notices:** Keeps an important guideline, rule, or template embed pinned as the latest message at the bottom of active channels.
+  - **Auto-Refresh Runner:** Automatically deletes the previous sticky message and re-posts it when new chat messages arrive.
+  - **Rate-Limit Throttling:** Configurable cooldown intervals to avoid Discord API message rate limits in fast-moving chats.
+
+---
+
+### 2. Planned Module Enhancements
+
+- **Giveaways (`GIVEAWAYS`):**
+  - **Advanced Entry Requirements:** Optional entry gates based on minimum server leveling rank/XP, minimum account age, required server roles, or referral invite count before the Enter button is accepted.
+
+- **Moderation (`MODERATION`):**
+  - **Infraction Escalation with Staff Confirmation:** Configurable infraction threshold rules (e.g. 3 warns in 7 days = 24h timeout) with a **staff confirmation step** (interactive review prompt with Confirm / Dismiss buttons) before automated punishments are executed.
+
+- **Leveling (`LEVELING`):**
+  - **Voice XP Accumulation:** Continuous voice XP awarded per minute spent actively talking in non-muted/non-deafened voice channels.
+  - **Visual Rank Cards & Milestones:** Dynamic progress bar styling and milestone celebration embeds on reaching major levels.
+
+- **Join-to-Create Temporary Voice (`JOIN_TO_CREATE`):**
+  - **Channel Customization Controls:** Interactive presets for temporary voice channel owners to set voice bitrate (up to 384kbps for boosted servers), video quality, region overrides, and custom channel name templates.
+
+---
 
 ## Design Direction
 
 SlickBot should continue to use polished embeds, buttons, setup panels, guided message flows, and compact status indicators instead of plain text-only command output.
-
-
-### v0.8.8 Support Review Index Patches
-- Report Review Index filter buttons now route correctly as button interactions.
-- Added an All filter to the report review index alongside Open, Dismissed, and Resolved.
-- Added filtered, auto-refreshing review indexes for Tickets and Appeals.
-- Ticket indexes support Open, Unclaimed, Claimed, Escalated, Closed, and All views.
-- Appeal indexes support Pending, Approved, Denied, and All views.
