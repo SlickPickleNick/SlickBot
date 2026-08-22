@@ -35,7 +35,7 @@ const { ReferralService, buildReferralsConfigModal } = require('../modules/commu
 const { TemporaryRoleService } = require('../modules/moderation/tempRoleService');
 const { AchievementService, ACHIEVEMENT_KEYS } = require('../modules/community/achievementService');
 const { LockdownService } = require('../modules/safety/lockdownService');
-const { SocialFeedService } = require('../modules/automation/socialFeedService');
+const { SocialFeedService, PLATFORM_META } = require('../modules/automation/socialFeedService');
 const { BotUpdatesService } = require('../modules/status/botUpdatesService');
 const { buildRoleManagerPanel, toggleRole } = require('../modules/community/rolePanelService');
 const { JoinCreateService } = require('../modules/voice/joinCreateService');
@@ -436,6 +436,34 @@ async function handleButton(interaction, ctx) {
     await interaction.deferUpdate().catch(() => {});
     await socialFeeds.checkGuildFeeds(interaction.guildId, ctx.client, ctx.logger);
     await updatePanel(interaction, await socialFeeds.buildManagerPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.FeedsToggleAlertsPrefix)) {
+    const feedId = id.slice(CustomIds.FeedsToggleAlertsPrefix.length);
+    const result = await socialFeeds.toggleSubscription(interaction.guildId, feedId, interaction.user.id);
+    if (!result.ok) {
+      await replyPrivate(interaction, { embeds: [createWarningEmbed('Alerts', result.reason || 'Feed not found.')] });
+      return true;
+    }
+    const meta = PLATFORM_META[result.feed.platform] || { icon: '🌐', label: result.feed.platform };
+    if (result.subscribed) {
+      await replyPrivate(interaction, {
+        embeds: [createSuccessEmbed('Alerts Enabled', `🔔 You will now receive notifications when ${meta.icon} **${result.feed.account_name}** (${meta.label}) goes live or posts new content!`)]
+      });
+    } else {
+      await replyPrivate(interaction, {
+        embeds: [createSuccessEmbed('Alerts Muted', `🔕 You have unsubscribed from notifications for ${meta.icon} **${result.feed.account_name}** (${meta.label}).`)]
+      });
+    }
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.FeedsLiveDirectoryRefreshPrefix)) {
+    const payload = await socialFeeds.buildLiveDirectoryPayload(interaction.guildId, ctx.client);
+    await interaction.update(payload).catch(async () => {
+      await replyPrivate(interaction, { embeds: [createSuccessEmbed('Live Directory Refreshed', 'Live stream status directory refreshed!')] });
+    });
     return true;
   }
 

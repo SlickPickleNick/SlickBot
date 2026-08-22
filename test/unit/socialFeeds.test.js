@@ -186,12 +186,20 @@ test('Feed Slash Command Structure and Permissions', async (t) => {
     assert.ok(subcommands.includes('reset'));
 
     assert.equal(feedCommand.getActionKey({ options: { getSubcommand: () => 'list' } }), ActionKeys.FeedsView);
+    assert.equal(feedCommand.getActionKey({ options: { getSubcommand: () => 'subscribe' } }), ActionKeys.FeedsView);
+    assert.equal(feedCommand.getActionKey({ options: { getSubcommand: () => 'unsubscribe' } }), ActionKeys.FeedsView);
+    assert.equal(feedCommand.getActionKey({ options: { getSubcommand: () => 'my-alerts' } }), ActionKeys.FeedsView);
     assert.equal(feedCommand.getActionKey({ options: { getSubcommand: () => 'check' } }), ActionKeys.FeedsCheck);
     assert.equal(feedCommand.getActionKey({ options: { getSubcommand: () => 'reset' } }), ActionKeys.FeedsReset);
     assert.equal(feedCommand.getActionKey({ options: { getSubcommand: () => 'setup' } }), ActionKeys.FeedsManage);
     assert.equal(feedCommand.getActionKey({ options: { getSubcommand: () => 'add' } }), ActionKeys.FeedsManage);
+    assert.equal(feedCommand.getActionKey({ options: { getSubcommand: () => 'directory' } }), ActionKeys.FeedsManage);
     assert.equal(feedCommand.isPublic({ options: { getSubcommand: () => 'list' } }), true);
+    assert.equal(feedCommand.isPublic({ options: { getSubcommand: () => 'subscribe' } }), true);
+    assert.equal(feedCommand.isPublic({ options: { getSubcommand: () => 'unsubscribe' } }), true);
+    assert.equal(feedCommand.isPublic({ options: { getSubcommand: () => 'my-alerts' } }), true);
     assert.equal(feedCommand.isPublic({ options: { getSubcommand: () => 'add' } }), false);
+    assert.equal(feedCommand.isPublic({ options: { getSubcommand: () => 'directory' } }), false);
   });
 
   await t.test('feed list outputs followed feeds cleanly', async () => {
@@ -210,6 +218,7 @@ test('Feed Slash Command Structure and Permissions', async (t) => {
             account_url: 'https://twitch.tv/ninja',
             channel_id: '300000000000000001',
             ping_role_id: null,
+            discord_user_id: '500000000000000001',
             enabled: true,
             last_status: 'OFFLINE'
           }
@@ -237,7 +246,118 @@ test('Feed Slash Command Structure and Permissions', async (t) => {
     const reply = interaction.replies[0];
     assert.ok(reply.embeds?.[0]?.data?.title?.includes('Followed Social Feeds'));
     assert.ok(reply.embeds?.[0]?.data?.description?.includes('Ninja'));
+    assert.ok(reply.embeds?.[0]?.data?.description?.includes('500000000000000001'));
 
     db.uninstall();
+  });
+});
+
+test('Social Feeds Subscriptions and Live Directory System', async (t) => {
+  const db = new MockDatabase();
+  db.install();
+
+  t.after(() => {
+    db.uninstall();
+  });
+
+  const service = new SocialFeedService();
+  const guildId = '400000000000000001';
+  const feedId = 'feed-123';
+  const userId = '500000000000000001';
+
+  await t.test('toggleSubscription toggles member subscription on and off', async () => {
+    let subscriberRows = [];
+
+    db.addHandler('SELECT * FROM social_feeds', () => {
+      return {
+        rows: [{
+          id: feedId,
+          guild_id: guildId,
+          platform: 'TWITCH',
+          account_id: 'shroud',
+          account_name: 'Shroud',
+          channel_id: '300000000000000001'
+        }],
+        rowCount: 1
+      };
+    });
+
+    db.addHandler('SELECT id FROM social_feed_subscribers', (sql, params) => {
+      const match = subscriberRows.find((r) => r.feed_id === params[0] && r.user_id === params[1]);
+      return { rows: match ? [match] : [], rowCount: match ? 1 : 0 };
+    });
+
+    db.addHandler('INSERT INTO social_feed_subscribers', (sql, params) => {
+      subscriberRows.push({ id: 'sub-1', guild_id: params[0], feed_id: params[1], user_id: params[2] });
+      return { rows: [], rowCount: 1 };
+    });
+
+    db.addHandler('DELETE FROM social_feed_subscribers', (sql, params) => {
+      subscriberRows = subscriberRows.filter((r) => !(r.feed_id === params[0] && r.user_id === params[1]));
+      return { rows: [], rowCount: 1 };
+    });
+
+    // 1. First toggle -> subscribe
+    const subResult = await service.toggleSubscription(guildId, feedId, userId);
+    assert.equal(subResult.ok, true);
+    assert.equal(subResult.subscribed, true);
+    assert.equal(subResult.feed.account_name, 'Shroud');
+
+    // 2. Second toggle -> unsubscribe
+    const unsubResult = await service.toggleSubscription(guildId, feedId, userId);
+    assert.equal(unsubResult.ok, true);
+    assert.equal(unsubResult.subscribed, false);
+  });
+
+  await t.test('buildLiveDirectoryPayload generates valid embed for 0 and >0 live streams', async () => {
+    // Case 1: 0 live streams
+    db.addHandler('SELECT * FROM social_feeds', () => {
+      return {
+        rows: [{
+          id: feedId,
+          guild_id: guildId,
+          platform: 'TWITCH',
+          account_id: 'shroud',
+          account_name: 'Shroud',
+          account_url: 'https://twitch.tv/shroud',
+          channel_id: '300000000000000001',
+          enabled: true,
+          last_status: 'OFFLINE'
+        }],
+        rowCount: 1
+      };
+    });
+
+    const mockGuild = createMockGuild({ id: guildId, name: 'SlickBot Server' });
+    const mockClient = { guilds: { cache: new Map([[guildId, mockGuild]]) } };
+
+    const offlinePayload = await service.buildLiveDirectoryPayload(guildId, mockClient);
+    assert.ok(offlinePayload.embeds[0].data.description.includes('No community creators are currently live'));
+
+    // Case 2: 1 live stream
+    db.addHandler('SELECT * FROM social_feeds', () => {
+      return {
+        rows: [{
+          id: feedId,
+          guild_id: guildId,
+          platform: 'TWITCH',
+          account_id: 'shroud',
+          account_name: 'Shroud',
+          account_url: 'https://twitch.tv/shroud',
+          channel_id: '300000000000000001',
+          discord_user_id: '500000000000000001',
+          enabled: true,
+          last_status: 'LIVE',
+          live_started_at: new Date(Date.now() - 1800000)
+        }],
+        rowCount: 1
+      };
+    });
+
+    const livePayload = await service.buildLiveDirectoryPayload(guildId, mockClient);
+    assert.ok(livePayload.embeds[0].data.title.includes('1 Online'));
+    assert.ok(livePayload.embeds[0].data.description.includes('Shroud'));
+    assert.ok(livePayload.embeds[0].data.description.includes('500000000000000001'));
+    assert.ok(livePayload.components.length > 0);
   });
 });

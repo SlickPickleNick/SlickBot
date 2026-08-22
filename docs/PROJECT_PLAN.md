@@ -1,6 +1,6 @@
 # SlickBot Project Plan
 
-## Current Version: 0.9.6
+## Current Version: 0.9.8
 
 SlickBot is being built as a modular all-in-one Discord server management bot for the SlickPickleNick community.
 

@@ -553,13 +553,19 @@ const HELP_CATALOG = Object.freeze([
   {
     name: 'feed',
     command: '/feed',
-    syntax: '/feed <add|list|remove|check|setup>',
-    description: 'Automated social media notifications for YouTube, Twitch, Twitter/X, and Reddit.',
+    syntax: '/feed <setup|add|edit|remove|list|subscribe|unsubscribe|my-alerts|directory|test|check|manager|reset>',
+    description: 'Automated social media notifications, live streamer directory hub, and per-creator alert subscriptions for Twitch and YouTube.',
     category: 'AUTOMATION',
     moduleKey: ModuleKeys.SOCIAL_FEEDS,
-    actionKey: ActionKeys.SocialFeedsManage,
+    actionKey: ActionKeys.FeedsManage,
     level: PermissionLevels.ADMIN,
-    examples: ['/feed add platform:youtube account:"UC_x5XG1OV2P6uZZ5FSM9Ttw" channel:#uploads', '/feed list']
+    examples: [
+      '/feed add platform:Twitch account:ninja member:@User channel:#live-streams',
+      '/feed directory action:Post Directory channel:#streams',
+      '/feed subscribe feed:"Twitch - Ninja"',
+      '/feed my-alerts',
+      '/feed list'
+    ]
   }
 ]);
 

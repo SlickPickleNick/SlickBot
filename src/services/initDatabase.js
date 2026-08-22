@@ -1836,6 +1836,26 @@ async function initDatabase() {
     );
   `);
 
+  await query(`ALTER TABLE social_feed_configs ADD COLUMN IF NOT EXISTS live_directory_channel_id TEXT;`);
+  await query(`ALTER TABLE social_feed_configs ADD COLUMN IF NOT EXISTS live_directory_message_id TEXT;`);
+  await query(`ALTER TABLE social_feed_configs ADD COLUMN IF NOT EXISTS live_directory_auto_sticky BOOLEAN NOT NULL DEFAULT true;`);
+
+  await query(`ALTER TABLE social_feeds ADD COLUMN IF NOT EXISTS discord_user_id TEXT;`);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS social_feed_subscribers (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      feed_id TEXT NOT NULL REFERENCES social_feeds(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (feed_id, user_id)
+    );
+  `);
+
+  await query(`CREATE INDEX IF NOT EXISTS idx_feed_subscribers_feed ON social_feed_subscribers(feed_id);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_feed_subscribers_user ON social_feed_subscribers(guild_id, user_id);`);
+
   await query(`ALTER TABLE achievement_configs ADD COLUMN IF NOT EXISTS standard_tiers_version TEXT;`);
   await query(`ALTER TABLE achievement_configs ADD COLUMN IF NOT EXISTS dm_enabled BOOLEAN NOT NULL DEFAULT false;`);
   await query(`ALTER TABLE achievement_definitions ADD COLUMN IF NOT EXISTS achievement_type TEXT NOT NULL DEFAULT 'TIERED';`);

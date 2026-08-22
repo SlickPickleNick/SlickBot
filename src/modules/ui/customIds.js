@@ -289,6 +289,8 @@ const CustomIds = Object.freeze({
   FeedsRefresh: 'slickbot:feeds:refresh',
   FeedsResetConfirmPrefix: 'slickbot:feeds:reset:confirm:',
   FeedsResetCancelPrefix: 'slickbot:feeds:reset:cancel:',
+  FeedsToggleAlertsPrefix: 'slickbot:feeds:toggle-alerts:',
+  FeedsLiveDirectoryRefreshPrefix: 'slickbot:feeds:dir-refresh:',
 
   UtilityRefresh: 'slickbot:utility:refresh',
   UtilitySetupModal: 'slickbot:modal:utility-setup',

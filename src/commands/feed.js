@@ -67,8 +67,11 @@ module.exports = {
         .addRoleOption((option) =>
           option.setName('ping_role').setDescription('Role to ping when new content is posted').setRequired(false)
         )
+        .addUserOption((option) =>
+          option.setName('member').setDescription('Link this feed to a server member (optional)').setRequired(false)
+        )
         .addStringOption((option) =>
-          option.setName('custom_message').setDescription('Custom announcement template (supports {author}, {url}, {title}, etc.)').setMaxLength(1000).setRequired(false)
+          option.setName('custom_message').setDescription('Custom announcement template (supports {author}, {member}, {url}, etc.)').setMaxLength(1000).setRequired(false)
         )
         .addStringOption((option) =>
           option.setName('shorts_message').setDescription('Custom announcement text specifically for YouTube Shorts').setMaxLength(1000).setRequired(false)
@@ -116,6 +119,12 @@ module.exports = {
         .addBooleanOption((option) =>
           option.setName('clear_ping_role').setDescription('Clear the configured ping role').setRequired(false)
         )
+        .addUserOption((option) =>
+          option.setName('member').setDescription('Link this feed to a server member').setRequired(false)
+        )
+        .addBooleanOption((option) =>
+          option.setName('clear_member').setDescription('Remove linked server member').setRequired(false)
+        )
         .addStringOption((option) =>
           option.setName('custom_message').setDescription('New custom announcement template').setMaxLength(1000).setRequired(false)
         )
@@ -130,6 +139,58 @@ module.exports = {
         )
         .addBooleanOption((option) =>
           option.setName('enabled').setDescription('Enable or disable this specific feed').setRequired(false)
+        )
+    )
+    .addSubcommand((sub) =>
+      sub
+        .setName('subscribe')
+        .setDescription('Subscribe to alerts for a specific creator feed.')
+        .addStringOption((option) =>
+          option
+            .setName('feed')
+            .setDescription('Select the feed to subscribe to')
+            .setRequired(true)
+            .setAutocomplete(true)
+        )
+    )
+    .addSubcommand((sub) =>
+      sub
+        .setName('unsubscribe')
+        .setDescription('Unsubscribe from alerts for a specific creator feed.')
+        .addStringOption((option) =>
+          option
+            .setName('feed')
+            .setDescription('Select the feed to unsubscribe from')
+            .setRequired(true)
+            .setAutocomplete(true)
+        )
+    )
+    .addSubcommand((sub) =>
+      sub
+        .setName('my-alerts')
+        .setDescription('View your active creator feed notification subscriptions.')
+    )
+    .addSubcommand((sub) =>
+      sub
+        .setName('directory')
+        .setDescription('Manage the Live Stream sticky directory hub.')
+        .addStringOption((option) =>
+          option
+            .setName('action')
+            .setDescription('Action to perform')
+            .setRequired(true)
+            .addChoices(
+              { name: 'Post Directory', value: 'post' },
+              { name: 'Refresh Directory', value: 'refresh' },
+              { name: 'Remove Directory', value: 'remove' }
+            )
+        )
+        .addChannelOption((option) =>
+          option
+            .setName('channel')
+            .setDescription('Channel to post the Live Directory into (for post action)')
+            .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)
+            .setRequired(false)
         )
     )
     .addSubcommand((sub) =>
@@ -186,13 +247,14 @@ module.exports = {
   moduleKey: ModuleKeys.SOCIAL_FEEDS,
   getActionKey(interaction) {
     const sub = interaction.options.getSubcommand();
-    if (sub === 'list') return ActionKeys.FeedsView;
+    if (sub === 'list' || sub === 'subscribe' || sub === 'unsubscribe' || sub === 'my-alerts') return ActionKeys.FeedsView;
     if (sub === 'check') return ActionKeys.FeedsCheck;
     if (sub === 'reset') return ActionKeys.FeedsReset;
     return ActionKeys.FeedsManage;
   },
   isPublic(interaction) {
-    return interaction.options.getSubcommand() === 'list';
+    const sub = interaction.options.getSubcommand();
+    return sub === 'list' || sub === 'subscribe' || sub === 'unsubscribe' || sub === 'my-alerts';
   },
 
   async autocomplete(interaction) {
@@ -268,6 +330,7 @@ module.exports = {
       const account = interaction.options.getString('account', true);
       const channel = interaction.options.getChannel('channel', false);
       const pingRole = interaction.options.getRole('ping_role', false);
+      const member = interaction.options.getUser('member', false);
       const customMessage = interaction.options.getString('custom_message', false);
       const shortsMessage = interaction.options.getString('shorts_message', false);
       const videoMessage = interaction.options.getString('video_message', false);
@@ -282,6 +345,7 @@ module.exports = {
         account,
         channelId: targetChannelId,
         pingRoleId: pingRole ? pingRole.id : config.default_ping_role_id,
+        discordUserId: member ? member.id : null,
         customMessage,
         shortsMessage,
         videoMessage,
@@ -298,7 +362,7 @@ module.exports = {
         guildId: interaction.guildId,
         eventKey: 'social-feed-added',
         title: `${meta.label} Feed Added`,
-        body: `Now following **${result.feed.account_name}** on ${meta.label}.\nAnnouncements: <#${result.feed.channel_id}>`,
+        body: `Now following **${result.feed.account_name}** on ${meta.label}.\nAnnouncements: <#${result.feed.channel_id}>${result.feed.discord_user_id ? `\nMember: <@${result.feed.discord_user_id}>` : ''}`,
         actorUserId: interaction.user.id,
         metadata: { feed: result.feed }
       }).catch(() => {});
@@ -309,6 +373,7 @@ module.exports = {
           [
             `${meta.icon} **Platform:** ${meta.label}`,
             `👤 **Account:** [${result.feed.account_name}](${result.feed.account_url})`,
+            result.feed.discord_user_id ? `👥 **Linked Member:** <@${result.feed.discord_user_id}>` : '',
             `📢 **Announcement Channel:** <#${result.feed.channel_id}>`,
             result.feed.ping_role_id ? `🔔 **Ping Role:** <@&${result.feed.ping_role_id}>` : '🔔 **Ping Role:** *None*',
             result.feed.shorts_message ? `⚡ **Shorts Custom Text:** Set` : '',
@@ -349,6 +414,8 @@ module.exports = {
       const channel = interaction.options.getChannel('channel', false);
       const pingRole = interaction.options.getRole('ping_role', false);
       const clearPingRole = interaction.options.getBoolean('clear_ping_role', false);
+      const member = interaction.options.getUser('member', false);
+      const clearMember = interaction.options.getBoolean('clear_member', false);
       const customMessage = interaction.options.getString('custom_message', false);
       const shortsMessage = interaction.options.getString('shorts_message', false);
       const videoMessage = interaction.options.getString('video_message', false);
@@ -359,6 +426,8 @@ module.exports = {
         channelId: channel ? channel.id : undefined,
         pingRoleId: pingRole ? pingRole.id : undefined,
         clearPingRole: Boolean(clearPingRole),
+        discordUserId: member ? member.id : undefined,
+        clearDiscordUser: Boolean(clearMember),
         customMessage: customMessage !== null ? customMessage : undefined,
         shortsMessage: shortsMessage !== null ? shortsMessage : undefined,
         videoMessage: videoMessage !== null ? videoMessage : undefined,
@@ -386,12 +455,128 @@ module.exports = {
           'Social Feed Updated',
           [
             `${meta.icon} **Account:** [${updated.account_name}](${updated.account_url})`,
+            updated.discord_user_id ? `👥 **Linked Member:** <@${updated.discord_user_id}>` : '',
             `📢 **Channel:** <#${updated.channel_id}>`,
             updated.ping_role_id ? `🔔 **Ping Role:** <@&${updated.ping_role_id}>` : '🔔 **Ping Role:** *None*',
             `⚡ **Feed Enabled:** **${updated.enabled ? 'Yes' : 'No'}**`
-          ].join('\n')
+          ].filter(Boolean).join('\n')
         )]
       });
+    }
+
+    if (subcommand === 'subscribe') {
+      const feedId = interaction.options.getString('feed', true);
+      const result = await feeds.toggleSubscription(interaction.guildId, feedId, interaction.user.id);
+      if (!result.ok) {
+        return replyPrivate(interaction, { embeds: [createWarningEmbed('Subscription Failed', result.reason || 'Feed not found.')] });
+      }
+
+      const meta = PLATFORM_META[result.feed.platform] || { icon: '🌐', label: result.feed.platform };
+      if (result.subscribed) {
+        return replyPrivate(interaction, {
+          embeds: [createSuccessEmbed(
+            'Alerts Subscribed',
+            `🔔 You will now receive notifications when ${meta.icon} **${result.feed.account_name}** (${meta.label}) goes live or posts new content!`
+          )]
+        });
+      } else {
+        return replyPrivate(interaction, {
+          embeds: [createSuccessEmbed(
+            'Alerts Muted',
+            `🔕 You have unsubscribed from notifications for ${meta.icon} **${result.feed.account_name}** (${meta.label}).`
+          )]
+        });
+      }
+    }
+
+    if (subcommand === 'unsubscribe') {
+      const feedId = interaction.options.getString('feed', true);
+      const feed = await feeds.getFeed(interaction.guildId, feedId);
+      if (!feed) {
+        return replyPrivate(interaction, { embeds: [createWarningEmbed('Feed Not Found', 'Could not find the requested social feed.')] });
+      }
+
+      await query(
+        `DELETE FROM social_feed_subscribers WHERE feed_id = $1 AND user_id = $2`,
+        [feed.id, interaction.user.id]
+      );
+
+      const meta = PLATFORM_META[feed.platform] || { icon: '🌐', label: feed.platform };
+      return replyPrivate(interaction, {
+        embeds: [createSuccessEmbed(
+          'Alerts Muted',
+          `🔕 You have unsubscribed from notifications for ${meta.icon} **${feed.account_name}** (${meta.label}).`
+        )]
+      });
+    }
+
+    if (subcommand === 'my-alerts') {
+      const userSubs = await feeds.getUserSubscriptions(interaction.guildId, interaction.user.id);
+      if (!userSubs.length) {
+        return replyPrivate(interaction, {
+          embeds: [createBaseEmbed({
+            title: 'Your Social Feed Alerts',
+            description: 'You are not currently subscribed to any creator feeds.\n\nUse `/feed subscribe` or click the **🔔 Get Alerts** button on any announcement to get notified!',
+            color: SlickBotColors.INFO
+          })]
+        });
+      }
+
+      const lines = userSubs.map((f, idx) => {
+        const meta = PLATFORM_META[f.platform] || { icon: '🌐', label: f.platform };
+        const memberText = f.discord_user_id ? ` · <@${f.discord_user_id}>` : '';
+        return `**${idx + 1}.** ${meta.icon} **[${f.account_name}](${f.account_url})** (${meta.label})${memberText}\n   ↳ Announcements: <#${f.channel_id}>`;
+      });
+
+      return replyPrivate(interaction, {
+        embeds: [createBaseEmbed({
+          title: `Your Subscribed Feeds (${userSubs.length})`,
+          description: [
+            'You will receive notification pings for the following creators:',
+            '',
+            ...lines,
+            '',
+            '*To unsubscribe from any feed, use `/feed unsubscribe` or click **Get Alerts** on their posts.*'
+          ].join('\n'),
+          color: SlickBotColors.PRIMARY
+        })]
+      });
+    }
+
+    if (subcommand === 'directory') {
+      const action = interaction.options.getString('action', true);
+      const channel = interaction.options.getChannel('channel', false);
+
+      if (action === 'post') {
+        const targetChannel = channel || interaction.channel;
+        const res = await feeds.postLiveDirectory(interaction.guildId, targetChannel.id, ctx.client);
+        if (!res.ok) {
+          return replyPrivate(interaction, { embeds: [createWarningEmbed('Directory Post Failed', res.reason || 'Could not post Live Directory.')] });
+        }
+        return replyPrivate(interaction, {
+          embeds: [createSuccessEmbed(
+            'Live Directory Posted',
+            `Successfully posted and linked the Live Stream Directory in <#${targetChannel.id}>!\nIt will update automatically whenever tracked creators go live or offline.`
+          )]
+        });
+      }
+
+      if (action === 'refresh') {
+        const updated = await feeds.updateLiveDirectory(interaction.guildId, ctx.client);
+        if (!updated) {
+          return replyPrivate(interaction, { embeds: [createWarningEmbed('No Active Directory', 'No live directory message is currently active. Use `/feed directory action:Post Directory` to set one up.')] });
+        }
+        return replyPrivate(interaction, {
+          embeds: [createSuccessEmbed('Live Directory Refreshed', 'Successfully refreshed the Live Stream Directory embed.')]
+        });
+      }
+
+      if (action === 'remove') {
+        await feeds.removeLiveDirectory(interaction.guildId, ctx.client);
+        return replyPrivate(interaction, {
+          embeds: [createSuccessEmbed('Live Directory Removed', 'Successfully removed the Live Stream Directory configuration.')]
+        });
+      }
     }
 
     if (subcommand === 'list') {
@@ -414,7 +599,8 @@ module.exports = {
         const meta = PLATFORM_META[f.platform] || { icon: '🌐', label: f.platform };
         const statusBadge = f.enabled ? (f.last_status === 'LIVE' ? '🔴 LIVE' : '✅ Active') : '⏸️ Paused';
         const pingText = f.ping_role_id ? ` · <@&${f.ping_role_id}>` : '';
-        return `**${idx + 1}.** ${meta.icon} **[${f.account_name}](${f.account_url})** (${meta.label})\n   ↳ Channel: <#${f.channel_id}>${pingText} · ${statusBadge}`;
+        const memberText = f.discord_user_id ? ` · <@${f.discord_user_id}>` : '';
+        return `**${idx + 1}.** ${meta.icon} **[${f.account_name}](${f.account_url})** (${meta.label})${memberText}\n   ↳ Channel: <#${f.channel_id}>${pingText} · ${statusBadge}`;
       });
 
       return replyPrivate(interaction, {
@@ -478,7 +664,6 @@ module.exports = {
     }
 
     if (subcommand === 'reset') {
-
       const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
           .setCustomId(`${CustomIds.FeedsResetConfirmPrefix}${interaction.user.id}`)

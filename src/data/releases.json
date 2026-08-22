@@ -1,4 +1,28 @@
 {
+  "0.9.8": {
+    "title": "SlickBot v0.9.8",
+    "summary": "Introduces Live Channels Sticky Directory hub, per-creator self-service notification subscriptions with interactive Get Alerts buttons, server member-to-feed pairing, and enhanced Twitch Developer API diagnostic reporting.",
+    "notes": [
+      "Added Live Stream Directory Hub (/feed directory post|refresh|remove) providing an auto-updating embed listing all currently live Twitch & YouTube creators with game/category, viewer count, live duration, and direct watch links.",
+      "Added auto-sticky directory reposting (social_feed_configs.live_directory_auto_sticky) ensuring the live hub always stays pinned at the bottom of the designated stream channel.",
+      "Added per-feed self-service alert subscriptions (social_feed_subscribers) allowing server members to subscribe to notifications for specific creators via /feed subscribe, /feed unsubscribe, /feed my-alerts, or direct interactive buttons.",
+      "Added interactive '🔔 Get Alerts' and direct '🎮 Watch Stream' / '▶️ Watch Video' link buttons on every social feed announcement embed.",
+      "Added optional Server Member Pairing (discord_user_id) in /feed add and /feed edit linking external Twitch/YouTube streams to Discord members with community attribution and {member} template tag support.",
+      "Added Twitch Developer API credential diagnostics in SocialFeedService and /feed manager to clearly flag missing TWITCH_CLIENT_ID or TWITCH_CLIENT_SECRET environment variables."
+    ],
+    "commands": [
+      "/feed add platform:<platform> account:<account> [member:<user>]",
+      "/feed edit feed:<feed> [member:<user>] [clear_member:<bool>]",
+      "/feed directory action:<post|refresh|remove> [channel:<channel>]",
+      "/feed subscribe feed:<feed>",
+      "/feed unsubscribe feed:<feed>",
+      "/feed my-alerts",
+      "/feed list",
+      "/feed check",
+      "/feed test",
+      "/feed manager"
+    ]
+  },
   "0.9.7": {
     "title": "SlickBot v0.9.7",
     "summary": "Features a complete Setup Center module control overhaul with category quick-toggles and dashboard enable/disable buttons, centralized TaskScheduler background runner, consolidated shared time/color utilities, and an interactive /help knowledge center with live autocomplete search and command deep-dives.",

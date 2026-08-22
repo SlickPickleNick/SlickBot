@@ -4,7 +4,43 @@ SlickBot is an all-in-one Discord server management bot built for the SlickPickl
 
 ## Version
 
-Current package: **v0.9.7**
+Current package: **v0.9.8**
+
+
+
+## v0.9.8 Updates
+
+### Live Stream Directory & Self-Service Social Feeds
+
+- **Live Stream Sticky Directory Hub:**
+  - Added `/feed directory action:Post Directory [channel]` creating an auto-updating live directory embed for all currently active Twitch and YouTube streams.
+  - Displays streamer name, live duration, viewer count, category/game, linked Discord member, and direct watch buttons.
+  - Implemented auto-sticky channel reposting (`live_directory_auto_sticky`) to keep the live directory pinned at the newest message position in the stream channel.
+  - Added `/feed directory action:Refresh Directory` and `/feed directory action:Remove Directory`.
+- **Per-Feed Self-Service Alert Subscriptions:**
+  - Added `social_feed_subscribers` table supporting individual user alert notifications per creator.
+  - Added interactive `🔔 Get Alerts` button on all social feed announcement embeds (and `/feed subscribe`, `/feed unsubscribe`, and `/feed my-alerts`).
+  - Automatically mentions subscribed members when new content or live streams are detected without requiring server-wide `@everyone` pings.
+- **Server Member-to-Feed Pairing:**
+  - Added `[member:@User]` option in `/feed add` and `/feed edit` linking external channels to Discord members.
+  - Added `{member}` placeholder token in custom announcement templates and community member attribution badges on announcements and directory embeds.
+- **Twitch Developer API Diagnostics:**
+  - Added clear credential diagnostics in `SocialFeedService` and `/feed manager` to immediately detect and report missing `TWITCH_CLIENT_ID` or `TWITCH_CLIENT_SECRET` environment variables.
+
+Updated commands:
+
+```text
+/feed add platform:<platform> account:<account> [member:<user>]
+/feed edit feed:<feed> [member:<user>] [clear_member:<bool>]
+/feed directory action:<post|refresh|remove> [channel:<channel>]
+/feed subscribe feed:<feed>
+/feed unsubscribe feed:<feed>
+/feed my-alerts
+/feed list
+/feed check
+/feed test
+/feed manager
+```
 
 
 

@@ -571,6 +571,11 @@ client.on(Events.MessageCreate, async (message) => {
       await utility.handleMessageAfkCheck(message).catch((error) => console.error('Failed to process AFK check:', error));
     }
 
+    const socialFeedsEnabled = await permissions.isModuleEnabled(message.guild.id, ModuleKeys.SOCIAL_FEEDS).catch(() => false);
+    if (socialFeedsEnabled) {
+      await socialFeeds.handleStickyDirectoryRepost(message, client).catch((error) => console.error('Failed to handle sticky directory repost:', error));
+    }
+
     const levelingEnabled = await permissions.isModuleEnabled(message.guild.id, 'LEVELING').catch(() => false);
     if (levelingEnabled && !countingResult.suppressNormalXp) {
       await leveling.processMessage(message, logger).catch((error) => console.error('Failed to process message XP:', error));

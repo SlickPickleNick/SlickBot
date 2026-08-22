@@ -87,10 +87,12 @@ function applyFeedPlaceholders(template, data = {}) {
   const game = data.gameName || 'General';
   const duration = data.duration || '';
   const itemType = data.itemType || 'Update';
+  const memberMention = data.discordUserId ? `<@${data.discordUserId}>` : author;
 
   text = text.replaceAll('{author}', author);
   text = text.replaceAll('{channel}', author);
   text = text.replaceAll('{user}', author);
+  text = text.replaceAll('{member}', memberMention);
   text = text.replaceAll('{title}', title);
   text = text.replaceAll('{caption}', title);
   text = text.replaceAll('{url}', url);
@@ -169,6 +171,7 @@ class SocialFeedService {
     account,
     channelId,
     pingRoleId = null,
+    discordUserId = null,
     customMessage = null,
     shortsMessage = null,
     videoMessage = null,
@@ -192,16 +195,17 @@ class SocialFeedService {
 
     const result = await query(
       `INSERT INTO social_feeds (
-         guild_id, platform, account_id, account_name, account_url, channel_id, ping_role_id,
+         guild_id, platform, account_id, account_name, account_url, channel_id, ping_role_id, discord_user_id,
          custom_message, shorts_message, video_message, live_message, story_message, offline_message,
          enabled, last_status, created_at, updated_at
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, true, 'OFFLINE', NOW(), NOW())
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, true, 'OFFLINE', NOW(), NOW())
        ON CONFLICT (guild_id, platform, account_id) DO UPDATE SET
          account_name = EXCLUDED.account_name,
          account_url = EXCLUDED.account_url,
          channel_id = EXCLUDED.channel_id,
          ping_role_id = COALESCE(EXCLUDED.ping_role_id, social_feeds.ping_role_id),
+         discord_user_id = COALESCE(EXCLUDED.discord_user_id, social_feeds.discord_user_id),
          custom_message = COALESCE(EXCLUDED.custom_message, social_feeds.custom_message),
          shorts_message = COALESCE(EXCLUDED.shorts_message, social_feeds.shorts_message),
          video_message = COALESCE(EXCLUDED.video_message, social_feeds.video_message),
@@ -219,6 +223,7 @@ class SocialFeedService {
         accountUrl,
         channelId,
         pingRoleId,
+        discordUserId || null,
         customMessage,
         shortsMessage,
         videoMessage,
@@ -247,6 +252,7 @@ class SocialFeedService {
 
     const channelId = updates.channelId !== undefined ? updates.channelId : feed.channel_id;
     const pingRoleId = updates.clearPingRole ? null : updates.pingRoleId !== undefined ? updates.pingRoleId : feed.ping_role_id;
+    const discordUserId = updates.clearDiscordUser ? null : updates.discordUserId !== undefined ? updates.discordUserId : feed.discord_user_id;
     const customMessage = updates.customMessage !== undefined ? updates.customMessage : feed.custom_message;
     const shortsMessage = updates.shortsMessage !== undefined ? updates.shortsMessage : feed.shorts_message;
     const videoMessage = updates.videoMessage !== undefined ? updates.videoMessage : feed.video_message;
@@ -259,13 +265,14 @@ class SocialFeedService {
       `UPDATE social_feeds
        SET channel_id = $3,
            ping_role_id = $4,
-           custom_message = $5,
-           shorts_message = $6,
-           video_message = $7,
-           live_message = $8,
-           story_message = $9,
-           offline_message = $10,
-           enabled = $11,
+           discord_user_id = $5,
+           custom_message = $6,
+           shorts_message = $7,
+           video_message = $8,
+           live_message = $9,
+           story_message = $10,
+           offline_message = $11,
+           enabled = $12,
            updated_at = NOW()
        WHERE guild_id = $1 AND id = $2
        RETURNING *`,
@@ -274,6 +281,7 @@ class SocialFeedService {
         feed.id,
         channelId,
         pingRoleId,
+        discordUserId,
         customMessage,
         shortsMessage,
         videoMessage,
@@ -284,6 +292,51 @@ class SocialFeedService {
       ]
     );
     return result.rows[0] || null;
+  }
+
+  async toggleSubscription(guildId, feedId, userId) {
+    const feed = await this.getFeed(guildId, feedId);
+    if (!feed) return { ok: false, reason: 'Feed not found' };
+
+    const existing = await query(
+      `SELECT id FROM social_feed_subscribers WHERE feed_id = $1 AND user_id = $2 LIMIT 1`,
+      [feed.id, userId]
+    );
+
+    if (existing.rows[0]) {
+      await query(
+        `DELETE FROM social_feed_subscribers WHERE feed_id = $1 AND user_id = $2`,
+        [feed.id, userId]
+      );
+      return { ok: true, subscribed: false, feed };
+    }
+
+    await query(
+      `INSERT INTO social_feed_subscribers (guild_id, feed_id, user_id)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (feed_id, user_id) DO NOTHING`,
+      [guildId, feed.id, userId]
+    );
+    return { ok: true, subscribed: true, feed };
+  }
+
+  async getSubscribers(feedId) {
+    const result = await query(
+      `SELECT user_id FROM social_feed_subscribers WHERE feed_id = $1 ORDER BY created_at ASC`,
+      [feedId]
+    );
+    return result.rows.map((r) => r.user_id);
+  }
+
+  async getUserSubscriptions(guildId, userId) {
+    const result = await query(
+      `SELECT f.* FROM social_feeds f
+       JOIN social_feed_subscribers s ON f.id = s.feed_id
+       WHERE f.guild_id = $1 AND s.user_id = $2
+       ORDER BY f.platform ASC, f.account_name ASC`,
+      [guildId, userId]
+    );
+    return result.rows;
   }
 
   async getFeed(guildId, feedId) {
@@ -490,7 +543,24 @@ class SocialFeedService {
     }
 
     const platformMeta = PLATFORM_META[feed.platform] || { label: feed.platform, color: SlickBotColors.PRIMARY };
-    const pingRole = feed.ping_role_id ? `<@&${feed.ping_role_id}>` : '';
+    const subscribers = await this.getSubscribers(feed.id);
+
+    const isGlobalPing = feed.ping_role_id === 'everyone' || feed.ping_role_id === guild.id || feed.ping_role_id === 'here';
+    const pings = [];
+    if (feed.ping_role_id) {
+      if (feed.ping_role_id === 'everyone' || feed.ping_role_id === guild.id) {
+        pings.push('@everyone');
+      } else if (feed.ping_role_id === 'here') {
+        pings.push('@here');
+      } else {
+        pings.push(`<@&${feed.ping_role_id}>`);
+      }
+    }
+
+    if (!isGlobalPing && subscribers.length > 0) {
+      pings.push(subscribers.map((id) => `<@${id}>`).join(' '));
+    }
+    const pingHeader = pings.join(' ').trim();
 
     let template = feed.custom_message;
     if (updateData.itemType === 'SHORT' && feed.shorts_message) {
@@ -512,6 +582,7 @@ class SocialFeedService {
     const messageContent = applyFeedPlaceholders(template, {
       authorName: updateData.authorName || feed.account_name,
       accountName: feed.account_name,
+      discordUserId: feed.discord_user_id,
       pingRoleId: feed.ping_role_id,
       title: updateData.title,
       url: updateData.url,
@@ -545,13 +616,40 @@ class SocialFeedService {
       }
     }
 
+    if (feed.discord_user_id) {
+      embed.addFields({ name: 'Community Member', value: `<@${feed.discord_user_id}>`, inline: true });
+    }
+
     if (updateData.thumbnailUrl) {
       embed.setImage(updateData.thumbnailUrl);
     }
 
+    const buttonRow = new ActionRowBuilder();
+    const watchLabel = isLive ? 'Watch Stream' : (updateData.itemType === 'SHORT' ? 'Watch Short' : 'Watch Video');
+    const watchEmoji = isLive ? '🎮' : '▶️';
+
+    buttonRow.addComponents(
+      new ButtonBuilder()
+        .setLabel(watchLabel)
+        .setURL(updateData.url || feed.account_url || platformMeta.defaultUrl(feed.account_id))
+        .setStyle(ButtonStyle.Link)
+        .setEmoji(watchEmoji)
+    );
+
+    if (!isGlobalPing) {
+      buttonRow.addComponents(
+        new ButtonBuilder()
+          .setCustomId(`${CustomIds.FeedsToggleAlertsPrefix}${feed.id}`)
+          .setLabel('Get Alerts')
+          .setStyle(ButtonStyle.Secondary)
+          .setEmoji('🔔')
+      );
+    }
+
     const payload = {
-      content: pingRole ? `${pingRole} ${messageContent}`.trim() : messageContent,
-      embeds: [embed]
+      content: pingHeader ? `${pingHeader}\n${messageContent}`.trim() : messageContent,
+      embeds: [embed],
+      components: buttonRow.components.length ? [buttonRow] : []
     };
 
     const sentMessage = await channel.send(payload).catch((err) => {
@@ -778,7 +876,215 @@ class SocialFeedService {
       }
     }
 
+    if (activeFeeds.length > 0 && client) {
+      await this.updateLiveDirectory(guildId, client).catch(() => {});
+    }
+
     return { checked: activeFeeds.length, announced: announcedCount, results };
+  }
+
+  async buildLiveDirectoryPayload(guildId, client) {
+    const guild = client?.guilds?.cache?.get(guildId);
+    const guildName = guild ? guild.name : 'Server';
+
+    const feeds = await this.listFeeds(guildId);
+    const liveFeeds = feeds.filter((f) => f.enabled && f.last_status === 'LIVE');
+
+    if (liveFeeds.length === 0) {
+      const embed = createBaseEmbed({
+        title: `🔴 Live Creator Hub • ${guildName}`,
+        description: [
+          '*No community creators are currently live!*',
+          '',
+          'When followed creators go live on Twitch or YouTube, their streams will be listed here automatically with live details and direct links.',
+          '',
+          '💡 *Want notifications when your favorite creator goes live? Click **🔔 Get Alerts** on their announcements or use `/feed subscribe`.*'
+        ].join('\n'),
+        color: SlickBotColors.MUTED,
+        footer: 'SlickBot Live Hub • Auto-updates when streams go live / offline'
+      });
+
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`${CustomIds.FeedsLiveDirectoryRefreshPrefix}${guildId}`)
+          .setLabel('Refresh Status')
+          .setStyle(ButtonStyle.Secondary)
+          .setEmoji('🔄')
+      );
+
+      return { embeds: [embed], components: [row] };
+    }
+
+    const lines = liveFeeds.map((f, idx) => {
+      const meta = PLATFORM_META[f.platform] || { icon: '🎮', label: f.platform };
+      const memberText = f.discord_user_id ? ` · <@${f.discord_user_id}>` : '';
+      const startedTimestamp = f.live_started_at ? Math.floor(new Date(f.live_started_at).getTime() / 1000) : null;
+      const timeText = startedTimestamp ? `<t:${startedTimestamp}:R>` : 'Just now';
+
+      return [
+        `**${idx + 1}.** ${meta.icon} **[${f.account_name}](${f.account_url || meta.defaultUrl(f.account_id)})** (${meta.label})${memberText}`,
+        `   ↳ ⏱️ Live: ${timeText} · [Watch Stream](${f.account_url || meta.defaultUrl(f.account_id)})`
+      ].join('\n');
+    });
+
+    const embed = createBaseEmbed({
+      title: `🔴 Live Creator Hub • ${guildName} (${liveFeeds.length} Online)`,
+      description: [
+        '**Currently Streaming:**',
+        '',
+        ...lines,
+        '',
+        'Click the buttons below to tune in and support our community creators!'
+      ].join('\n'),
+      color: SlickBotColors.PRIMARY,
+      footer: 'SlickBot Live Hub • Auto-updates when streams go live / offline'
+    });
+
+    const buttonRow = new ActionRowBuilder();
+    for (const f of liveFeeds.slice(0, 4)) {
+      const meta = PLATFORM_META[f.platform] || { icon: '🎮' };
+      buttonRow.addComponents(
+        new ButtonBuilder()
+          .setLabel(`Watch ${f.account_name.slice(0, 20)}`)
+          .setURL(f.account_url || meta.defaultUrl(f.account_id))
+          .setStyle(ButtonStyle.Link)
+          .setEmoji(meta.icon)
+      );
+    }
+    buttonRow.addComponents(
+      new ButtonBuilder()
+        .setCustomId(`${CustomIds.FeedsLiveDirectoryRefreshPrefix}${guildId}`)
+        .setLabel('Refresh')
+        .setStyle(ButtonStyle.Secondary)
+        .setEmoji('🔄')
+    );
+
+    return { embeds: [embed], components: [buttonRow] };
+  }
+
+  async postLiveDirectory(guildId, channelId, client) {
+    const guild = client?.guilds?.cache?.get(guildId);
+    if (!guild) return { ok: false, reason: 'Guild not found in cache' };
+
+    const channel = guild.channels.cache.get(channelId) || await guild.channels.fetch(channelId).catch(() => null);
+    if (!channel || !channel.isTextBased()) {
+      return { ok: false, reason: 'Destination channel not found or not text-based' };
+    }
+
+    const payload = await this.buildLiveDirectoryPayload(guildId, client);
+    const sentMessage = await channel.send(payload).catch((err) => ({ error: err.message }));
+
+    if (sentMessage.error || !sentMessage.id) {
+      return { ok: false, reason: sentMessage.error || 'Failed to send directory message' };
+    }
+
+    await query(
+      `UPDATE social_feed_configs
+       SET live_directory_channel_id = $2,
+           live_directory_message_id = $3,
+           updated_at = NOW()
+       WHERE guild_id = $1`,
+      [guildId, channel.id, sentMessage.id]
+    );
+
+    const cached = this.configCache.get(guildId);
+    if (cached) {
+      cached.live_directory_channel_id = channel.id;
+      cached.live_directory_message_id = sentMessage.id;
+    }
+
+    return { ok: true, channelId: channel.id, messageId: sentMessage.id };
+  }
+
+  async updateLiveDirectory(guildId, client) {
+    const config = await this.getConfig(guildId);
+    if (!config.live_directory_channel_id || !config.live_directory_message_id) {
+      return false;
+    }
+
+    const guild = client?.guilds?.cache?.get(guildId);
+    if (!guild) return false;
+
+    const channel = guild.channels.cache.get(config.live_directory_channel_id) || await guild.channels.fetch(config.live_directory_channel_id).catch(() => null);
+    if (!channel || !channel.isTextBased()) return false;
+
+    const message = await channel.messages.fetch(config.live_directory_message_id).catch(() => null);
+    const payload = await this.buildLiveDirectoryPayload(guildId, client);
+
+    if (message) {
+      await message.edit(payload).catch(() => {});
+      return true;
+    }
+
+    if (config.live_directory_auto_sticky) {
+      const newMessage = await channel.send(payload).catch(() => null);
+      if (newMessage) {
+        await query(
+          `UPDATE social_feed_configs SET live_directory_message_id = $2 WHERE guild_id = $1`,
+          [guildId, newMessage.id]
+        );
+        config.live_directory_message_id = newMessage.id;
+      }
+    }
+    return true;
+  }
+
+  async removeLiveDirectory(guildId, client) {
+    const config = await this.getConfig(guildId);
+    if (config.live_directory_channel_id && config.live_directory_message_id) {
+      const guild = client?.guilds?.cache?.get(guildId);
+      if (guild) {
+        const channel = guild.channels.cache.get(config.live_directory_channel_id) || await guild.channels.fetch(config.live_directory_channel_id).catch(() => null);
+        if (channel && channel.isTextBased()) {
+          const msg = await channel.messages.fetch(config.live_directory_message_id).catch(() => null);
+          if (msg) await msg.delete().catch(() => {});
+        }
+      }
+    }
+
+    await query(
+      `UPDATE social_feed_configs
+       SET live_directory_channel_id = NULL,
+           live_directory_message_id = NULL,
+           updated_at = NOW()
+       WHERE guild_id = $1`,
+      [guildId]
+    );
+
+    const cached = this.configCache.get(guildId);
+    if (cached) {
+      cached.live_directory_channel_id = null;
+      cached.live_directory_message_id = null;
+    }
+    return { ok: true };
+  }
+
+  async handleStickyDirectoryRepost(message, client) {
+    if (!message.guild || message.author.bot) return;
+    const guildId = message.guild.id;
+    const config = await this.getConfig(guildId);
+    if (!config.live_directory_channel_id || !config.live_directory_auto_sticky) return;
+    if (message.channel.id !== config.live_directory_channel_id) return;
+
+    const channel = message.channel;
+    const oldMessageId = config.live_directory_message_id;
+
+    if (oldMessageId) {
+      const oldMessage = await channel.messages.fetch(oldMessageId).catch(() => null);
+      if (oldMessage) {
+        await oldMessage.delete().catch(() => {});
+      }
+    }
+
+    const payload = await this.buildLiveDirectoryPayload(guildId, client);
+    const newMessage = await channel.send(payload).catch(() => null);
+    if (newMessage) {
+      await query(
+        `UPDATE social_feed_configs SET live_directory_message_id = $2 WHERE guild_id = $1`,
+        [guildId, newMessage.id]
+      );
+      config.live_directory_message_id = newMessage.id;
+    }
   }
 
   async processFeeds(client, logger) {
@@ -813,6 +1119,7 @@ class SocialFeedService {
       `Module Enabled: **${config.enabled ? '✅ Enabled' : '⏸️ Disabled'}**`,
       `Default Channel: ${config.default_channel_id ? `<#${config.default_channel_id}>` : '*None (Configured per feed)*'}`,
       `Default Ping Role: ${config.default_ping_role_id ? `<@&${config.default_ping_role_id}>` : '*None*'}`,
+      `Live Directory Channel: ${config.live_directory_channel_id ? `<#${config.live_directory_channel_id}>` : '*None*'}`,
       '',
       '**Tracked Channels Summary**',
       `• Total Feeds: **${feeds.length}** (${activeCount} active)`,
