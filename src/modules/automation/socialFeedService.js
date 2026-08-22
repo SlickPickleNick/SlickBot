@@ -125,6 +125,8 @@ class SocialFeedService {
     this.configCache = new Map();
     this.tokenCache = new Map();
     this.stickyRepostLocks = new Map();
+    this.sentDirectoryMessageIds = new Set();
+    this.lastRepostTimestamp = new Map();
   }
 
   async getConfig(guildId) {
@@ -712,7 +714,7 @@ class SocialFeedService {
     // If announcement was sent to the sticky directory channel, immediately reposition directory below it
     const config = await this.getConfig(feed.guild_id).catch(() => null);
     if (config && config.live_directory_channel_id === channel.id && config.live_directory_auto_sticky !== false) {
-      await this.handleStickyDirectoryRepost(sentMessage, client).catch(() => {});
+      await this.executeStickyRepost(feed.guild_id, channel, client).catch(() => {});
     }
 
     // Record in history
@@ -1164,6 +1166,10 @@ class SocialFeedService {
       [guildId, channel.id, sentMessage.id]
     );
 
+    if (sentMessage && sentMessage.id) {
+      this.sentDirectoryMessageIds.add(sentMessage.id);
+    }
+
     const cached = this.configCache.get(guildId) || {};
     cached.live_directory_channel_id = channel.id;
     cached.live_directory_message_id = sentMessage.id;
@@ -1240,60 +1246,80 @@ class SocialFeedService {
 
   async handleStickyDirectoryRepost(message, client) {
     if (!message || !message.guild || !message.channel) return;
+    if (message.author?.id === client?.user?.id) return;
+
     const guildId = message.guild.id;
     const config = await this.getConfig(guildId);
     if (!config || !config.live_directory_channel_id || config.live_directory_auto_sticky === false) return;
     if (message.channel.id !== config.live_directory_channel_id) return;
 
     // Never delete or re-trigger on the live directory message itself
-    if (message.id === config.live_directory_message_id) return;
+    if (message.id === config.live_directory_message_id || this.sentDirectoryMessageIds.has(message.id)) return;
+
+    // If directory message is already the latest message in the channel, do not repost
+    if (message.channel.lastMessageId === config.live_directory_message_id) return;
 
     const channelId = message.channel.id;
-    if (this.stickyRepostLocks.has(channelId)) {
-      this.stickyRepostLocks.set(channelId, 'PENDING');
+    if (this.stickyRepostLocks.has(channelId)) return;
+
+    const now = Date.now();
+    const lastTime = this.lastRepostTimestamp.get(channelId) || 0;
+    if (now - lastTime < 3000) {
+      // Debounce rapid messages to avoid rate limits
+      if (!this.stickyRepostLocks.has(channelId)) {
+        this.stickyRepostLocks.set(channelId, true);
+        setTimeout(async () => {
+          this.stickyRepostLocks.delete(channelId);
+          await this.executeStickyRepost(guildId, message.channel, client).catch(() => {});
+        }, 3500);
+      }
       return;
     }
 
-    this.stickyRepostLocks.set(channelId, 'RUNNING');
+    this.stickyRepostLocks.set(channelId, true);
+    this.lastRepostTimestamp.set(channelId, now);
 
     try {
-      let shouldRerun = false;
-      do {
-        shouldRerun = false;
-        const channel = message.channel;
-        const latestConfig = await this.getConfig(guildId);
-        const oldMessageId = latestConfig.live_directory_message_id;
-
-        if (oldMessageId) {
-          const oldMessage = await channel.messages.fetch(oldMessageId).catch(() => null);
-          if (oldMessage) {
-            await oldMessage.delete().catch(() => {});
-          }
-        }
-
-        const payload = await this.buildLiveDirectoryPayload(guildId, client);
-        const newMessage = await channel.send(payload).catch((err) => {
-          console.error('Failed to repost sticky directory message:', err);
-          return null;
-        });
-
-        if (newMessage) {
-          await query(
-            `UPDATE social_feed_configs SET live_directory_message_id = $2, updated_at = NOW() WHERE guild_id = $1`,
-            [guildId, newMessage.id]
-          );
-          latestConfig.live_directory_message_id = newMessage.id;
-          const cached = this.configCache.get(guildId);
-          if (cached) cached.live_directory_message_id = newMessage.id;
-        }
-
-        if (this.stickyRepostLocks.get(channelId) === 'PENDING') {
-          this.stickyRepostLocks.set(channelId, 'RUNNING');
-          shouldRerun = true;
-        }
-      } while (shouldRerun);
+      await this.executeStickyRepost(guildId, message.channel, client);
     } finally {
       this.stickyRepostLocks.delete(channelId);
+    }
+  }
+
+  async executeStickyRepost(guildId, channel, client) {
+    const config = await this.getConfig(guildId);
+    if (!config || !config.live_directory_channel_id || config.live_directory_auto_sticky === false) return;
+    if (channel.id !== config.live_directory_channel_id) return;
+
+    const oldMessageId = config.live_directory_message_id;
+
+    if (oldMessageId) {
+      const oldMessage = await channel.messages.fetch(oldMessageId).catch(() => null);
+      if (oldMessage) {
+        await oldMessage.delete().catch(() => {});
+      }
+    }
+
+    const payload = await this.buildLiveDirectoryPayload(guildId, client);
+    const newMessage = await channel.send(payload).catch((err) => {
+      console.error('Failed to repost sticky directory message:', err);
+      return null;
+    });
+
+    if (newMessage && newMessage.id) {
+      this.sentDirectoryMessageIds.add(newMessage.id);
+      if (this.sentDirectoryMessageIds.size > 100) {
+        const first = this.sentDirectoryMessageIds.values().next().value;
+        this.sentDirectoryMessageIds.delete(first);
+      }
+
+      await query(
+        `UPDATE social_feed_configs SET live_directory_message_id = $2, updated_at = NOW() WHERE guild_id = $1`,
+        [guildId, newMessage.id]
+      );
+      config.live_directory_message_id = newMessage.id;
+      const cached = this.configCache.get(guildId);
+      if (cached) cached.live_directory_message_id = newMessage.id;
     }
   }
 

@@ -536,4 +536,82 @@ test('Social Feeds Subscriptions and Live Directory System', async (t) => {
     assert.ok(sentPayload.embeds[0].data.thumbnail.url.includes('avatar.png'));
     assert.ok(sentPayload.embeds[0].data.footer.text.includes('StreamerNick'));
   });
+
+  await t.test('sendAnnouncement automatically repositions sticky directory below announcement when posted to directory channel', async () => {
+    service.configCache.clear();
+    let oldDirectoryDeleted = false;
+    let directorySentCount = 0;
+
+    const directoryConfig = {
+      guild_id: guildId,
+      live_directory_channel_id: '300000000000000001',
+      live_directory_message_id: 'dir-old-1',
+      live_directory_auto_sticky: true
+    };
+
+    db.addHandler('SELECT * FROM social_feed_configs', () => ({
+      rows: [directoryConfig],
+      rowCount: 1
+    }));
+
+    db.addHandler('UPDATE social_feed_configs SET live_directory_message_id', (sql, params) => {
+      directoryConfig.live_directory_message_id = params[1];
+      return { rows: [], rowCount: 1 };
+    });
+
+    const mockDirectoryMsg = {
+      id: 'dir-old-1',
+      delete: async () => { oldDirectoryDeleted = true; }
+    };
+
+    const mockGuild = createMockGuild({ id: guildId });
+    const mockChannel = {
+      id: '300000000000000001',
+      guild: mockGuild,
+      isTextBased: () => true,
+      messages: {
+        fetch: async (id) => {
+          if (id === 'dir-old-1') return mockDirectoryMsg;
+          return null;
+        }
+      },
+      send: async (payload) => {
+        if (payload.embeds?.[0]?.data?.title?.includes('Live Creator Hub')) {
+          directorySentCount++;
+          return { id: `dir-new-${directorySentCount}` };
+        }
+        return { id: 'announcement-msg-99' };
+      }
+    };
+
+    mockGuild.channels = {
+      cache: new Map([[mockChannel.id, mockChannel]])
+    };
+
+    const feed = {
+      id: feedId,
+      guild_id: guildId,
+      platform: 'TWITCH',
+      account_id: 'ninja',
+      account_name: 'Ninja',
+      channel_id: mockChannel.id,
+      enabled: true
+    };
+
+    const updateData = {
+      itemType: 'LIVE',
+      title: 'Stream Going Live',
+      url: 'https://twitch.tv/ninja',
+      gameName: 'Fortnite',
+      viewerCount: 12000,
+      thumbnailUrl: 'https://static-cdn.jtvnw.net/preview.jpg'
+    };
+
+    const mockClient = { guilds: { cache: new Map([[guildId, mockGuild]]) } };
+    const result = await service.sendAnnouncement(mockClient, feed, updateData, null);
+    assert.equal(result.ok, true);
+    assert.equal(oldDirectoryDeleted, true);
+    assert.equal(directorySentCount, 1);
+    assert.equal(directoryConfig.live_directory_message_id, 'dir-new-1');
+  });
 });
