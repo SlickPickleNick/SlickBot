@@ -1,6 +1,14 @@
-const { ButtonStyle, PermissionFlagsBits } = require('discord.js');
+const {
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  ModalBuilder,
+  StringSelectMenuBuilder,
+  TextInputBuilder,
+  TextInputStyle
+} = require('discord.js');
 const { ModuleKeys, implementedModules } = require('../moduleRegistry');
-const { ActionKeys, PermissionLevels, permissionLevelRank } = require('../permissions/actionKeys');
+const { ActionKeys, PermissionLevels, defaultActionLevels } = require('../permissions/actionKeys');
 const {
   createBaseEmbed,
   createButtonRow,
@@ -9,354 +17,846 @@ const {
   SlickBotColors
 } = require('../ui/uiService');
 const { CustomIds } = require('../ui/customIds');
-const { query } = require('../../services/db');
 
 const MODULE_LABELS = Object.freeze({
   [ModuleKeys.PERMISSIONS]: 'Permissions & Setup',
-  [ModuleKeys.LOGGING]: 'Logging',
-  [ModuleKeys.STATUS]: 'Bot Status',
-  [ModuleKeys.MODERATION]: 'Moderation',
-  [ModuleKeys.TICKETS]: 'Tickets',
-  [ModuleKeys.REPORTS]: 'Reports',
-  [ModuleKeys.APPLICATIONS]: 'Applications',
-  [ModuleKeys.APPEALS]: 'Appeals',
-  [ModuleKeys.SCHEDULED_MESSAGES]: 'Scheduled Messages',
+  [ModuleKeys.LOGGING]: 'Logging & Audits',
+  [ModuleKeys.STATUS]: 'Status & Health',
+  [ModuleKeys.MODERATION]: 'Moderation & Cases',
+  [ModuleKeys.LOCKDOWN]: 'Emergency Lockdown',
+  [ModuleKeys.TEMP_ROLES]: 'Temporary Roles',
+  [ModuleKeys.UTILITY]: 'Utility & Essentials',
+  [ModuleKeys.TICKETS]: 'Support Tickets',
+  [ModuleKeys.REPORTS]: 'User Reports',
+  [ModuleKeys.APPLICATIONS]: 'Custom Applications',
+  [ModuleKeys.APPEALS]: 'Punishment Appeals',
   [ModuleKeys.WELCOME]: 'Welcome & Auto Roles',
   [ModuleKeys.REACTION_ROLES]: 'Role Panels',
   [ModuleKeys.GIVEAWAYS]: 'Giveaways',
   [ModuleKeys.BIRTHDAYS]: 'Birthdays',
-  [ModuleKeys.LEVELING]: 'Leveling',
+  [ModuleKeys.LEVELING]: 'Leveling & XP',
   [ModuleKeys.COMMUNITY_GAMES]: 'Community Games',
   [ModuleKeys.FAQ]: 'Knowledge Base / FAQ',
-  [ModuleKeys.SUGGESTIONS]: 'Suggestions',
-  [ModuleKeys.REFERRALS]: 'Referrals',
-  [ModuleKeys.TEMP_ROLES]: 'Temporary Roles',
-  [ModuleKeys.ACHIEVEMENTS]: 'Achievements',
-  [ModuleKeys.SERVER_STATS]: 'Server Stats',
-  [ModuleKeys.BOT_UPDATES]: 'Bot Updates',
+  [ModuleKeys.SUGGESTIONS]: 'Suggestions Hub',
+  [ModuleKeys.REFERRALS]: 'Invite Referrals',
+  [ModuleKeys.ACHIEVEMENTS]: 'Achievements & Badges',
+  [ModuleKeys.JOIN_TO_CREATE]: 'Join-to-Create Voice',
+  [ModuleKeys.SERVER_STATS]: 'Server Stat Counters',
   [ModuleKeys.CUSTOM_COMMANDS]: 'Custom Commands',
-  [ModuleKeys.JOIN_TO_CREATE]: 'Join-to-Create Voice'
+  [ModuleKeys.SCHEDULED_MESSAGES]: 'Scheduled Announcements',
+  [ModuleKeys.BOT_UPDATES]: 'Bot Changelogs',
+  [ModuleKeys.SOCIAL_FEEDS]: 'Social Feeds'
 });
 
+const HELP_CATEGORIES = Object.freeze([
+  {
+    key: 'MEMBER',
+    label: 'Member Commands',
+    emoji: '✨',
+    description: 'Commands available to all server members.'
+  },
+  {
+    key: 'CORE',
+    label: 'Core & Safety',
+    emoji: '🛡️',
+    description: 'Moderation, lockdown, temporary roles, logging, and essentials.'
+  },
+  {
+    key: 'SUPPORT',
+    label: 'Support Systems',
+    emoji: '🎟️',
+    description: 'Tickets, reports, DM applications, and punishment appeals.'
+  },
+  {
+    key: 'COMMUNITY',
+    label: 'Community & Games',
+    emoji: '🎉',
+    description: 'Leveling, giveaways, birthdays, games, FAQ, suggestions, and voice.'
+  },
+  {
+    key: 'AUTOMATION',
+    label: 'Automation & Stats',
+    emoji: '⚡',
+    description: 'Server stats, scheduled messages, social feeds, and custom commands.'
+  }
+]);
+
 const HELP_CATALOG = Object.freeze([
-  { moduleKey: ModuleKeys.PERMISSIONS, actionKey: ActionKeys.BotPing, command: '/ping', description: 'Check whether SlickBot is online.' },
-  { moduleKey: ModuleKeys.PERMISSIONS, actionKey: ActionKeys.Help, command: '/help', description: 'Open the interactive SlickBot help menu.' },
-  { moduleKey: ModuleKeys.STATUS, actionKey: ActionKeys.BotVersion, command: '/bot version', description: 'Show the running SlickBot version.' },
-  { moduleKey: ModuleKeys.STATUS, actionKey: ActionKeys.BotTest, command: '/bot test', description: 'Run diagnostics for SlickBot modules and setup.' },
-  { moduleKey: ModuleKeys.PERMISSIONS, actionKey: ActionKeys.Setup, command: '/setup', description: 'Open the main setup center.' },
-  { moduleKey: ModuleKeys.PERMISSIONS, actionKey: ActionKeys.ModulesManage, command: '/modules panel', description: 'Open the module manager.' },
-  { moduleKey: ModuleKeys.PERMISSIONS, actionKey: ActionKeys.ModulesManage, command: '/modules enable|disable', description: 'Enable or disable non-core modules.' },
-  { moduleKey: ModuleKeys.PERMISSIONS, actionKey: ActionKeys.PermissionsPanel, command: '/permissions panel', description: 'Open the permission center.' },
-  { moduleKey: ModuleKeys.PERMISSIONS, actionKey: ActionKeys.PermissionsManage, command: '/permissions apply-defaults', description: 'Reapply the current default permission map.' },
-  { moduleKey: ModuleKeys.PERMISSIONS, actionKey: ActionKeys.PermissionsManage, command: '/permissions command-level', description: 'Set required permission levels for actions.' },
-  { moduleKey: ModuleKeys.PERMISSIONS, actionKey: ActionKeys.PermissionsManage, command: '/permissions module-level', description: 'Set required permission levels for modules.' },
-  { moduleKey: ModuleKeys.PERMISSIONS, actionKey: ActionKeys.PermissionsIgnore, command: '/permissions ignore-add|ignore-remove|ignore-list', description: 'Manage users blocked from SlickBot interactions.' },
-  { moduleKey: ModuleKeys.PERMISSIONS, actionKey: ActionKeys.TeamsManage, command: '/team create|add-role|remove-role|allow|delete|list', description: 'Manage SlickBot permission teams.' },
-  { moduleKey: ModuleKeys.PERMISSIONS, actionKey: ActionKeys.ServerReset, command: '/reset', description: 'Reset SlickBot data for this server.' },
+  // Core & Permissions
+  {
+    name: 'ping',
+    command: '/ping',
+    syntax: '/ping',
+    description: 'Check whether SlickBot is online and view gateway latency.',
+    category: 'MEMBER',
+    moduleKey: ModuleKeys.PERMISSIONS,
+    actionKey: ActionKeys.BotPing,
+    level: PermissionLevels.EVERYONE,
+    examples: ['/ping']
+  },
+  {
+    name: 'help',
+    command: '/help',
+    syntax: '/help [command] [module]',
+    description: 'Open the interactive help center or view syntax for a specific command.',
+    category: 'MEMBER',
+    moduleKey: ModuleKeys.PERMISSIONS,
+    actionKey: ActionKeys.Help,
+    level: PermissionLevels.EVERYONE,
+    options: [
+      { name: 'command', description: 'Command name to view syntax and examples for', required: false },
+      { name: 'module', description: 'Module key to view commands for', required: false }
+    ],
+    examples: ['/help', '/help command:purge', '/help module:tickets']
+  },
+  {
+    name: 'setup',
+    command: '/setup',
+    syntax: '/setup',
+    description: 'Open the centralized Setup Center with category dashboards and guided onboarding.',
+    category: 'CORE',
+    moduleKey: ModuleKeys.PERMISSIONS,
+    actionKey: ActionKeys.Setup,
+    level: PermissionLevels.ADMIN,
+    examples: ['/setup']
+  },
+  {
+    name: 'modules',
+    command: '/modules',
+    syntax: '/modules [action]',
+    description: 'Open the module manager or enable/disable specific modules.',
+    category: 'CORE',
+    moduleKey: ModuleKeys.PERMISSIONS,
+    actionKey: ActionKeys.ModulesManage,
+    level: PermissionLevels.ADMIN,
+    examples: ['/modules panel', '/modules enable module:giveaways', '/modules disable module:leveling']
+  },
+  {
+    name: 'permissions',
+    command: '/permissions',
+    syntax: '/permissions [panel|apply-defaults|command-level|module-level|ignore-add|ignore-remove|ignore-list]',
+    description: 'Configure permission levels, command overrides, and blocked users.',
+    category: 'CORE',
+    moduleKey: ModuleKeys.PERMISSIONS,
+    actionKey: ActionKeys.PermissionsManage,
+    level: PermissionLevels.ADMIN,
+    examples: ['/permissions panel', '/permissions apply-defaults', '/permissions command-level action:purge level:Moderator']
+  },
+  {
+    name: 'team',
+    command: '/team',
+    syntax: '/team [create|add-role|remove-role|allow|delete|list]',
+    description: 'Manage staff and custom permission teams.',
+    category: 'CORE',
+    moduleKey: ModuleKeys.PERMISSIONS,
+    actionKey: ActionKeys.TeamsManage,
+    level: PermissionLevels.ADMIN,
+    examples: ['/team list', '/team create name:SupportStaff', '/team add-role team:SupportStaff role:@Helpers']
+  },
+  {
+    name: 'reset',
+    command: '/reset',
+    syntax: '/reset',
+    description: 'Reset SlickBot configurations and stored data for this server.',
+    category: 'CORE',
+    moduleKey: ModuleKeys.PERMISSIONS,
+    actionKey: ActionKeys.ServerReset,
+    level: PermissionLevels.OWNER,
+    examples: ['/reset']
+  },
 
-  { moduleKey: ModuleKeys.LOGGING, actionKey: ActionKeys.LoggingView, command: '/logging panel', description: 'Open the logging center.' },
-  { moduleKey: ModuleKeys.LOGGING, actionKey: ActionKeys.LoggingConfigure, command: '/logging set-channel|clear-channel', description: 'Configure log module channels.' },
-  { moduleKey: ModuleKeys.LOGGING, actionKey: ActionKeys.LoggingConfigure, command: '/logging module-mode|event-mode|event-channel', description: 'Configure instant log delivery or event channel overrides.' },
-  { moduleKey: ModuleKeys.LOGGING, actionKey: ActionKeys.LoggingConfigure, command: '/logging test', description: 'Send a test log to verify the configured route.' },
+  // Logging & Status
+  {
+    name: 'logging',
+    command: '/logging',
+    syntax: '/logging [panel|set-channel|clear-channel|module-mode|event-mode|event-channel|test]',
+    description: 'Configure audit log routing, channel assignments, and event delivery modes.',
+    category: 'CORE',
+    moduleKey: ModuleKeys.LOGGING,
+    actionKey: ActionKeys.LoggingConfigure,
+    level: PermissionLevels.ADMIN,
+    examples: ['/logging panel', '/logging set-channel module:moderation channel:#mod-logs', '/logging test module:moderation']
+  },
+  {
+    name: 'status',
+    command: '/status',
+    syntax: '/status [view|manager|set|stream-url|clear]',
+    description: 'View or configure SlickBot presence status and custom activity text.',
+    category: 'CORE',
+    moduleKey: ModuleKeys.STATUS,
+    actionKey: ActionKeys.StatusManage,
+    level: PermissionLevels.ADMIN,
+    examples: ['/status view', '/status set status:Online activity:Watching text:SlickBot Server']
+  },
+  {
+    name: 'bot',
+    command: '/bot',
+    syntax: '/bot [version|test]',
+    description: 'Show SlickBot version info or run safe diagnostic checks.',
+    category: 'CORE',
+    moduleKey: ModuleKeys.STATUS,
+    actionKey: ActionKeys.BotTest,
+    level: PermissionLevels.ADMIN,
+    examples: ['/bot version', '/bot test']
+  },
 
-  { moduleKey: ModuleKeys.STATUS, actionKey: ActionKeys.StatusView, command: '/status view', description: 'View the current bot presence.' },
-  { moduleKey: ModuleKeys.STATUS, actionKey: ActionKeys.StatusManage, command: '/status set|stream-url|clear', description: 'Configure bot presence text/status.' },
+  // Moderation, Cases, Notes, Temp Roles, Lockdown
+  {
+    name: 'mod',
+    command: '/mod',
+    syntax: '/mod <warn|timeout|untimeout|kick|ban|unban|massban|panel>',
+    description: 'Staff moderation suite for managing infractions, timeouts, kicks, and bans.',
+    category: 'CORE',
+    moduleKey: ModuleKeys.MODERATION,
+    actionKey: ActionKeys.ModerationPanel,
+    level: PermissionLevels.MODERATOR,
+    examples: ['/mod warn user:@badactor reason:Spamming', '/mod timeout user:@member duration:1h reason:Disruptive', '/mod ban user:@troll reason:Raiding']
+  },
+  {
+    name: 'case',
+    command: '/case',
+    syntax: '/case <panel|view|user|close|reopen>',
+    description: 'Inspect, manage, and close moderation infraction cases.',
+    category: 'CORE',
+    moduleKey: ModuleKeys.MODERATION,
+    actionKey: ActionKeys.CasesView,
+    level: PermissionLevels.MODERATOR,
+    examples: ['/case view case_number:12', '/case user user:@member', '/case close case_number:12 reason:Resolved']
+  },
+  {
+    name: 'note',
+    command: '/note',
+    syntax: '/note <add|list|remove>',
+    description: 'Manage private staff notes attached to server members.',
+    category: 'CORE',
+    moduleKey: ModuleKeys.MODERATION,
+    actionKey: ActionKeys.UserNotesView,
+    level: PermissionLevels.MODERATOR,
+    examples: ['/note add user:@member note:Given verbal warning in ticket #45', '/note list user:@member']
+  },
+  {
+    name: 'temp-role',
+    command: '/temp-role',
+    syntax: '/temp-role <add|remove|list|active>',
+    description: 'Assign a role to a member for a temporary duration (e.g. 7d, 24h).',
+    category: 'CORE',
+    moduleKey: ModuleKeys.TEMP_ROLES,
+    actionKey: ActionKeys.TempRolesAdd,
+    level: PermissionLevels.MODERATOR,
+    examples: ['/temp-role add user:@member role:@VIP duration:7d reason:Nitro Booster', '/temp-role list']
+  },
+  {
+    name: 'lockdown',
+    command: '/lockdown',
+    syntax: '/lockdown <start|end|manager|setup|channel-add|channel-remove>',
+    description: 'Instantly lock down channels during emergencies and restore permissions cleanly.',
+    category: 'CORE',
+    moduleKey: ModuleKeys.LOCKDOWN,
+    actionKey: ActionKeys.LockdownManage,
+    level: PermissionLevels.ADMIN,
+    examples: ['/lockdown start preset:Emergency', '/lockdown end', '/lockdown manager']
+  },
 
-  { moduleKey: ModuleKeys.MODERATION, actionKey: ActionKeys.ModerationPanel, command: '/mod panel', description: 'Open the moderation panel.' },
-  { moduleKey: ModuleKeys.MODERATION, actionKey: ActionKeys.ModerationWarn, command: '/mod warn', description: 'Warn a member and create a case.' },
-  { moduleKey: ModuleKeys.MODERATION, actionKey: ActionKeys.ModerationTimeout, command: '/mod timeout', description: 'Timeout a member.' },
-  { moduleKey: ModuleKeys.MODERATION, actionKey: ActionKeys.ModerationUntimeout, command: '/mod untimeout', description: 'Remove a timeout.' },
-  { moduleKey: ModuleKeys.MODERATION, actionKey: ActionKeys.ModerationKick, command: '/mod kick', description: 'Kick a member.' },
-  { moduleKey: ModuleKeys.MODERATION, actionKey: ActionKeys.ModerationBan, command: '/mod ban', description: 'Ban a member.' },
-  { moduleKey: ModuleKeys.MODERATION, actionKey: ActionKeys.ModerationUnban, command: '/mod unban', description: 'Unban by user ID.' },
-  { moduleKey: ModuleKeys.MODERATION, actionKey: ActionKeys.ModerationMassBan, command: '/mod massban', description: 'Ban multiple user IDs.' },
-  { moduleKey: ModuleKeys.MODERATION, actionKey: ActionKeys.CasesView, command: '/case panel|view|user', description: 'View cases.' },
-  { moduleKey: ModuleKeys.MODERATION, actionKey: ActionKeys.CasesManage, command: '/case close|reopen', description: 'Close or reopen moderation cases.' },
-  { moduleKey: ModuleKeys.MODERATION, actionKey: ActionKeys.UserNotesView, command: '/note list', description: 'View user notes.' },
-  { moduleKey: ModuleKeys.MODERATION, actionKey: ActionKeys.UserNotesManage, command: '/note add|remove', description: 'Manage user notes.' },
-  { moduleKey: ModuleKeys.TEMP_ROLES, actionKey: ActionKeys.TempRolesView, command: '/temp-role active|list', description: 'Review active temporary role assignments.' },
-  { moduleKey: ModuleKeys.TEMP_ROLES, actionKey: ActionKeys.TempRolesAdd, command: '/temp-role add', description: 'Assign a role to a member for a fixed duration.' },
-  { moduleKey: ModuleKeys.TEMP_ROLES, actionKey: ActionKeys.TempRolesRemove, command: '/temp-role remove', description: 'Remove an active temporary role assignment early.' },
+  // Utility
+  {
+    name: 'purge',
+    command: '/purge',
+    syntax: '/purge <amount> [user] [match]',
+    description: 'Bulk delete up to 100 recent messages with optional user and keyword filters.',
+    category: 'CORE',
+    moduleKey: ModuleKeys.UTILITY,
+    actionKey: ActionKeys.UtilityPurge,
+    level: PermissionLevels.MODERATOR,
+    examples: ['/purge amount:50', '/purge amount:100 user:@spammer', '/purge amount:25 match:discord.gg']
+  },
+  {
+    name: 'poll',
+    command: '/poll',
+    syntax: '/poll <create|close|results>',
+    description: 'Launch interactive community polls with single/multiple votes and custom durations.',
+    category: 'MEMBER',
+    moduleKey: ModuleKeys.UTILITY,
+    actionKey: ActionKeys.UtilityPolls,
+    level: PermissionLevels.EVERYONE,
+    examples: ['/poll create question:"Game night choice?" option_1:AmongUs option_2:Valorant duration:24h']
+  },
+  {
+    name: 'remind',
+    command: '/remind',
+    syntax: '/remind <set|list|cancel>',
+    description: 'Schedule persistent reminders delivered via DM or channel.',
+    category: 'MEMBER',
+    moduleKey: ModuleKeys.UTILITY,
+    actionKey: ActionKeys.UtilityReminders,
+    level: PermissionLevels.EVERYONE,
+    examples: ['/remind set duration:2h message:"Submit tournament roster"', '/remind list']
+  },
+  {
+    name: 'afk',
+    command: '/afk',
+    syntax: '/afk [message]',
+    description: 'Set your AFK status. SlickBot automatically notifies members who ping you.',
+    category: 'MEMBER',
+    moduleKey: ModuleKeys.UTILITY,
+    actionKey: ActionKeys.UtilityAfk,
+    level: PermissionLevels.EVERYONE,
+    examples: ['/afk message:"Studying for exams"', '/afk']
+  },
+  {
+    name: 'snipe',
+    command: '/snipe',
+    syntax: '/snipe [channel]',
+    description: 'View the most recently deleted message in a channel.',
+    category: 'CORE',
+    moduleKey: ModuleKeys.UTILITY,
+    actionKey: ActionKeys.UtilitySnipe,
+    level: PermissionLevels.MODERATOR,
+    examples: ['/snipe', '/snipe channel:#general']
+  },
+  {
+    name: 'userinfo',
+    command: '/userinfo',
+    syntax: '/userinfo [user]',
+    description: 'View detailed account age, join date, roles, and status for a member.',
+    category: 'MEMBER',
+    moduleKey: ModuleKeys.UTILITY,
+    actionKey: ActionKeys.UtilityInfo,
+    level: PermissionLevels.EVERYONE,
+    examples: ['/userinfo', '/userinfo user:@member']
+  },
+  {
+    name: 'serverinfo',
+    command: '/serverinfo',
+    syntax: '/serverinfo',
+    description: 'View comprehensive guild statistics, boost tier, channel counts, and owner info.',
+    category: 'MEMBER',
+    moduleKey: ModuleKeys.UTILITY,
+    actionKey: ActionKeys.UtilityInfo,
+    level: PermissionLevels.EVERYONE,
+    examples: ['/serverinfo']
+  },
 
-  { moduleKey: ModuleKeys.TICKETS, actionKey: ActionKeys.TicketsOpen, command: '/ticket open', description: 'Open a support ticket.' },
-  { moduleKey: ModuleKeys.TICKETS, actionKey: ActionKeys.TicketsPanel, command: '/ticket manager', description: 'Open the ticket manager.' },
-  { moduleKey: ModuleKeys.TICKETS, actionKey: ActionKeys.TicketsConfigure, command: '/ticket setup|type-setup|question-add|question-clear|type-delete', description: 'Configure ticket categories, teams, and questions.' },
-  { moduleKey: ModuleKeys.TICKETS, actionKey: ActionKeys.TicketsPostPanel, command: '/ticket panel', description: 'Post a public ticket panel.' },
-  { moduleKey: ModuleKeys.TICKETS, actionKey: ActionKeys.TicketsReview, command: '/ticket review-index', description: 'Post or refresh the staff ticket review index.' },
-  { moduleKey: ModuleKeys.TICKETS, actionKey: ActionKeys.TicketsClaim, command: '/ticket claim', description: 'Claim the current ticket.' },
-  { moduleKey: ModuleKeys.TICKETS, actionKey: ActionKeys.TicketsManage, command: '/ticket priority|escalate|add-user|remove-user', description: 'Manage a ticket channel.' },
-  { moduleKey: ModuleKeys.TICKETS, actionKey: ActionKeys.TicketsClose, command: '/ticket close', description: 'Close a ticket with transcript handling.' },
+  // Support
+  {
+    name: 'ticket',
+    command: '/ticket',
+    syntax: '/ticket <open|manager|setup|panel|claim|close|priority|escalate>',
+    description: 'Comprehensive support ticket system with custom intake questions and transcripts.',
+    category: 'SUPPORT',
+    moduleKey: ModuleKeys.TICKETS,
+    actionKey: ActionKeys.TicketsOpen,
+    level: PermissionLevels.EVERYONE,
+    examples: ['/ticket open', '/ticket manager', '/ticket close reason:"Issue resolved"']
+  },
+  {
+    name: 'report',
+    command: '/report',
+    syntax: '/report <user|message|manager|setup|panel|review-index>',
+    description: 'Submit private reports to staff with message context or inspect incoming reports.',
+    category: 'SUPPORT',
+    moduleKey: ModuleKeys.REPORTS,
+    actionKey: ActionKeys.ReportsSubmit,
+    level: PermissionLevels.EVERYONE,
+    examples: ['/report user user:@violator reason:"DM advertising"', '/report manager']
+  },
+  {
+    name: 'application',
+    command: '/application',
+    syntax: '/application <apply|manager|setup|question-add|panel|review-index>',
+    description: 'Interactive step-by-step DM application builder with timeout limits and staff review.',
+    category: 'SUPPORT',
+    moduleKey: ModuleKeys.APPLICATIONS,
+    actionKey: ActionKeys.ApplicationsApply,
+    level: PermissionLevels.EVERYONE,
+    examples: ['/application apply type:Staff', '/application manager']
+  },
+  {
+    name: 'appeal',
+    command: '/appeal',
+    syntax: '/appeal <submit|manager|setup|edit|panel|review-index>',
+    description: 'Ban and punishment appeal submission system with decision notifications.',
+    category: 'SUPPORT',
+    moduleKey: ModuleKeys.APPEALS,
+    actionKey: ActionKeys.AppealsSubmit,
+    level: PermissionLevels.EVERYONE,
+    examples: ['/appeal submit', '/appeal manager']
+  },
 
-  { moduleKey: ModuleKeys.REPORTS, actionKey: ActionKeys.ReportsSubmit, command: '/report user|message', description: 'Submit a private report to staff.' },
-  { moduleKey: ModuleKeys.REPORTS, actionKey: ActionKeys.ReportsPanel, command: '/report manager', description: 'Open the report manager.' },
-  { moduleKey: ModuleKeys.REPORTS, actionKey: ActionKeys.ReportsConfigure, command: '/report setup', description: 'Configure report review settings.' },
-  { moduleKey: ModuleKeys.REPORTS, actionKey: ActionKeys.ReportsPostPanel, command: '/report panel', description: 'Post the public report panel.' },
-  { moduleKey: ModuleKeys.REPORTS, actionKey: ActionKeys.ReportsReview, command: '/report review-index', description: 'Post or refresh the report review index.' },
+  // Community
+  {
+    name: 'welcome',
+    command: '/welcome',
+    syntax: '/welcome <manager|setup|auto-role-add|auto-role-remove|test>',
+    description: 'Custom welcome cards, join embeds, dynamic placeholders, and auto-roles.',
+    category: 'COMMUNITY',
+    moduleKey: ModuleKeys.WELCOME,
+    actionKey: ActionKeys.WelcomeConfigure,
+    level: PermissionLevels.ADMIN,
+    examples: ['/welcome manager', '/welcome test']
+  },
+  {
+    name: 'roles',
+    command: '/roles',
+    syntax: '/roles <manager|create-panel|add-option|post-panel|list>',
+    description: 'Create interactive button, dropdown, and reaction self-assignable role panels.',
+    category: 'COMMUNITY',
+    moduleKey: ModuleKeys.REACTION_ROLES,
+    actionKey: ActionKeys.RolePanelsConfigure,
+    level: PermissionLevels.ADMIN,
+    examples: ['/roles manager', '/roles create-panel title:"Color Roles"', '/roles post-panel']
+  },
+  {
+    name: 'giveaway',
+    command: '/giveaway',
+    syntax: '/giveaway <start|end|reroll|list|manager|setup>',
+    description: 'Timed giveaway creator with role requirements, entry buttons, and winner picking.',
+    category: 'COMMUNITY',
+    moduleKey: ModuleKeys.GIVEAWAYS,
+    actionKey: ActionKeys.GiveawaysCreate,
+    level: PermissionLevels.MODERATOR,
+    examples: ['/giveaway start duration:24h winners:2 prize:"Discord Nitro"', '/giveaway reroll message_id:123456']
+  },
+  {
+    name: 'birthday',
+    command: '/birthday',
+    syntax: '/birthday <set|view|remove|manager|setup|test>',
+    description: 'Register birthdays with timezones, automated birthday roles, and greetings.',
+    category: 'MEMBER',
+    moduleKey: ModuleKeys.BIRTHDAYS,
+    actionKey: ActionKeys.BirthdaysUse,
+    level: PermissionLevels.EVERYONE,
+    examples: ['/birthday set month:8 day:22 timezone:"America/New_York"', '/birthday view']
+  },
+  {
+    name: 'level',
+    command: '/level',
+    syntax: '/level <rank|leaderboard|info|manager|setup|set-xp|reset>',
+    description: 'Text and voice XP leveling system with reward roles, multipliers, and rank cards.',
+    category: 'MEMBER',
+    moduleKey: ModuleKeys.LEVELING,
+    actionKey: ActionKeys.LevelingUse,
+    level: PermissionLevels.EVERYONE,
+    examples: ['/level rank', '/level leaderboard', '/level info']
+  },
+  {
+    name: 'games',
+    command: '/games',
+    syntax: '/games <counting|tic-tac-toe|connect-four|manager|panel>',
+    description: 'Interactive multiplayer games including Counting, Tic-Tac-Toe, and Connect 4.',
+    category: 'MEMBER',
+    moduleKey: ModuleKeys.COMMUNITY_GAMES,
+    actionKey: ActionKeys.GamesPlay,
+    level: PermissionLevels.EVERYONE,
+    examples: ['/games tic-tac-toe challenge opponent:@friend', '/games counting leaderboard']
+  },
+  {
+    name: 'faq',
+    command: '/faq',
+    syntax: '/faq <answer|status|panel|setup|edit|refresh>',
+    description: 'Community knowledge base forum with fast-response search and master index thread.',
+    category: 'MEMBER',
+    moduleKey: ModuleKeys.FAQ,
+    actionKey: ActionKeys.FaqAnswer,
+    level: PermissionLevels.EVERYONE,
+    examples: ['/faq answer query:"How to link account"', '/faq status']
+  },
+  {
+    name: 'suggestion',
+    command: '/suggestion',
+    syntax: '/suggestion <submit|view|panel|review-index|setup|status>',
+    description: 'Community suggestion box with voting reactions, approval states, and review indexes.',
+    category: 'MEMBER',
+    moduleKey: ModuleKeys.SUGGESTIONS,
+    actionKey: ActionKeys.SuggestionsSubmit,
+    level: PermissionLevels.EVERYONE,
+    examples: ['/suggestion submit title:"Add custom emotes" description:"More server emojis"', '/suggestion review-index']
+  },
+  {
+    name: 'referral',
+    command: '/referral',
+    syntax: '/referral <submit|leaderboard|status|manager|setup>',
+    description: 'Track member invites and referral rewards with lifetime leaderboards.',
+    category: 'MEMBER',
+    moduleKey: ModuleKeys.REFERRALS,
+    actionKey: ActionKeys.ReferralsSubmit,
+    level: PermissionLevels.EVERYONE,
+    examples: ['/referral submit referrer:@friend', '/referral leaderboard']
+  },
+  {
+    name: 'achievement',
+    command: '/achievement',
+    syntax: '/achievement <profile|list|leaderboard|manager|setup>',
+    description: 'Automatic badge unlock system for voice time, messages, games, and boosts.',
+    category: 'MEMBER',
+    moduleKey: ModuleKeys.ACHIEVEMENTS,
+    actionKey: ActionKeys.AchievementsUse,
+    level: PermissionLevels.EVERYONE,
+    examples: ['/achievement profile', '/achievement list', '/achievement leaderboard']
+  },
+  {
+    name: 'join-create',
+    command: '/join-create',
+    syntax: '/join-create <setup|create-hub|panel|list|delete|cleanup>',
+    description: 'Dynamic temporary voice channel generator with owner management controls.',
+    category: 'COMMUNITY',
+    moduleKey: ModuleKeys.JOIN_TO_CREATE,
+    actionKey: ActionKeys.JoinCreateSetup,
+    level: PermissionLevels.ADMIN,
+    examples: ['/join-create setup', '/join-create create-hub channel:#hub-voice']
+  },
 
-  { moduleKey: ModuleKeys.APPLICATIONS, actionKey: ActionKeys.ApplicationsApply, command: '/application apply', description: 'Start an application through DM.' },
-  { moduleKey: ModuleKeys.APPLICATIONS, actionKey: ActionKeys.ApplicationsPanel, command: '/application manager', description: 'Open the application manager.' },
-  { moduleKey: ModuleKeys.APPLICATIONS, actionKey: ActionKeys.ApplicationsConfigure, command: '/application setup|question-add|question-list|question-clear|close|reopen|delete', description: 'Configure custom application types/questions.' },
-  { moduleKey: ModuleKeys.APPLICATIONS, actionKey: ActionKeys.ApplicationsPostPanel, command: '/application panel', description: 'Post a public application panel.' },
-  { moduleKey: ModuleKeys.APPLICATIONS, actionKey: ActionKeys.ApplicationsReview, command: '/application review-index and review buttons', description: 'Post review indexes, open review threads, and inspect submissions.' },
-  { moduleKey: ModuleKeys.APPLICATIONS, actionKey: ActionKeys.ApplicationsApprove, command: 'Approve application', description: 'Approve an application with a reason.' },
-  { moduleKey: ModuleKeys.APPLICATIONS, actionKey: ActionKeys.ApplicationsDeny, command: 'Deny application', description: 'Deny an application with a reason.' },
-
-  { moduleKey: ModuleKeys.APPEALS, actionKey: ActionKeys.AppealsSubmit, command: '/appeal submit', description: 'Submit an appeal.' },
-  { moduleKey: ModuleKeys.APPEALS, actionKey: ActionKeys.AppealsPanel, command: '/appeal manager', description: 'Open the appeal manager.' },
-  { moduleKey: ModuleKeys.APPEALS, actionKey: ActionKeys.AppealsConfigure, command: '/appeal setup|edit', description: 'Configure or update appeal settings.' },
-  { moduleKey: ModuleKeys.APPEALS, actionKey: ActionKeys.AppealsPostPanel, command: '/appeal panel', description: 'Post a public appeal panel.' },
-  { moduleKey: ModuleKeys.APPEALS, actionKey: ActionKeys.AppealsReview, command: '/appeal review-index', description: 'Post or refresh the appeal review index.' },
-  { moduleKey: ModuleKeys.APPEALS, actionKey: ActionKeys.AppealsApprove, command: 'Approve appeal', description: 'Approve an appeal with a reason.' },
-  { moduleKey: ModuleKeys.APPEALS, actionKey: ActionKeys.AppealsDeny, command: 'Deny appeal', description: 'Deny an appeal with a reason.' },
-
-  { moduleKey: ModuleKeys.WELCOME, actionKey: ActionKeys.WelcomeView, command: '/welcome manager', description: 'Open the welcome manager.' },
-  { moduleKey: ModuleKeys.WELCOME, actionKey: ActionKeys.WelcomeConfigure, command: '/welcome setup|auto-role-add|auto-role-remove', description: 'Configure welcome messages and auto roles.' },
-  { moduleKey: ModuleKeys.WELCOME, actionKey: ActionKeys.WelcomeTest, command: '/welcome test', description: 'Send a welcome test.' },
-
-  { moduleKey: ModuleKeys.REACTION_ROLES, actionKey: ActionKeys.RolePanelsUse, command: 'Role panel controls', description: 'Use public button/dropdown/reaction role panels.' },
-  { moduleKey: ModuleKeys.REACTION_ROLES, actionKey: ActionKeys.RolePanelsView, command: '/roles manager|list', description: 'View role panel configuration.' },
-  { moduleKey: ModuleKeys.REACTION_ROLES, actionKey: ActionKeys.RolePanelsConfigure, command: '/roles create-panel|add-option|add-bundle|bulk-add|remove-option', description: 'Configure role panels and bundles.' },
-  { moduleKey: ModuleKeys.REACTION_ROLES, actionKey: ActionKeys.RolePanelsPost, command: '/roles post-panel', description: 'Post a role panel.' },
-
-  { moduleKey: ModuleKeys.GIVEAWAYS, actionKey: ActionKeys.GiveawaysEnter, command: 'Giveaway entry button', description: 'Enter active giveaways.' },
-  { moduleKey: ModuleKeys.GIVEAWAYS, actionKey: ActionKeys.GiveawaysView, command: '/giveaway manager|list', description: 'View giveaway status.' },
-  { moduleKey: ModuleKeys.GIVEAWAYS, actionKey: ActionKeys.GiveawaysConfigure, command: '/giveaway setup', description: 'Configure giveaway defaults.' },
-  { moduleKey: ModuleKeys.GIVEAWAYS, actionKey: ActionKeys.GiveawaysCreate, command: '/giveaway start', description: 'Start a giveaway.' },
-  { moduleKey: ModuleKeys.GIVEAWAYS, actionKey: ActionKeys.GiveawaysEnd, command: '/giveaway end', description: 'End a giveaway.' },
-  { moduleKey: ModuleKeys.GIVEAWAYS, actionKey: ActionKeys.GiveawaysReroll, command: '/giveaway reroll', description: 'Reroll giveaway winners.' },
-
-  { moduleKey: ModuleKeys.BIRTHDAYS, actionKey: ActionKeys.BirthdaysUse, command: '/birthday set|view|remove', description: 'Manage your birthday profile.' },
-  { moduleKey: ModuleKeys.BIRTHDAYS, actionKey: ActionKeys.BirthdaysView, command: '/birthday manager|list', description: 'View birthday module details.' },
-  { moduleKey: ModuleKeys.BIRTHDAYS, actionKey: ActionKeys.BirthdaysConfigure, command: '/birthday setup|test', description: 'Configure and test birthday announcements.' },
-
-  { moduleKey: ModuleKeys.LEVELING, actionKey: ActionKeys.LevelingUse, command: '/level rank|leaderboard|info', description: 'View XP, ranks, leaderboard, and server XP rules.' },
-  { moduleKey: ModuleKeys.LEVELING, actionKey: ActionKeys.LevelingView, command: '/level manager|multiplier-list|analyze', description: 'View leveling configuration and XP analysis.' },
-  { moduleKey: ModuleKeys.LEVELING, actionKey: ActionKeys.LevelingConfigure, command: '/level setup|role-add|role-remove|multiplier-add|ignored-channel-add', description: 'Configure XP, rewards, multipliers, and ignored targets.' },
-  { moduleKey: ModuleKeys.LEVELING, actionKey: ActionKeys.LevelingAdjust, command: '/level set-xp|reset', description: 'Adjust or reset user XP.' },
-
-  { moduleKey: ModuleKeys.COMMUNITY_GAMES, actionKey: ActionKeys.GamesPlay, command: '/games counting leaderboard', description: 'View the counting contribution leaderboard.' },
-  { moduleKey: ModuleKeys.COMMUNITY_GAMES, actionKey: ActionKeys.GamesPlay, command: '/games tic-tac-toe challenge|stats', description: 'Challenge a member to Tic-Tac-Toe or view player statistics.' },
-  { moduleKey: ModuleKeys.COMMUNITY_GAMES, actionKey: ActionKeys.GamesPlay, command: '/games connect-four challenge|stats', description: 'Challenge a member to Connect Four or view player statistics.' },
-  { moduleKey: ModuleKeys.COMMUNITY_GAMES, actionKey: ActionKeys.GamesView, command: '/games manager and /games counting status', description: 'Review all Community Games configuration and counting state.' },
-  { moduleKey: ModuleKeys.COMMUNITY_GAMES, actionKey: ActionKeys.GamesConfigure, command: '/games panel post|edit|refresh', description: 'Post or update a public launcher panel for available Community Games.' },
-  { moduleKey: ModuleKeys.COMMUNITY_GAMES, actionKey: ActionKeys.GamesConfigure, command: '/games counting setup|enable|disable|reset|set-number', description: 'Configure Counting rules, reactions, failure embeds, and staff controls.' },
-  { moduleKey: ModuleKeys.COMMUNITY_GAMES, actionKey: ActionKeys.GamesConfigure, command: '/games tic-tac-toe setup|enable|disable', description: 'Configure or toggle Tic-Tac-Toe, including win XP.' },
-  { moduleKey: ModuleKeys.COMMUNITY_GAMES, actionKey: ActionKeys.GamesConfigure, command: '/games connect-four setup|enable|disable', description: 'Configure or toggle Connect Four, including win XP.' },
-
-  { moduleKey: ModuleKeys.FAQ, actionKey: ActionKeys.FaqAnswer, command: '/faq answer', description: 'Send a linked FAQ response to a member or message.' },
-  { moduleKey: ModuleKeys.FAQ, actionKey: ActionKeys.FaqAnswer, command: 'FAQ Reply message command', description: 'Right-click a message and use Apps → FAQ Reply for a direct FAQ response.' },
-  { moduleKey: ModuleKeys.FAQ, actionKey: ActionKeys.FaqView, command: '/faq status|panel', description: 'View Knowledge Base / FAQ setup status.' },
-  { moduleKey: ModuleKeys.FAQ, actionKey: ActionKeys.FaqConfigure, command: '/faq setup|edit|refresh', description: 'Configure the FAQ forum and refresh the master index post.' },
-
-  { moduleKey: ModuleKeys.REFERRALS, actionKey: ActionKeys.ReferralsSubmit, command: '/referral submit', description: 'Record who referred you to the server. One time only.' },
-  { moduleKey: ModuleKeys.REFERRALS, actionKey: ActionKeys.ReferralsView, command: '/referral leaderboard|status', description: 'View lifetime referral standings or referral status.' },
-  { moduleKey: ModuleKeys.REFERRALS, actionKey: ActionKeys.ReferralsManage, command: '/referral manager|set', description: 'Review referrals or retroactively record a referral for a member.' },
-  { moduleKey: ModuleKeys.REFERRALS, actionKey: ActionKeys.ReferralsConfigure, command: '/referral setup', description: 'Configure referral XP and enabled state.' },
-
-  { moduleKey: ModuleKeys.ACHIEVEMENTS, actionKey: ActionKeys.AchievementsUse, command: '/achievement profile|list|leaderboard', description: 'View achievement profiles, available tiers, and stat leaderboards.' },
-  { moduleKey: ModuleKeys.ACHIEVEMENTS, actionKey: ActionKeys.AchievementsView, command: '/achievement manager', description: 'Open the Achievements manager panel.' },
-  { moduleKey: ModuleKeys.ACHIEVEMENTS, actionKey: ActionKeys.AchievementsConfigure, command: '/achievement setup|tier-set|one-time-config|rename|ignored-channel', description: 'Configure achievement tracking, standard tiers, one-time achievements, rewards, names, announcements, and ignored message channels.' },
-  { moduleKey: ModuleKeys.ACHIEVEMENTS, actionKey: ActionKeys.AchievementsReset, command: '/achievement reset', description: 'Owner-only achievement reset for testing and troubleshooting.' },
-
-  { moduleKey: ModuleKeys.SCHEDULED_MESSAGES, actionKey: ActionKeys.ScheduledMessagesView, command: '/schedule manager|list', description: 'View scheduled messages.' },
-  { moduleKey: ModuleKeys.SCHEDULED_MESSAGES, actionKey: ActionKeys.ScheduledMessagesConfigure, command: '/schedule setup', description: 'Configure schedule defaults.' },
-  { moduleKey: ModuleKeys.SCHEDULED_MESSAGES, actionKey: ActionKeys.ScheduledMessagesCreate, command: '/schedule create', description: 'Create a scheduled message.' },
-  { moduleKey: ModuleKeys.SCHEDULED_MESSAGES, actionKey: ActionKeys.ScheduledMessagesCancel, command: '/schedule cancel', description: 'Cancel a scheduled message.' },
-  { moduleKey: ModuleKeys.SCHEDULED_MESSAGES, actionKey: ActionKeys.ScheduledMessagesSendNow, command: '/schedule send-now', description: 'Send a scheduled message immediately.' },
-
-  { moduleKey: ModuleKeys.SERVER_STATS, actionKey: ActionKeys.ServerStatsView, command: '/stats manager', description: 'View server stat counter setup.' },
-  { moduleKey: ModuleKeys.SERVER_STATS, actionKey: ActionKeys.ServerStatsConfigure, command: '/stats setup', description: 'Configure server stat counter channels/templates.' },
-  { moduleKey: ModuleKeys.SERVER_STATS, actionKey: ActionKeys.ServerStatsRefresh, command: '/stats refresh', description: 'Refresh stat counter channels.' },
-
-  { moduleKey: ModuleKeys.BOT_UPDATES, actionKey: ActionKeys.BotUpdatesView, command: '/bot-updates panel|roles|preview', description: 'View bot update announcement settings.' },
-  { moduleKey: ModuleKeys.BOT_UPDATES, actionKey: ActionKeys.BotUpdatesConfigure, command: '/bot-updates setup|channel|role-add|role-remove|enable|disable', description: 'Configure bot update announcements.' },
-  { moduleKey: ModuleKeys.BOT_UPDATES, actionKey: ActionKeys.BotUpdatesSend, command: '/bot-updates send', description: 'Manually send update patch notes.' },
-
-  { moduleKey: ModuleKeys.CUSTOM_COMMANDS, actionKey: ActionKeys.CustomCommandsUse, command: '!custom-command', description: 'Run enabled custom commands using the configured prefix.' },
-  { moduleKey: ModuleKeys.CUSTOM_COMMANDS, actionKey: ActionKeys.CustomCommandsView, command: '/custom-command panel|list|view', description: 'View custom commands.' },
-  { moduleKey: ModuleKeys.CUSTOM_COMMANDS, actionKey: ActionKeys.CustomCommandsCreate, command: '/custom-command create', description: 'Create a custom command.' },
-  { moduleKey: ModuleKeys.CUSTOM_COMMANDS, actionKey: ActionKeys.CustomCommandsEdit, command: '/custom-command edit', description: 'Edit a custom command.' },
-  { moduleKey: ModuleKeys.CUSTOM_COMMANDS, actionKey: ActionKeys.CustomCommandsDelete, command: '/custom-command delete', description: 'Delete a custom command.' },
-  { moduleKey: ModuleKeys.CUSTOM_COMMANDS, actionKey: ActionKeys.CustomCommandsEnable, command: '/custom-command enable|disable|prefix', description: 'Enable, disable, or change custom-command behavior.' },
-
-  { moduleKey: ModuleKeys.JOIN_TO_CREATE, actionKey: ActionKeys.TempVoiceManage, command: 'Temporary voice control panel', description: 'Manage your temporary voice channel with buttons and selectors.' },
-  { moduleKey: ModuleKeys.JOIN_TO_CREATE, actionKey: ActionKeys.JoinCreateView, command: '/join-create panel|list|view', description: 'View join-to-create configuration.' },
-  { moduleKey: ModuleKeys.JOIN_TO_CREATE, actionKey: ActionKeys.JoinCreateSetup, command: '/join-create setup|create-hub', description: 'Configure join-to-create hubs.' },
-  { moduleKey: ModuleKeys.JOIN_TO_CREATE, actionKey: ActionKeys.JoinCreateEdit, command: '/join-create enable|disable|rename|limit|lock|unlock|permit|remove|transfer|claim', description: 'Manage hubs or temporary voice channels.' },
-  { moduleKey: ModuleKeys.JOIN_TO_CREATE, actionKey: ActionKeys.JoinCreateDelete, command: '/join-create delete', description: 'Delete a join-to-create hub.' },
-  { moduleKey: ModuleKeys.JOIN_TO_CREATE, actionKey: ActionKeys.JoinCreateCleanup, command: '/join-create cleanup', description: 'Clean up tracked temporary channels.' },
-
-  { moduleKey: ModuleKeys.PANELS || ModuleKeys.PERMISSIONS, actionKey: ActionKeys.PanelsConfigure, command: '/panel setup|edit|delete|design|help', description: 'Configure shared panel design and live panel posts.' }
+  // Automation
+  {
+    name: 'stats',
+    command: '/stats',
+    syntax: '/stats <manager|setup|refresh>',
+    description: 'Dynamic voice counter channels displaying members, bots, roles, and voice counts.',
+    category: 'AUTOMATION',
+    moduleKey: ModuleKeys.SERVER_STATS,
+    actionKey: ActionKeys.ServerStatsConfigure,
+    level: PermissionLevels.ADMIN,
+    examples: ['/stats manager', '/stats setup', '/stats refresh']
+  },
+  {
+    name: 'custom-command',
+    command: '/custom-command',
+    syntax: '/custom-command <create|edit|delete|panel|list|enable|disable|prefix>',
+    description: 'Custom response commands triggered by slash or custom text prefix (!cmd).',
+    category: 'AUTOMATION',
+    moduleKey: ModuleKeys.CUSTOM_COMMANDS,
+    actionKey: ActionKeys.CustomCommandsCreate,
+    level: PermissionLevels.ADMIN,
+    examples: ['/custom-command create name:rules response:"Please follow our server rules."', '/custom-command list']
+  },
+  {
+    name: 'schedule',
+    command: '/schedule',
+    syntax: '/schedule <create|list|manager|cancel|send-now|setup>',
+    description: 'Recurring or one-time automated announcements delivered to designated channels.',
+    category: 'AUTOMATION',
+    moduleKey: ModuleKeys.SCHEDULED_MESSAGES,
+    actionKey: ActionKeys.ScheduledMessagesCreate,
+    level: PermissionLevels.ADMIN,
+    examples: ['/schedule create name:EventAlert channel:#announcements cron:"0 18 * * 5" message:"Weekend event begins now!"']
+  },
+  {
+    name: 'bot-updates',
+    command: '/bot-updates',
+    syntax: '/bot-updates <panel|setup|channel|roles|send|preview>',
+    description: 'Automatic changelog broadcasting system for new SlickBot features and fixes.',
+    category: 'AUTOMATION',
+    moduleKey: ModuleKeys.BOT_UPDATES,
+    actionKey: ActionKeys.BotUpdatesConfigure,
+    level: PermissionLevels.ADMIN,
+    examples: ['/bot-updates panel', '/bot-updates setup channel:#bot-news']
+  },
+  {
+    name: 'feed',
+    command: '/feed',
+    syntax: '/feed <add|list|remove|check|setup>',
+    description: 'Automated social media notifications for YouTube, Twitch, Twitter/X, and Reddit.',
+    category: 'AUTOMATION',
+    moduleKey: ModuleKeys.SOCIAL_FEEDS,
+    actionKey: ActionKeys.SocialFeedsManage,
+    level: PermissionLevels.ADMIN,
+    examples: ['/feed add platform:youtube account:"UC_x5XG1OV2P6uZZ5FSM9Ttw" channel:#uploads', '/feed list']
+  }
 ]);
 
 function moduleLabel(moduleKey) {
   return MODULE_LABELS[moduleKey] || moduleKey;
 }
 
-function accessSection(level) {
-  if (level === PermissionLevels.EVERYONE) return 'Member Commands';
-  if (level === PermissionLevels.OWNER) return 'Owner / Admin Commands';
-  return 'Staff Commands';
+function getPermissionBadge(level) {
+  if (level === PermissionLevels.EVERYONE) return '`🟢 Everyone`';
+  if (level === PermissionLevels.MODERATOR) return '`🛡️ Moderator`';
+  if (level === PermissionLevels.ADMIN) return '`⚙️ Server Admin`';
+  if (level === PermissionLevels.OWNER) return '`👑 Server Owner`';
+  return '`Staff`';
 }
 
-function shortCommandText(item) {
-  return `• \`${item.command}\` — ${item.description}`;
-}
+function getHelpAutocomplete(focusedOption, value) {
+  const queryText = String(value || '').trim().toLowerCase();
 
-async function getModuleRows(guildId) {
-  for (const moduleKey of implementedModules) {
-    await query(
-      `INSERT INTO module_configs (guild_id, module_key, enabled)
-       VALUES ($1, $2, true)
-       ON CONFLICT (guild_id, module_key) DO NOTHING`,
-      [guildId, moduleKey]
-    ).catch(() => {});
-  }
-  const result = await query(`SELECT module_key, enabled FROM module_configs WHERE guild_id = $1`, [guildId]).catch(() => ({ rows: [] }));
-  return new Map(result.rows.map((row) => [row.module_key, Boolean(row.enabled)]));
-}
-
-async function buildVisibleCatalog(interaction, ctx, mode = 'enabled') {
-  await ctx.permissions.ensureGuildConfig(interaction.guildId, interaction.guild ? interaction.guild.name : null);
-  const moduleRows = await getModuleRows(interaction.guildId);
-  const roleIds = ctx.permissions.getInteractionRoleIds(interaction);
-  const userLevel = await ctx.permissions.getUserPermissionLevel(interaction, roleIds);
-  const visible = [];
-  const moduleAccessCache = new Map();
-
-  for (const item of HELP_CATALOG) {
-    const moduleEnabled = item.moduleKey === ModuleKeys.PERMISSIONS || item.moduleKey === ModuleKeys.LOGGING || item.moduleKey === ModuleKeys.STATUS
-      ? true
-      : moduleRows.get(item.moduleKey) !== false;
-
-    if (mode === 'enabled' && !moduleEnabled) continue;
-    if (mode === 'disabled' && moduleEnabled) continue;
-
-    if (!moduleAccessCache.has(item.moduleKey)) {
-      moduleAccessCache.set(item.moduleKey, await ctx.permissions.hasModuleTargetAccess(interaction, item.moduleKey, roleIds).catch(() => ({ locked: false, allowed: true })));
-    }
-    const moduleAccess = moduleAccessCache.get(item.moduleKey);
-    if (moduleAccess.locked && !moduleAccess.allowed) continue;
-
-    const publicSetting = await ctx.permissions.getPublicActionSetting(interaction.guildId, item.actionKey).catch(() => null);
-    const required = publicSetting === true
-      ? PermissionLevels.EVERYONE
-      : await ctx.permissions.getRequiredLevel(interaction.guildId, item.actionKey, item.moduleKey).catch(() => PermissionLevels.SENIOR_MODERATOR);
-    const allowed = publicSetting === true || (permissionLevelRank[userLevel] || 0) >= (permissionLevelRank[required] || 0);
-    if (!allowed) continue;
-    visible.push({ ...item, required, moduleEnabled });
+  if (focusedOption === 'command') {
+    return HELP_CATALOG
+      .filter((cmd) => cmd.name.toLowerCase().includes(queryText) || cmd.command.toLowerCase().includes(queryText))
+      .slice(0, 25)
+      .map((cmd) => ({
+        name: `${cmd.command} — ${cmd.description}`.slice(0, 100),
+        value: cmd.name
+      }));
   }
 
-  return { visible, userLevel, moduleRows };
-}
-
-function buildModeButtons(mode) {
-  return createButtonRow([
-    createPanelButton(CustomIds.HelpEnabled, 'Enabled Modules', mode === 'enabled' ? ButtonStyle.Primary : ButtonStyle.Secondary, '🟢'),
-    createPanelButton(CustomIds.HelpDisabled, 'Disabled Modules', mode === 'disabled' ? ButtonStyle.Primary : ButtonStyle.Secondary, '🔴'),
-    createPanelButton(CustomIds.HelpRefresh, 'Refresh', ButtonStyle.Secondary, '🔄')
-  ]);
-}
-
-function moduleSummaryLines(visible) {
-  const byModule = new Map();
-  for (const item of visible) {
-    if (!byModule.has(item.moduleKey)) byModule.set(item.moduleKey, []);
-    byModule.get(item.moduleKey).push(item);
+  if (focusedOption === 'module') {
+    return Object.entries(MODULE_LABELS)
+      .filter(([key, label]) => key.toLowerCase().includes(queryText) || label.toLowerCase().includes(queryText))
+      .slice(0, 25)
+      .map(([key, label]) => ({
+        name: `${label} (${key})`.slice(0, 100),
+        value: key
+      }));
   }
-  return Array.from(byModule.entries())
-    .sort((a, b) => moduleLabel(a[0]).localeCompare(moduleLabel(b[0])))
-    .map(([moduleKey, items]) => `• **${moduleLabel(moduleKey)}** \`${moduleKey}\` — ${items.length} visible item(s)`);
+
+  return [];
 }
 
-function buildModuleOptions(visible, mode) {
-  const moduleKeys = Array.from(new Set(visible.map((item) => item.moduleKey)))
-    .sort((a, b) => moduleLabel(a).localeCompare(moduleLabel(b)))
-    .slice(0, 25);
-  return moduleKeys.map((moduleKey) => ({
-    label: moduleLabel(moduleKey).slice(0, 100),
-    value: moduleKey,
-    description: `${mode === 'disabled' ? 'Disabled module. ' : ''}${visible.filter((item) => item.moduleKey === moduleKey).length} visible command/control item(s).`.slice(0, 100)
+function buildCommandHelpPayload(commandName) {
+  const name = String(commandName || '').replace(/^\/+/, '').trim().toLowerCase();
+  const cmd = HELP_CATALOG.find((entry) => entry.name.toLowerCase() === name || entry.command.toLowerCase().includes(name));
+
+  if (!cmd) {
+    return {
+      embeds: [
+        createBaseEmbed({
+          title: 'Command Not Found',
+          description: `No command documentation found for **\`${commandName}\`**.\nRun \`/help\` to browse all available commands.`,
+          color: SlickBotColors.WARNING,
+          footer: 'SlickBot Help'
+        })
+      ],
+      components: [
+        createButtonRow([
+          createPanelButton(CustomIds.HelpRefresh, 'All Commands', ButtonStyle.Primary, '📖'),
+          createPanelButton(CustomIds.SetupRefresh, 'Setup Center', ButtonStyle.Secondary, '⚙️')
+        ])
+      ]
+    };
+  }
+
+  const optionsLines = Array.isArray(cmd.options) && cmd.options.length > 0
+    ? cmd.options.map((opt) => `• \`${opt.name}\`${opt.required ? ' *(Required)*' : ' *(Optional)*'} — ${opt.description}`).join('\n')
+    : '*No special options or subcommands.*';
+
+  const exampleLines = Array.isArray(cmd.examples) && cmd.examples.length > 0
+    ? cmd.examples.map((ex) => `\`${ex}\``).join('\n')
+    : `\`${cmd.syntax}\``;
+
+  const embed = createBaseEmbed({
+    title: `Command Help • ${cmd.command}`,
+    description: [
+      `**Description:** ${cmd.description}`,
+      `**Required Access:** ${getPermissionBadge(cmd.level)}`,
+      `**Module:** **${moduleLabel(cmd.moduleKey)}** (\`${cmd.moduleKey}\`)`,
+      '',
+      '**Syntax**',
+      `\`\`\`text\n${cmd.syntax}\n\`\`\``,
+      '**Options & Arguments**',
+      optionsLines,
+      '',
+      '**Examples**',
+      exampleLines
+    ].join('\n'),
+    color: SlickBotColors.PRIMARY,
+    footer: `SlickBot Help • ${moduleLabel(cmd.moduleKey)}`
+  });
+
+  const buttons = [
+    createPanelButton(`${CustomIds.OnboardingModulePrefix}${cmd.moduleKey}`, 'Quick Setup', ButtonStyle.Success, '🚀'),
+    createPanelButton(CustomIds.HelpRefresh, 'All Commands', ButtonStyle.Primary, '📖'),
+    createPanelButton(CustomIds.SetupRefresh, 'Setup Center', ButtonStyle.Secondary, '⚙️')
+  ];
+
+  return { embeds: [embed], components: [createButtonRow(buttons)] };
+}
+
+function buildModuleHelpPayload(moduleKey) {
+  const key = String(moduleKey || '').toUpperCase().trim();
+  const commands = HELP_CATALOG.filter((cmd) => cmd.moduleKey === key);
+
+  if (!commands.length) {
+    return {
+      embeds: [
+        createBaseEmbed({
+          title: 'Module Not Found',
+          description: `No module documentation found for **\`${moduleKey}\`**.\nRun \`/help\` to browse all available modules.`,
+          color: SlickBotColors.WARNING,
+          footer: 'SlickBot Help'
+        })
+      ],
+      components: [
+        createButtonRow([
+          createPanelButton(CustomIds.HelpRefresh, 'All Commands', ButtonStyle.Primary, '📖'),
+          createPanelButton(CustomIds.SetupRefresh, 'Setup Center', ButtonStyle.Secondary, '⚙️')
+        ])
+      ]
+    };
+  }
+
+  const cmdLines = commands.map((c) => `• \`${c.command}\` — ${c.description} (${getPermissionBadge(c.level)})`).join('\n\n');
+
+  const embed = createBaseEmbed({
+    title: `Module Guide • ${moduleLabel(key)}`,
+    description: [
+      `**Module Key:** \`${key}\``,
+      `**Total Commands:** **${commands.length}**`,
+      '',
+      '**Commands in this Module**',
+      cmdLines,
+      '',
+      'Use `/help command:<name>` for detailed option parameters and copy-paste examples.'
+    ].join('\n'),
+    color: SlickBotColors.PRIMARY,
+    footer: `SlickBot Help • ${moduleLabel(key)}`
+  });
+
+  const buttons = [
+    createPanelButton(`${CustomIds.OnboardingModulePrefix}${key}`, 'Guided Setup', ButtonStyle.Success, '🚀'),
+    createPanelButton(CustomIds.HelpRefresh, 'Help Menu', ButtonStyle.Secondary, '📖'),
+    createPanelButton(CustomIds.SetupRefresh, 'Setup Center', ButtonStyle.Secondary, '⚙️')
+  ];
+
+  return { embeds: [embed], components: [createButtonRow(buttons)] };
+}
+
+function buildCategoryHelpPayload(categoryKey, mode = 'all') {
+  let filtered = HELP_CATALOG;
+
+  if (categoryKey && categoryKey !== 'ALL') {
+    filtered = filtered.filter((cmd) => cmd.category === categoryKey);
+  }
+
+  if (mode === 'member') {
+    filtered = filtered.filter((cmd) => cmd.level === PermissionLevels.EVERYONE);
+  } else if (mode === 'staff') {
+    filtered = filtered.filter((cmd) => cmd.level !== PermissionLevels.EVERYONE);
+  }
+
+  const categoryDef = HELP_CATEGORIES.find((c) => c.key === categoryKey) || { label: 'All Commands', emoji: '📚' };
+
+  const lines = filtered.map((cmd) => `• \`${cmd.command}\` — ${cmd.description} ${getPermissionBadge(cmd.level)}`).join('\n');
+
+  const embed = createBaseEmbed({
+    title: `SlickBot Help • ${categoryDef.emoji} ${categoryDef.label}`,
+    description: [
+      categoryDef.description ? `*${categoryDef.description}*\n` : '',
+      `**Showing:** ${mode === 'member' ? 'Member Commands' : mode === 'staff' ? 'Staff & Admin Commands' : 'All Category Commands'} (${filtered.length} commands)`,
+      '',
+      lines || '*No commands found for this view.*',
+      '',
+      '💡 *Tip: Use `/help command:<name>` to inspect full argument syntax and examples.*'
+    ].join('\n'),
+    color: SlickBotColors.PRIMARY,
+    footer: `SlickBot Knowledge Center • ${categoryDef.label}`
+  });
+
+  const catOptions = HELP_CATEGORIES.map((cat) => ({
+    label: cat.label,
+    value: cat.key,
+    description: cat.description.slice(0, 100),
+    emoji: cat.emoji,
+    default: cat.key === categoryKey
   }));
-}
 
-function trimLines(lines, maxLength = 3300) {
-  const output = [];
-  let length = 0;
-  for (const line of lines) {
-    if (length + line.length + 1 > maxLength) {
-      output.push('• Additional commands are hidden to keep this panel readable. Use a module page for details.');
-      break;
-    }
-    output.push(line);
-    length += line.length + 1;
-  }
-  return output;
+  const selectRow = createSelectRow(CustomIds.HelpCategorySelect, 'Browse command categories...', catOptions);
+
+  const buttonRow = createButtonRow([
+    createPanelButton(`${CustomIds.HelpModePrefix}member`, 'Member View', mode === 'member' ? ButtonStyle.Primary : ButtonStyle.Secondary, '✨'),
+    createPanelButton(`${CustomIds.HelpModePrefix}staff`, 'Staff View', mode === 'staff' ? ButtonStyle.Primary : ButtonStyle.Secondary, '🛡️'),
+    createPanelButton(`${CustomIds.HelpModePrefix}all`, 'All Commands', mode === 'all' ? ButtonStyle.Primary : ButtonStyle.Secondary, '📚'),
+    createPanelButton(CustomIds.SetupRefresh, 'Setup Center', ButtonStyle.Secondary, '⚙️')
+  ]);
+
+  return { embeds: [embed], components: [selectRow, buttonRow] };
 }
 
 async function buildHelpPayload(interaction, ctx, options = {}) {
-  const mode = options.mode === 'disabled' ? 'disabled' : 'enabled';
-  const selectedModule = options.moduleKey || null;
-  const { visible, userLevel } = await buildVisibleCatalog(interaction, ctx, mode);
+  const commandArg = interaction.options?.getString?.('command');
+  const moduleArg = interaction.options?.getString?.('module');
 
-  const title = selectedModule
-    ? `${moduleLabel(selectedModule)} Help`
-    : 'SlickBot Help Center';
-  const moduleItems = selectedModule ? visible.filter((item) => item.moduleKey === selectedModule) : [];
-
-  let description;
-  if (selectedModule) {
-    const grouped = {
-      'Member Commands': [],
-      'Staff Commands': [],
-      'Owner / Admin Commands': []
-    };
-    for (const item of moduleItems) grouped[accessSection(item.required)].push(shortCommandText(item));
-
-    const sections = Object.entries(grouped)
-      .filter(([, lines]) => lines.length)
-      .flatMap(([section, lines]) => [`**${section}**`, ...trimLines(lines, 1200), '']);
-
-    description = [
-      `Your SlickBot permission level: **${userLevel}**`,
-      mode === 'disabled' ? '**Viewing disabled modules.** Commands shown here will not run until the module is enabled.' : '**Viewing enabled modules.**',
-      '',
-      sections.length ? sections.join('\n').trim() : 'No commands from this module are available to your current permission level.'
-    ].join('\n');
-  } else {
-    const lines = moduleSummaryLines(visible);
-    description = [
-      `Your SlickBot permission level: **${userLevel}**`,
-      mode === 'disabled'
-        ? 'Showing disabled modules with commands that would be available to your permission level after the module is enabled.'
-        : 'Showing enabled modules and command groups available to your permission level.',
-      '',
-      '**Modules**',
-      ...(lines.length ? trimLines(lines) : ['No modules matched this view for your current permission level.']),
-      '',
-      'Use the menu below to open a focused help page for one module.'
-    ].join('\n');
+  if (commandArg) {
+    return buildCommandHelpPayload(commandArg);
   }
+
+  if (moduleArg) {
+    return buildModuleHelpPayload(moduleArg);
+  }
+
+  // Default interactive view
+  return buildCategoryHelpPayload('MEMBER', 'member');
+}
+
+function buildHelpSearchModal() {
+  return new ModalBuilder()
+    .setCustomId(CustomIds.HelpSearchModalSubmit)
+    .setTitle('Search SlickBot Commands')
+    .addComponents(
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('query')
+          .setLabel('Keyword or Command Name')
+          .setPlaceholder('e.g. purge, tickets, rank, xp, role, giveaway')
+          .setStyle(TextInputStyle.Short)
+          .setRequired(true)
+          .setMinLength(2)
+          .setMaxLength(50)
+      )
+    );
+}
+
+function handleHelpSearch(query) {
+  const text = String(query || '').trim().toLowerCase();
+  const matches = HELP_CATALOG.filter((cmd) =>
+    cmd.name.toLowerCase().includes(text) ||
+    cmd.command.toLowerCase().includes(text) ||
+    cmd.description.toLowerCase().includes(text) ||
+    moduleLabel(cmd.moduleKey).toLowerCase().includes(text)
+  ).slice(0, 15);
+
+  if (!matches.length) {
+    return {
+      embeds: [
+        createBaseEmbed({
+          title: `Search Results • "${query}"`,
+          description: `No commands matched **"${query}"**.\nUse \`/help\` to browse categories or check your spelling.`,
+          color: SlickBotColors.WARNING,
+          footer: 'SlickBot Help'
+        })
+      ],
+      components: [
+        createButtonRow([
+          createPanelButton(CustomIds.HelpRefresh, 'All Commands', ButtonStyle.Primary, '📖'),
+          createPanelButton(CustomIds.SetupRefresh, 'Setup Center', ButtonStyle.Secondary, '⚙️')
+        ])
+      ]
+    };
+  }
+
+  const lines = matches.map((cmd) => `• \`${cmd.command}\` — ${cmd.description} (${getPermissionBadge(cmd.level)})`).join('\n\n');
 
   const embed = createBaseEmbed({
-    title,
-    description,
-    color: mode === 'disabled' ? SlickBotColors.MUTED : SlickBotColors.INFO,
-    footer: 'SlickBot Help • Commands are filtered by module state and permission level.'
+    title: `Search Results • "${query}"`,
+    description: [
+      `Found **${matches.length}** matching command(s):`,
+      '',
+      lines,
+      '',
+      'Use `/help command:<name>` for full options and examples.'
+    ].join('\n'),
+    color: SlickBotColors.PRIMARY,
+    footer: `SlickBot Help • Search for "${query}"`
   });
 
-  const components = [];
-  const optionsForSelect = buildModuleOptions(visible, mode);
-  if (optionsForSelect.length) {
-    components.push(createSelectRow(mode === 'disabled' ? CustomIds.HelpDisabledSelect : CustomIds.HelpEnabledSelect, 'Choose a module...', optionsForSelect));
-  }
-  components.push(buildModeButtons(mode));
-
-  return { embeds: [embed], components };
+  return {
+    embeds: [embed],
+    components: [
+      createButtonRow([
+        createPanelButton(CustomIds.HelpRefresh, 'Help Menu', ButtonStyle.Secondary, '📖'),
+        createPanelButton(CustomIds.SetupRefresh, 'Setup Center', ButtonStyle.Secondary, '⚙️')
+      ])
+    ]
+  };
 }
 
 module.exports = {
+  MODULE_LABELS,
+  HELP_CATEGORIES,
   HELP_CATALOG,
+  getHelpAutocomplete,
+  buildCommandHelpPayload,
+  buildModuleHelpPayload,
+  buildCategoryHelpPayload,
   buildHelpPayload,
-  moduleLabel
+  buildHelpSearchModal,
+  handleHelpSearch
 };

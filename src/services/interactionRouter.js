@@ -6,7 +6,14 @@ const { query } = require('./db');
 const { replyPrivate, acknowledgeQuietly } = require('../utils/reply');
 const { buildSetupPanel, buildCategoryPanel, buildModulesPanel, buildModuleDetailPanel, buildLoggingPanel, buildTeamsPanel, buildPermissionsPanel, buildCommunityPanel } = require('../modules/ui/panels');
 const { OnboardingService } = require('../modules/onboarding/onboardingService');
-const { buildHelpPayload } = require('../modules/help/helpService');
+const {
+  buildHelpPayload,
+  buildCategoryHelpPayload,
+  buildCommandHelpPayload,
+  buildModuleHelpPayload,
+  buildHelpSearchModal,
+  handleHelpSearch
+} = require('../modules/help/helpService');
 const { buildModerationPanel, buildRecentCasesPanel } = require('../modules/moderation/moderationUi');
 const { buildStatusPanel, buildStatusActivityTextModal } = require('../commands/status');
 const { createBaseEmbed, createSuccessEmbed, createWarningEmbed, SlickBotColors } = require('../modules/ui/uiService');
@@ -110,6 +117,22 @@ async function handleComponentInteraction(interaction, ctx) {
 
 async function handleButton(interaction, ctx) {
   const id = interaction.customId;
+
+  if (id === CustomIds.HelpRefresh) {
+    await updatePanel(interaction, buildCategoryHelpPayload('MEMBER', 'member'));
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.HelpModePrefix)) {
+    const mode = id.slice(CustomIds.HelpModePrefix.length);
+    await updatePanel(interaction, buildCategoryHelpPayload(null, mode));
+    return true;
+  }
+
+  if (id === CustomIds.HelpSearchBtn) {
+    await interaction.showModal(buildHelpSearchModal());
+    return true;
+  }
 
 
   if (id === CustomIds.GamePanelTicTacToe || id === CustomIds.GamePanelConnectFour) {
@@ -1820,6 +1843,18 @@ async function handleButton(interaction, ctx) {
 async function handleSelect(interaction, ctx) {
   const id = interaction.customId;
 
+  if (id === CustomIds.HelpCategorySelect) {
+    const selectedCategory = interaction.values?.[0] || 'MEMBER';
+    await updatePanel(interaction, buildCategoryHelpPayload(selectedCategory, selectedCategory === 'MEMBER' ? 'member' : 'all'));
+    return true;
+  }
+
+  if (id === CustomIds.HelpModuleSelect) {
+    const selectedModule = interaction.values?.[0];
+    await updatePanel(interaction, buildModuleHelpPayload(selectedModule));
+    return true;
+  }
+
   if (id === CustomIds.SetupModuleSelect || id === CustomIds.ModulesDetailSelect) {
     if (!(await requireAction(interaction, ctx, ActionKeys.Setup, ModuleKeys.PERMISSIONS))) return true;
     const moduleKey = interaction.values?.[0];
@@ -2269,6 +2304,12 @@ async function handleSelect(interaction, ctx) {
 
 async function handleModal(interaction, ctx) {
   const id = interaction.customId;
+
+  if (id === CustomIds.HelpSearchModalSubmit) {
+    const query = interaction.fields.getTextInputValue('query');
+    await replyPrivate(interaction, handleHelpSearch(query));
+    return true;
+  }
 
   if (id === CustomIds.UtilitySetupModal) {
     if (!(await requireAction(interaction, ctx, ActionKeys.UtilityManage, ModuleKeys.UTILITY))) return true;
