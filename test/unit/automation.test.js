@@ -29,4 +29,14 @@ test('Scheduled Message Repeat Intervals and Delay Parsing', async (t) => {
     assert.ok(release.commands.includes('/userinfo'));
     assert.ok(release.commands.includes('/poll create'));
   });
+
+  await t.test('BotUpdatesService loads structured release patch notes for current v0.9.7', () => {
+    const service = new BotUpdatesService();
+    const release = service.getRelease('0.9.7');
+    assert.equal(release.title, 'SlickBot v0.9.7');
+    assert.ok(release.summary.includes('Setup Center'));
+    assert.ok(release.notes.length > 5);
+    assert.ok(release.commands.includes('/help'));
+    assert.ok(release.commands.includes('/setup'));
+  });
 });

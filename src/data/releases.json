@@ -1,4 +1,30 @@
 {
+  "0.9.7": {
+    "title": "SlickBot v0.9.7",
+    "summary": "Features a complete Setup Center module control overhaul with category quick-toggles and dashboard enable/disable buttons, centralized TaskScheduler background runner, consolidated shared time/color utilities, and an interactive /help knowledge center with live autocomplete search and command deep-dives.",
+    "notes": [
+      "Added dedicated quick-toggle select menus to all category dashboards (Core & Safety, Support Systems, Community, Automation) for instant module enable/disable toggling.",
+      "Added direct Enable Module / Disable Module action buttons across all 26 module manager dashboards.",
+      "Added 'All Modules' overview button in the /setup center for instant management of all server features.",
+      "Implemented setModuleEnabled in PermissionService with automatic cache invalidation, audit event logging, and live UI badge refreshing.",
+      "Built centralized TaskScheduler (src/services/taskScheduler.js) replacing 10 loose intervals with concurrency locks, staggered startup execution, safe error boundaries, and graceful shutdown handling.",
+      "Consolidated shared time and duration utilities into src/utils/time.js supporting single units, compound durations (e.g. 1d 2h 30m), and formatted relative Discord timestamps.",
+      "Consolidated color and hex normalization into src/modules/ui/uiService.js across role panels, custom commands, giveaways, and welcome services.",
+      "Overhauled /help into an interactive knowledge center with live Discord autocomplete for /help command:<name> and /help module:<key>.",
+      "Added rich command deep-dive cards showing syntax codeblocks, required permission rank badges, argument requirements, copy-paste examples, and quick setup launch buttons.",
+      "Added audience-aware navigation tabs (Member View, Staff View, All Commands), category dropdown menus, and interactive modal keyword search.",
+      "Optimized server stats 15-minute background fallback runner to prevent unthrottled member fetching and Discord 429 rate limits."
+    ],
+    "commands": [
+      "/help",
+      "/help command:<name>",
+      "/help module:<key>",
+      "/setup",
+      "/modules panel",
+      "/modules enable",
+      "/modules disable"
+    ]
+  },
   "0.9.6": {
     "title": "SlickBot v0.9.6",
     "summary": "Introduces the Utility & Server Essentials module with advanced message purge filters, rich identity & server info cards, interactive polling, persistent reminders, visual embed composer, AFK auto-replies, and moderation snipe tools.",
