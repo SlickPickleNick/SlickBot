@@ -119,13 +119,30 @@ async function handleButton(interaction, ctx) {
   const id = interaction.customId;
 
   if (id === CustomIds.HelpRefresh) {
-    await updatePanel(interaction, buildCategoryHelpPayload('MEMBER', 'member'));
+    await updatePanel(interaction, buildCategoryHelpPayload('MEMBER', 'member', 1));
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.HelpPagePrefix)) {
+    const rest = id.slice(CustomIds.HelpPagePrefix.length);
+    const [categoryKey, mode, pageStr] = rest.split(':');
+    const targetPage = Number.parseInt(pageStr, 10) || 1;
+    await updatePanel(interaction, buildCategoryHelpPayload(categoryKey, mode || 'all', targetPage));
     return true;
   }
 
   if (id.startsWith(CustomIds.HelpModePrefix)) {
-    const mode = id.slice(CustomIds.HelpModePrefix.length);
-    await updatePanel(interaction, buildCategoryHelpPayload(null, mode));
+    const rest = id.slice(CustomIds.HelpModePrefix.length);
+    const parts = rest.split(':');
+    let categoryKey = 'MEMBER';
+    let mode = 'member';
+    if (parts.length === 2) {
+      categoryKey = parts[0];
+      mode = parts[1];
+    } else {
+      mode = parts[0];
+    }
+    await updatePanel(interaction, buildCategoryHelpPayload(categoryKey, mode, 1));
     return true;
   }
 
@@ -1845,7 +1862,7 @@ async function handleSelect(interaction, ctx) {
 
   if (id === CustomIds.HelpCategorySelect) {
     const selectedCategory = interaction.values?.[0] || 'MEMBER';
-    await updatePanel(interaction, buildCategoryHelpPayload(selectedCategory, selectedCategory === 'MEMBER' ? 'member' : 'all'));
+    await updatePanel(interaction, buildCategoryHelpPayload(selectedCategory, selectedCategory === 'MEMBER' ? 'member' : 'all', 1));
     return true;
   }
 

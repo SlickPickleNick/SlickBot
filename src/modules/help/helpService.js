@@ -709,7 +709,9 @@ function buildModuleHelpPayload(moduleKey) {
   return { embeds: [embed], components: [createButtonRow(buttons)] };
 }
 
-function buildCategoryHelpPayload(categoryKey, mode = 'all') {
+const PAGE_SIZE = 6;
+
+function buildCategoryHelpPayload(categoryKey = 'MEMBER', mode = 'member', page = 1) {
   let filtered = HELP_CATALOG;
 
   if (categoryKey && categoryKey !== 'ALL') {
@@ -723,21 +725,27 @@ function buildCategoryHelpPayload(categoryKey, mode = 'all') {
   }
 
   const categoryDef = HELP_CATEGORIES.find((c) => c.key === categoryKey) || { label: 'All Commands', emoji: '📚' };
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const currentPage = Math.max(1, Math.min(Number(page) || 1, totalPages));
+  const startIndex = (currentPage - 1) * PAGE_SIZE;
+  const pageItems = filtered.slice(startIndex, startIndex + PAGE_SIZE);
 
-  const lines = filtered.map((cmd) => `• \`${cmd.command}\` — ${cmd.description} ${getPermissionBadge(cmd.level)}`).join('\n');
+  const lines = pageItems.map((cmd) => `• \`${cmd.command}\` — ${cmd.description} ${getPermissionBadge(cmd.level)}`).join('\n\n');
+
+  const modeLabel = mode === 'member' ? 'Member Commands' : mode === 'staff' ? 'Staff & Admin Commands' : 'All Category Commands';
 
   const embed = createBaseEmbed({
     title: `SlickBot Help • ${categoryDef.emoji} ${categoryDef.label}`,
     description: [
       categoryDef.description ? `*${categoryDef.description}*\n` : '',
-      `**Showing:** ${mode === 'member' ? 'Member Commands' : mode === 'staff' ? 'Staff & Admin Commands' : 'All Category Commands'} (${filtered.length} commands)`,
+      `**Filter:** ${modeLabel} • **Page ${currentPage} of ${totalPages}** (${filtered.length} total commands)`,
       '',
       lines || '*No commands found for this view.*',
       '',
       '💡 *Tip: Use `/help command:<name>` to inspect full argument syntax and examples.*'
     ].join('\n'),
     color: SlickBotColors.PRIMARY,
-    footer: `SlickBot Knowledge Center • ${categoryDef.label}`
+    footer: `SlickBot Knowledge Center • Page ${currentPage} / ${totalPages}`
   });
 
   const catOptions = HELP_CATEGORIES.map((cat) => ({
@@ -750,14 +758,39 @@ function buildCategoryHelpPayload(categoryKey, mode = 'all') {
 
   const selectRow = createSelectRow(CustomIds.HelpCategorySelect, 'Browse command categories...', catOptions);
 
-  const buttonRow = createButtonRow([
-    createPanelButton(`${CustomIds.HelpModePrefix}member`, 'Member View', mode === 'member' ? ButtonStyle.Primary : ButtonStyle.Secondary, '✨'),
-    createPanelButton(`${CustomIds.HelpModePrefix}staff`, 'Staff View', mode === 'staff' ? ButtonStyle.Primary : ButtonStyle.Secondary, '🛡️'),
-    createPanelButton(`${CustomIds.HelpModePrefix}all`, 'All Commands', mode === 'all' ? ButtonStyle.Primary : ButtonStyle.Secondary, '📚'),
+  const navRow = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`${CustomIds.HelpPagePrefix}${categoryKey || 'ALL'}:${mode}:${currentPage - 1}`)
+      .setLabel('Previous')
+      .setEmoji('◀️')
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(currentPage <= 1),
+    new ButtonBuilder()
+      .setCustomId('slickbot:help:page_indicator')
+      .setLabel(`Page ${currentPage} of ${totalPages}`)
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(true),
+    new ButtonBuilder()
+      .setCustomId(`${CustomIds.HelpPagePrefix}${categoryKey || 'ALL'}:${mode}:${currentPage + 1}`)
+      .setLabel('Next')
+      .setEmoji('▶️')
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(currentPage >= totalPages),
+    new ButtonBuilder()
+      .setCustomId(CustomIds.HelpSearchBtn)
+      .setLabel('Search')
+      .setEmoji('🔍')
+      .setStyle(ButtonStyle.Primary)
+  );
+
+  const filterRow = createButtonRow([
+    createPanelButton(`${CustomIds.HelpModePrefix}${categoryKey || 'MEMBER'}:member`, 'Member View', mode === 'member' ? ButtonStyle.Primary : ButtonStyle.Secondary, '✨'),
+    createPanelButton(`${CustomIds.HelpModePrefix}${categoryKey || 'MEMBER'}:staff`, 'Staff View', mode === 'staff' ? ButtonStyle.Primary : ButtonStyle.Secondary, '🛡️'),
+    createPanelButton(`${CustomIds.HelpModePrefix}${categoryKey || 'MEMBER'}:all`, 'All Commands', mode === 'all' ? ButtonStyle.Primary : ButtonStyle.Secondary, '📚'),
     createPanelButton(CustomIds.SetupRefresh, 'Setup Center', ButtonStyle.Secondary, '⚙️')
   ]);
 
-  return { embeds: [embed], components: [selectRow, buttonRow] };
+  return { embeds: [embed], components: [selectRow, navRow, filterRow] };
 }
 
 async function buildHelpPayload(interaction, ctx, options = {}) {
@@ -773,7 +806,7 @@ async function buildHelpPayload(interaction, ctx, options = {}) {
   }
 
   // Default interactive view
-  return buildCategoryHelpPayload('MEMBER', 'member');
+  return buildCategoryHelpPayload('MEMBER', 'member', 1);
 }
 
 function buildHelpSearchModal() {

@@ -72,15 +72,32 @@ test('Help System: buildModuleHelpPayload renders module overview and command li
   assert.ok(payload.components?.length > 0);
 });
 
-test('Help System: buildCategoryHelpPayload filters member and staff views properly', () => {
-  const memberPayload = buildCategoryHelpPayload('MEMBER', 'member');
-  const staffPayload = buildCategoryHelpPayload('CORE', 'staff');
+test('Help System: buildCategoryHelpPayload filters and paginates commands cleanly', () => {
+  const page1 = buildCategoryHelpPayload('MEMBER', 'member', 1);
+  const page2 = buildCategoryHelpPayload('MEMBER', 'member', 2);
 
-  assert.ok(memberPayload.embeds?.length > 0);
-  assert.ok(staffPayload.embeds?.length > 0);
+  assert.ok(page1.embeds?.length > 0);
+  assert.ok(page1.embeds[0].data.description.includes('Page 1'));
 
-  // Check category selector exists
-  assert.ok(memberPayload.components.some((row) => row.components.some((c) => c.data?.custom_id === CustomIds.HelpCategorySelect)));
+  // Verify pagination navigation row
+  const navRow = page1.components.find((row) =>
+    row.components.some((c) => c.data?.custom_id?.startsWith(CustomIds.HelpPagePrefix))
+  );
+  assert.ok(navRow, 'Navigation row with page buttons should exist');
+
+  const prevBtn = navRow.components.find((c) => c.data?.label === 'Previous');
+  assert.equal(prevBtn.data.disabled, true, 'Previous button on page 1 should be disabled');
+
+  const indicatorBtn = navRow.components.find((c) => c.data?.custom_id === 'slickbot:help:page_indicator');
+  assert.ok(indicatorBtn.data.label.includes('Page 1 of'));
+
+  if (page2.embeds[0].data.description.includes('Page 2')) {
+    const page2Nav = page2.components.find((row) =>
+      row.components.some((c) => c.data?.custom_id?.startsWith(CustomIds.HelpPagePrefix))
+    );
+    const page2Prev = page2Nav.components.find((c) => c.data?.label === 'Previous');
+    assert.equal(page2Prev.data.disabled, false, 'Previous button on page 2 should be enabled');
+  }
 });
 
 test('Help System: handleHelpSearch finds commands by keyword', () => {

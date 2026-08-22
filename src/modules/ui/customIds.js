@@ -50,6 +50,7 @@ const CustomIds = Object.freeze({
   HelpCategorySelect: 'slickbot:help:cat-select',
   HelpModuleSelect: 'slickbot:help:mod-select',
   HelpModePrefix: 'slickbot:help:mode:',
+  HelpPagePrefix: 'slickbot:help:page:',
   HelpSearchBtn: 'slickbot:help:search-btn',
   HelpSearchModal: 'slickbot:help:search-modal',
   HelpSearchModalSubmit: 'slickbot:modal:help-search',
