@@ -1,30 +1,11 @@
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 const { query } = require('../../services/db');
-const { createBaseEmbed, createSuccessEmbed, createWarningEmbed, SlickBotColors, withPanelHeaderImage } = require('../ui/uiService');
+const { createBaseEmbed, createSuccessEmbed, createWarningEmbed, SlickBotColors, withPanelHeaderImage, parseColor } = require('../ui/uiService');
 const { CustomIds } = require('../ui/customIds');
+const { parseDurationToMs, formatDiscordTimestamp } = require('../../utils/time');
 
 function parseHexColor(color, fallback = SlickBotColors.PRIMARY) {
-  const value = String(color || '').trim();
-  if (/^#[0-9a-fA-F]{6}$/.test(value)) return Number.parseInt(value.slice(1), 16);
-  return fallback;
-}
-
-function parseDurationToMs(input) {
-  const text = String(input || '').trim().toLowerCase();
-  const match = text.match(/^(\d+)\s*(s|sec|secs|second|seconds|m|min|mins|minute|minutes|h|hr|hrs|hour|hours|d|day|days)$/);
-  if (!match) return null;
-  const amount = Number(match[1]);
-  const unit = match[2][0];
-  if (!Number.isFinite(amount) || amount <= 0) return null;
-  if (unit === 's') return amount * 1000;
-  if (unit === 'm') return amount * 60 * 1000;
-  if (unit === 'h') return amount * 60 * 60 * 1000;
-  if (unit === 'd') return amount * 24 * 60 * 60 * 1000;
-  return null;
-}
-
-function formatDiscordTimestamp(date, style = 'R') {
-  return `<t:${Math.floor(new Date(date).getTime() / 1000)}:${style}>`;
+  return parseColor(color, fallback);
 }
 
 function buildGiveawayPayload(giveaway, entryCount = 0, config = null) {

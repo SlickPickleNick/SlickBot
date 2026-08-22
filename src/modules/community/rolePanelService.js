@@ -1,25 +1,12 @@
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder } = require('discord.js');
 const { query } = require('../../services/db');
-const { createBaseEmbed, SlickBotColors, withPanelHeaderImage } = require('../ui/uiService');
+const { createBaseEmbed, SlickBotColors, withPanelHeaderImage, parseColor, normalizeHexColor } = require('../ui/uiService');
 const { updatePublishedPanelsForRefs } = require('../panels/publishedPanelService');
 
 const MAX_NATIVE_REACTION_OPTIONS = 20;
 
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function normalizeHexColor(color, fallback = '#7869ff') {
-  if (!color) return fallback;
-  const value = String(color).trim();
-  if (/^#[0-9a-fA-F]{6}$/.test(value)) return value;
-  if (/^[0-9a-fA-F]{6}$/.test(value)) return `#${value}`;
-  return fallback;
-}
-
-function parseColor(color) {
-  const value = normalizeHexColor(color);
-  return Number.parseInt(value.slice(1), 16);
 }
 
 function normalizeRoleIds(roleIds) {

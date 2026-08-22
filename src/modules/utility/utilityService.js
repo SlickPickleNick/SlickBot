@@ -12,6 +12,7 @@ const { createBaseEmbed, createSuccessEmbed, createWarningEmbed, createErrorEmbe
 const { CustomIds } = require('../ui/customIds');
 const { ActionKeys } = require('../permissions/actionKeys');
 const { ModuleKeys } = require('../moduleRegistry');
+const { parseDurationToMs } = require('../../utils/time');
 
 const DEFAULT_UTILITY_CONFIG = Object.freeze({
   enabled: true,
@@ -27,23 +28,6 @@ const DEFAULT_UTILITY_CONFIG = Object.freeze({
 });
 
 const snipeCache = new Map(); // channelId -> Array<{ author, content, attachments, createdAt, deletedAt }>
-
-function parseDurationToMs(input) {
-  if (!input) return null;
-  const str = String(input).trim().toLowerCase();
-  const match = str.match(/^(\d+)\s*(s|sec|seconds?|m|min|minutes?|h|hr|hours?|d|days?|w|weeks?)$/);
-  if (!match) return null;
-
-  const value = parseInt(match[1], 10);
-  const unit = match[2];
-
-  if (unit.startsWith('s')) return value * 1000;
-  if (unit.startsWith('m')) return value * 60 * 1000;
-  if (unit.startsWith('h')) return value * 60 * 60 * 1000;
-  if (unit.startsWith('d')) return value * 24 * 60 * 60 * 1000;
-  if (unit.startsWith('w')) return value * 7 * 24 * 60 * 60 * 1000;
-  return null;
-}
 
 function renderProgressBar(percentage, length = 10) {
   const clamped = Math.max(0, Math.min(100, percentage));

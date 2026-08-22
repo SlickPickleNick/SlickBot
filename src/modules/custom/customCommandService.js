@@ -1,6 +1,6 @@
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 const { query } = require('../../services/db');
-const { SlickBotColors, createBaseEmbed } = require('../ui/uiService');
+const { SlickBotColors, createBaseEmbed, parseColor, normalizeHexColor } = require('../ui/uiService');
 const { CustomIds } = require('../ui/customIds');
 
 const DEFAULT_PREFIX = '!';
@@ -23,20 +23,11 @@ function normalizePrefix(value) {
   return text.slice(0, 8);
 }
 
-function parseColor(value) {
-  const text = String(value || '').trim();
-  if (!text) return SlickBotColors.PRIMARY;
-  const normalized = text.startsWith('#') ? text.slice(1) : text;
-  if (!/^[0-9a-fA-F]{6}$/.test(normalized)) return SlickBotColors.PRIMARY;
-  return Number.parseInt(normalized, 16);
-}
-
 function normalizeColorText(value) {
   const text = String(value || '').trim();
   if (!text) return null;
-  const normalized = text.startsWith('#') ? text.slice(1) : text;
-  if (!/^[0-9a-fA-F]{6}$/.test(normalized)) return null;
-  return `#${normalized.toUpperCase()}`;
+  const normalized = normalizeHexColor(text, null);
+  return normalized ? normalized.toUpperCase() : null;
 }
 
 function truncate(value, maxLength) {

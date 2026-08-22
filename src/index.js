@@ -67,7 +67,92 @@ const socialFeeds = new SocialFeedService();
 const utility = new UtilityService();
 const healthServer = startHealthServer(client);
 
-const backgroundIntervals = [];
+const { TaskScheduler } = require('./services/taskScheduler');
+
+const taskScheduler = new TaskScheduler();
+
+taskScheduler
+  .registerTask({
+    name: 'giveaways',
+    intervalMs: 60 * 1000,
+    initialDelayMs: 2 * 1000,
+    immediate: true,
+    run: (readyClient, log) => giveaways.processDueGiveaways(readyClient, log)
+  })
+  .registerTask({
+    name: 'scheduledMessages',
+    intervalMs: 60 * 1000,
+    initialDelayMs: 4 * 1000,
+    immediate: true,
+    run: (readyClient, log) => scheduledMessages.processDue(readyClient, log)
+  })
+  .registerTask({
+    name: 'applications',
+    intervalMs: 30 * 1000,
+    initialDelayMs: 6 * 1000,
+    immediate: true,
+    run: (readyClient, log) => applications.processExpiredSessions(readyClient, log)
+  })
+  .registerTask({
+    name: 'tempRoles',
+    intervalMs: 60 * 1000,
+    initialDelayMs: 8 * 1000,
+    immediate: true,
+    run: (readyClient, log) => tempRoles.processExpired(readyClient, log)
+  })
+  .registerTask({
+    name: 'reminders',
+    intervalMs: 30 * 1000,
+    initialDelayMs: 10 * 1000,
+    immediate: true,
+    run: (readyClient, log) => utility.processDueReminders(readyClient, log)
+  })
+  .registerTask({
+    name: 'polls',
+    intervalMs: 60 * 1000,
+    initialDelayMs: 12 * 1000,
+    immediate: true,
+    run: (readyClient, log) => utility.processExpiredPolls(readyClient, log)
+  })
+  .registerTask({
+    name: 'communityGames',
+    intervalMs: 5 * 60 * 1000,
+    initialDelayMs: 14 * 1000,
+    immediate: true,
+    run: (readyClient) => communityGames.expireStaleSessions(readyClient)
+  })
+  .registerTask({
+    name: 'achievementsVoice',
+    intervalMs: 5 * 60 * 1000,
+    initialDelayMs: 16 * 1000,
+    immediate: true,
+    run: (readyClient, log) => achievements.processVoiceHeartbeat(readyClient, log)
+  })
+  .registerTask({
+    name: 'socialFeeds',
+    intervalMs: 60 * 1000,
+    initialDelayMs: 18 * 1000,
+    immediate: true,
+    run: (readyClient, log) => socialFeeds.processFeeds(readyClient, log)
+  })
+  .registerTask({
+    name: 'birthdays',
+    intervalMs: 60 * 60 * 1000,
+    initialDelayMs: 20 * 1000,
+    immediate: true,
+    run: (readyClient, log) => birthdays.processBirthdays(readyClient, log)
+  })
+  .registerTask({
+    name: 'serverStats',
+    intervalMs: 15 * 60 * 1000,
+    initialDelayMs: 30 * 1000,
+    immediate: false,
+    run: async (readyClient, log) => {
+      for (const guild of readyClient.guilds.cache.values()) {
+        await serverStats.updateStats(guild, log, '15-minute scheduled interval', { forceMemberFetch: false }).catch(() => {});
+      }
+    }
+  });
 
 client.once(Events.ClientReady, async (readyClient) => {
   console.log(`SlickBot logged in as ${readyClient.user.tag}.`);
@@ -83,64 +168,10 @@ client.once(Events.ClientReady, async (readyClient) => {
     await permissions.ensureGuildConfig(guild.id, guild.name).catch((error) => console.error(`Failed to ensure guild config for ${guild.name}:`, error));
   }
 
-  backgroundIntervals.push(setInterval(() => {
-    giveaways.processDueGiveaways(readyClient, logger).catch((error) => console.error('Failed to process due giveaways:', error));
-  }, 60 * 1000));
-  await giveaways.processDueGiveaways(readyClient, logger).catch((error) => console.error('Failed to process due giveaways:', error));
-
-  backgroundIntervals.push(setInterval(() => {
-    birthdays.processBirthdays(readyClient, logger).catch((error) => console.error('Failed to process birthdays:', error));
-  }, 60 * 60 * 1000));
-  await birthdays.processBirthdays(readyClient, logger).catch((error) => console.error('Failed to process birthdays:', error));
-
-  backgroundIntervals.push(setInterval(() => {
-    scheduledMessages.processDue(readyClient, logger).catch((error) => console.error('Failed to process scheduled messages:', error));
-  }, 60 * 1000));
-  await scheduledMessages.processDue(readyClient, logger).catch((error) => console.error('Failed to process scheduled messages:', error));
-
-  backgroundIntervals.push(setInterval(() => {
-    applications.processExpiredSessions(readyClient, logger).catch((error) => console.error('Failed to process expired application sessions:', error));
-  }, 30 * 1000));
-  await applications.processExpiredSessions(readyClient, logger).catch((error) => console.error('Failed to process expired application sessions:', error));
-
-  backgroundIntervals.push(setInterval(() => {
-    communityGames.expireStaleSessions(readyClient).catch((error) => console.error('Failed to expire stale community games:', error));
-  }, 5 * 60 * 1000));
-  await communityGames.expireStaleSessions(readyClient).catch((error) => console.error('Failed to expire stale community games:', error));
-
-  backgroundIntervals.push(setInterval(() => {
-    tempRoles.processExpired(readyClient, logger).catch((error) => console.error('Failed to process temporary role expirations:', error));
-  }, 60 * 1000));
-  await tempRoles.processExpired(readyClient, logger).catch((error) => console.error('Failed to process temporary role expirations:', error));
-
-  backgroundIntervals.push(setInterval(() => {
-    achievements.processVoiceHeartbeat(readyClient, logger).catch((error) => console.error('Failed to process achievement voice sessions:', error));
-  }, 5 * 60 * 1000));
-  await achievements.processVoiceHeartbeat(readyClient, logger).catch((error) => console.error('Failed to process achievement voice sessions:', error));
-
-  backgroundIntervals.push(setInterval(() => {
-    socialFeeds.processFeeds(readyClient, logger).catch((error) => console.error('Failed to process social feeds:', error));
-  }, 60 * 1000));
-  await socialFeeds.processFeeds(readyClient, logger).catch((error) => console.error('Failed to process social feeds on startup:', error));
-
-  backgroundIntervals.push(setInterval(() => {
-    utility.processDueReminders(readyClient, logger).catch((error) => console.error('Failed to process due reminders:', error));
-  }, 30 * 1000));
-  await utility.processDueReminders(readyClient, logger).catch((error) => console.error('Failed to process due reminders on startup:', error));
-
-  backgroundIntervals.push(setInterval(() => {
-    utility.processExpiredPolls(readyClient, logger).catch((error) => console.error('Failed to process expired polls:', error));
-  }, 60 * 1000));
-  await utility.processExpiredPolls(readyClient, logger).catch((error) => console.error('Failed to process expired polls on startup:', error));
-
-  backgroundIntervals.push(setInterval(() => {
-    for (const guild of readyClient.guilds.cache.values()) {
-      serverStats.updateStats(guild, logger, '15-minute fallback interval', { forceMemberFetch: true }).catch((error) => console.error(`Failed interval server stats update for ${guild.name}:`, error));
-    }
-  }, 15 * 60 * 1000));
+  taskScheduler.start(readyClient, logger);
 
   for (const guild of readyClient.guilds.cache.values()) {
-    serverStats.scheduleUpdate(guild, logger, 'startup', 10 * 1000, { forceMemberFetch: true });
+    serverStats.scheduleUpdate(guild, logger, 'startup', 10 * 1000, { forceMemberFetch: false });
   }
 
   await botUpdates.announceStartup(readyClient, logger).catch((error) => console.error('Failed to process bot update announcements:', error));
@@ -1096,9 +1127,7 @@ main().catch(async (error) => {
 
 async function shutdown() {
   console.log('Shutting down SlickBot...');
-  for (const interval of backgroundIntervals) {
-    clearInterval(interval);
-  }
+  taskScheduler.stop();
   healthServer.close();
   client.destroy();
   await closeDatabase();

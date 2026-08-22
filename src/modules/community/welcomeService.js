@@ -1,6 +1,6 @@
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 const { query } = require('../../services/db');
-const { createBaseEmbed, createSuccessEmbed, createWarningEmbed, SlickBotColors } = require('../ui/uiService');
+const { createBaseEmbed, createSuccessEmbed, createWarningEmbed, SlickBotColors, normalizeHexColor, parseColor } = require('../ui/uiService');
 const { CustomIds } = require('../ui/customIds');
 
 function applyPlaceholders(template, member) {
@@ -241,20 +241,6 @@ function buildWelcomeEditModal(config) {
     );
 }
 
-function normalizeHexColor(color) {
-  if (!color) return undefined;
-  const value = String(color).trim();
-  if (/^#[0-9a-fA-F]{6}$/.test(value)) return value;
-  if (/^[0-9a-fA-F]{6}$/.test(value)) return `#${value}`;
-  return undefined;
-}
-
-function parseColor(color) {
-  const value = normalizeHexColor(color);
-  if (!value) return null;
-  return Number.parseInt(value.slice(1), 16);
-}
-
 module.exports = {
   getWelcomeConfig,
   upsertWelcomeConfig,
@@ -266,5 +252,6 @@ module.exports = {
   buildWelcomePanel,
   buildWelcomeEditModal,
   applyPlaceholders,
+  normalizeHexColor,
   parseColor
 };

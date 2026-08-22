@@ -116,6 +116,21 @@ function formatStatusBadge(status) {
   return 'Unknown';
 }
 
+function normalizeHexColor(color, fallback = '#7869ff') {
+  if (!color) return fallback;
+  const value = String(color).trim();
+  if (/^#[0-9a-fA-F]{6}$/.test(value)) return value;
+  if (/^[0-9a-fA-F]{6}$/.test(value)) return `#${value}`;
+  return fallback;
+}
+
+function parseColor(color, fallback = null) {
+  if (typeof color === 'number' && Number.isFinite(color)) return color;
+  const normalized = normalizeHexColor(color, null);
+  if (!normalized) return fallback;
+  return Number.parseInt(normalized.slice(1), 16);
+}
+
 module.exports = {
   SlickBotColors,
   createBaseEmbed,
@@ -131,5 +146,7 @@ module.exports = {
   withPanelHeaderImage,
   formatEnabled,
   formatStatusBadge,
+  normalizeHexColor,
+  parseColor,
   ButtonStyle
 };

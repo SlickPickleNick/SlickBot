@@ -2,37 +2,10 @@ const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { createBaseEmbed, createSuccessEmbed, createWarningEmbed, SlickBotColors } = require('../ui/uiService');
 const { query } = require('../../services/db');
 const { CustomIds } = require('../ui/customIds');
-
-const MAX_DURATION_MS = 365 * 24 * 60 * 60 * 1000;
+const { parseDurationToMs: parseTimeMs, formatDuration, MAX_DURATION_MS } = require('../../utils/time');
 
 function parseDurationToMs(input) {
-  const text = String(input || '').trim().toLowerCase();
-  if (!text) return 0;
-  const pattern = /(\d+)\s*(w|week|weeks|d|day|days|h|hr|hrs|hour|hours|m|min|mins|minute|minutes)/gi;
-  let total = 0;
-  let match;
-  while ((match = pattern.exec(text)) !== null) {
-    const amount = Number(match[1]);
-    const unit = match[2];
-    if (!Number.isFinite(amount) || amount <= 0) continue;
-    if (unit.startsWith('w')) total += amount * 7 * 24 * 60 * 60 * 1000;
-    else if (unit.startsWith('d')) total += amount * 24 * 60 * 60 * 1000;
-    else if (unit.startsWith('h')) total += amount * 60 * 60 * 1000;
-    else total += amount * 60 * 1000;
-  }
-  return Math.max(0, Math.min(total, MAX_DURATION_MS));
-}
-
-function formatDuration(ms) {
-  const minutes = Math.max(1, Math.round(Number(ms || 0) / 60000));
-  const days = Math.floor(minutes / 1440);
-  const hours = Math.floor((minutes % 1440) / 60);
-  const mins = minutes % 60;
-  const parts = [];
-  if (days) parts.push(`${days}d`);
-  if (hours) parts.push(`${hours}h`);
-  if (mins || !parts.length) parts.push(`${mins}m`);
-  return parts.join(' ');
+  return parseTimeMs(input, { maxDurationMs: MAX_DURATION_MS, fallback: 0 });
 }
 
 class TemporaryRoleService {
