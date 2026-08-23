@@ -4,24 +4,64 @@ const { ActionKeys } = require('../modules/permissions/actionKeys');
 const { replyPrivate } = require('../utils/reply');
 const { ModerationService } = require('../modules/moderation/moderationService');
 const { buildModerationPanel, buildCaseEmbed } = require('../modules/moderation/moderationUi');
-const { createBaseEmbed, SlickBotColors } = require('../modules/ui/uiService');
+const { createBaseEmbed, createSuccessEmbed, createWarningEmbed, SlickBotColors } = require('../modules/ui/uiService');
+const { parseDurationToMs } = require('../utils/time');
+const { AutoModService } = require('../modules/moderation/autoModService');
 
 const moderation = new ModerationService();
+const autoMod = new AutoModService();
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('mod')
-    .setDescription('Moderation tools for SlickBot.')
+    .setDescription('Moderation tools, punishments, and infraction auto-escalation.')
     .addSubcommand((subcommand) => subcommand.setName('manager').setDescription('Open the moderation control panel.'))
     .addSubcommand((subcommand) => subcommand.setName('panel').setDescription('Open the moderation control panel.'))
     .addSubcommand((subcommand) =>
       subcommand
         .setName('warn')
-        .setDescription('Create a warning case for a user.')
+        .setDescription('Create a warning case for a user and evaluate auto-escalation.')
         .addUserOption((option) => option.setName('user').setDescription('User to warn.').setRequired(true))
         .addStringOption((option) => option.setName('reason').setDescription('Reason for the warning.').setRequired(true).setMaxLength(1000))
         .addStringOption((option) => option.setName('evidence').setDescription('Optional evidence or context.').setRequired(false).setMaxLength(1000))
         .addBooleanOption((option) => option.setName('dm_user').setDescription('Try to DM the user. Defaults to false.').setRequired(false))
+    )
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName('warnings')
+        .setDescription('View a user’s active warnings and escalation status.')
+        .addUserOption((option) => option.setName('user').setDescription('User to inspect.').setRequired(true))
+    )
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName('escalation-list')
+        .setDescription('View the server warning escalation matrix.')
+    )
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName('escalation-set')
+        .setDescription('Set an auto-punishment rule for a warning count threshold.')
+        .addIntegerOption((option) => option.setName('warnings').setDescription('Warning count threshold.').setRequired(true).setMinValue(1).setMaxValue(50))
+        .addStringOption((option) =>
+          option.setName('punishment')
+            .setDescription('Punishment to execute.')
+            .setRequired(true)
+            .addChoices(
+              { name: 'Timeout', value: 'TIMEOUT' },
+              { name: 'Kick', value: 'KICK' },
+              { name: 'Ban', value: 'BAN' }
+            )
+        )
+        .addStringOption((option) => option.setName('duration').setDescription('Timeout duration, such as 10m, 1h, 24h, 7d.').setRequired(false).setMaxLength(30))
+        .addIntegerOption((option) => option.setName('days').setDescription('Timeout duration in days.').setRequired(false).setMinValue(1).setMaxValue(28))
+        .addIntegerOption((option) => option.setName('hours').setDescription('Timeout duration in hours.').setRequired(false).setMinValue(1).setMaxValue(672))
+        .addIntegerOption((option) => option.setName('minutes').setDescription('Timeout duration in minutes.').setRequired(false).setMinValue(1).setMaxValue(40320))
+    )
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName('escalation-remove')
+        .setDescription('Remove an auto-escalation rule.')
+        .addIntegerOption((option) => option.setName('warnings').setDescription('Warning count threshold to remove.').setRequired(true).setMinValue(1).setMaxValue(50))
     )
     .addSubcommand((subcommand) =>
       subcommand
@@ -79,6 +119,10 @@ module.exports = {
   getActionKey(interaction) {
     const subcommand = interaction.options.getSubcommand();
     if (subcommand === 'warn') return ActionKeys.ModerationWarn;
+    if (subcommand === 'warnings') return ActionKeys.ModerationWarnings;
+    if (subcommand === 'escalation-list') return ActionKeys.ModerationEscalation;
+    if (subcommand === 'escalation-set') return ActionKeys.ModerationEscalation;
+    if (subcommand === 'escalation-remove') return ActionKeys.ModerationEscalation;
     if (subcommand === 'timeout') return ActionKeys.ModerationTimeout;
     if (subcommand === 'untimeout') return ActionKeys.ModerationUntimeout;
     if (subcommand === 'kick') return ActionKeys.ModerationKick;
@@ -98,6 +142,26 @@ module.exports = {
 
     if (subcommand === 'warn') {
       await handleWarn(interaction, ctx);
+      return;
+    }
+
+    if (subcommand === 'warnings') {
+      await handleUserWarnings(interaction, ctx);
+      return;
+    }
+
+    if (subcommand === 'escalation-list') {
+      await handleEscalationList(interaction, ctx);
+      return;
+    }
+
+    if (subcommand === 'escalation-set') {
+      await handleEscalationSet(interaction, ctx);
+      return;
+    }
+
+    if (subcommand === 'escalation-remove') {
+      await handleEscalationRemove(interaction, ctx);
       return;
     }
 
@@ -151,14 +215,155 @@ async function handleWarn(interaction, ctx) {
     dmStatus = await target.send(`You received a warning in ${interaction.guild.name}: ${reason}`).then(() => 'Sent.').catch(() => 'Failed or blocked.');
   }
 
+  const member = interaction.guild ? await interaction.guild.members.fetch(target.id).catch(() => null) : null;
+  const esc = await moderation.checkAndApplyEscalation({
+    guild: interaction.guild,
+    member,
+    targetUser: target,
+    actorUser: interaction.user,
+    autoMod,
+    logger: ctx.logger
+  });
+
   const embed = buildCaseEmbed(caseRecord, 'Warning Case Created')
-    .addFields({ name: 'DM Status', value: dmStatus, inline: true });
+    .addFields(
+      { name: 'DM Status', value: dmStatus, inline: true },
+      { name: 'Active Warnings', value: `**${esc.warningCount}** warning(s)`, inline: true }
+    );
+
+  if (esc.escalated) {
+    const durStr = esc.durationSeconds ? ` (${Math.round(esc.durationSeconds / 60)}m)` : '';
+    embed.addFields({
+      name: '⚠️ Infraction Auto-Escalation Applied',
+      value: `User reached **${esc.warningCount} active warnings**.\nAction Executed: **${esc.punishment}**${durStr}\nAuto-Case: #${esc.caseRecord?.case_number || 'Created'}`,
+      inline: false
+    });
+  } else if (esc.nextRule) {
+    embed.setFooter({ text: `Next auto-escalation at ${esc.nextRule.warning_count} warnings (${esc.nextRule.punishment})` });
+  }
+
   await replyPrivate(interaction, { embeds: [embed] });
 }
 
-const { parseDurationToMs } = require('../utils/time');
-const { AutoModService } = require('../modules/moderation/autoModService');
-const autoMod = new AutoModService();
+async function handleUserWarnings(interaction, ctx) {
+  const target = interaction.options.getUser('user', true);
+  const activeCount = await moderation.getActiveWarningCount(interaction.guildId, target.id, 30);
+  const userCases = await moderation.listUserCases(interaction.guildId, target.id, 10);
+  const warningCases = userCases.filter((c) => c.action_type === 'WARN');
+  const rules = await moderation.getEscalationRules(interaction.guildId);
+  const nextRule = rules.find((r) => r.warning_count > activeCount);
+
+  const lines = warningCases.length
+    ? warningCases.map((c) => `• Case #${c.case_number} (${c.status}) — *${c.reason || 'No reason'}*`).join('\n')
+    : 'No warning cases recorded.';
+
+  const embed = createBaseEmbed({
+    title: `Warnings Profile • ${target.tag}`,
+    description: [
+      `User: <@${target.id}>`,
+      `Active Warnings (30d): **${activeCount}**`,
+      nextRule
+        ? `Next Escalation: **${nextRule.warning_count} Warnings** -> **${nextRule.punishment}**${nextRule.duration_seconds ? ` (${Math.round(nextRule.duration_seconds / 60)}m)` : ''}`
+        : 'Next Escalation: *No higher threshold configured.*',
+      '',
+      '**Recent Warnings**',
+      lines
+    ].join('\n'),
+    color: activeCount > 0 ? SlickBotColors.WARNING : SlickBotColors.INFO
+  });
+
+  await replyPrivate(interaction, { embeds: [embed] });
+}
+
+async function handleEscalationList(interaction, ctx) {
+  const rules = await moderation.getEscalationRules(interaction.guildId);
+
+  const lines = rules.length
+    ? rules.map((r) => `• **${r.warning_count} Warnings** ➔ **${r.punishment}**${r.duration_seconds ? ` (${Math.round(r.duration_seconds / 60)}m duration)` : ''}`).join('\n')
+    : '*No auto-escalation rules configured. Use `/mod escalation-set` to create one.*';
+
+  const embed = createBaseEmbed({
+    title: '⚠️ Moderation Infraction Auto-Escalation Ladder',
+    description: [
+      'When members accumulate active warnings within a 30-day window, SlickBot automatically enforces escalating punishments.',
+      '',
+      '**Configured Escalation Rules**',
+      lines,
+      '',
+      '**Commands**',
+      '`/mod escalation-set <warnings> <punishment> [duration]` — Set a threshold',
+      '`/mod escalation-remove <warnings>` — Remove a threshold'
+    ].join('\n'),
+    color: rules.length ? SlickBotColors.PRIMARY : SlickBotColors.INFO
+  });
+
+  await replyPrivate(interaction, { embeds: [embed] });
+}
+
+async function handleEscalationSet(interaction, ctx) {
+  const warnings = interaction.options.getInteger('warnings', true);
+  const punishment = interaction.options.getString('punishment', true);
+  const durationStr = interaction.options.getString('duration');
+  const days = interaction.options.getInteger('days') || 0;
+  const hours = interaction.options.getInteger('hours') || 0;
+  const minutes = interaction.options.getInteger('minutes') || 0;
+
+  let durationSeconds = 0;
+  if (durationStr) {
+    const ms = parseDurationToMs(durationStr, { maxDurationMs: 28 * 24 * 60 * 60 * 1000, fallback: 0 });
+    durationSeconds = Math.floor(ms / 1000);
+  }
+  if (!durationSeconds) {
+    durationSeconds = (days * 86400) + (hours * 3600) + (minutes * 60);
+  }
+  if (punishment === 'TIMEOUT' && durationSeconds <= 0) {
+    durationSeconds = 3600; // Default 1h timeout
+  }
+
+  const rule = await moderation.setEscalationRule(
+    interaction.guildId,
+    warnings,
+    punishment,
+    punishment === 'TIMEOUT' ? durationSeconds : null
+  );
+
+  await ctx.logger.log({
+    guildId: interaction.guildId,
+    eventKey: 'moderation-config',
+    title: 'Auto-Escalation Rule Saved',
+    body: `Threshold: **${warnings} Warnings**\nPunishment: **${punishment}**${punishment === 'TIMEOUT' ? ` (${Math.round(durationSeconds / 60)}m)` : ''}\nConfigured By: <@${interaction.user.id}>`,
+    actorUserId: interaction.user.id
+  }).catch(() => {});
+
+  await replyPrivate(interaction, {
+    embeds: [createSuccessEmbed(
+      'Auto-Escalation Rule Saved',
+      `Members reaching **${warnings} active warnings** will automatically receive a **${punishment}**${punishment === 'TIMEOUT' ? ` for **${Math.round(durationSeconds / 60)} minutes**` : ''}.`
+    )]
+  });
+}
+
+async function handleEscalationRemove(interaction, ctx) {
+  const warnings = interaction.options.getInteger('warnings', true);
+  const removed = await moderation.removeEscalationRule(interaction.guildId, warnings);
+
+  if (!removed) {
+    await replyPrivate(interaction, { embeds: [createWarningEmbed('Rule Not Found', `No auto-escalation rule exists for **${warnings} warnings**.`)] });
+    return;
+  }
+
+  await ctx.logger.log({
+    guildId: interaction.guildId,
+    eventKey: 'moderation-config',
+    title: 'Auto-Escalation Rule Removed',
+    body: `Removed threshold for **${warnings} Warnings** by <@${interaction.user.id}>.`,
+    actorUserId: interaction.user.id
+  }).catch(() => {});
+
+  await replyPrivate(interaction, {
+    embeds: [createSuccessEmbed('Auto-Escalation Rule Removed', `Removed escalation rule for **${warnings} warnings**.`)]
+  });
+}
 
 async function handleTimeout(interaction, ctx) {
   const target = interaction.options.getUser('user', true);
@@ -199,27 +404,40 @@ async function handleTimeout(interaction, ctx) {
     reason,
     evidence,
     durationSeconds,
-    expiresAt
+    expiresAt,
+    metadata: {
+      durationSeconds,
+      expiresAt,
+      roleApplied: timeoutRes?.roleApplied,
+      roleMode: timeoutRes?.roleMode,
+      nativeSuccess: timeoutRes?.nativeSuccess
+    }
   });
 
+  const durationLabel = `${Math.floor(durationSeconds / 60)} minutes`;
   const embed = buildCaseEmbed(caseRecord, 'Timeout Applied')
-    .addFields({
+    .addFields(
+      { name: 'Duration', value: durationLabel, inline: true },
+      { name: 'Expires', value: `<t:${Math.floor((Date.now() + (durationSeconds * 1000)) / 1000)}:R>`, inline: true }
+    );
+
+  if (timeoutRes?.roleApplied) {
+    const roleIdText = timeoutRes.timeoutRoleId ? `<@&${timeoutRes.timeoutRoleId}>` : (member.guild.roles?.cache?.find ? `<@&${member.guild.roles.cache.find((r) => r.name.toLowerCase().includes('timeout'))?.id || 'role-timeout'}>` : 'Timeout Role');
+    embed.addFields({
       name: 'Dual-Layer Enforcement',
-      value: [
-        `• **Discord Timeout:** ${timeoutRes.nativeTimeout ? '`✅ Applied`' : '`⚠️ Skipped/Failed`' + (timeoutRes.nativeError ? ` (${timeoutRes.nativeError})` : '')}`,
-        `• **Timeout Role:** ${timeoutRes.roleApplied ? `\`✅ Assigned\` <@&${timeoutRes.timeoutRoleId}>` : `\`⚠️ Not Assigned\` (${timeoutRes.roleError || 'No role set'})`}`
-      ].join('\n'),
+      value: `Discord Timeout: ${timeoutRes.nativeTimeout !== false ? '✅ Applied' : '⚠️ Fallback'}\nTimeout Role: ✅ Assigned (${roleIdText})`,
       inline: false
     });
+  }
 
   await replyPrivate(interaction, { embeds: [embed] });
 }
 
 async function handleUntimeout(interaction, ctx) {
   const target = interaction.options.getUser('user', true);
-  const reason = interaction.options.getString('reason') || 'Timeout removed by moderator.';
-  const member = await interaction.guild.members.fetch(target.id).catch(() => null);
+  const reason = interaction.options.getString('reason') || 'No reason provided';
 
+  const member = await interaction.guild.members.fetch(target.id).catch(() => null);
   if (!member) {
     await replyPrivate(interaction, { embeds: [createBaseEmbed({ title: 'Member Not Found', description: 'That user is not currently available as a server member.', color: SlickBotColors.WARNING })] });
     return;
@@ -230,18 +448,19 @@ async function handleUntimeout(interaction, ctx) {
     target,
     actionType: 'UNTIMEOUT',
     reason,
-    status: 'CLOSED'
+    status: 'CLOSED',
+    metadata: {
+      roleRemoved: untimeoutRes?.roleRemoved,
+      nativeSuccess: untimeoutRes?.nativeSuccess
+    }
   });
 
   const embed = buildCaseEmbed(caseRecord, 'Timeout Removed')
-    .addFields({
-      name: 'Enforcement Clearance',
-      value: [
-        `• **Discord Timeout:** ${untimeoutRes.nativeUntimeout ? '`✅ Cleared`' : '`ℹ️ None Active`'}`,
-        `• **Timeout Role:** ${untimeoutRes.roleRemoved ? '`✅ Role Removed`' : '`ℹ️ No Role Active`'}`
-      ].join('\n'),
-      inline: false
-    });
+    .addFields({ name: 'Status', value: 'Active timeout cleared.', inline: true });
+
+  if (untimeoutRes?.roleRemoved) {
+    embed.addFields({ name: 'Dual Enforcement', value: 'Cleared restricted timeout role from member.', inline: false });
+  }
 
   await replyPrivate(interaction, { embeds: [embed] });
 }
@@ -250,10 +469,15 @@ async function handleKick(interaction, ctx) {
   const target = interaction.options.getUser('user', true);
   const reason = interaction.options.getString('reason', true);
   const evidence = interaction.options.getString('evidence', false);
-  const member = await interaction.guild.members.fetch(target.id).catch(() => null);
 
+  const member = await interaction.guild.members.fetch(target.id).catch(() => null);
   if (!member) {
-    await replyPrivate(interaction, { embeds: [createBaseEmbed({ title: 'Member Not Found', description: 'That user is not currently available as a server member.', color: SlickBotColors.WARNING })] });
+    await replyPrivate(interaction, { embeds: [createBaseEmbed({ title: 'Member Not Found', description: 'That user is not currently available in this server.', color: SlickBotColors.WARNING })] });
+    return;
+  }
+
+  if (!member.kickable) {
+    await replyPrivate(interaction, { embeds: [createBaseEmbed({ title: 'Cannot Kick Member', description: 'I do not have high enough hierarchy or permissions to kick that member.', color: SlickBotColors.ERROR })] });
     return;
   }
 
@@ -262,22 +486,22 @@ async function handleKick(interaction, ctx) {
     target,
     actionType: 'KICK',
     reason,
-    evidence,
-    status: 'CLOSED'
+    evidence
   });
 
-  await replyPrivate(interaction, { embeds: [buildCaseEmbed(caseRecord, 'User Kicked')] });
+  await replyPrivate(interaction, { embeds: [buildCaseEmbed(caseRecord, 'Member Kicked')] });
 }
 
 async function handleBan(interaction, ctx) {
   const target = interaction.options.getUser('user', true);
   const reason = interaction.options.getString('reason', true);
-  const evidence = interaction.options.getString('evidence', false);
   const deleteDays = interaction.options.getInteger('delete_message_days') ?? 0;
+  const evidence = interaction.options.getString('evidence', false);
 
-  await interaction.guild.members.ban(target.id, {
+  const deleteMessageSeconds = deleteDays * 86400;
+  await interaction.guild.bans.create(target.id, {
     reason,
-    deleteMessageSeconds: deleteDays * 24 * 60 * 60
+    deleteMessageSeconds
   });
 
   const caseRecord = await createAndLogCase(interaction, ctx, {
@@ -285,8 +509,7 @@ async function handleBan(interaction, ctx) {
     actionType: 'BAN',
     reason,
     evidence,
-    status: 'CLOSED',
-    metadata: { deleteMessageDays: deleteDays }
+    metadata: { deleteDays }
   });
 
   await replyPrivate(interaction, { embeds: [buildCaseEmbed(caseRecord, 'User Banned')] });
@@ -294,17 +517,11 @@ async function handleBan(interaction, ctx) {
 
 async function handleUnban(interaction, ctx) {
   const userId = interaction.options.getString('user_id', true).trim();
-  const reason = interaction.options.getString('reason') || 'Ban removed by moderator.';
+  const reason = interaction.options.getString('reason') || 'No reason provided';
 
-  if (!/^\d{15,25}$/.test(userId)) {
-    await replyPrivate(interaction, { embeds: [createBaseEmbed({ title: 'Invalid User ID', description: 'Provide a valid Discord user ID.', color: SlickBotColors.WARNING })] });
-    return;
-  }
-
-  const target = await interaction.client.users.fetch(userId).catch(() => ({ id: userId, tag: userId }));
-  await interaction.guild.members.unban(userId, reason);
+  await interaction.guild.bans.remove(userId, reason);
   const caseRecord = await createAndLogCase(interaction, ctx, {
-    target,
+    target: { id: userId, tag: `User ${userId}` },
     actionType: 'UNBAN',
     reason,
     status: 'CLOSED'
@@ -314,64 +531,70 @@ async function handleUnban(interaction, ctx) {
 }
 
 async function handleMassBan(interaction, ctx) {
-  const raw = interaction.options.getString('user_ids', true);
+  const rawIds = interaction.options.getString('user_ids', true);
   const reason = interaction.options.getString('reason', true);
   const deleteDays = interaction.options.getInteger('delete_message_days') ?? 0;
-  const ids = Array.from(new Set(raw.split(/[\s,]+/).map((item) => item.trim()).filter(Boolean))).slice(0, 25);
+  const deleteMessageSeconds = deleteDays * 86400;
 
-  if (ids.length === 0) {
-    await replyPrivate(interaction, { embeds: [createBaseEmbed({ title: 'No User IDs Found', description: 'Provide at least one user ID.', color: SlickBotColors.WARNING })] });
+  const userIds = [...new Set(rawIds.split(/[\s,]+/).filter(Boolean))].slice(0, 25);
+  if (!userIds.length) {
+    await replyPrivate(interaction, { embeds: [createBaseEmbed({ title: 'Invalid User IDs', description: 'No valid user IDs could be extracted.', color: SlickBotColors.WARNING })] });
     return;
   }
 
-  const results = [];
-  for (const userId of ids) {
+  const success = [];
+  const failed = [];
+
+  for (const id of userIds) {
     try {
-      await interaction.guild.members.ban(userId, {
-        reason,
-        deleteMessageSeconds: deleteDays * 24 * 60 * 60
-      });
+      await interaction.guild.bans.create(id, { reason, deleteMessageSeconds });
       await moderation.createCase({
         guildId: interaction.guildId,
-        targetUserId: userId,
-        targetUserTag: null,
+        targetUserId: id,
         actorUserId: interaction.user.id,
-        actionType: 'MASS_BAN',
-        reason,
-        status: 'CLOSED',
-        metadata: { deleteMessageDays: deleteDays }
+        actionType: 'BAN',
+        reason: `[Mass Ban] ${reason}`,
+        metadata: { massBan: true, deleteDays }
       });
-      results.push(`✅ ${userId}`);
-    } catch (error) {
-      results.push(`❌ ${userId} — ${error.message || 'Failed'}`);
+      success.push(id);
+    } catch {
+      failed.push(id);
     }
   }
 
   await ctx.logger.log({
     guildId: interaction.guildId,
-    eventKey: 'moderation',
-    title: 'Mass Ban Completed',
-    body: [`Moderator: <@${interaction.user.id}>`, `Reason: ${reason}`, '', results.join('\n')].join('\n'),
-    metadata: { moderatorId: interaction.user.id, userIds: ids, reason, deleteDays }
+    eventKey: 'moderation-action',
+    title: 'Mass Ban Executed',
+    body: `Actor: <@${interaction.user.id}>\nBanned: **${success.length}**\nFailed: **${failed.length}**\nReason: ${reason}`,
+    actorUserId: interaction.user.id,
+    metadata: { success, failed, reason }
   });
 
-  await replyPrivate(interaction, {
-    embeds: [createBaseEmbed({
-      title: 'Mass Ban Completed',
-      description: results.join('\n'),
-      color: results.some((line) => line.startsWith('❌')) ? SlickBotColors.WARNING : SlickBotColors.SUCCESS
-    })]
+  const embed = createBaseEmbed({
+    title: 'Mass Ban Complete',
+    description: [
+      `Total Attempted: **${userIds.length}**`,
+      `Successfully Banned: **${success.length}**`,
+      `Failed: **${failed.length}**`,
+      '',
+      success.length ? `Banned IDs: ${success.map((id) => `\`${id}\``).join(', ')}` : null,
+      failed.length ? `Failed IDs: ${failed.map((id) => `\`${id}\``).join(', ')}` : null
+    ].filter(Boolean).join('\n'),
+    color: failed.length ? SlickBotColors.WARNING : SlickBotColors.SUCCESS
   });
+
+  await replyPrivate(interaction, { embeds: [embed] });
 }
 
 async function createAndLogCase(interaction, ctx, input) {
   const caseRecord = await moderation.createCase({
     guildId: interaction.guildId,
     targetUserId: input.target.id,
-    targetUserTag: input.target.tag,
+    targetUserTag: input.target.tag || input.target.username || null,
     actorUserId: interaction.user.id,
     actionType: input.actionType,
-    reason: input.reason,
+    reason: input.reason || null,
     status: input.status || 'OPEN',
     durationSeconds: input.durationSeconds || null,
     expiresAt: input.expiresAt || null,
@@ -379,28 +602,24 @@ async function createAndLogCase(interaction, ctx, input) {
     metadata: input.metadata || null
   });
 
-  await ctx.logger.writeAudit({
-    guildId: interaction.guildId,
-    actorUserId: interaction.user.id,
-    actionKey: `moderation.${input.actionType.toLowerCase()}`,
-    targetType: 'User',
-    targetId: input.target.id,
-    summary: `${input.actionType} case #${caseRecord.case_number} created for ${input.target.tag}.`,
-    metadata: { caseNumber: caseRecord.case_number, reason: input.reason }
-  });
-
   await ctx.logger.log({
     guildId: interaction.guildId,
-    eventKey: 'moderation',
-    title: `${input.actionType} • Case #${caseRecord.case_number}`,
+    eventKey: 'moderation-action',
+    title: `Moderation Case #${caseRecord.case_number} Created`,
     body: [
-      `Target: <@${input.target.id}> \`${input.target.id}\``,
-      `Moderator: <@${interaction.user.id}>`,
-      `Status: **${caseRecord.status}**`,
-      '',
-      `Reason: ${input.reason}`
-    ].join('\n'),
-    metadata: { caseNumber: caseRecord.case_number, targetUserId: input.target.id, actorUserId: interaction.user.id }
+      `Action: **${input.actionType}**`,
+      `Target: <@${input.target.id}> (${input.target.tag || input.target.id})`,
+      `Actor: <@${interaction.user.id}>`,
+      `Reason: ${input.reason || 'No reason provided'}`,
+      input.evidence ? `Evidence: ${input.evidence}` : null,
+      input.durationSeconds ? `Duration: ${Math.floor(input.durationSeconds / 60)} minutes` : null
+    ].filter(Boolean).join('\n'),
+    actorUserId: interaction.user.id,
+    metadata: {
+      caseNumber: caseRecord.case_number,
+      targetUserId: input.target.id,
+      actionType: input.actionType
+    }
   });
 
   return caseRecord;

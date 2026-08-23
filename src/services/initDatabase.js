@@ -178,9 +178,21 @@ async function initDatabase() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       UNIQUE(guild_id, note_number)
     );
+  await query(`
+    CREATE TABLE IF NOT EXISTS moderation_escalation_rules (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      warning_count INTEGER NOT NULL,
+      punishment TEXT NOT NULL,
+      duration_seconds INTEGER,
+      active BOOLEAN NOT NULL DEFAULT true,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(guild_id, warning_count)
+    );
   `);
 
-
+  await query(`CREATE INDEX IF NOT EXISTS idx_moderation_escalation_rules_lookup ON moderation_escalation_rules(guild_id, warning_count, active);`);
 
   await query(`
     CREATE TABLE IF NOT EXISTS ticket_configs (
@@ -694,6 +706,14 @@ async function initDatabase() {
   await query(`CREATE INDEX IF NOT EXISTS idx_giveaways_due ON giveaways(status, ends_at);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_giveaway_entries_lookup ON giveaway_entries(giveaway_id);`);
   await query(`ALTER TABLE giveaway_configs ADD COLUMN IF NOT EXISTS panel_header_image_url TEXT;`).catch(() => {});
+  await query(`ALTER TABLE giveaway_configs ADD COLUMN IF NOT EXISTS default_min_account_age_days INTEGER NOT NULL DEFAULT 0;`).catch(() => {});
+  await query(`ALTER TABLE giveaway_configs ADD COLUMN IF NOT EXISTS default_min_level INTEGER NOT NULL DEFAULT 0;`).catch(() => {});
+  await query(`ALTER TABLE giveaway_configs ADD COLUMN IF NOT EXISTS default_required_role_id TEXT;`).catch(() => {});
+  await query(`ALTER TABLE giveaways ADD COLUMN IF NOT EXISTS required_role_id TEXT;`).catch(() => {});
+  await query(`ALTER TABLE giveaways ADD COLUMN IF NOT EXISTS required_role_ids TEXT[] NOT NULL DEFAULT '{}';`).catch(() => {});
+  await query(`ALTER TABLE giveaways ADD COLUMN IF NOT EXISTS blocked_role_ids TEXT[] NOT NULL DEFAULT '{}';`).catch(() => {});
+  await query(`ALTER TABLE giveaways ADD COLUMN IF NOT EXISTS min_account_age_days INTEGER NOT NULL DEFAULT 0;`).catch(() => {});
+  await query(`ALTER TABLE giveaways ADD COLUMN IF NOT EXISTS min_level INTEGER NOT NULL DEFAULT 0;`).catch(() => {});
 
 
   await query(`
@@ -868,10 +888,10 @@ async function initDatabase() {
   await query(`ALTER TABLE join_create_hubs ADD COLUMN IF NOT EXISTS bitrate INTEGER;`).catch(() => {});
   await query(`ALTER TABLE join_create_hubs ADD COLUMN IF NOT EXISTS private_enabled BOOLEAN NOT NULL DEFAULT false;`).catch(() => {});
   await query(`ALTER TABLE join_create_hubs ADD COLUMN IF NOT EXISTS owner_controls_enabled BOOLEAN NOT NULL DEFAULT true;`).catch(() => {});
-  await query(`ALTER TABLE join_create_hubs ADD COLUMN IF NOT EXISTS delete_when_empty BOOLEAN NOT NULL DEFAULT true;`).catch(() => {});
   await query(`ALTER TABLE join_create_hubs ADD COLUMN IF NOT EXISTS empty_delete_delay_seconds INTEGER NOT NULL DEFAULT 30;`).catch(() => {});
   await query(`ALTER TABLE join_create_hubs ADD COLUMN IF NOT EXISTS staff_role_id TEXT;`).catch(() => {});
   await query(`ALTER TABLE join_create_temp_channels ADD COLUMN IF NOT EXISTS locked BOOLEAN NOT NULL DEFAULT false;`).catch(() => {});
+  await query(`ALTER TABLE join_create_temp_channels ADD COLUMN IF NOT EXISTS hidden BOOLEAN NOT NULL DEFAULT false;`).catch(() => {});
   await query(`ALTER TABLE join_create_temp_channels ADD COLUMN IF NOT EXISTS user_limit INTEGER NOT NULL DEFAULT 0;`).catch(() => {});
   await query(`ALTER TABLE join_create_temp_channels ADD COLUMN IF NOT EXISTS control_message_id TEXT;`).catch(() => {});
   await query(`ALTER TABLE join_create_temp_channels ADD COLUMN IF NOT EXISTS control_message_error TEXT;`).catch(() => {});
@@ -1020,6 +1040,14 @@ async function initDatabase() {
   `);
 
   await query(`ALTER TABLE leveling_configs ADD COLUMN IF NOT EXISTS level_up_announce_mode TEXT NOT NULL DEFAULT 'ALL_LEVELS';`).catch(() => {});
+  await query(`ALTER TABLE leveling_configs ADD COLUMN IF NOT EXISTS voice_xp_enabled BOOLEAN NOT NULL DEFAULT true;`).catch(() => {});
+  await query(`ALTER TABLE leveling_configs ADD COLUMN IF NOT EXISTS voice_xp_min INTEGER NOT NULL DEFAULT 10;`).catch(() => {});
+  await query(`ALTER TABLE leveling_configs ADD COLUMN IF NOT EXISTS voice_xp_max INTEGER NOT NULL DEFAULT 20;`).catch(() => {});
+  await query(`ALTER TABLE leveling_configs ADD COLUMN IF NOT EXISTS voice_xp_interval_seconds INTEGER NOT NULL DEFAULT 60;`).catch(() => {});
+  await query(`ALTER TABLE leveling_configs ADD COLUMN IF NOT EXISTS voice_xp_require_unmuted BOOLEAN NOT NULL DEFAULT true;`).catch(() => {});
+  await query(`ALTER TABLE leveling_configs ADD COLUMN IF NOT EXISTS voice_xp_min_channel_members INTEGER NOT NULL DEFAULT 2;`).catch(() => {});
+  await query(`ALTER TABLE leveling_configs ADD COLUMN IF NOT EXISTS voice_ignored_channel_ids JSONB NOT NULL DEFAULT '[]'::jsonb;`).catch(() => {});
+  await query(`ALTER TABLE leveling_profiles ADD COLUMN IF NOT EXISTS voice_minutes INTEGER NOT NULL DEFAULT 0;`).catch(() => {});
 
   await query(`
     CREATE TABLE IF NOT EXISTS leveling_multiplier_roles (
@@ -2075,6 +2103,47 @@ async function initDatabase() {
 
   await query(`CREATE INDEX IF NOT EXISTS idx_automod_configs_guild ON automod_configs(guild_id);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_automod_blacklists_guild ON automod_blacklists(guild_id);`);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS starboard_configs (
+      guild_id TEXT PRIMARY KEY REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      enabled BOOLEAN NOT NULL DEFAULT true,
+      channel_id TEXT,
+      star_threshold INTEGER NOT NULL DEFAULT 3,
+      star_emoji TEXT NOT NULL DEFAULT '⭐',
+      allow_self_star BOOLEAN NOT NULL DEFAULT false,
+      allow_nsfw BOOLEAN NOT NULL DEFAULT false,
+      ignored_channels TEXT[] NOT NULL DEFAULT '{}',
+      ignored_roles TEXT[] NOT NULL DEFAULT '{}',
+      color TEXT NOT NULL DEFAULT '#FFA800',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS starboard_entries (
+      id SERIAL PRIMARY KEY,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      original_channel_id TEXT NOT NULL,
+      original_message_id TEXT NOT NULL,
+      starboard_message_id TEXT,
+      author_user_id TEXT NOT NULL,
+      author_tag TEXT,
+      star_count INTEGER NOT NULL DEFAULT 0,
+      starred_user_ids TEXT[] NOT NULL DEFAULT '{}',
+      content TEXT,
+      attachments TEXT[] NOT NULL DEFAULT '{}',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(guild_id, original_message_id)
+    );
+  `);
+
+  await query(`CREATE INDEX IF NOT EXISTS idx_starboard_configs_guild ON starboard_configs(guild_id);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_starboard_entries_lookup ON starboard_entries(guild_id, original_message_id);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_starboard_entries_starboard_msg ON starboard_entries(guild_id, starboard_message_id);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_starboard_entries_stars ON starboard_entries(guild_id, star_count DESC);`);
 }
 
 if (require.main === module) {

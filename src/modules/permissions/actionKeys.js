@@ -24,6 +24,8 @@ const ActionKeys = Object.freeze({
   ModerationBan: 'moderation.ban',
   ModerationUnban: 'moderation.unban',
   ModerationMassBan: 'moderation.massban',
+  ModerationEscalation: 'moderation.escalation',
+  ModerationWarnings: 'moderation.warnings',
   LockdownView: 'lockdown.view',
   LockdownConfigure: 'lockdown.configure',
   LockdownStart: 'lockdown.start',
@@ -186,6 +188,10 @@ const ActionKeys = Object.freeze({
   AutoModEnactLockdown: 'automod.enact_lockdown',
   AutoModReset: 'automod.reset',
 
+  StarboardView: 'starboard.view',
+  StarboardManage: 'starboard.manage',
+  StarboardReset: 'starboard.reset',
+
   PanelsConfigure: 'panels.configure',
 
   ServerReset: 'server.reset'
@@ -231,6 +237,8 @@ const defaultActionLevels = Object.freeze({
   [ActionKeys.ModerationBan]: PermissionLevels.SENIOR_MODERATOR,
   [ActionKeys.ModerationUnban]: PermissionLevels.SENIOR_MODERATOR,
   [ActionKeys.ModerationMassBan]: PermissionLevels.OWNER,
+  [ActionKeys.ModerationEscalation]: PermissionLevels.SENIOR_MODERATOR,
+  [ActionKeys.ModerationWarnings]: PermissionLevels.MODERATOR,
   [ActionKeys.LockdownView]: PermissionLevels.MODERATOR,
   [ActionKeys.LockdownConfigure]: PermissionLevels.SENIOR_MODERATOR,
   [ActionKeys.LockdownStart]: PermissionLevels.SENIOR_MODERATOR,
@@ -394,6 +402,10 @@ const defaultActionLevels = Object.freeze({
   [ActionKeys.AutoModEnactLockdown]: PermissionLevels.MODERATOR,
   [ActionKeys.AutoModReset]: PermissionLevels.OWNER,
 
+  [ActionKeys.StarboardView]: PermissionLevels.EVERYONE,
+  [ActionKeys.StarboardManage]: PermissionLevels.SENIOR_MODERATOR,
+  [ActionKeys.StarboardReset]: PermissionLevels.OWNER,
+
   [ActionKeys.ServerReset]: PermissionLevels.OWNER
 });
 
@@ -425,7 +437,8 @@ const defaultModuleLevels = Object.freeze({
   [ModuleKeys.ACHIEVEMENTS]: PermissionLevels.EVERYONE,
   [ModuleKeys.SOCIAL_FEEDS]: PermissionLevels.EVERYONE,
   [ModuleKeys.UTILITY]: PermissionLevels.EVERYONE,
-  [ModuleKeys.AUTOMOD]: PermissionLevels.MODERATOR
+  [ModuleKeys.AUTOMOD]: PermissionLevels.MODERATOR,
+  [ModuleKeys.STARBOARD]: PermissionLevels.EVERYONE
 });
 
 const defaultPublicActions = Object.freeze([
@@ -452,7 +465,8 @@ const defaultPublicActions = Object.freeze([
   ActionKeys.UtilityView,
   ActionKeys.UtilityPollVote,
   ActionKeys.UtilityRemindUse,
-  ActionKeys.UtilityAfkUse
+  ActionKeys.UtilityAfkUse,
+  ActionKeys.StarboardView
 ]);
 
 const defaultTeamPermissions = Object.freeze(Object.values(ActionKeys));

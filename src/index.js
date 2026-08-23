@@ -27,6 +27,7 @@ const { AchievementService, ACHIEVEMENT_KEYS } = require('./modules/community/ac
 const { SocialFeedService } = require('./modules/automation/socialFeedService');
 const { AutoModService } = require('./modules/moderation/autoModService');
 const { UtilityService } = require('./modules/utility/utilityService');
+const { StarboardService } = require('./modules/community/starboardService');
 const { handleReactionRole, syncAllPublishedReactionPanels } = require('./modules/community/rolePanelService');
 const { handleComponentInteraction } = require('./services/interactionRouter');
 const { ActionKeys } = require('./modules/permissions/actionKeys');
@@ -67,6 +68,7 @@ const achievements = new AchievementService();
 const socialFeeds = new SocialFeedService();
 const autoMod = new AutoModService();
 const utility = new UtilityService();
+const starboard = new StarboardService();
 const healthServer = startHealthServer(client);
 
 const { TaskScheduler } = require('./services/taskScheduler');
@@ -136,6 +138,13 @@ taskScheduler
     initialDelayMs: 18 * 1000,
     immediate: true,
     run: (readyClient, log) => socialFeeds.processFeeds(readyClient, log)
+  })
+  .registerTask({
+    name: 'voiceXp',
+    intervalMs: 60 * 1000,
+    initialDelayMs: 20 * 1000,
+    immediate: false,
+    run: (readyClient, log) => leveling.processVoiceXpSweep(readyClient, log)
   })
   .registerTask({
     name: 'birthdays',
@@ -410,6 +419,9 @@ client.on(Events.MessageDelete, async (message) => {
     utility.recordDeletedMessage(message);
   } catch (e) {}
   await handleCountingMessageMutationEvent(message, 'DELETED');
+  await starboard.handleMessageDelete(message, client, logger).catch((error) => {
+    console.error('Failed to handle starboard message delete:', error);
+  });
   if (!message.guild || message.author?.bot) return;
 
   const attachmentUrls = message.attachments?.size
@@ -442,6 +454,20 @@ client.on(Events.MessageDelete, async (message) => {
       messageId: message.id
     }
   }).catch((error) => console.error('Failed to log message delete:', error));
+});
+
+client.on(Events.MessageReactionAdd, async (reaction, user) => {
+  if (user?.bot) return;
+  await starboard.handleReactionAdd(reaction, user, client, logger).catch((error) => {
+    console.error('Failed to process starboard reaction add:', error);
+  });
+});
+
+client.on(Events.MessageReactionRemove, async (reaction, user) => {
+  if (user?.bot) return;
+  await starboard.handleReactionRemove(reaction, user, client, logger).catch((error) => {
+    console.error('Failed to process starboard reaction remove:', error);
+  });
 });
 
 client.on(Events.MessageUpdate, async (oldMessage, newMessage) => {

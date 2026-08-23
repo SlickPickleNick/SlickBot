@@ -58,7 +58,7 @@ const STATUS_META = Object.freeze({
 const MODULE_CATEGORIES = Object.freeze([
   { key: 'CORE', label: 'Core Setup', modules: [ModuleKeys.PERMISSIONS, ModuleKeys.LOGGING, ModuleKeys.STATUS, ModuleKeys.MODERATION, ModuleKeys.LOCKDOWN, ModuleKeys.AUTOMOD, ModuleKeys.TEMP_ROLES, ModuleKeys.UTILITY] },
   { key: 'SUPPORT', label: 'Support Systems', modules: [ModuleKeys.TICKETS, ModuleKeys.REPORTS, ModuleKeys.APPLICATIONS, ModuleKeys.APPEALS] },
-  { key: 'COMMUNITY', label: 'Community Systems', modules: [ModuleKeys.WELCOME, ModuleKeys.REACTION_ROLES, ModuleKeys.GIVEAWAYS, ModuleKeys.BIRTHDAYS, ModuleKeys.LEVELING, ModuleKeys.COMMUNITY_GAMES, ModuleKeys.FAQ, ModuleKeys.SUGGESTIONS, ModuleKeys.REFERRALS, ModuleKeys.ACHIEVEMENTS, ModuleKeys.SERVER_STATS, ModuleKeys.CUSTOM_COMMANDS, ModuleKeys.JOIN_TO_CREATE] },
+  { key: 'COMMUNITY', label: 'Community Systems', modules: [ModuleKeys.WELCOME, ModuleKeys.REACTION_ROLES, ModuleKeys.GIVEAWAYS, ModuleKeys.BIRTHDAYS, ModuleKeys.LEVELING, ModuleKeys.COMMUNITY_GAMES, ModuleKeys.FAQ, ModuleKeys.SUGGESTIONS, ModuleKeys.REFERRALS, ModuleKeys.ACHIEVEMENTS, ModuleKeys.SERVER_STATS, ModuleKeys.CUSTOM_COMMANDS, ModuleKeys.JOIN_TO_CREATE, ModuleKeys.STARBOARD] },
   { key: 'AUTOMATION', label: 'Automation Systems', modules: [ModuleKeys.SCHEDULED_MESSAGES, ModuleKeys.BOT_UPDATES, ModuleKeys.SOCIAL_FEEDS] },
   { key: 'BACKLOG', label: 'Coming Soon', modules: [] }
 ]);
@@ -243,6 +243,12 @@ const MODULE_SETUP_CATALOG = Object.freeze({
     managerCommand: '/automod manager', setupCommand: '/automod setup',
     nextSteps: ['Run `/automod setup` to choose a 1-click protection preset.', 'Open `/automod manager` to customize filter rules and punishment actions.', 'Use the visual role and channel pickers to configure bypass exemptions.'],
     usefulCommands: ['/automod setup', '/automod manager', '/automod status', '/automod rule', '/automod blacklist-add', '/automod blacklist-list', '/automod whitelist-add', '/automod raid', '/automod reset']
+  },
+  [ModuleKeys.STARBOARD]: {
+    name: 'Starboard', category: 'Community Systems', description: 'Pins high-voted community messages to a dedicated showcase channel when reaction star thresholds are reached.',
+    managerCommand: '/starboard manager', setupCommand: '/starboard setup',
+    nextSteps: ['Run `/starboard setup` and set a showcase channel.', 'Tune reaction star threshold with `/starboard set-threshold`.', 'View top community moments with `/starboard leaderboard`.'],
+    usefulCommands: ['/starboard manager', '/starboard setup', '/starboard set-channel', '/starboard set-threshold', '/starboard set-emoji', '/starboard leaderboard', '/starboard reset']
   }
 });
 
@@ -876,6 +882,15 @@ async function getModuleStatus(guildId, row) {
     const config = res.rows[0];
     if (config && config.enabled === false) return { moduleKey: row.module_key, core: false, state: 'DISABLED', emoji: '⏸️', label: 'Disabled', note: 'Auto-Mod protection paused' };
     return { moduleKey: row.module_key, core: false, state: 'READY', emoji: '✅', label: 'Ready', note: 'Filters & Raid Shield active' };
+  }
+
+  if (row.module_key === 'STARBOARD') {
+    const res = await query(`SELECT enabled, channel_id, star_threshold, star_emoji FROM starboard_configs WHERE guild_id = $1 LIMIT 1`, [guildId]).catch(() => ({ rows: [] }));
+    const config = res.rows[0];
+    if (!config) return { moduleKey: row.module_key, core: false, state: 'NEEDS_CONFIG', emoji: '🟣', label: 'Needs Setup', note: 'Run /starboard setup' };
+    if (config.enabled === false) return { moduleKey: row.module_key, core: false, state: 'DISABLED', emoji: '⏸️', label: 'Disabled', note: 'Showcase paused' };
+    if (config.channel_id) return { moduleKey: row.module_key, core: false, state: 'READY', emoji: '✅', label: 'Ready', note: `Threshold: ${config.star_threshold} ${config.star_emoji || '⭐'}` };
+    return { moduleKey: row.module_key, core: false, state: 'NEEDS_CONFIG', emoji: '🟣', label: 'Needs Setup', note: 'Showcase channel missing' };
   }
 
   return { moduleKey: row.module_key, core: false, state: 'PARTIAL', emoji: '🟠', label: 'Partially Configured', note: 'Module shell only' };

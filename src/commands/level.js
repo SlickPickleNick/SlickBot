@@ -10,11 +10,11 @@ const leveling = new LevelingService();
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('level')
-    .setDescription('Manage SlickBot leveling and XP.')
+    .setDescription('Manage SlickBot leveling, XP rates, and voice activity XP.')
     .addSubcommand((sub) => sub.setName('manager').setDescription('Open the leveling manager.'))
     .addSubcommand((sub) => sub.setName('info').setDescription('Post the server leveling information panel.'))
-    .addSubcommand((sub) => sub.setName('setup').setDescription('Configure automatic message XP.')
-      .addBooleanOption((o) => o.setName('enabled').setDescription('Enable or disable XP awards.').setRequired(false))
+    .addSubcommand((sub) => sub.setName('setup').setDescription('Configure message and voice activity XP.')
+      .addBooleanOption((o) => o.setName('enabled').setDescription('Enable or disable text XP awards.').setRequired(false))
       .addIntegerOption((o) => o.setName('xp_min').setDescription('Minimum XP per eligible message.').setMinValue(1).setMaxValue(1000).setRequired(false))
       .addIntegerOption((o) => o.setName('xp_max').setDescription('Maximum XP per eligible message.').setMinValue(1).setMaxValue(1000).setRequired(false))
       .addIntegerOption((o) => o.setName('cooldown_seconds').setDescription('XP cooldown per user.').setMinValue(5).setMaxValue(86400).setRequired(false))
@@ -24,8 +24,13 @@ module.exports = {
       .addStringOption((o) => o.setName('level_up_mode').setDescription('Choose which level-ups are announced.').setRequired(false).addChoices(
         { name: 'Announce every level', value: 'ALL_LEVELS' },
         { name: 'Only announce levels with role rewards', value: 'ROLE_REWARDS_ONLY' }
-      )))
-    .addSubcommand((sub) => sub.setName('rank').setDescription('View a user’s XP rank.').addUserOption((o) => o.setName('user').setDescription('User to view. Defaults to you.').setRequired(false)))
+      ))
+      .addBooleanOption((o) => o.setName('voice_xp_enabled').setDescription('Enable or disable passive Voice XP awards.').setRequired(false))
+      .addIntegerOption((o) => o.setName('voice_xp_min').setDescription('Minimum Voice XP awarded per minute.').setMinValue(1).setMaxValue(1000).setRequired(false))
+      .addIntegerOption((o) => o.setName('voice_xp_max').setDescription('Maximum Voice XP awarded per minute.').setMinValue(1).setMaxValue(1000).setRequired(false))
+      .addIntegerOption((o) => o.setName('voice_min_members').setDescription('Min non-bot members in VC to earn Voice XP (anti-farming).').setMinValue(1).setMaxValue(20).setRequired(false))
+      .addBooleanOption((o) => o.setName('voice_require_unmuted').setDescription('Require members to be unmuted/undeafened for Voice XP.').setRequired(false)))
+    .addSubcommand((sub) => sub.setName('rank').setDescription('View a user’s XP rank and voice activity.').addUserOption((o) => o.setName('user').setDescription('User to view. Defaults to you.').setRequired(false)))
     .addSubcommand((sub) => sub.setName('leaderboard').setDescription('View the top XP users.'))
     .addSubcommand((sub) => sub.setName('role-add').setDescription('Assign a role automatically at a level.')
       .addIntegerOption((o) => o.setName('level').setDescription('Required level.').setMinValue(1).setMaxValue(10000).setRequired(true))
@@ -34,7 +39,7 @@ module.exports = {
       .addIntegerOption((o) => o.setName('level').setDescription('Reward level.').setMinValue(1).setMaxValue(10000).setRequired(true))
       .addRoleOption((o) => o.setName('role').setDescription('Specific role to remove. Leave blank to remove all rewards at this level.').setRequired(false)))
     .addSubcommand((sub) => sub.setName('multiplier-add').setDescription('Add or update an XP multiplier role.')
-      .addRoleOption((o) => o.setName('role').setDescription('Role that receives multiplied message XP.').setRequired(true))
+      .addRoleOption((o) => o.setName('role').setDescription('Role that receives multiplied XP.').setRequired(true))
       .addNumberOption((o) => o.setName('multiplier').setDescription('XP multiplier, such as 1.5 or 2.').setMinValue(0.1).setMaxValue(100).setRequired(true)))
     .addSubcommand((sub) => sub.setName('multiplier-remove').setDescription('Remove an XP multiplier role.')
       .addRoleOption((o) => o.setName('role').setDescription('Multiplier role to remove.').setRequired(true)))
@@ -42,10 +47,13 @@ module.exports = {
     .addSubcommand((sub) => sub.setName('analyze').setDescription('Analyze the XP curve and export all levels to CSV.')
       .addIntegerOption((o) => o.setName('max_level').setDescription('Highest level to analyze. Defaults to 100.').setMinValue(1).setMaxValue(1000).setRequired(false))
       .addNumberOption((o) => o.setName('multiplier').setDescription('Optional multiplier to use in message estimates.').setMinValue(0.1).setMaxValue(100).setRequired(false)))
-    .addSubcommand((sub) => sub.setName('ignored-channel-add').setDescription('Prevent XP in a channel.').addChannelOption((o) => o.setName('channel').setDescription('Channel to ignore.').addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement).setRequired(true)))
-    .addSubcommand((sub) => sub.setName('ignored-channel-remove').setDescription('Allow XP in a previously ignored channel.').addChannelOption((o) => o.setName('channel').setDescription('Channel to remove from the ignore list.').addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement).setRequired(true)))
+    .addSubcommand((sub) => sub.setName('ignored-channel-add').setDescription('Prevent text XP in a channel.').addChannelOption((o) => o.setName('channel').setDescription('Channel to ignore.').addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement).setRequired(true)))
+    .addSubcommand((sub) => sub.setName('ignored-channel-remove').setDescription('Allow text XP in a previously ignored channel.').addChannelOption((o) => o.setName('channel').setDescription('Channel to remove from the ignore list.').addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement).setRequired(true)))
     .addSubcommand((sub) => sub.setName('ignored-role-add').setDescription('Prevent XP for members with a role.').addRoleOption((o) => o.setName('role').setDescription('Role to ignore.').setRequired(true)))
     .addSubcommand((sub) => sub.setName('ignored-role-remove').setDescription('Remove a role from the XP ignore list.').addRoleOption((o) => o.setName('role').setDescription('Role to remove.').setRequired(true)))
+    .addSubcommand((sub) => sub.setName('voice-ignore-add').setDescription('Prevent Voice XP in a voice channel.').addChannelOption((o) => o.setName('channel').setDescription('Voice channel to ignore.').addChannelTypes(ChannelType.GuildVoice, ChannelType.GuildStageVoice).setRequired(true)))
+    .addSubcommand((sub) => sub.setName('voice-ignore-remove').setDescription('Allow Voice XP in a previously ignored voice channel.').addChannelOption((o) => o.setName('channel').setDescription('Voice channel to remove from ignore list.').addChannelTypes(ChannelType.GuildVoice, ChannelType.GuildStageVoice).setRequired(true)))
+    .addSubcommand((sub) => sub.setName('voice-ignore-list').setDescription('List ignored voice channels.'))
     .addSubcommand((sub) => sub.setName('set-xp').setDescription('Set a user’s total XP.').addUserOption((o) => o.setName('user').setDescription('User to update.').setRequired(true)).addIntegerOption((o) => o.setName('xp').setDescription('New total XP.').setMinValue(0).setMaxValue(2147483647).setRequired(true)))
     .addSubcommand((sub) => sub.setName('reset').setDescription('Reset a user’s XP profile.').addUserOption((o) => o.setName('user').setDescription('User to reset.').setRequired(true)).addBooleanOption((o) => o.setName('confirm').setDescription('Must be true to reset the profile.').setRequired(true))),
   moduleKey: ModuleKeys.LEVELING,
@@ -53,7 +61,7 @@ module.exports = {
   getActionKey(interaction) {
     const sub = interaction.options.getSubcommand();
     if (['rank', 'leaderboard', 'info'].includes(sub)) return ActionKeys.LevelingUse;
-    if (sub === 'manager' || sub === 'multiplier-list' || sub === 'analyze') return ActionKeys.LevelingView;
+    if (sub === 'manager' || sub === 'multiplier-list' || sub === 'analyze' || sub === 'voice-ignore-list') return ActionKeys.LevelingView;
     if (sub === 'set-xp' || sub === 'reset') return ActionKeys.LevelingAdjust;
     return ActionKeys.LevelingConfigure;
   },
@@ -74,10 +82,33 @@ module.exports = {
         minimumMessageLength: interaction.options.getInteger('minimum_length') ?? undefined,
         levelUpChannelId: interaction.options.getChannel('level_up_channel')?.id,
         levelUpMessage: interaction.options.getString('level_up_message') ?? undefined,
-        levelUpAnnounceMode: interaction.options.getString('level_up_mode') ?? undefined
+        levelUpAnnounceMode: interaction.options.getString('level_up_mode') ?? undefined,
+        voiceXpEnabled: interaction.options.getBoolean('voice_xp_enabled') ?? undefined,
+        voiceXpMin: interaction.options.getInteger('voice_xp_min') ?? undefined,
+        voiceXpMax: interaction.options.getInteger('voice_xp_max') ?? undefined,
+        voiceXpMinChannelMembers: interaction.options.getInteger('voice_min_members') ?? undefined,
+        voiceXpRequireUnmuted: interaction.options.getBoolean('voice_require_unmuted') ?? undefined
       });
-      await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'leveling-config', title: 'Leveling Config Updated', body: `Updated By: <@${interaction.user.id}>\nXP: **${config.xp_min}–${config.xp_max}**\nCooldown: **${config.cooldown_seconds}s**\nAnnouncements: **${config.level_up_announce_mode === 'ROLE_REWARDS_ONLY' ? 'Reward levels only' : 'All levels'}**`, actorUserId: interaction.user.id });
-      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Leveling Configuration Saved', `Message XP is **${config.enabled ? 'enabled' : 'disabled'}**.\nXP Range: **${config.xp_min}–${config.xp_max}**\nCooldown: **${config.cooldown_seconds}s**\nAnnouncements: **${config.level_up_announce_mode === 'ROLE_REWARDS_ONLY' ? 'Reward levels only' : 'All levels'}**`)] });
+      await ctx.logger.log({
+        guildId: interaction.guildId,
+        eventKey: 'leveling-config',
+        title: 'Leveling Config Updated',
+        body: `Updated By: <@${interaction.user.id}>\nText XP: **${config.xp_min}–${config.xp_max}**\nVoice XP: **${config.voice_xp_enabled ? `Enabled (${config.voice_xp_min}–${config.voice_xp_max} XP/min)` : 'Disabled'}**\nCooldown: **${config.cooldown_seconds}s**\nAnnouncements: **${config.level_up_announce_mode === 'ROLE_REWARDS_ONLY' ? 'Reward levels only' : 'All levels'}**`,
+        actorUserId: interaction.user.id
+      });
+      return replyPrivate(interaction, {
+        embeds: [createSuccessEmbed(
+          'Leveling Configuration Saved',
+          [
+            `Text XP: **${config.enabled ? 'Enabled' : 'Disabled'}** (${config.xp_min}–${config.xp_max} XP per msg)`,
+            `Voice XP: **${config.voice_xp_enabled ? 'Enabled' : 'Disabled'}** (${config.voice_xp_min}–${config.voice_xp_max} XP per min)`,
+            `Voice Anti-Farming: **≥ ${config.voice_xp_min_channel_members} members** in VC`,
+            `Voice Unmuted Required: **${config.voice_xp_require_unmuted ? 'Yes' : 'No'}**`,
+            `Cooldown: **${config.cooldown_seconds}s**`,
+            `Announcements: **${config.level_up_announce_mode === 'ROLE_REWARDS_ONLY' ? 'Reward levels only' : 'All levels'}**`
+          ].join('\n')
+        )]
+      });
     }
 
     if (sub === 'rank') {
@@ -105,7 +136,7 @@ module.exports = {
       const multiplier = interaction.options.getNumber('multiplier', true);
       const saved = await leveling.addMultiplierRole(interaction.guildId, role.id, multiplier);
       await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'leveling-config', title: 'XP Multiplier Role Saved', body: `Role: ${role}\nMultiplier: **${formatMultiplier(saved.multiplier)}**\nUpdated By: <@${interaction.user.id}>`, actorUserId: interaction.user.id }).catch(() => {});
-      return replyPrivate(interaction, { embeds: [createSuccessEmbed('XP Multiplier Saved', `${role} now earns **${formatMultiplier(saved.multiplier)} XP** per eligible message. If a user has multiple multiplier roles, the highest multiplier is used.`)] });
+      return replyPrivate(interaction, { embeds: [createSuccessEmbed('XP Multiplier Saved', `${role} now earns **${formatMultiplier(saved.multiplier)} XP** per eligible message and voice interval. If a user has multiple multiplier roles, the highest multiplier is used.`)] });
     }
     if (sub === 'multiplier-remove') {
       const role = interaction.options.getRole('role', true);
@@ -142,6 +173,22 @@ module.exports = {
       const role = interaction.options.getRole('role', true);
       if (sub.endsWith('add')) await leveling.addIgnoredRole(interaction.guildId, role.id); else await leveling.removeIgnoredRole(interaction.guildId, role.id);
       return replyPrivate(interaction, { embeds: [createSuccessEmbed('XP Role List Updated', `${role} was ${sub.endsWith('add') ? 'added to' : 'removed from'} the ignored role list.`)] });
+    }
+
+    if (sub === 'voice-ignore-add' || sub === 'voice-ignore-remove') {
+      const channel = interaction.options.getChannel('channel', true);
+      if (sub.endsWith('add')) await leveling.addVoiceIgnoredChannel(interaction.guildId, channel.id); else await leveling.removeVoiceIgnoredChannel(interaction.guildId, channel.id);
+      return replyPrivate(interaction, { embeds: [createSuccessEmbed('Voice XP Channel List Updated', `${channel} was ${sub.endsWith('add') ? 'added to' : 'removed from'} the voice XP ignore list.`)] });
+    }
+    if (sub === 'voice-ignore-list') {
+      const channels = await leveling.listVoiceIgnoredChannels(interaction.guildId);
+      return replyPrivate(interaction, { embeds: [createBaseEmbed({
+        title: 'Ignored Voice Channels',
+        description: channels.length
+          ? channels.map((id) => `• <#${id}>`).join('\n')
+          : 'No voice channels are ignored.',
+        color: channels.length ? SlickBotColors.PRIMARY : SlickBotColors.INFO
+      })] });
     }
 
     if (sub === 'set-xp') {

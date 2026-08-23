@@ -43,7 +43,8 @@ async function autoCreateChannel(guild, {
   reason = 'SlickBot auto-channel setup'
 }) {
   if (!guild || typeof guild.channels?.create !== 'function') throw new Error('Guild channels manager not available.');
-  const existing = guild.channels.cache ? guild.channels.cache.find((c) => c.name.toLowerCase() === name.toLowerCase() && c.type === type) : null;
+  const cacheList = Array.from(guild.channels.cache?.values?.() || guild.channels.cache || []);
+  const existing = cacheList.find((c) => c?.name?.toLowerCase() === name.toLowerCase() && (type === undefined || c.type === type));
   if (existing) return existing;
 
   const overwrites = [];
@@ -1575,6 +1576,55 @@ const ONBOARDING_STEPS = Object.freeze({
         return { created: `@${res.role?.name || 'Timeout'}` };
       }
     }
+  ],
+
+  [ModuleKeys.STARBOARD]: [
+    {
+      id: 'starboard_channel',
+      moduleKey: ModuleKeys.STARBOARD,
+      title: 'Starboard Showcase Channel',
+      description: 'Select the showcase channel where top-starred community messages will be pinned automatically.',
+      pickerType: 'CHANNEL',
+      channelTypes: [ChannelType.GuildText, ChannelType.GuildAnnouncement],
+      autoCreateLabel: 'Auto-Create #starboard',
+      autoCreateDescription: 'Creates a public #starboard channel.',
+      async getCurrent(guild) {
+        const res = await query(`SELECT channel_id FROM starboard_configs WHERE guild_id = $1 LIMIT 1`, [guild.id]).catch(() => ({ rows: [] }));
+        return res.rows[0]?.channel_id ? `<#${res.rows[0].channel_id}>` : null;
+      },
+      async applyDefault(guild) {
+        const cacheList = Array.from(guild.channels?.cache?.values?.() || guild.channels?.cache || []);
+        const existing = cacheList.find((c) => ['starboard', 'hall-of-fame', 'stars', 'highlights'].includes(c?.name?.toLowerCase()));
+        if (existing) {
+          await query(
+            `INSERT INTO starboard_configs (guild_id, channel_id, enabled)
+             VALUES ($1, $2, true)
+             ON CONFLICT (guild_id) DO UPDATE SET channel_id = EXCLUDED.channel_id, updated_at = NOW()`,
+            [guild.id, existing.id]
+          );
+          return { result: `Assigned existing <#${existing.id}>` };
+        }
+        return { result: 'Starboard enabled' };
+      },
+      async applySelection(guild, channelId) {
+        await query(
+          `INSERT INTO starboard_configs (guild_id, channel_id, enabled)
+           VALUES ($1, $2, true)
+           ON CONFLICT (guild_id) DO UPDATE SET channel_id = EXCLUDED.channel_id, updated_at = NOW()`,
+          [guild.id, channelId]
+        );
+      },
+      async autoCreate(guild) {
+        const channel = await autoCreateChannel(guild, { name: 'starboard', isPrivate: false, topic: 'Community Hall of Fame — Starred messages' });
+        await query(
+          `INSERT INTO starboard_configs (guild_id, channel_id, enabled)
+           VALUES ($1, $2, true)
+           ON CONFLICT (guild_id) DO UPDATE SET channel_id = EXCLUDED.channel_id, updated_at = NOW()`,
+          [guild.id, channel.id]
+        );
+        return { created: `#${channel.name}` };
+      }
+    }
   ]
 });
 
@@ -1597,7 +1647,8 @@ const CATEGORY_ONBOARDING_MAP = Object.freeze({
     ...ONBOARDING_STEPS[ModuleKeys.SERVER_STATS],
     ...ONBOARDING_STEPS[ModuleKeys.GIVEAWAYS],
     ...ONBOARDING_STEPS[ModuleKeys.BIRTHDAYS],
-    ...ONBOARDING_STEPS[ModuleKeys.SUGGESTIONS]
+    ...ONBOARDING_STEPS[ModuleKeys.SUGGESTIONS],
+    ...ONBOARDING_STEPS[ModuleKeys.STARBOARD]
   ],
   AUTOMATION: [
     ...ONBOARDING_STEPS[ModuleKeys.BOT_UPDATES],

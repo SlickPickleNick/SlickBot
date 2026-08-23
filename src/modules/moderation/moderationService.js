@@ -134,6 +134,135 @@ class ModerationService {
     );
     return result.rows[0] || null;
   }
+
+  // --- Auto-Escalation Engine ---
+
+  async getEscalationRules(guildId) {
+    const result = await query(
+      `SELECT * FROM moderation_escalation_rules
+       WHERE guild_id = $1 AND active = true
+       ORDER BY warning_count ASC`,
+      [guildId]
+    );
+    return result.rows;
+  }
+
+  async setEscalationRule(guildId, warningCount, punishment, durationSeconds = null) {
+    const normPunishment = String(punishment).toUpperCase();
+    const result = await query(
+      `INSERT INTO moderation_escalation_rules (guild_id, warning_count, punishment, duration_seconds, active)
+       VALUES ($1, $2, $3, $4, true)
+       ON CONFLICT (guild_id, warning_count)
+       DO UPDATE SET punishment = EXCLUDED.punishment,
+                     duration_seconds = EXCLUDED.duration_seconds,
+                     active = true,
+                     updated_at = NOW()
+       RETURNING *`,
+      [guildId, Number(warningCount), normPunishment, durationSeconds ? Number(durationSeconds) : null]
+    );
+    return result.rows[0];
+  }
+
+  async removeEscalationRule(guildId, warningCount) {
+    const result = await query(
+      `DELETE FROM moderation_escalation_rules
+       WHERE guild_id = $1 AND warning_count = $2
+       RETURNING *`,
+      [guildId, Number(warningCount)]
+    );
+    return result.rows[0] || null;
+  }
+
+  async getActiveWarningCount(guildId, targetUserId, expiryDays = 30) {
+    const result = await query(
+      `SELECT COUNT(*)::int AS count
+       FROM moderation_cases
+       WHERE guild_id = $1
+         AND target_user_id = $2
+         AND action_type = 'WARN'
+         AND status = 'OPEN'
+         AND ($3::int = 0 OR created_at >= NOW() - ($3::int || ' days')::interval)`,
+      [guildId, targetUserId, Number(expiryDays) || 0]
+    );
+    return Number(result.rows[0]?.count || 0);
+  }
+
+  async checkAndApplyEscalation({ guild, member = null, targetUser, actorUser = null, autoMod = null, logger = null, expiryDays = 30 }) {
+    if (!guild || !targetUser) return { escalated: false, warningCount: 0 };
+
+    const warningCount = await this.getActiveWarningCount(guild.id, targetUser.id, expiryDays);
+    const rules = await this.getEscalationRules(guild.id);
+    if (!rules.length) return { escalated: false, warningCount };
+
+    // Match rule for exact warning count
+    const matchedRule = rules.find((r) => r.warning_count === warningCount);
+    if (!matchedRule) {
+      const nextRule = rules.find((r) => r.warning_count > warningCount);
+      return { escalated: false, warningCount, nextRule: nextRule || null };
+    }
+
+    const punishment = matchedRule.punishment;
+    const durationSeconds = matchedRule.duration_seconds || 3600;
+    let applied = false;
+    let error = null;
+
+    const guildMember = member || (guild.members?.fetch ? await guild.members.fetch(targetUser.id).catch(() => null) : null);
+
+    if (punishment === 'TIMEOUT') {
+      if (guildMember) {
+        if (autoMod && typeof autoMod.applyTimeout === 'function') {
+          await autoMod.applyTimeout(guildMember, durationSeconds, `Auto-Escalation: Reached ${warningCount} active warning(s).`, actorUser);
+        } else if (typeof guildMember.timeout === 'function') {
+          await guildMember.timeout(durationSeconds * 1000, `Auto-Escalation: Reached ${warningCount} active warning(s).`);
+        }
+        applied = true;
+      }
+    } else if (punishment === 'KICK') {
+      if (guildMember && typeof guildMember.kick === 'function') {
+        await guildMember.kick(`Auto-Escalation: Reached ${warningCount} active warning(s).`).catch((err) => { error = err; });
+        applied = !error;
+      }
+    } else if (punishment === 'BAN') {
+      if (guild.bans?.create) {
+        await guild.bans.create(targetUser.id, { reason: `Auto-Escalation: Reached ${warningCount} active warning(s).` }).catch((err) => { error = err; });
+        applied = !error;
+      } else if (guild.members?.ban) {
+        await guild.members.ban(targetUser.id, { reason: `Auto-Escalation: Reached ${warningCount} active warning(s).` }).catch((err) => { error = err; });
+        applied = !error;
+      }
+    }
+
+    const caseRecord = await this.createCase({
+      guildId: guild.id,
+      targetUserId: targetUser.id,
+      targetUserTag: targetUser.tag || null,
+      actorUserId: actorUser?.id || null,
+      actionType: punishment,
+      reason: `Auto-Escalation: Triggered at ${warningCount} active warning(s).`,
+      durationSeconds: punishment === 'TIMEOUT' ? durationSeconds : null,
+      expiresAt: punishment === 'TIMEOUT' ? new Date(Date.now() + durationSeconds * 1000).toISOString() : null,
+      metadata: { autoEscalated: true, warningCount, ruleId: matchedRule.id }
+    });
+
+    await logger?.log?.({
+      guildId: guild.id,
+      eventKey: 'moderation-auto-escalation',
+      title: 'Infraction Auto-Escalation Triggered',
+      body: `Target: <@${targetUser.id}>\nWarning Threshold: **${warningCount} Warnings**\nAction Applied: **${punishment}**${punishment === 'TIMEOUT' ? ` (${Math.round(durationSeconds / 60)}m)` : ''}\nCase: #${caseRecord.case_number}`,
+      actorUserId: actorUser?.id || null,
+      metadata: { targetUserId: targetUser.id, punishment, warningCount, caseNumber: caseRecord.case_number }
+    }).catch(() => {});
+
+    return {
+      escalated: true,
+      applied,
+      rule: matchedRule,
+      punishment,
+      durationSeconds,
+      warningCount,
+      caseRecord
+    };
+  }
 }
 
 function formatCaseLine(item) {

@@ -589,6 +589,93 @@ class JoinCreateService {
     return { channel, temp: result.rows[0] || temp, targetMember };
   }
 
+  async setHidden(member, hidden) {
+    const temp = await this.findUserTempChannel(member);
+    if (!temp) throw new Error('You do not currently own or manage an active temporary voice channel.');
+    if (!this.canManageTemp(member, temp)) throw new Error('You can only manage your own temporary voice channel.');
+    return this.setHiddenFromControl(member, temp.channel_id, hidden);
+  }
+
+  async setHiddenFromControl(member, channelId, hidden) {
+    const { temp, channel } = await this.getManageableTempFromControl(member, channelId);
+    await channel.permissionOverwrites.edit(member.guild.roles.everyone.id, {
+      ViewChannel: hidden ? false : null
+    }, { reason: `SlickBot temp voice ${hidden ? 'hidden' : 'unhidden'} from control panel by ${member.user.tag}` });
+    const result = await query(`UPDATE join_create_temp_channels SET hidden = $2, updated_at = NOW() WHERE channel_id = $1 RETURNING *`, [channel.id, Boolean(hidden)]);
+    await this.refreshControlPanel(member.guild, channel.id).catch(() => null);
+    return { channel, temp: result.rows[0] || temp, hidden: Boolean(hidden) };
+  }
+
+  async setBitrate(member, kbps) {
+    const temp = await this.findUserTempChannel(member);
+    if (!temp) throw new Error('You do not currently own or manage an active temporary voice channel.');
+    if (!this.canManageTemp(member, temp)) throw new Error('You can only manage your own temporary voice channel.');
+    return this.setBitrateFromControl(member, temp.channel_id, kbps);
+  }
+
+  async setBitrateFromControl(member, channelId, kbps) {
+    const { temp, channel } = await this.getManageableTempFromControl(member, channelId);
+    const num = Math.max(8, Math.min(parseInt(kbps, 10) || 64, 384));
+    const bitrateBps = num * 1000;
+    if (typeof channel.setBitrate === 'function') {
+      await channel.setBitrate(bitrateBps, `SlickBot temp voice bitrate set by ${member.user.tag}`);
+    }
+    await this.refreshControlPanel(member.guild, channel.id).catch(() => null);
+    return { channel, temp, kbps: num };
+  }
+
+  async kickUser(member, targetMember) {
+    const temp = await this.findUserTempChannel(member);
+    if (!temp) throw new Error('You do not currently own or manage an active temporary voice channel.');
+    if (!this.canManageTemp(member, temp)) throw new Error('You can only manage your own temporary voice channel.');
+    return this.kickUserFromControl(member, temp.channel_id, targetMember);
+  }
+
+  async kickUserFromControl(member, channelId, targetMember) {
+    const { temp, channel } = await this.getManageableTempFromControl(member, channelId);
+    if (targetMember.id === member.id) throw new Error('You cannot kick yourself.');
+    if (targetMember.voice?.channelId === channel.id && typeof targetMember.voice.disconnect === 'function') {
+      await targetMember.voice.disconnect(`Kicked from temporary voice by ${member.user.tag}`).catch(() => null);
+    }
+    await this.refreshControlPanel(member.guild, channel.id).catch(() => null);
+    return { channel, temp, targetMember };
+  }
+
+  async banUser(member, targetMember) {
+    const temp = await this.findUserTempChannel(member);
+    if (!temp) throw new Error('You do not currently own or manage an active temporary voice channel.');
+    if (!this.canManageTemp(member, temp)) throw new Error('You can only manage your own temporary voice channel.');
+    return this.banUserFromControl(member, temp.channel_id, targetMember);
+  }
+
+  async banUserFromControl(member, channelId, targetMember) {
+    const { temp, channel } = await this.getManageableTempFromControl(member, channelId);
+    if (targetMember.id === member.id) throw new Error('You cannot block/ban yourself.');
+    await channel.permissionOverwrites.edit(targetMember.id, {
+      ViewChannel: false,
+      Connect: false
+    }, { reason: `SlickBot temp voice user blocked/banned by ${member.user.tag}` });
+    if (targetMember.voice?.channelId === channel.id && typeof targetMember.voice.disconnect === 'function') {
+      await targetMember.voice.disconnect(`Blocked/banned from temp voice by ${member.user.tag}`).catch(() => null);
+    }
+    await this.refreshControlPanel(member.guild, channel.id).catch(() => null);
+    return { channel, temp, targetMember };
+  }
+
+  async unbanUser(member, targetMember) {
+    const temp = await this.findUserTempChannel(member);
+    if (!temp) throw new Error('You do not currently own or manage an active temporary voice channel.');
+    if (!this.canManageTemp(member, temp)) throw new Error('You can only manage your own temporary voice channel.');
+    return this.unbanUserFromControl(member, temp.channel_id, targetMember);
+  }
+
+  async unbanUserFromControl(member, channelId, targetMember) {
+    const { temp, channel } = await this.getManageableTempFromControl(member, channelId);
+    await channel.permissionOverwrites.delete(targetMember.id, `Unbanned from temp voice by ${member.user.tag}`).catch(() => null);
+    await this.refreshControlPanel(member.guild, channel.id).catch(() => null);
+    return { channel, temp, targetMember };
+  }
+
   async permitUser(member, targetMember) {
     const temp = await this.findUserTempChannel(member);
     if (!temp) throw new Error('You do not currently own or manage an active temporary voice channel.');
@@ -661,15 +748,16 @@ class JoinCreateService {
   buildTempControlPayload(temp, channel = null) {
     const channelName = channel?.name || temp?.name || 'Temporary Voice Channel';
     const locked = Boolean(temp?.locked);
+    const hidden = Boolean(temp?.hidden);
     const limit = Number(temp?.user_limit || 0);
     const ownerId = temp?.owner_user_id;
     const deleteDelay = clampInt(temp?.empty_delete_delay_seconds, 5, 3600, 30);
-    const statusLabel = locked ? '🔒 Locked' : '🔓 Unlocked';
+    const statusLabel = `${locked ? '🔒 Locked' : '🔓 Unlocked'} · ${hidden ? '👁️‍🗨️ Hidden' : '👁️ Visible'}`;
     const embed = createBaseEmbed({
       title: 'Temporary Voice Controls',
       description: [
         `This panel controls **${channelName}**.`,
-        'Use the buttons below for common actions. Most controls open a short form so first-time users do not need to remember slash commands.'
+        'Use the buttons below to manage access, settings, bitrate, and members in your room.'
       ].join('\n'),
       color: locked ? SlickBotColors.WARNING : SlickBotColors.INFO,
       footer: 'SlickBot temporary voice control panel'
@@ -678,20 +766,13 @@ class JoinCreateService {
       { name: 'Status', value: statusLabel, inline: true },
       { name: 'User Limit', value: limit ? String(limit) : 'No limit', inline: true },
       {
-        name: 'Quick Controls',
+        name: 'Quick Actions',
         value: [
-          '**Lock / Unlock** controls who can newly connect.',
-          '**Rename / Set Limit** update the room settings.',
-          '**Permit / Remove / Transfer** manage specific users.',
-          '**Claim** is available when the current owner leaves the room.'
-        ].join('\n'),
-        inline: false
-      },
-      {
-        name: 'Slash Commands',
-        value: [
-          '`/join-create rename` · `/join-create limit`',
-          '`/join-create permit` · `/join-create remove` · `/join-create transfer`'
+          '• **Lock / Unlock**: Control whether others can newly connect.',
+          '• **Hide / Unhide**: Toggle visibility in server channel list.',
+          '• **Rename / Limit / Bitrate**: Customize room identity and audio quality.',
+          '• **Permit / Kick / Ban**: Whitelist friends or remove/block disruptive users.',
+          '• **Claim / Transfer**: Manage channel ownership.'
         ].join('\n'),
         inline: false
       },
@@ -702,20 +783,57 @@ class JoinCreateService {
       }
     );
     const channelId = temp?.channel_id || channel?.id;
-    const primaryRow = new ActionRowBuilder().addComponents(
+
+    // Row 1: Access Controls
+    const row1 = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId(`${CustomIds.JoinCreateLockPrefix}${channelId}`).setLabel('Lock').setEmoji('🔒').setStyle(ButtonStyle.Secondary).setDisabled(locked),
       new ButtonBuilder().setCustomId(`${CustomIds.JoinCreateUnlockPrefix}${channelId}`).setLabel('Unlock').setEmoji('🔓').setStyle(ButtonStyle.Secondary).setDisabled(!locked),
-      new ButtonBuilder().setCustomId(`${CustomIds.JoinCreateClaimPrefix}${channelId}`).setLabel('Claim').setStyle(ButtonStyle.Primary),
-      new ButtonBuilder().setCustomId(`${CustomIds.JoinCreateDeletePrefix}${channelId}`).setLabel('Delete Channel').setStyle(ButtonStyle.Danger)
+      new ButtonBuilder().setCustomId(`${CustomIds.JoinCreateHidePrefix}${channelId}`).setLabel('Hide').setEmoji('👁️‍🗨️').setStyle(ButtonStyle.Secondary).setDisabled(hidden),
+      new ButtonBuilder().setCustomId(`${CustomIds.JoinCreateUnhidePrefix}${channelId}`).setLabel('Unhide').setEmoji('👁️').setStyle(ButtonStyle.Secondary).setDisabled(!hidden),
+      new ButtonBuilder().setCustomId(`${CustomIds.JoinCreateClaimPrefix}${channelId}`).setLabel('Claim').setEmoji('👑').setStyle(ButtonStyle.Primary)
     );
-    const settingsRow = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId(`${CustomIds.JoinCreateRenamePrefix}${channelId}`).setLabel('Rename').setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId(`${CustomIds.JoinCreateLimitPrefix}${channelId}`).setLabel('Set Limit').setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId(`${CustomIds.JoinCreatePermitPrefix}${channelId}`).setLabel('Permit User').setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId(`${CustomIds.JoinCreateRemovePrefix}${channelId}`).setLabel('Remove User').setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId(`${CustomIds.JoinCreateTransferPrefix}${channelId}`).setLabel('Transfer').setStyle(ButtonStyle.Secondary)
+
+    // Row 2: Room Settings & User Management
+    const row2 = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`${CustomIds.JoinCreateRenamePrefix}${channelId}`).setLabel('Rename').setEmoji('✏️').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId(`${CustomIds.JoinCreateLimitPrefix}${channelId}`).setLabel('Set Limit').setEmoji('👥').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId(`${CustomIds.JoinCreateBitratePrefix}${channelId}`).setLabel('Bitrate').setEmoji('🎚️').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId(`${CustomIds.JoinCreatePermitPrefix}${channelId}`).setLabel('Permit').setEmoji('✅').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId(`${CustomIds.JoinCreateKickPrefix}${channelId}`).setLabel('Kick').setEmoji('🚪').setStyle(ButtonStyle.Secondary)
     );
-    return { content: ownerId ? `<@${ownerId}>` : undefined, embeds: [embed], components: [primaryRow, settingsRow], allowedMentions: ownerId ? { users: [ownerId], roles: [] } : { parse: [] } };
+
+    // Row 3: Moderation & Danger
+    const row3 = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`${CustomIds.JoinCreateBanPrefix}${channelId}`).setLabel('Block / Ban').setEmoji('⛔').setStyle(ButtonStyle.Danger),
+      new ButtonBuilder().setCustomId(`${CustomIds.JoinCreateTransferPrefix}${channelId}`).setLabel('Transfer').setEmoji('🔄').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId(`${CustomIds.JoinCreateDeletePrefix}${channelId}`).setLabel('Delete Room').setEmoji('🗑️').setStyle(ButtonStyle.Danger)
+    );
+
+    return { content: ownerId ? `<@${ownerId}>` : undefined, embeds: [embed], components: [row1, row2, row3], allowedMentions: ownerId ? { users: [ownerId], roles: [] } : { parse: [] } };
+  }
+
+  async buildOwnerPanel(member, channelId = null) {
+    let temp = null;
+    if (channelId) {
+      temp = await this.findActiveTempByChannel(member.guild.id, channelId).catch(() => null);
+    }
+    if (!temp) {
+      temp = await this.findUserTempChannel(member).catch(() => null);
+    }
+    if (!temp) {
+      return {
+        embeds: [createBaseEmbed({
+          title: '🎙️ Temporary Voice Control Dashboard',
+          description: 'You are not currently in or managing an active temporary voice channel.\n\nJoin a **Join-to-Create** hub channel to generate your personal temporary voice room.',
+          color: SlickBotColors.WARNING
+        })]
+      };
+    }
+
+    const channel = await member.guild.channels.fetch(temp.channel_id).catch(() => null);
+    const payload = this.buildTempControlPayload(temp, channel);
+    payload.content = undefined; // Don't ping on ephemeral personal dashboard
+    return payload;
   }
 
   buildRenameModal(channelId, channelName = null) {
@@ -739,6 +857,18 @@ class JoinCreateService {
       placeholder: '0-99',
       maxLength: 2,
       value: String(currentLimit || 0)
+    });
+  }
+
+  buildBitrateModal(channelId, currentBitrate = 64) {
+    return buildSingleInputModal({
+      customId: `${CustomIds.JoinCreateBitrateModalPrefix}${channelId}`,
+      title: 'Set Audio Bitrate (kbps)',
+      inputId: 'bitrate',
+      label: 'Bitrate in kbps (e.g. 64, 96, 128, 256, 384)',
+      placeholder: '64',
+      maxLength: 3,
+      value: String(currentBitrate || 64)
     });
   }
 
@@ -791,13 +921,25 @@ class JoinCreateService {
       permit: {
         customId: `${CustomIds.JoinCreatePermitUserSelectPrefix}${channelId}`,
         title: 'Permit User',
-        description: 'Search for and select the member who should be allowed to join this temporary voice channel.',
+        description: 'Search for and select the member who should be allowed to view and connect to this temporary voice channel.',
         placeholder: 'Select a user to permit'
+      },
+      kick: {
+        customId: `${CustomIds.JoinCreateKickUserSelectPrefix}${channelId}`,
+        title: 'Kick User from Voice',
+        description: 'Select a user currently in the voice channel to disconnect them from this room.',
+        placeholder: 'Select a user to disconnect'
+      },
+      ban: {
+        customId: `${CustomIds.JoinCreateBanUserSelectPrefix}${channelId}`,
+        title: 'Block / Ban User from Voice',
+        description: 'Select a user to disconnect and block them from viewing or reconnecting to this room.',
+        placeholder: 'Select a user to block/ban'
       },
       remove: {
         customId: `${CustomIds.JoinCreateRemoveUserSelectPrefix}${channelId}`,
         title: 'Remove User',
-        description: 'Search for and select the member who should be removed or blocked from this temporary voice channel.',
+        description: 'Search for and select the member who should be removed from this temporary voice channel.',
         placeholder: 'Select a user to remove'
       },
       transfer: {

@@ -37,6 +37,7 @@ module.exports = {
     .setDescription('Configure and manage join-to-create voice channels.')
     .addSubcommand((subcommand) => subcommand.setName('manager').setDescription('Open the join-to-create manager.'))
     .addSubcommand((subcommand) => subcommand.setName('panel').setDescription('View the join-to-create manager.'))
+    .addSubcommand((subcommand) => subcommand.setName('controls').setDescription('Open your interactive temporary voice control dashboard.'))
     .addSubcommand((subcommand) =>
       subcommand
         .setName('setup')
@@ -93,6 +94,10 @@ module.exports = {
         .setDescription('Clean up tracked temporary voice channels.')
         .addBooleanOption((option) => option.setName('include_occupied').setDescription('Also delete occupied temporary channels. Use carefully.').setRequired(false))
     )
+    .addSubcommand((subcommand) => subcommand.setName('lock').setDescription('Lock your temporary voice channel.'))
+    .addSubcommand((subcommand) => subcommand.setName('unlock').setDescription('Unlock your temporary voice channel.'))
+    .addSubcommand((subcommand) => subcommand.setName('hide').setDescription('Hide your temporary voice channel from the server channel list.'))
+    .addSubcommand((subcommand) => subcommand.setName('unhide').setDescription('Unhide your temporary voice channel so everyone can see it.'))
     .addSubcommand((subcommand) =>
       subcommand
         .setName('rename')
@@ -105,13 +110,35 @@ module.exports = {
         .setDescription('Set the user limit for your temporary voice channel.')
         .addIntegerOption((option) => option.setName('limit').setDescription('User limit. Use 0 for no limit.').setRequired(true).setMinValue(0).setMaxValue(99))
     )
-    .addSubcommand((subcommand) => subcommand.setName('lock').setDescription('Lock your temporary voice channel.'))
-    .addSubcommand((subcommand) => subcommand.setName('unlock').setDescription('Unlock your temporary voice channel.'))
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName('bitrate')
+        .setDescription('Set the audio bitrate for your temporary voice channel.')
+        .addIntegerOption((option) => option.setName('kbps').setDescription('Bitrate in kbps (e.g. 64, 96, 128, 256, 384).').setRequired(true).setMinValue(8).setMaxValue(384))
+    )
     .addSubcommand((subcommand) =>
       subcommand
         .setName('permit')
-        .setDescription('Permit a user to join your temporary voice channel.')
+        .setDescription('Permit a user to view and join your temporary voice channel.')
         .addUserOption((option) => option.setName('user').setDescription('User to permit.').setRequired(true))
+    )
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName('kick')
+        .setDescription('Disconnect a user from your temporary voice channel.')
+        .addUserOption((option) => option.setName('user').setDescription('User to kick.').setRequired(true))
+    )
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName('ban')
+        .setDescription('Block and disconnect a user from your temporary voice channel.')
+        .addUserOption((option) => option.setName('user').setDescription('User to block/ban.').setRequired(true))
+    )
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName('unban')
+        .setDescription('Unblock a user from your temporary voice channel.')
+        .addUserOption((option) => option.setName('user').setDescription('User to unblock.').setRequired(true))
     )
     .addSubcommand((subcommand) =>
       subcommand
@@ -137,7 +164,7 @@ module.exports = {
     return ActionKeys.TempVoiceManage;
   },
   isPublic(interaction) {
-    return ['rename', 'limit', 'lock', 'unlock', 'permit', 'remove', 'transfer', 'claim'].includes(interaction.options.getSubcommand());
+    return ['controls', 'rename', 'limit', 'bitrate', 'lock', 'unlock', 'hide', 'unhide', 'permit', 'kick', 'ban', 'unban', 'remove', 'transfer', 'claim'].includes(interaction.options.getSubcommand());
   },
   async autocomplete(interaction) {
     const focused = String(interaction.options.getFocused() || '').toLowerCase();
@@ -229,16 +256,27 @@ module.exports = {
 
       const member = await interaction.guild.members.fetch(interaction.user.id);
 
+      if (sub === 'owner-panel' || sub === 'controls') {
+        const panelPayload = await service.buildOwnerPanel(member);
+        return replyPrivate(interaction, panelPayload);
+      }
+
       if (sub === 'rename') {
         const result = await service.renameTemp(member, interaction.options.getString('name', true));
         await logJoinCreate(ctx, interaction, 'Temporary Voice Renamed', `Channel: <#${result.channel.id}>\nName: **${result.channel.name}**`, { channelId: result.channel.id }, 'join-create-control');
-        return replyPrivate(interaction, { embeds: [createSuccessEmbed('Temporary Voice Renamed', `Updated <#${result.channel.id}> to **${result.channel.name}**.`)] });
+        return replyPrivate(interaction, { embeds: [createSuccessEmbed('Temporary Voice Renamed', `✏️ Updated <#${result.channel.id}> to **${result.channel.name}**.`)] });
       }
 
       if (sub === 'limit') {
         const result = await service.setLimit(member, interaction.options.getInteger('limit', true));
         await logJoinCreate(ctx, interaction, 'Temporary Voice Limit Updated', `Channel: <#${result.channel.id}>\nLimit: **${result.temp.user_limit || 0}**`, { channelId: result.channel.id, userLimit: result.temp.user_limit || 0 }, 'join-create-control');
-        return replyPrivate(interaction, { embeds: [createSuccessEmbed('Temporary Voice Limit Updated', `<#${result.channel.id}> now has a user limit of **${result.temp.user_limit || 0}**.`)] });
+        return replyPrivate(interaction, { embeds: [createSuccessEmbed('Temporary Voice Limit Updated', `👥 <#${result.channel.id}> now has a user limit of **${result.temp.user_limit || 0}**.`)] });
+      }
+
+      if (sub === 'bitrate') {
+        const result = await service.setBitrate(member, interaction.options.getInteger('kbps', true));
+        await logJoinCreate(ctx, interaction, 'Temporary Voice Bitrate Updated', `Channel: <#${result.channel.id}>\nBitrate: **${result.kbps} kbps**`, { channelId: result.channel.id, kbps: result.kbps }, 'join-create-control');
+        return replyPrivate(interaction, { embeds: [createSuccessEmbed('Temporary Voice Bitrate Updated', `🎚️ <#${result.channel.id}> bitrate set to **${result.kbps} kbps**.`)] });
       }
 
       if (sub === 'lock' || sub === 'unlock') {
@@ -248,31 +286,59 @@ module.exports = {
         return replyPrivate(interaction, { embeds: [createSuccessEmbed(`Temporary Voice ${locked ? 'Locked' : 'Unlocked'}`, `<#${result.channel.id}> is now **${locked ? 'locked' : 'unlocked'}**.`)] });
       }
 
+      if (sub === 'hide' || sub === 'unhide') {
+        const hidden = sub === 'hide';
+        const result = await service.setHidden(member, hidden);
+        await logJoinCreate(ctx, interaction, `Temporary Voice ${hidden ? 'Hidden' : 'Unhidden'}`, `Channel: <#${result.channel.id}>`, { channelId: result.channel.id, hidden }, 'join-create-control');
+        return replyPrivate(interaction, { embeds: [createSuccessEmbed(`Temporary Voice ${hidden ? 'Hidden' : 'Visible'}`, `<#${result.channel.id}> is now **${hidden ? 'hidden from everyone' : 'visible to everyone'}**.`)] });
+      }
+
       if (sub === 'permit') {
         const target = await interaction.guild.members.fetch(interaction.options.getUser('user', true).id);
         const result = await service.permitUser(member, target);
         await logJoinCreate(ctx, interaction, 'Temporary Voice User Permitted', `Channel: <#${result.channel.id}>\nUser: <@${target.id}>`, { channelId: result.channel.id, targetUserId: target.id }, 'join-create-control');
-        return replyPrivate(interaction, { embeds: [createSuccessEmbed('User Permitted', `<@${target.id}> can now join <#${result.channel.id}>.`)] });
+        return replyPrivate(interaction, { embeds: [createSuccessEmbed('User Permitted', `✅ <@${target.id}> can now view and join <#${result.channel.id}>.`)] });
+      }
+
+      if (sub === 'kick') {
+        const target = await interaction.guild.members.fetch(interaction.options.getUser('user', true).id);
+        const result = await service.kickUser(member, target);
+        await logJoinCreate(ctx, interaction, 'Temporary Voice User Kicked', `Channel: <#${result.channel.id}>\nUser: <@${target.id}>`, { channelId: result.channel.id, targetUserId: target.id }, 'join-create-control');
+        return replyPrivate(interaction, { embeds: [createSuccessEmbed('User Kicked', `🚪 <@${target.id}> was kicked from <#${result.channel.id}>.`)] });
+      }
+
+      if (sub === 'ban') {
+        const target = await interaction.guild.members.fetch(interaction.options.getUser('user', true).id);
+        const result = await service.banUser(member, target);
+        await logJoinCreate(ctx, interaction, 'Temporary Voice User Blocked/Banned', `Channel: <#${result.channel.id}>\nUser: <@${target.id}>`, { channelId: result.channel.id, targetUserId: target.id }, 'join-create-control');
+        return replyPrivate(interaction, { embeds: [createSuccessEmbed('User Blocked', `⛔ <@${target.id}> was blocked and banned from <#${result.channel.id}>.`)] });
+      }
+
+      if (sub === 'unban') {
+        const target = await interaction.guild.members.fetch(interaction.options.getUser('user', true).id);
+        const result = await service.unbanUser(member, target);
+        await logJoinCreate(ctx, interaction, 'Temporary Voice User Unbanned', `Channel: <#${result.channel.id}>\nUser: <@${target.id}>`, { channelId: result.channel.id, targetUserId: target.id }, 'join-create-control');
+        return replyPrivate(interaction, { embeds: [createSuccessEmbed('User Unbanned', `🔓 <@${target.id}> was unbanned from <#${result.channel.id}>.`)] });
       }
 
       if (sub === 'remove') {
         const target = await interaction.guild.members.fetch(interaction.options.getUser('user', true).id);
         const result = await service.removeUser(member, target);
         await logJoinCreate(ctx, interaction, 'Temporary Voice User Removed', `Channel: <#${result.channel.id}>\nUser: <@${target.id}>`, { channelId: result.channel.id, targetUserId: target.id }, 'join-create-control');
-        return replyPrivate(interaction, { embeds: [createSuccessEmbed('User Removed', `<@${target.id}> was removed or blocked from <#${result.channel.id}>.`)] });
+        return replyPrivate(interaction, { embeds: [createSuccessEmbed('User Removed', `<@${target.id}> was removed from <#${result.channel.id}>.`)] });
       }
 
       if (sub === 'transfer') {
         const target = await interaction.guild.members.fetch(interaction.options.getUser('user', true).id);
         const result = await service.transfer(member, target);
         await logJoinCreate(ctx, interaction, 'Temporary Voice Ownership Transferred', `Channel: <#${result.channel.id}>\nNew Owner: <@${target.id}>`, { channelId: result.channel.id, targetUserId: target.id }, 'join-create-control');
-        return replyPrivate(interaction, { embeds: [createSuccessEmbed('Temporary Voice Ownership Transferred', `<#${result.channel.id}> is now owned by <@${target.id}>.`)] });
+        return replyPrivate(interaction, { embeds: [createSuccessEmbed('Temporary Voice Ownership Transferred', `👑 <#${result.channel.id}> is now owned by <@${target.id}>.`)] });
       }
 
       if (sub === 'claim') {
         const result = await service.claim(member);
         await logJoinCreate(ctx, interaction, 'Temporary Voice Claimed', `Channel: <#${result.channel.id}>`, { channelId: result.channel.id }, 'join-create-control');
-        return replyPrivate(interaction, { embeds: [createSuccessEmbed('Temporary Voice Claimed', `You now own <#${result.channel.id}>.`)] });
+        return replyPrivate(interaction, { embeds: [createSuccessEmbed('Temporary Voice Claimed', `👑 You now own <#${result.channel.id}>.`)] });
       }
     } catch (error) {
       return replyPrivate(interaction, { embeds: [createErrorEmbed('Join-to-Create Error', error instanceof Error ? error.message : String(error))] });

@@ -51,6 +51,8 @@ const snipeCommand = require('./snipe');
 const emojisCommand = require('./emojis');
 const stickersCommand = require('./stickers');
 const automodCommand = require('./automod');
+const starboardCommand = require('./starboard');
+const vcCommand = require('./vc');
 const userInfoContextCommand = require('./userInfoContext');
 const avatarContextCommand = require('./avatarContext');
 
@@ -84,6 +86,7 @@ const commands = [
   botUpdatesCommand,
   customCommand,
   joinCreateCommand,
+  vcCommand,
   gamesCommand,
   faqCommand,
   faqReplyCommand,
@@ -108,6 +111,7 @@ const commands = [
   emojisCommand,
   stickersCommand,
   automodCommand,
+  starboardCommand,
   userInfoContextCommand,
   avatarContextCommand
 ];

@@ -103,14 +103,23 @@ class LevelingService {
       levelUpMessage: values.levelUpMessage ?? current?.level_up_message ?? 'Congratulations {user}! You reached level **{level}**.',
       levelUpAnnounceMode: normalizeAnnouncementMode(values.levelUpAnnounceMode ?? current?.level_up_announce_mode),
       ignoredChannels: values.ignoredChannels ?? safeArray(current?.ignored_channel_ids),
-      ignoredRoles: values.ignoredRoles ?? safeArray(current?.ignored_role_ids)
+      ignoredRoles: values.ignoredRoles ?? safeArray(current?.ignored_role_ids),
+      voiceXpEnabled: values.voiceXpEnabled ?? current?.voice_xp_enabled ?? true,
+      voiceXpMin: Math.max(1, Math.min(1000, Number(values.voiceXpMin ?? current?.voice_xp_min ?? 10))),
+      voiceXpMax: Math.max(1, Math.min(1000, Number(values.voiceXpMax ?? current?.voice_xp_max ?? 20))),
+      voiceXpIntervalSeconds: Math.max(10, Math.min(3600, Number(values.voiceXpIntervalSeconds ?? current?.voice_xp_interval_seconds ?? 60))),
+      voiceXpRequireUnmuted: values.voiceXpRequireUnmuted ?? current?.voice_xp_require_unmuted ?? true,
+      voiceXpMinChannelMembers: Math.max(1, Math.min(20, Number(values.voiceXpMinChannelMembers ?? current?.voice_xp_min_channel_members ?? 2))),
+      voiceIgnoredChannels: values.voiceIgnoredChannels ?? safeArray(current?.voice_ignored_channel_ids)
     };
     if (config.xpMax < config.xpMin) [config.xpMin, config.xpMax] = [config.xpMax, config.xpMin];
+    if (config.voiceXpMax < config.voiceXpMin) [config.voiceXpMin, config.voiceXpMax] = [config.voiceXpMax, config.voiceXpMin];
 
     const result = await query(
       `INSERT INTO leveling_configs
-       (guild_id, enabled, xp_min, xp_max, cooldown_seconds, minimum_message_length, level_up_channel_id, level_up_message, level_up_announce_mode, ignored_channel_ids, ignored_role_ids)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11::jsonb)
+       (guild_id, enabled, xp_min, xp_max, cooldown_seconds, minimum_message_length, level_up_channel_id, level_up_message, level_up_announce_mode, ignored_channel_ids, ignored_role_ids,
+        voice_xp_enabled, voice_xp_min, voice_xp_max, voice_xp_interval_seconds, voice_xp_require_unmuted, voice_xp_min_channel_members, voice_ignored_channel_ids)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11::jsonb,$12,$13,$14,$15,$16,$17,$18::jsonb)
        ON CONFLICT (guild_id)
        DO UPDATE SET enabled = EXCLUDED.enabled,
                      xp_min = EXCLUDED.xp_min,
@@ -122,11 +131,56 @@ class LevelingService {
                      level_up_announce_mode = EXCLUDED.level_up_announce_mode,
                      ignored_channel_ids = EXCLUDED.ignored_channel_ids,
                      ignored_role_ids = EXCLUDED.ignored_role_ids,
+                     voice_xp_enabled = EXCLUDED.voice_xp_enabled,
+                     voice_xp_min = EXCLUDED.voice_xp_min,
+                     voice_xp_max = EXCLUDED.voice_xp_max,
+                     voice_xp_interval_seconds = EXCLUDED.voice_xp_interval_seconds,
+                     voice_xp_require_unmuted = EXCLUDED.voice_xp_require_unmuted,
+                     voice_xp_min_channel_members = EXCLUDED.voice_xp_min_channel_members,
+                     voice_ignored_channel_ids = EXCLUDED.voice_ignored_channel_ids,
                      updated_at = NOW()
        RETURNING *`,
-      [guildId, config.enabled, config.xpMin, config.xpMax, config.cooldownSeconds, config.minimumMessageLength, config.levelUpChannelId, config.levelUpMessage, config.levelUpAnnounceMode, JSON.stringify(config.ignoredChannels), JSON.stringify(config.ignoredRoles)]
+      [
+        guildId,
+        config.enabled,
+        config.xpMin,
+        config.xpMax,
+        config.cooldownSeconds,
+        config.minimumMessageLength,
+        config.levelUpChannelId,
+        config.levelUpMessage,
+        config.levelUpAnnounceMode,
+        JSON.stringify(config.ignoredChannels),
+        JSON.stringify(config.ignoredRoles),
+        config.voiceXpEnabled,
+        config.voiceXpMin,
+        config.voiceXpMax,
+        config.voiceXpIntervalSeconds,
+        config.voiceXpRequireUnmuted,
+        config.voiceXpMinChannelMembers,
+        JSON.stringify(config.voiceIgnoredChannels)
+      ]
     );
-    const saved = result.rows[0];
+    const saved = result.rows[0] || {
+      guild_id: guildId,
+      enabled: config.enabled,
+      xp_min: config.xpMin,
+      xp_max: config.xpMax,
+      cooldown_seconds: config.cooldownSeconds,
+      minimum_message_length: config.minimumMessageLength,
+      level_up_channel_id: config.levelUpChannelId,
+      level_up_message: config.levelUpMessage,
+      level_up_announce_mode: config.levelUpAnnounceMode,
+      ignored_channel_ids: config.ignoredChannels,
+      ignored_role_ids: config.ignoredRoles,
+      voice_xp_enabled: config.voiceXpEnabled,
+      voice_xp_min: config.voiceXpMin,
+      voice_xp_max: config.voiceXpMax,
+      voice_xp_interval_seconds: config.voiceXpIntervalSeconds,
+      voice_xp_require_unmuted: config.voiceXpRequireUnmuted,
+      voice_xp_min_channel_members: config.voiceXpMinChannelMembers,
+      voice_ignored_channel_ids: config.voiceIgnoredChannels
+    };
     this.configCache.set(guildId, saved);
     return saved;
   }
@@ -140,7 +194,12 @@ class LevelingService {
     const profile = await this.getProfile(guildId, userId);
     if (!profile) return null;
     const rankResult = await query(`SELECT COUNT(*)::int + 1 AS rank FROM leveling_profiles WHERE guild_id = $1 AND xp > $2`, [guildId, profile.xp]);
-    return { profile, rank: Number(rankResult.rows[0]?.rank || 1), progress: progressForProfile(profile) };
+    return {
+      profile,
+      rank: Number(rankResult.rows[0]?.rank || 1),
+      progress: progressForProfile(profile),
+      voiceMinutes: Number(profile?.voice_minutes || 0)
+    };
   }
 
   async leaderboard(guildId, limit = 10) {
@@ -157,6 +216,22 @@ class LevelingService {
   async removeIgnoredChannel(guildId, channelId) {
     const config = await this.saveConfig(guildId, {});
     return this.saveConfig(guildId, { ignoredChannels: safeArray(config.ignored_channel_ids).filter((id) => id !== String(channelId)) });
+  }
+
+  async addVoiceIgnoredChannel(guildId, channelId) {
+    const config = await this.saveConfig(guildId, {});
+    const ids = [...new Set([...safeArray(config.voice_ignored_channel_ids), String(channelId)])];
+    return this.saveConfig(guildId, { voiceIgnoredChannels: ids });
+  }
+
+  async removeVoiceIgnoredChannel(guildId, channelId) {
+    const config = await this.saveConfig(guildId, {});
+    return this.saveConfig(guildId, { voiceIgnoredChannels: safeArray(config.voice_ignored_channel_ids).filter((id) => id !== String(channelId)) });
+  }
+
+  async listVoiceIgnoredChannels(guildId) {
+    const config = await this.getConfig(guildId);
+    return safeArray(config?.voice_ignored_channel_ids);
   }
 
   async addIgnoredRole(guildId, roleId) {
@@ -403,6 +478,119 @@ class LevelingService {
     return { awarded: true, gained, profile, leveledUp: newLevel > oldLevel };
   }
 
+  async awardVoiceXp({ guild, member, channel, amount, minutes = 1, config = null, logger = null }) {
+    if (!guild || !member || member.user?.bot) return { awarded: false };
+    const effectiveConfig = config || await this.getConfig(guild.id);
+    if (!effectiveConfig || effectiveConfig.enabled === false || effectiveConfig.voice_xp_enabled === false) {
+      return { awarded: false };
+    }
+
+    const gained = Math.max(1, Math.floor(Number(amount) || 0));
+    const safeMinutes = Math.max(1, Math.floor(Number(minutes) || 1));
+    const existing = await this.getProfile(guild.id, member.id);
+    const oldLevel = Number(existing?.level || 0);
+    const newXp = Number(existing?.xp || 0) + gained;
+    const newLevel = levelFromXp(newXp);
+
+    const result = await query(
+      `INSERT INTO leveling_profiles (guild_id, user_id, user_tag, xp, level, message_count, voice_minutes, last_xp_at)
+       VALUES ($1, $2, $3, $4, $5, 0, $6, NOW())
+       ON CONFLICT (guild_id, user_id)
+       DO UPDATE SET user_tag = EXCLUDED.user_tag,
+                     xp = EXCLUDED.xp,
+                     level = EXCLUDED.level,
+                     voice_minutes = leveling_profiles.voice_minutes + EXCLUDED.voice_minutes,
+                     last_xp_at = NOW(),
+                     updated_at = NOW()
+       RETURNING *`,
+      [guild.id, member.id, member.user?.tag || null, newXp, newLevel, safeMinutes]
+    );
+    const profile = result.rows[0];
+
+    const syntheticMessage = {
+      guild,
+      channel,
+      channelId: channel?.id || null,
+      author: member.user,
+      member
+    };
+
+    if (newLevel > oldLevel) {
+      await this.handleLevelUp(syntheticMessage, member, profile, oldLevel, effectiveConfig, logger);
+    }
+
+    return { awarded: true, gained, minutes: safeMinutes, profile, leveledUp: newLevel > oldLevel };
+  }
+
+  async processVoiceXpSweep(client, logger) {
+    if (!client?.guilds?.cache) return;
+
+    for (const guild of client.guilds.cache.values()) {
+      try {
+        const config = await this.getConfig(guild.id);
+        if (!config || config.enabled === false || config.voice_xp_enabled === false) continue;
+
+        const ignoredText = safeArray(config.ignored_channel_ids);
+        const ignoredVoice = safeArray(config.voice_ignored_channel_ids);
+        const ignoredRoles = safeArray(config.ignored_role_ids);
+        const afkChannelId = guild.afkChannelId;
+        const minMembers = Number(config.voice_xp_min_channel_members ?? 2);
+        const requireUnmuted = config.voice_xp_require_unmuted !== false;
+
+        const rawChannels = guild.channels?.cache?.values ? Array.from(guild.channels.cache.values()) : (Array.isArray(guild.channels?.cache) ? guild.channels.cache : []);
+        const voiceChannels = rawChannels.filter((c) => (typeof c.isVoiceBased === 'function' ? c.isVoiceBased() : c.type === 2 || c.type === 13));
+
+        for (const channel of voiceChannels) {
+          // Exclude server AFK channel and configured ignored channels
+          if (afkChannelId && channel.id === afkChannelId) continue;
+          if (ignoredVoice.includes(channel.id) || ignoredText.includes(channel.id)) continue;
+
+          const rawMembers = channel.members?.values ? Array.from(channel.members.values()) : (Array.isArray(channel.members) ? channel.members : []);
+          if (!rawMembers.length) continue;
+
+          // Anti-farming check: Count non-bot members
+          const humanMembers = rawMembers.filter((m) => !m.user?.bot);
+          if (humanMembers.length < minMembers) continue;
+
+          const minXp = Number(config.voice_xp_min || 10);
+          const maxXp = Number(config.voice_xp_max || 20);
+
+          for (const member of humanMembers) {
+            const voice = member.voice;
+            if (!voice) continue;
+
+            // Disqualify muted / deafened members if required
+            const isMuted = Boolean(voice.selfMute || voice.serverMute);
+            const isDeaf = Boolean(voice.selfDeaf || voice.serverDeaf);
+            if (requireUnmuted && (isMuted || isDeaf)) continue;
+            if (isDeaf) continue;
+
+            // Check ignored roles
+            const memberRoleIds = member.roles?.cache ? [...member.roles.cache.keys()] : [];
+            if (ignoredRoles.some((id) => memberRoleIds.includes(id))) continue;
+
+            // Calculate XP with role multiplier
+            const baseGained = Math.floor(Math.random() * (maxXp - minXp + 1)) + minXp;
+            const multiplierData = await this.getApplicableMultiplier(guild.id, memberRoleIds);
+            const gained = Math.max(1, Math.round(baseGained * multiplierData.multiplier));
+
+            await this.awardVoiceXp({
+              guild,
+              member,
+              channel,
+              amount: gained,
+              minutes: 1,
+              config,
+              logger
+            }).catch((err) => console.error(`[Leveling] Failed to award voice XP to ${member.id}:`, err));
+          }
+        }
+      } catch (guildError) {
+        console.error(`[Leveling] Voice XP sweep error in guild ${guild.id}:`, guildError);
+      }
+    }
+  }
+
   async handleLevelUp(message, member, profile, oldLevel, config, logger) {
     const rewards = await query(
       `SELECT * FROM leveling_role_rewards WHERE guild_id = $1 AND active = true AND level > $2 AND level <= $3 ORDER BY level ASC`,
@@ -459,119 +647,52 @@ class LevelingService {
         estimatedMessagesTotal: Math.ceil(totalXp / averageAward)
       });
     }
-    return { rows, averageBaseXp, averageAward, multiplier: safeMultiplier, maxLevel: safeMaxLevel };
-  }
-
-  buildXpAnalysisCsv(analysis) {
-    const lines = ['Level,XP From Previous Level,Total XP Required,Estimated Messages For Level,Estimated Messages Total'];
-    for (const row of analysis.rows) {
-      lines.push([row.level, row.incrementalXp, row.totalXp, row.estimatedMessagesForLevel, row.estimatedMessagesTotal].join(','));
-    }
-    return `${lines.join('\n')}\n`;
-  }
-
-  buildXpAnalysisEmbed(analysis) {
-    const milestoneLevels = [1, 5, 10, 25, 50, 100, analysis.maxLevel]
-      .filter((value, index, values) => value <= analysis.maxLevel && values.indexOf(value) === index)
-      .sort((a, b) => a - b);
-    const milestones = milestoneLevels.map((level) => {
-      const row = analysis.rows[level - 1];
-      return `Level **${level}** — **${row.totalXp.toLocaleString()} XP** · ~**${row.estimatedMessagesTotal.toLocaleString()}** eligible messages`;
-    });
-    return createBaseEmbed({
-      title: 'SlickBot XP Curve Analysis',
-      description: [
-        `Levels analyzed: **1–${analysis.maxLevel}**`,
-        `Average base award: **${analysis.averageBaseXp.toFixed(1)} XP**`,
-        `Analysis multiplier: **${formatMultiplier(analysis.multiplier)}**`,
-        `Average adjusted award: **${analysis.averageAward.toFixed(1)} XP**`,
-        '',
-        ...milestones,
-        '',
-        'The attached CSV includes every analyzed level. Estimates assume every eligible message earns XP and do not account for cooldown downtime.'
-      ].join('\n'),
-      color: SlickBotColors.INFO
-    });
-  }
-
-  async buildInfoEmbed(guild) {
-    const config = await this.getConfig(guild.id);
-    const [rewards, multipliers] = await Promise.all([
-      this.listRoleRewards(guild.id),
-      this.listMultiplierRoles(guild.id)
-    ]);
-    if (!config) {
-      return createBaseEmbed({
-        title: 'How SlickBot Levels Work',
-        description: 'The Leveling module has not been configured yet.',
-        color: SlickBotColors.WARNING
-      });
-    }
-
-    const sortedMultipliers = [...multipliers].sort((a, b) => Number(a.multiplier) - Number(b.multiplier) || new Date(a.created_at || 0) - new Date(b.created_at || 0));
-    const multiplierLines = sortedMultipliers.length
-      ? sortedMultipliers.map((item) => `<@&${item.role_id}> — **${formatMultiplier(item.multiplier)} XP**`).join('\n')
-      : 'No multiplier roles are configured.';
-    const rewardLines = rewards.length
-      ? rewards.slice(0, 15).map((item) => `Level **${item.level}** — <@&${item.role_id}>`).join('\n')
-      : 'No level-role rewards are configured.';
-
-    return createBaseEmbed({
-      title: 'How SlickBot Levels Work',
-      description: [
-        '**Earning XP**',
-        `Send eligible messages to earn a random **${config.xp_min}–${config.xp_max} XP**.`,
-        `XP can be earned once every **${config.cooldown_seconds} seconds** per user.`,
-        `Messages must contain at least **${config.minimum_message_length} characters**. Bot messages, ignored channels, and ignored roles do not earn XP.`,
-        '',
-        '**Multiplier Roles**',
-        multiplierLines,
-        multipliers.length > 1 ? '\nIf you have multiple multiplier roles, SlickBot uses the **highest multiplier** rather than stacking them.' : '',
-        '',
-        '**Level Rewards**',
-        rewardLines,
-        '',
-        `Level-up announcements: **${normalizeAnnouncementMode(config.level_up_announce_mode) === 'ROLE_REWARDS_ONLY' ? 'Only levels with role rewards' : 'Every level'}**`,
-        config.level_up_channel_id ? `Announcement channel: <#${config.level_up_channel_id}>` : 'Announcement channel: Not configured',
-        '',
-        '**Commands**',
-        '`/level rank` — View your XP and level progress',
-        '`/level leaderboard` — View the top XP users',
-        '`/level info` — Show this information panel'
-      ].filter(Boolean).join('\n'),
-      color: SlickBotColors.PRIMARY,
-      footer: `SlickBot Leveling · ${guild.name}`
-    });
+    return {
+      maxLevel: safeMaxLevel,
+      multiplier: safeMultiplier,
+      averageAward,
+      levels: rows
+    };
   }
 
   async buildManagerPanel(guildId) {
-    const config = await this.getConfig(guildId);
-    const [profiles, rewards, multipliers] = await Promise.all([
-      query(`SELECT COUNT(*)::int AS count FROM leveling_profiles WHERE guild_id = $1`, [guildId]),
-      this.listRoleRewards(guildId),
-      this.listMultiplierRoles(guildId)
-    ]);
-
-    const enabled = config?.enabled ?? false;
+    const config = (await this.saveConfig(guildId, {})) || {};
+    const rewards = (await this.listRoleRewards(guildId)) || [];
+    const multiplierRoles = (await this.listMultiplierRoles(guildId)) || [];
+    const enabled = config?.enabled ?? true;
+    const voiceEnabled = config?.voice_xp_enabled ?? true;
     const announceMode = normalizeAnnouncementMode(config?.level_up_announce_mode);
-    const announceModeLabel = announceMode === 'ROLE_REWARDS_ONLY' ? 'Reward levels only' : 'All levels';
+
+    const ignoredText = safeArray(config?.ignored_channel_ids);
+    const ignoredVoice = safeArray(config?.voice_ignored_channel_ids);
+    const ignoredRoles = safeArray(config?.ignored_role_ids);
 
     const embed = createBaseEmbed({
-      title: 'SlickBot Leveling Center',
+      title: '⚡ Leveling & XP Management Panel',
       description: [
-        `Status: **${enabled ? '🟢 Active & Tracking XP' : '⏸️ Disabled'}**`,
-        `XP Range: **${config?.xp_min || 15}–${config?.xp_max || 25} XP** per eligible message`,
-        `Cooldown: **${config?.cooldown_seconds || 60}s**`,
-        `Minimum Message Length: **${config?.minimum_message_length || 1} chars**`,
-        `Level-Up Channel: ${config?.level_up_channel_id ? `<#${config.level_up_channel_id}>` : '*Same channel as message*'}`,
-        `Announcement Mode: **${announceModeLabel}**`,
-        `Member Profiles: **${profiles.rows[0]?.count || 0}**`,
-        `Role Rewards: **${rewards.length} role(s)**`,
-        `Multiplier Roles: **${multipliers.length} role(s)**`,
+        `Leveling System: **${enabled ? '🟢 Enabled' : '⏸️ Disabled'}**`,
+        `Announcement Mode: **${announceMode === 'ROLE_REWARDS_ONLY' ? 'Role Rewards Only' : 'All Levels'}**`,
+        `Level-up Channel: ${config?.level_up_channel_id ? `<#${config.level_up_channel_id}>` : '*Current channel / none*'}`,
         '',
-        'Click the buttons below to toggle XP tracking, edit rates/cooldowns, or change announcement mode.'
+        '**💬 Text Chat XP Rates**',
+        `• XP Per Message: **${config?.xp_min || 15}–${config?.xp_max || 25} XP**`,
+        `• Message Cooldown: **${config?.cooldown_seconds || 60}s**`,
+        `• Minimum Message Length: **${config?.minimum_message_length || 3} chars**`,
+        '',
+        '**🎙️ Voice Activity XP Rates**',
+        `• Voice XP Status: **${voiceEnabled ? '🟢 Enabled' : '⏸️ Disabled'}**`,
+        `• Voice XP Per Minute: **${config.voice_xp_min || 10}–${config.voice_xp_max || 20} XP**`,
+        `• Anti-Farming Threshold: **≥ ${config.voice_xp_min_channel_members || 2} members in VC**`,
+        `• Unmuted Required: **${config.voice_xp_require_unmuted !== false ? 'Yes (Mute/Deaf ignored)' : 'No'}**`,
+        `• Ignored Voice Channels: **${ignoredVoice.length ? ignoredVoice.map((id) => `<#${id}>`).join(', ') : 'None'}**`,
+        '',
+        '**Role Rewards & Multipliers**',
+        `• Role Rewards: **${rewards.length} configured**`,
+        `• Multiplier Roles: **${multiplierRoles.length} configured**`,
+        `• Ignored Channels: **${ignoredText.length} text** · **${ignoredVoice.length} voice**`,
+        `• Ignored Roles: **${ignoredRoles.length} roles**`
       ].join('\n'),
-      color: enabled ? SlickBotColors.SUCCESS : SlickBotColors.PRIMARY
+      color: enabled ? SlickBotColors.SUCCESS : SlickBotColors.WARNING
     });
 
     const row1 = new ActionRowBuilder().addComponents(
@@ -582,7 +703,7 @@ class LevelingService {
         .setEmoji(enabled ? '⏸️' : '▶️'),
       new ButtonBuilder()
         .setCustomId(CustomIds.LevelingConfigModal)
-        .setLabel('Edit XP Rate & Cooldown')
+        .setLabel('Edit XP Rates & Cooldown')
         .setStyle(ButtonStyle.Secondary)
         .setEmoji('⚡'),
       new ButtonBuilder()
@@ -621,12 +742,19 @@ class LevelingService {
   buildRankEmbed(user, rankData) {
     if (!rankData) return createBaseEmbed({ title: `Rank • ${user.tag}`, description: 'This user has not earned XP yet.', color: SlickBotColors.WARNING });
     const p = rankData.progress;
+    const voiceMinutes = Number(rankData.voiceMinutes || rankData.profile?.voice_minutes || 0);
+    const voiceHours = Math.floor(voiceMinutes / 60);
+    const remainingMins = voiceMinutes % 60;
+    const voiceStr = voiceHours > 0 ? `${voiceHours}h ${remainingMins}m` : `${remainingMins}m`;
+
     return createBaseEmbed({
       title: `Rank • ${user.tag}`,
       description: [
         `Server Rank: **#${rankData.rank}**`,
         `Level: **${p.level}**`,
         `Total XP: **${p.xp.toLocaleString()}**`,
+        `Messages: **${Number(rankData.profile?.message_count || 0).toLocaleString()}**`,
+        `Voice Activity: **${voiceStr}**`,
         `Progress: **${p.currentXp.toLocaleString()} / ${p.neededXp.toLocaleString()} XP**`,
         `\`${progressBar(p.currentXp, p.neededXp)}\``
       ].join('\n'),
@@ -689,6 +817,16 @@ function buildLevelingConfigModal(config) {
           .setMaxLength(4)
           .setRequired(true)
           .setValue(String(config?.minimum_message_length || 1))
+      ),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('voice_xp_rate')
+          .setLabel('Voice XP Range (Min-Max per min)')
+          .setPlaceholder('10-20')
+          .setStyle(TextInputStyle.Short)
+          .setMaxLength(10)
+          .setRequired(false)
+          .setValue(`${config?.voice_xp_min || 10}-${config?.voice_xp_max || 20}`)
       )
     );
 }

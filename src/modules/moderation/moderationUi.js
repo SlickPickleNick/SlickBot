@@ -60,6 +60,15 @@ async function buildModerationPanel(guildId) {
   const timeoutCfg = await query(`SELECT timeout_role_id, timeout_role_mode FROM automod_configs WHERE guild_id = $1 LIMIT 1`, [guildId]).catch(() => ({ rows: [] }));
   const timeoutRoleId = timeoutCfg.rows[0]?.timeout_role_id;
 
+  const escalationRes = await query(
+    `SELECT * FROM moderation_escalation_rules WHERE guild_id = $1 AND active = true ORDER BY warning_count ASC`,
+    [guildId]
+  ).catch(() => ({ rows: [] }));
+  const escalationRules = escalationRes.rows || [];
+  const escalationLines = escalationRules.length
+    ? escalationRules.map((r) => `• **${r.warning_count} Warnings** ➔ **${r.punishment}**${r.duration_seconds ? ` (${Math.round(r.duration_seconds / 60)}m)` : ''}`).join('\n')
+    : '*No auto-escalation rules configured (use `/mod escalation-set`).*';
+
   const embed = createBaseEmbed({
     title: 'SlickBot Core Setup',
     description: [
@@ -71,6 +80,9 @@ async function buildModerationPanel(guildId) {
       '✅ User notes are active through `/note`.',
       `${timeoutRoleId ? '✅' : '🟠'} Timeout Role: ${timeoutRoleId ? `<@&${timeoutRoleId}>` : 'Not configured'}`,
       `${logReady ? '✅' : '🟠'} Moderation Logs: ${logReady ? `<#${moderationLog.channel_id}>` : 'Not configured'}`,
+      '',
+      '**⚠️ Infraction Auto-Escalation Matrix**',
+      escalationLines,
       '',
       '**Lockdown / Safety**',
       lockdownStatus.active ? `⚠️ Active lockdown: **${lockdownStatus.active.preset_name}**` : `✅ No active lockdown. Presets configured: **${lockdownStatus.presets.length || 0}**`,
@@ -91,6 +103,7 @@ async function buildModerationPanel(guildId) {
       `Open Cases: **${stats.open_count || 0}**`,
       `Last 24 Hours: **${stats.last_day || 0}**`,
       `Active User Notes: **${notes.rows[0]?.total || 0}**`,
+      `Escalation Rules: **${escalationRules.length} configured**`,
       '',
       '**Recent Cases**',
       truncate(recentLines, 1800),

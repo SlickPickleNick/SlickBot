@@ -57,6 +57,12 @@ const {
   buildEmbedFieldModal,
   buildEmbedPreviewPayload
 } = require('../modules/utility/utilityUi');
+const { StarboardService } = require('../modules/community/starboardService');
+const {
+  buildStarboardPanel,
+  buildStarboardThresholdModal,
+  buildStarboardEmojiModal
+} = require('../modules/community/starboardUi');
 const {
   TicketService,
   ReportService,
@@ -96,6 +102,7 @@ const autoMod = new AutoModService();
 const botUpdates = new BotUpdatesService();
 const onboarding = new OnboardingService();
 const utility = new UtilityService();
+const starboard = new StarboardService();
 
 async function handleComponentInteraction(interaction, ctx) {
   if (!interaction.guildId) {
@@ -820,6 +827,133 @@ async function handleButton(interaction, ctx) {
     return true;
   }
 
+  // --- Starboard Interactions ---
+
+  if (id === CustomIds.StarboardManager || id === CustomIds.StarboardRefresh) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.StarboardView, ModuleKeys.STARBOARD))) return true;
+    await updatePanel(interaction, await buildStarboardPanel(interaction.guildId, 'OVERVIEW'));
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.StarboardTabPrefix)) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.StarboardView, ModuleKeys.STARBOARD))) return true;
+    const tab = id.slice(CustomIds.StarboardTabPrefix.length);
+    await updatePanel(interaction, await buildStarboardPanel(interaction.guildId, tab));
+    return true;
+  }
+
+  if (id === CustomIds.StarboardThresholdModalOpen) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.StarboardManage, ModuleKeys.STARBOARD))) return true;
+    const config = await starboard.getConfig(interaction.guildId);
+    await interaction.showModal(buildStarboardThresholdModal(config));
+    return true;
+  }
+
+  if (id === CustomIds.StarboardEmojiModalOpen) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.StarboardManage, ModuleKeys.STARBOARD))) return true;
+    const config = await starboard.getConfig(interaction.guildId);
+    await interaction.showModal(buildStarboardEmojiModal(config));
+    return true;
+  }
+
+  if (id === CustomIds.StarboardToggleSelfStar) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.StarboardManage, ModuleKeys.STARBOARD))) return true;
+    const config = await starboard.getConfig(interaction.guildId);
+    await starboard.upsertConfig(interaction.guildId, { allow_self_star: !config.allow_self_star });
+    await updatePanel(interaction, await buildStarboardPanel(interaction.guildId, 'OVERVIEW'));
+    return true;
+  }
+
+  if (id === CustomIds.StarboardToggleNsfw) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.StarboardManage, ModuleKeys.STARBOARD))) return true;
+    const config = await starboard.getConfig(interaction.guildId);
+    await starboard.upsertConfig(interaction.guildId, { allow_nsfw: !config.allow_nsfw });
+    await updatePanel(interaction, await buildStarboardPanel(interaction.guildId, 'OVERVIEW'));
+    return true;
+  }
+
+  if (id === CustomIds.StarboardToggleEnabled) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.StarboardManage, ModuleKeys.STARBOARD))) return true;
+    const config = await starboard.getConfig(interaction.guildId);
+    await starboard.upsertConfig(interaction.guildId, { enabled: !config.enabled });
+    await updatePanel(interaction, await buildStarboardPanel(interaction.guildId, 'OVERVIEW'));
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.StarboardResetConfirmPrefix)) {
+    const requestedGuildId = id.slice(CustomIds.StarboardResetConfirmPrefix.length);
+    if (!(await requireAction(interaction, ctx, ActionKeys.StarboardReset, ModuleKeys.STARBOARD))) return true;
+    await starboard.resetConfig(requestedGuildId);
+    await ctx.logger.log({
+      guildId: requestedGuildId,
+      eventKey: 'starboard-reset',
+      title: 'Starboard Reset',
+      body: `Starboard configuration and history reset by ${interaction.user.tag}.`,
+      actorUserId: interaction.user.id
+    }).catch(() => {});
+    await updatePanel(interaction, {
+      embeds: [createSuccessEmbed('Starboard Reset', 'Successfully reset Starboard configuration and cleared pinned entries.')],
+      components: []
+    });
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.StarboardResetCancelPrefix)) {
+    await updatePanel(interaction, {
+      embeds: [createSuccessEmbed('Reset Cancelled', 'Starboard settings were not changed.')],
+      components: []
+    });
+    return true;
+  }
+
+  // --- Giveaway Interactions ---
+
+  if (id.startsWith(CustomIds.GiveawaysEnterPrefix)) {
+    const giveawayId = id.slice(CustomIds.GiveawaysEnterPrefix.length);
+    const result = await giveaways.enterGiveaway({ interaction, giveawayId, logger: ctx.logger });
+    if (!result.ok) {
+      await replyPrivate(interaction, {
+        embeds: [createWarningEmbed('Entry Denied', result.reason)],
+        deleteAfterSeconds: 12
+      });
+      return true;
+    }
+
+    if (result.alreadyEntered) {
+      await replyPrivate(interaction, {
+        embeds: [createSuccessEmbed('Already Entered', `You are already entered in Giveaway #${result.giveaway.giveaway_number} for **${result.giveaway.prize}**! 🎉`)],
+        deleteAfterSeconds: 8
+      });
+      return true;
+    }
+
+    await giveaways.refreshGiveawayMessage(ctx.client, interaction.guildId, giveawayId).catch(() => {});
+    await replyPrivate(interaction, {
+      embeds: [createSuccessEmbed('Entry Confirmed! 🎉', `You have successfully entered Giveaway #${result.giveaway.giveaway_number} for **${result.giveaway.prize}**! Good luck!`)],
+      deleteAfterSeconds: 8
+    });
+    return true;
+  }
+
+  if (id === CustomIds.GiveawaysRefresh) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.GiveawaysView, ModuleKeys.GIVEAWAYS))) return true;
+    await updatePanel(interaction, await giveaways.buildManagerPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id === CustomIds.GiveawaysQuickStart) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.GiveawaysCreate, ModuleKeys.GIVEAWAYS))) return true;
+    await interaction.showModal(buildGiveawayStartModal());
+    return true;
+  }
+
+  if (id === CustomIds.GiveawaysConfigModal) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.GiveawaysConfigure, ModuleKeys.GIVEAWAYS))) return true;
+    const config = await giveaways.getConfig(interaction.guildId);
+    await interaction.showModal(buildGiveawayConfigModal(config));
+    return true;
+  }
+
   if (id.startsWith(CustomIds.PollVotePrefix)) {
     if (!(await requirePublicAction(interaction, ctx, ActionKeys.UtilityPollVote, ModuleKeys.UTILITY))) return true;
     const payload = id.slice(CustomIds.PollVotePrefix.length);
@@ -1144,6 +1278,9 @@ async function handleButton(interaction, ctx) {
         break;
       case ModuleKeys.SOCIAL_FEEDS:
         await updatePanel(interaction, await socialFeeds.buildManagerPanel(interaction.guildId));
+        break;
+      case ModuleKeys.STARBOARD:
+        await updatePanel(interaction, await buildStarboardPanel(interaction.guildId, 'OVERVIEW'));
         break;
       default:
         await updatePanel(interaction, await buildModulesPanel(interaction.guildId));
@@ -2122,13 +2259,19 @@ async function handleButton(interaction, ctx) {
   if ([
     CustomIds.JoinCreateLockPrefix,
     CustomIds.JoinCreateUnlockPrefix,
+    CustomIds.JoinCreateHidePrefix,
+    CustomIds.JoinCreateUnhidePrefix,
     CustomIds.JoinCreateClaimPrefix,
     CustomIds.JoinCreateDeletePrefix,
     CustomIds.JoinCreateRenamePrefix,
     CustomIds.JoinCreateLimitPrefix,
+    CustomIds.JoinCreateBitratePrefix,
     CustomIds.JoinCreatePermitPrefix,
+    CustomIds.JoinCreateKickPrefix,
+    CustomIds.JoinCreateBanPrefix,
     CustomIds.JoinCreateRemovePrefix,
-    CustomIds.JoinCreateTransferPrefix
+    CustomIds.JoinCreateTransferPrefix,
+    CustomIds.JoinCreateOwnerPanelPrefix
   ].some((prefix) => id.startsWith(prefix))) {
     if (!(await requirePublicAction(interaction, ctx, ActionKeys.TempVoiceManage, ModuleKeys.JOIN_TO_CREATE))) return true;
     const member = await interaction.guild.members.fetch(interaction.user.id).catch(() => interaction.member);
@@ -2147,11 +2290,25 @@ async function handleButton(interaction, ctx) {
         await replyPrivate(interaction, { embeds: [createSuccessEmbed('Channel Unlocked', `🔓 <#${result.channel.id}> is now unlocked.`)], deleteAfterSeconds: 8 });
         return true;
       }
+      if (id.startsWith(CustomIds.JoinCreateHidePrefix)) {
+        const channelId = id.slice(CustomIds.JoinCreateHidePrefix.length);
+        const result = await joinCreate.setHiddenFromControl(member, channelId, true);
+        await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'join-create-control', title: 'Temporary Voice Hidden', body: `Channel: <#${result.channel.id}>`, actorUserId: interaction.user.id, metadata: { channelId: result.channel.id, hidden: true } }).catch(() => {});
+        await replyPrivate(interaction, { embeds: [createSuccessEmbed('Channel Hidden', `👁️‍🗨️ <#${result.channel.id}> is now hidden from the server channel list.`)], deleteAfterSeconds: 8 });
+        return true;
+      }
+      if (id.startsWith(CustomIds.JoinCreateUnhidePrefix)) {
+        const channelId = id.slice(CustomIds.JoinCreateUnhidePrefix.length);
+        const result = await joinCreate.setHiddenFromControl(member, channelId, false);
+        await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'join-create-control', title: 'Temporary Voice Unhidden', body: `Channel: <#${result.channel.id}>`, actorUserId: interaction.user.id, metadata: { channelId: result.channel.id, hidden: false } }).catch(() => {});
+        await replyPrivate(interaction, { embeds: [createSuccessEmbed('Channel Visible', `👁️ <#${result.channel.id}> is now visible to everyone.`)], deleteAfterSeconds: 8 });
+        return true;
+      }
       if (id.startsWith(CustomIds.JoinCreateClaimPrefix)) {
         const channelId = id.slice(CustomIds.JoinCreateClaimPrefix.length);
         const result = await joinCreate.claimFromControl(member, channelId);
         await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'join-create-control', title: 'Temporary Voice Claimed', body: `Channel: <#${result.channel.id}>`, actorUserId: interaction.user.id, metadata: { channelId: result.channel.id } }).catch(() => {});
-        await replyPrivate(interaction, { embeds: [createSuccessEmbed('Channel Claimed', `You now own <#${result.channel.id}>.`)], deleteAfterSeconds: 8 });
+        await replyPrivate(interaction, { embeds: [createSuccessEmbed('Channel Claimed', `👑 You now own <#${result.channel.id}>.`)], deleteAfterSeconds: 8 });
         return true;
       }
       if (id.startsWith(CustomIds.JoinCreateDeletePrefix)) {
@@ -2171,9 +2328,26 @@ async function handleButton(interaction, ctx) {
         await interaction.showModal(joinCreate.buildLimitModal(channelId, temp?.user_limit || 0));
         return true;
       }
+      if (id.startsWith(CustomIds.JoinCreateBitratePrefix)) {
+        const channelId = id.slice(CustomIds.JoinCreateBitratePrefix.length);
+        const channel = await interaction.guild.channels.fetch(channelId).catch(() => null);
+        const currentKbps = channel?.bitrate ? Math.round(channel.bitrate / 1000) : 64;
+        await interaction.showModal(joinCreate.buildBitrateModal(channelId, currentKbps));
+        return true;
+      }
       if (id.startsWith(CustomIds.JoinCreatePermitPrefix)) {
         const channelId = id.slice(CustomIds.JoinCreatePermitPrefix.length);
         await replyPrivate(interaction, joinCreate.buildUserSelectPayload(channelId, 'permit'));
+        return true;
+      }
+      if (id.startsWith(CustomIds.JoinCreateKickPrefix)) {
+        const channelId = id.slice(CustomIds.JoinCreateKickPrefix.length);
+        await replyPrivate(interaction, joinCreate.buildUserSelectPayload(channelId, 'kick'));
+        return true;
+      }
+      if (id.startsWith(CustomIds.JoinCreateBanPrefix)) {
+        const channelId = id.slice(CustomIds.JoinCreateBanPrefix.length);
+        await replyPrivate(interaction, joinCreate.buildUserSelectPayload(channelId, 'ban'));
         return true;
       }
       if (id.startsWith(CustomIds.JoinCreateRemovePrefix)) {
@@ -2184,6 +2358,11 @@ async function handleButton(interaction, ctx) {
       if (id.startsWith(CustomIds.JoinCreateTransferPrefix)) {
         const channelId = id.slice(CustomIds.JoinCreateTransferPrefix.length);
         await replyPrivate(interaction, joinCreate.buildUserSelectPayload(channelId, 'transfer'));
+        return true;
+      }
+      if (id.startsWith(CustomIds.JoinCreateOwnerPanelPrefix)) {
+        const channelId = id.slice(CustomIds.JoinCreateOwnerPanelPrefix.length);
+        await replyPrivate(interaction, await joinCreate.buildOwnerPanel(member, channelId));
         return true;
       }
     } catch (error) {
@@ -2283,6 +2462,9 @@ async function routeModuleToManager(interaction, ctx, moduleKey) {
       break;
     case ModuleKeys.UTILITY:
       await updatePanel(interaction, await buildUtilityManagerPanel(interaction.guildId));
+      break;
+    case ModuleKeys.STARBOARD:
+      await updatePanel(interaction, await buildStarboardPanel(interaction.guildId, 'OVERVIEW'));
       break;
     default:
       await updatePanel(interaction, await buildModuleDetailPanel(interaction.guildId, moduleKey));
@@ -2728,6 +2910,96 @@ async function handleSelect(interaction, ctx) {
     await autoMod.syncTimeoutRolePermissions(interaction.guild);
     await updatePanel(interaction, await buildAutoModManagerPanel(interaction.guildId, 'TIMEOUT'));
     return true;
+  }
+
+  // --- Starboard Select Menus ---
+
+  if (id === CustomIds.StarboardChannelSelect) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.StarboardManage, ModuleKeys.STARBOARD))) return true;
+    await interaction.deferUpdate().catch(() => {});
+    const channelId = interaction.values[0];
+    await starboard.upsertConfig(interaction.guildId, { channel_id: channelId, enabled: true });
+    await updatePanel(interaction, await buildStarboardPanel(interaction.guildId, 'OVERVIEW'));
+    return true;
+  }
+
+  if (id === CustomIds.StarboardChannelExemptSelect) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.StarboardManage, ModuleKeys.STARBOARD))) return true;
+    await interaction.deferUpdate().catch(() => {});
+    await starboard.upsertConfig(interaction.guildId, { ignored_channels: interaction.values || [] });
+    await updatePanel(interaction, await buildStarboardPanel(interaction.guildId, 'EXCLUSIONS'));
+    return true;
+  }
+
+  if (id === CustomIds.StarboardRoleExemptSelect) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.StarboardManage, ModuleKeys.STARBOARD))) return true;
+    await interaction.deferUpdate().catch(() => {});
+    await starboard.upsertConfig(interaction.guildId, { ignored_roles: interaction.values || [] });
+    await updatePanel(interaction, await buildStarboardPanel(interaction.guildId, 'EXCLUSIONS'));
+    return true;
+  }
+
+  // --- Join-to-Create Temporary Voice Select Menus ---
+  if ([
+    CustomIds.JoinCreatePermitUserSelectPrefix,
+    CustomIds.JoinCreateKickUserSelectPrefix,
+    CustomIds.JoinCreateBanUserSelectPrefix,
+    CustomIds.JoinCreateRemoveUserSelectPrefix,
+    CustomIds.JoinCreateTransferUserSelectPrefix
+  ].some((prefix) => id.startsWith(prefix))) {
+    if (!(await requirePublicAction(interaction, ctx, ActionKeys.TempVoiceManage, ModuleKeys.JOIN_TO_CREATE))) return true;
+    const member = await interaction.guild.members.fetch(interaction.user.id).catch(() => interaction.member);
+    const targetUserId = interaction.values?.[0] || (interaction.users?.first()?.id);
+    if (!targetUserId) {
+      await replyPrivate(interaction, { embeds: [createWarningEmbed('Selection Required', 'No user was selected.')], deleteAfterSeconds: 8 });
+      return true;
+    }
+    const targetMember = await interaction.guild.members.fetch(targetUserId).catch(() => null);
+    if (!targetMember) {
+      await replyPrivate(interaction, { embeds: [createWarningEmbed('Member Not Found', 'The selected member is no longer in this server.')], deleteAfterSeconds: 8 });
+      return true;
+    }
+
+    try {
+      if (id.startsWith(CustomIds.JoinCreatePermitUserSelectPrefix)) {
+        const channelId = id.slice(CustomIds.JoinCreatePermitUserSelectPrefix.length);
+        const result = await joinCreate.permitUserFromControl(member, channelId, targetMember);
+        await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'join-create-control', title: 'User Permitted into Voice', body: `Member: <@${targetMember.id}>\nChannel: <#${result.channel.id}>`, actorUserId: interaction.user.id, metadata: { channelId: result.channel.id, targetUserId: targetMember.id } }).catch(() => {});
+        await replyPrivate(interaction, { embeds: [createSuccessEmbed('User Permitted', `✅ <@${targetMember.id}> can now view and join <#${result.channel.id}>.`)], deleteAfterSeconds: 8 });
+        return true;
+      }
+      if (id.startsWith(CustomIds.JoinCreateKickUserSelectPrefix)) {
+        const channelId = id.slice(CustomIds.JoinCreateKickUserSelectPrefix.length);
+        const result = await joinCreate.kickUserFromControl(member, channelId, targetMember);
+        await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'join-create-control', title: 'User Kicked from Voice', body: `Member: <@${targetMember.id}>\nChannel: <#${result.channel.id}>`, actorUserId: interaction.user.id, metadata: { channelId: result.channel.id, targetUserId: targetMember.id } }).catch(() => {});
+        await replyPrivate(interaction, { embeds: [createSuccessEmbed('User Kicked', `🚪 <@${targetMember.id}> was kicked from <#${result.channel.id}>.`)], deleteAfterSeconds: 8 });
+        return true;
+      }
+      if (id.startsWith(CustomIds.JoinCreateBanUserSelectPrefix)) {
+        const channelId = id.slice(CustomIds.JoinCreateBanUserSelectPrefix.length);
+        const result = await joinCreate.banUserFromControl(member, channelId, targetMember);
+        await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'join-create-control', title: 'User Blocked from Voice', body: `Member: <@${targetMember.id}>\nChannel: <#${result.channel.id}>`, actorUserId: interaction.user.id, metadata: { channelId: result.channel.id, targetUserId: targetMember.id } }).catch(() => {});
+        await replyPrivate(interaction, { embeds: [createSuccessEmbed('User Blocked', `⛔ <@${targetMember.id}> was blocked and banned from joining <#${result.channel.id}>.`)], deleteAfterSeconds: 8 });
+        return true;
+      }
+      if (id.startsWith(CustomIds.JoinCreateRemoveUserSelectPrefix)) {
+        const channelId = id.slice(CustomIds.JoinCreateRemoveUserSelectPrefix.length);
+        const result = await joinCreate.removeUserFromControl(member, channelId, targetMember);
+        await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'join-create-control', title: 'User Access Removed from Voice', body: `Member: <@${targetMember.id}>\nChannel: <#${result.channel.id}>`, actorUserId: interaction.user.id, metadata: { channelId: result.channel.id, targetUserId: targetMember.id } }).catch(() => {});
+        await replyPrivate(interaction, { embeds: [createSuccessEmbed('User Removed', `Removed join access for <@${targetMember.id}> in <#${result.channel.id}>.`)], deleteAfterSeconds: 8 });
+        return true;
+      }
+      if (id.startsWith(CustomIds.JoinCreateTransferUserSelectPrefix)) {
+        const channelId = id.slice(CustomIds.JoinCreateTransferUserSelectPrefix.length);
+        const result = await joinCreate.transferFromControl(member, channelId, targetMember);
+        await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'join-create-control', title: 'Temporary Voice Ownership Transferred', body: `New Owner: <@${targetMember.id}>\nChannel: <#${result.channel.id}>`, actorUserId: interaction.user.id, metadata: { channelId: result.channel.id, newOwnerUserId: targetMember.id } }).catch(() => {});
+        await replyPrivate(interaction, { embeds: [createSuccessEmbed('Ownership Transferred', `👑 <@${targetMember.id}> is now the owner of <#${result.channel.id}>.`)], deleteAfterSeconds: 8 });
+        return true;
+      }
+    } catch (error) {
+      await replyPrivate(interaction, { embeds: [createWarningEmbed('Voice Action Failed', error instanceof Error ? error.message : String(error))], deleteAfterSeconds: 10 });
+      return true;
+    }
   }
 
   return false;
@@ -3356,6 +3628,211 @@ async function handleModal(interaction, ctx) {
       embeds: [createSuccessEmbed('Domain Whitelisted', `Approved external domain: \`${domain}\`.`)]
     });
     return true;
+  }
+
+  // --- Starboard Modals ---
+
+  if (id === CustomIds.StarboardThresholdModal) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.StarboardManage, ModuleKeys.STARBOARD))) return true;
+    const thresholdInput = interaction.fields.getTextInputValue('star_threshold')?.trim();
+    const threshold = parseInt(thresholdInput, 10);
+    if (isNaN(threshold) || threshold < 1 || threshold > 50) {
+      return replyPrivate(interaction, { embeds: [createWarningEmbed('Invalid Threshold', 'Please enter a number between 1 and 50.')] });
+    }
+    const updated = await starboard.upsertConfig(interaction.guildId, { star_threshold: threshold });
+    await ctx.logger.log({
+      guildId: interaction.guildId,
+      eventKey: 'starboard-threshold-tuned',
+      title: 'Starboard Threshold Updated',
+      body: `Threshold set to **${threshold}** ${updated.star_emoji} by ${interaction.user.tag}.`,
+      actorUserId: interaction.user.id
+    }).catch(() => {});
+    await replyPrivate(interaction, { embeds: [createSuccessEmbed('Threshold Updated', `Star threshold set to **${threshold}** ${updated.star_emoji}.`)] });
+    return true;
+  }
+
+  if (id === CustomIds.StarboardEmojiModal) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.StarboardManage, ModuleKeys.STARBOARD))) return true;
+    const emoji = interaction.fields.getTextInputValue('star_emoji')?.trim();
+    if (!emoji) {
+      return replyPrivate(interaction, { embeds: [createWarningEmbed('Invalid Emoji', 'Please enter a valid emoji.')] });
+    }
+    await starboard.upsertConfig(interaction.guildId, { star_emoji: emoji });
+    await ctx.logger.log({
+      guildId: interaction.guildId,
+      eventKey: 'starboard-emoji-tuned',
+      title: 'Starboard Emoji Updated',
+      body: `Reaction emoji set to ${emoji} by ${interaction.user.tag}.`,
+      actorUserId: interaction.user.id
+    }).catch(() => {});
+    await replyPrivate(interaction, { embeds: [createSuccessEmbed('Emoji Updated', `Starboard trigger emoji updated to ${emoji}.`)] });
+    return true;
+  }
+
+  // --- Giveaway Modals ---
+
+  if (id === CustomIds.GiveawaysQuickStartModalSubmit) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.GiveawaysCreate, ModuleKeys.GIVEAWAYS))) return true;
+    const prize = interaction.fields.getTextInputValue('prize')?.trim();
+    const duration = interaction.fields.getTextInputValue('duration')?.trim();
+    const winnersStr = interaction.fields.getTextInputValue('winners')?.trim();
+    const minLevelStr = interaction.fields.getTextInputValue('min_level')?.trim();
+    const description = interaction.fields.getTextInputValue('description')?.trim() || null;
+
+    const winnerCount = Math.max(1, Math.min(parseInt(winnersStr, 10) || 1, 20));
+    const minLevel = minLevelStr ? Math.max(0, parseInt(minLevelStr, 10) || 0) : null;
+
+    const result = await giveaways.startGiveaway({
+      interaction,
+      client: ctx.client,
+      logger: ctx.logger,
+      prize,
+      duration,
+      winnerCount,
+      minLevel,
+      description
+    });
+
+    if (!result.ok) {
+      return replyPrivate(interaction, { embeds: [createWarningEmbed('Giveaway Not Started', result.reason)] });
+    }
+
+    await replyPrivate(interaction, {
+      embeds: [createSuccessEmbed('Giveaway Launched! 🎉', `Giveaway #${result.giveaway.giveaway_number} for **${result.giveaway.prize}** was posted in <#${result.channel.id}>.`)]
+    });
+    return true;
+  }
+
+  if (id === CustomIds.GiveawaysConfigModalSubmit) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.GiveawaysConfigure, ModuleKeys.GIVEAWAYS))) return true;
+    const panelColor = interaction.fields.getTextInputValue('panel_color')?.trim() || null;
+    const defaultMinLevelStr = interaction.fields.getTextInputValue('default_min_level')?.trim();
+    const defaultMinAgeStr = interaction.fields.getTextInputValue('default_min_account_age')?.trim();
+    const headerImageUrl = interaction.fields.getTextInputValue('header_image_url')?.trim() || null;
+
+    const defaultMinLevel = defaultMinLevelStr ? parseInt(defaultMinLevelStr, 10) || 0 : 0;
+    const defaultMinAccountAgeDays = defaultMinAgeStr ? parseInt(defaultMinAgeStr, 10) || 0 : 0;
+
+    await giveaways.updateConfig(interaction.guildId, {
+      panelColor,
+      defaultMinLevel,
+      defaultMinAccountAgeDays,
+      panelHeaderImageUrl: headerImageUrl
+    });
+
+    await updatePanel(interaction, await giveaways.buildManagerPanel(interaction.guildId));
+    return true;
+  }
+
+  // --- Join-to-Create Temporary Voice Modals ---
+
+  if (id.startsWith(CustomIds.JoinCreateRenameModalPrefix)) {
+    if (!(await requirePublicAction(interaction, ctx, ActionKeys.TempVoiceManage, ModuleKeys.JOIN_TO_CREATE))) return true;
+    const channelId = id.slice(CustomIds.JoinCreateRenameModalPrefix.length);
+    const member = await interaction.guild.members.fetch(interaction.user.id).catch(() => interaction.member);
+    const newName = interaction.fields.getTextInputValue('name')?.trim();
+    try {
+      const result = await joinCreate.renameTempFromControl(member, channelId, newName);
+      await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'join-create-control', title: 'Temporary Voice Renamed', body: `New Name: **${result.temp.name}**\nChannel: <#${result.channel.id}>`, actorUserId: interaction.user.id, metadata: { channelId: result.channel.id, name: result.temp.name } }).catch(() => {});
+      await replyPrivate(interaction, { embeds: [createSuccessEmbed('Voice Channel Renamed', `✏️ Renamed channel to **${result.temp.name}**.`)], deleteAfterSeconds: 8 });
+    } catch (error) {
+      await replyPrivate(interaction, { embeds: [createWarningEmbed('Rename Failed', error instanceof Error ? error.message : String(error))], deleteAfterSeconds: 10 });
+    }
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.JoinCreateLimitModalPrefix)) {
+    if (!(await requirePublicAction(interaction, ctx, ActionKeys.TempVoiceManage, ModuleKeys.JOIN_TO_CREATE))) return true;
+    const channelId = id.slice(CustomIds.JoinCreateLimitModalPrefix.length);
+    const member = await interaction.guild.members.fetch(interaction.user.id).catch(() => interaction.member);
+    const limit = Number(interaction.fields.getTextInputValue('limit') || 0);
+    try {
+      const result = await joinCreate.setLimitFromControl(member, channelId, limit);
+      await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'join-create-control', title: 'Temporary Voice Limit Updated', body: `User Limit: **${result.temp.user_limit}**\nChannel: <#${result.channel.id}>`, actorUserId: interaction.user.id, metadata: { channelId: result.channel.id, userLimit: result.temp.user_limit } }).catch(() => {});
+      await replyPrivate(interaction, { embeds: [createSuccessEmbed('User Limit Updated', `👥 Set user limit to **${result.temp.user_limit || 'No Limit'}** for <#${result.channel.id}>.`)], deleteAfterSeconds: 8 });
+    } catch (error) {
+      await replyPrivate(interaction, { embeds: [createWarningEmbed('Limit Update Failed', error instanceof Error ? error.message : String(error))], deleteAfterSeconds: 10 });
+    }
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.JoinCreateBitrateModalPrefix)) {
+    if (!(await requirePublicAction(interaction, ctx, ActionKeys.TempVoiceManage, ModuleKeys.JOIN_TO_CREATE))) return true;
+    const channelId = id.slice(CustomIds.JoinCreateBitrateModalPrefix.length);
+    const member = await interaction.guild.members.fetch(interaction.user.id).catch(() => interaction.member);
+    const kbps = Number(interaction.fields.getTextInputValue('bitrate') || 64);
+    try {
+      const result = await joinCreate.setBitrateFromControl(member, channelId, kbps);
+      await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'join-create-control', title: 'Temporary Voice Bitrate Updated', body: `Bitrate: **${result.kbps} kbps**\nChannel: <#${result.channel.id}>`, actorUserId: interaction.user.id, metadata: { channelId: result.channel.id, kbps: result.kbps } }).catch(() => {});
+      await replyPrivate(interaction, { embeds: [createSuccessEmbed('Bitrate Updated', `🎚️ Set voice bitrate to **${result.kbps} kbps** for <#${result.channel.id}>.`)], deleteAfterSeconds: 8 });
+    } catch (error) {
+      await replyPrivate(interaction, { embeds: [createWarningEmbed('Bitrate Update Failed', error instanceof Error ? error.message : String(error))], deleteAfterSeconds: 10 });
+    }
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.JoinCreateDeleteConfirmPrefix)) {
+    if (!(await requirePublicAction(interaction, ctx, ActionKeys.TempVoiceManage, ModuleKeys.JOIN_TO_CREATE))) return true;
+    const channelId = id.slice(CustomIds.JoinCreateDeleteConfirmPrefix.length);
+    const member = await interaction.guild.members.fetch(interaction.user.id).catch(() => interaction.member);
+    const confirm = interaction.fields.getTextInputValue('confirm')?.trim().toUpperCase();
+    if (confirm !== 'DELETE') {
+      await replyPrivate(interaction, { embeds: [createWarningEmbed('Deletion Cancelled', 'You must type DELETE in all caps to delete your temporary voice channel.')], deleteAfterSeconds: 8 });
+      return true;
+    }
+    try {
+      await joinCreate.deleteTempFromControl(member, channelId, ctx.logger);
+      await replyPrivate(interaction, { embeds: [createSuccessEmbed('Channel Deleted', '🗑️ Your temporary voice channel has been deleted.')], deleteAfterSeconds: 8 });
+    } catch (error) {
+      await replyPrivate(interaction, { embeds: [createWarningEmbed('Delete Failed', error instanceof Error ? error.message : String(error))], deleteAfterSeconds: 10 });
+    }
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.JoinCreatePermitModalPrefix) ||
+      id.startsWith(CustomIds.JoinCreateKickModalPrefix) ||
+      id.startsWith(CustomIds.JoinCreateBanModalPrefix) ||
+      id.startsWith(CustomIds.JoinCreateRemoveModalPrefix) ||
+      id.startsWith(CustomIds.JoinCreateTransferModalPrefix)) {
+    if (!(await requirePublicAction(interaction, ctx, ActionKeys.TempVoiceManage, ModuleKeys.JOIN_TO_CREATE))) return true;
+    const member = await interaction.guild.members.fetch(interaction.user.id).catch(() => interaction.member);
+    const userInput = interaction.fields.getTextInputValue('user')?.trim();
+    try {
+      const targetMember = await resolveGuildMemberFromInput(interaction.guild, userInput);
+      if (id.startsWith(CustomIds.JoinCreatePermitModalPrefix)) {
+        const channelId = id.slice(CustomIds.JoinCreatePermitModalPrefix.length);
+        const result = await joinCreate.permitUserFromControl(member, channelId, targetMember);
+        await replyPrivate(interaction, { embeds: [createSuccessEmbed('User Permitted', `✅ <@${targetMember.id}> can now join <#${result.channel.id}>.`)], deleteAfterSeconds: 8 });
+        return true;
+      }
+      if (id.startsWith(CustomIds.JoinCreateKickModalPrefix)) {
+        const channelId = id.slice(CustomIds.JoinCreateKickModalPrefix.length);
+        const result = await joinCreate.kickUserFromControl(member, channelId, targetMember);
+        await replyPrivate(interaction, { embeds: [createSuccessEmbed('User Kicked', `🚪 <@${targetMember.id}> was kicked from <#${result.channel.id}>.`)], deleteAfterSeconds: 8 });
+        return true;
+      }
+      if (id.startsWith(CustomIds.JoinCreateBanModalPrefix)) {
+        const channelId = id.slice(CustomIds.JoinCreateBanModalPrefix.length);
+        const result = await joinCreate.banUserFromControl(member, channelId, targetMember);
+        await replyPrivate(interaction, { embeds: [createSuccessEmbed('User Blocked', `⛔ <@${targetMember.id}> was blocked and banned from joining <#${result.channel.id}>.`)], deleteAfterSeconds: 8 });
+        return true;
+      }
+      if (id.startsWith(CustomIds.JoinCreateRemoveModalPrefix)) {
+        const channelId = id.slice(CustomIds.JoinCreateRemoveModalPrefix.length);
+        const result = await joinCreate.removeUserFromControl(member, channelId, targetMember);
+        await replyPrivate(interaction, { embeds: [createSuccessEmbed('User Removed', `Removed access for <@${targetMember.id}> in <#${result.channel.id}>.`)], deleteAfterSeconds: 8 });
+        return true;
+      }
+      if (id.startsWith(CustomIds.JoinCreateTransferModalPrefix)) {
+        const channelId = id.slice(CustomIds.JoinCreateTransferModalPrefix.length);
+        const result = await joinCreate.transferFromControl(member, channelId, targetMember);
+        await replyPrivate(interaction, { embeds: [createSuccessEmbed('Ownership Transferred', `👑 <@${targetMember.id}> is now the owner of <#${result.channel.id}>.`)], deleteAfterSeconds: 8 });
+        return true;
+      }
+    } catch (error) {
+      await replyPrivate(interaction, { embeds: [createWarningEmbed('Action Failed', error instanceof Error ? error.message : String(error))], deleteAfterSeconds: 10 });
+      return true;
+    }
   }
 
   return false;
