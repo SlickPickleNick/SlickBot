@@ -783,7 +783,7 @@ class JoinCreateService {
     const limit = Number(temp?.user_limit || 0);
     const ownerId = temp?.owner_user_id;
     const deleteDelay = clampInt(temp?.empty_delete_delay_seconds, 5, 3600, 30);
-    const statusLabel = `${locked ? '🔒 Locked' : '🔓 Unlocked'} · ${hidden ? '👁️‍🗨️ Hidden' : '👁️ Visible'}`;
+    const statusLabel = `${locked ? '🔒 Locked' : '🔓 Unlocked'} · ${hidden ? '👻 Hidden' : '👁️ Visible'}`;
     const embed = createBaseEmbed({
       title: 'Temporary Voice Controls',
       description: [
@@ -820,7 +820,7 @@ class JoinCreateService {
       new ButtonBuilder().setCustomId(`${CustomIds.JoinCreateOwnerPanelPrefix}${channelId}`).setLabel('Control Menu').setEmoji('🎛️').setStyle(ButtonStyle.Primary),
       new ButtonBuilder().setCustomId(`${CustomIds.JoinCreateLockPrefix}${channelId}`).setLabel('Lock').setEmoji('🔒').setStyle(ButtonStyle.Secondary).setDisabled(locked),
       new ButtonBuilder().setCustomId(`${CustomIds.JoinCreateUnlockPrefix}${channelId}`).setLabel('Unlock').setEmoji('🔓').setStyle(ButtonStyle.Secondary).setDisabled(!locked),
-      new ButtonBuilder().setCustomId(`${CustomIds.JoinCreateHidePrefix}${channelId}`).setLabel('Hide').setEmoji('👁️‍🗨️').setStyle(ButtonStyle.Secondary).setDisabled(hidden),
+      new ButtonBuilder().setCustomId(`${CustomIds.JoinCreateHidePrefix}${channelId}`).setLabel('Hide').setEmoji('👻').setStyle(ButtonStyle.Secondary).setDisabled(hidden),
       new ButtonBuilder().setCustomId(`${CustomIds.JoinCreateUnhidePrefix}${channelId}`).setLabel('Unhide').setEmoji('👁️').setStyle(ButtonStyle.Secondary).setDisabled(!hidden)
     );
 
@@ -828,7 +828,7 @@ class JoinCreateService {
     const row2 = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId(`${CustomIds.JoinCreateRenamePrefix}${channelId}`).setLabel('Rename').setEmoji('✏️').setStyle(ButtonStyle.Secondary),
       new ButtonBuilder().setCustomId(`${CustomIds.JoinCreateLimitPrefix}${channelId}`).setLabel('Set Limit').setEmoji('👥').setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId(`${CustomIds.JoinCreateBitratePrefix}${channelId}`).setLabel('Bitrate').setEmoji('🎚️').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId(`${CustomIds.JoinCreateBitratePrefix}${channelId}`).setLabel('Bitrate').setEmoji('🔊').setStyle(ButtonStyle.Secondary),
       new ButtonBuilder().setCustomId(`${CustomIds.JoinCreatePermitPrefix}${channelId}`).setLabel('Permit').setEmoji('✅').setStyle(ButtonStyle.Secondary),
       new ButtonBuilder().setCustomId(`${CustomIds.JoinCreateKickPrefix}${channelId}`).setLabel('Kick').setEmoji('🚪').setStyle(ButtonStyle.Secondary)
     );

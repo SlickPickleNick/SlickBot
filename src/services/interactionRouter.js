@@ -2294,7 +2294,7 @@ async function handleButton(interaction, ctx) {
         const channelId = id.slice(CustomIds.JoinCreateHidePrefix.length);
         const result = await joinCreate.setHiddenFromControl(member, channelId, true);
         await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'join-create-control', title: 'Temporary Voice Hidden', body: `Channel: <#${result.channel.id}>`, actorUserId: interaction.user.id, metadata: { channelId: result.channel.id, hidden: true } }).catch(() => {});
-        await replyPrivate(interaction, { embeds: [createSuccessEmbed('Channel Hidden', `👁️‍🗨️ <#${result.channel.id}> is now hidden from the server channel list.`)], deleteAfterSeconds: 8 });
+        await replyPrivate(interaction, { embeds: [createSuccessEmbed('Channel Hidden', `👻 <#${result.channel.id}> is now hidden from the server channel list.`)], deleteAfterSeconds: 8 });
         return true;
       }
       if (id.startsWith(CustomIds.JoinCreateUnhidePrefix)) {
