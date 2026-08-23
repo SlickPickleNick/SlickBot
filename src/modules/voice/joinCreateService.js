@@ -530,27 +530,36 @@ class JoinCreateService {
     const temp = await this.findUserTempChannel(member);
     if (!temp) throw new Error('You do not currently own or manage an active temporary voice channel.');
     if (!this.canManageTemp(member, temp)) throw new Error('You can only manage your own temporary voice channel.');
-    const channel = await member.guild.channels.fetch(temp.channel_id).catch(() => null);
-    if (!channel) throw new Error('The temporary voice channel no longer exists.');
-    await channel.permissionOverwrites.edit(member.guild.roles.everyone.id, {
-      Connect: locked ? false : null
-    }, { reason: `SlickBot temp voice ${locked ? 'locked' : 'unlocked'} by ${member.user.tag}` });
-    const result = await query(`UPDATE join_create_temp_channels SET locked = $2, updated_at = NOW() WHERE channel_id = $1 RETURNING *`, [channel.id, locked]);
-    await this.refreshControlPanel(member.guild, channel.id).catch(() => null);
-    return { channel, temp: result.rows[0] || temp };
+    return this.setLockedFromControl(member, temp.channel_id, locked);
   }
 
-
   async setLockedFromControl(member, channelId, locked) {
-    const temp = await this.findActiveTempByChannel(member.guild.id, channelId);
-    if (!temp) throw new Error('This temporary voice channel is no longer active.');
-    if (!this.canManageTemp(member, temp)) throw new Error('You can only manage your own temporary voice channel.');
-    const channel = await member.guild.channels.fetch(temp.channel_id).catch(() => null);
-    if (!channel) throw new Error('The temporary voice channel no longer exists.');
-    await channel.permissionOverwrites.edit(member.guild.roles.everyone.id, {
-      Connect: locked ? false : null
-    }, { reason: `SlickBot temp voice ${locked ? 'locked' : 'unlocked'} from control panel by ${member.user.tag}` });
-    const result = await query(`UPDATE join_create_temp_channels SET locked = $2, updated_at = NOW() WHERE channel_id = $1 RETURNING *`, [channel.id, locked]);
+    const { temp, channel } = await this.getManageableTempFromControl(member, channelId);
+
+    if (locked) {
+      // Retain full voice and text access for all current members in the call
+      const currentMembers = channel.members ? [...channel.members.values()] : [];
+      for (const m of currentMembers) {
+        if (!m.user.bot) {
+          await channel.permissionOverwrites.edit(m.id, {
+            ViewChannel: true,
+            Connect: true,
+            Speak: true,
+            SendMessages: true,
+            ReadMessageHistory: true
+          }, { reason: `SlickBot retain member access during lock by ${member.user.tag}` }).catch(() => null);
+        }
+      }
+      await channel.permissionOverwrites.edit(member.guild.roles.everyone.id, {
+        Connect: false
+      }, { reason: `SlickBot temp voice locked from control panel by ${member.user.tag}` });
+    } else {
+      await channel.permissionOverwrites.edit(member.guild.roles.everyone.id, {
+        Connect: null
+      }, { reason: `SlickBot temp voice unlocked from control panel by ${member.user.tag}` });
+    }
+
+    const result = await query(`UPDATE join_create_temp_channels SET locked = $2, updated_at = NOW() WHERE channel_id = $1 RETURNING *`, [channel.id, Boolean(locked)]);
     await this.refreshControlPanel(member.guild, channel.id).catch(() => null);
     return { channel, temp: result.rows[0] || temp };
   }
@@ -715,7 +724,10 @@ class JoinCreateService {
     if (!channel) throw new Error('The temporary voice channel no longer exists.');
     await channel.permissionOverwrites.edit(targetMember.id, {
       ViewChannel: true,
-      Connect: true
+      Connect: true,
+      Speak: true,
+      SendMessages: true,
+      ReadMessageHistory: true
     }, { reason: `SlickBot temp voice permit by ${member.user.tag}` });
     await this.refreshControlPanel(member.guild, channel.id).catch(() => null);
     return { channel, temp, targetMember };
