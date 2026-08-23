@@ -53,13 +53,14 @@ test('Join-to-Create Temporary Voice Owner Panel Tests', async (t) => {
     assert.ok(payload1.embeds?.[0]);
     assert.equal(payload1.components.length, 3);
 
-    // Row 1: Access Controls (Lock, Unlock, Hide, Unhide, Claim)
+    // Row 1: Access Controls & Personal Menu (Menu, Lock, Unlock, Hide, Unhide)
     const row1Btns = payload1.components[0].components;
     assert.equal(row1Btns.length, 5);
-    assert.equal(row1Btns[0].data.disabled, false); // Lock is active
-    assert.equal(row1Btns[1].data.disabled, true);  // Unlock is disabled (already unlocked)
-    assert.equal(row1Btns[2].data.disabled, false); // Hide is active
-    assert.equal(row1Btns[3].data.disabled, true);  // Unhide is disabled (already visible)
+    assert.ok(row1Btns[0].data.custom_id.startsWith(CustomIds.JoinCreateOwnerPanelPrefix));
+    assert.equal(row1Btns[1].data.disabled, false); // Lock is active
+    assert.equal(row1Btns[2].data.disabled, true);  // Unlock is disabled (already unlocked)
+    assert.equal(row1Btns[3].data.disabled, false); // Hide is active
+    assert.equal(row1Btns[4].data.disabled, true);  // Unhide is disabled (already visible)
 
     // Row 2: Room Settings (Rename, Set Limit, Bitrate, Permit, Kick)
     const row2Btns = payload1.components[1].components;
@@ -70,12 +71,13 @@ test('Join-to-Create Temporary Voice Owner Panel Tests', async (t) => {
     assert.ok(row2Btns[3].data.custom_id.startsWith(CustomIds.JoinCreatePermitPrefix));
     assert.ok(row2Btns[4].data.custom_id.startsWith(CustomIds.JoinCreateKickPrefix));
 
-    // Row 3: Moderation & Danger (Block/Ban, Transfer, Delete Room)
+    // Row 3: Moderation & Danger (Claim, Block/Ban, Transfer, Delete Room)
     const row3Btns = payload1.components[2].components;
-    assert.equal(row3Btns.length, 3);
-    assert.ok(row3Btns[0].data.custom_id.startsWith(CustomIds.JoinCreateBanPrefix));
-    assert.ok(row3Btns[1].data.custom_id.startsWith(CustomIds.JoinCreateTransferPrefix));
-    assert.ok(row3Btns[2].data.custom_id.startsWith(CustomIds.JoinCreateDeletePrefix));
+    assert.equal(row3Btns.length, 4);
+    assert.ok(row3Btns[0].data.custom_id.startsWith(CustomIds.JoinCreateClaimPrefix));
+    assert.ok(row3Btns[1].data.custom_id.startsWith(CustomIds.JoinCreateBanPrefix));
+    assert.ok(row3Btns[2].data.custom_id.startsWith(CustomIds.JoinCreateTransferPrefix));
+    assert.ok(row3Btns[3].data.custom_id.startsWith(CustomIds.JoinCreateDeletePrefix));
 
     // Test locked and hidden state disabled toggles
     const tempLockedHidden = {
@@ -90,10 +92,10 @@ test('Join-to-Create Temporary Voice Owner Panel Tests', async (t) => {
 
     const payload2 = service.buildTempControlPayload(tempLockedHidden);
     const row1LockedBtns = payload2.components[0].components;
-    assert.equal(row1LockedBtns[0].data.disabled, true);  // Lock disabled (already locked)
-    assert.equal(row1LockedBtns[1].data.disabled, false); // Unlock enabled
-    assert.equal(row1LockedBtns[2].data.disabled, true);  // Hide disabled (already hidden)
-    assert.equal(row1LockedBtns[3].data.disabled, false); // Unhide enabled
+    assert.equal(row1LockedBtns[1].data.disabled, true);  // Lock disabled (already locked)
+    assert.equal(row1LockedBtns[2].data.disabled, false); // Unlock enabled
+    assert.equal(row1LockedBtns[3].data.disabled, true);  // Hide disabled (already hidden)
+    assert.equal(row1LockedBtns[4].data.disabled, false); // Unhide enabled
   });
 
   await t.test('buildOwnerPanel returns personal ephemeral dashboard or fallback', async () => {

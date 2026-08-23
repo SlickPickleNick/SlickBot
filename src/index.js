@@ -1081,8 +1081,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
       return;
     }
 
-    await handleComponentInteraction(interaction, { client, permissions, logger, status, moderation }).catch((error) => {
+    await handleComponentInteraction(interaction, { client, permissions, logger, status, moderation }).catch(async (error) => {
       console.error('Component interaction failed:', error);
+      await replyPrivate(interaction, 'Something went wrong while processing this action. Check the bot logs for details.').catch(() => {});
     });
     return;
   }

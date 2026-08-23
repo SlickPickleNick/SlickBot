@@ -306,17 +306,48 @@ class JoinCreateService {
     const userLimit = clampInt(hub.user_limit, 0, 99, 0);
     const overwrites = [];
 
+    // Bot permissions (Ensure bot can always manage and post messages in voice text chat)
+    if (me) {
+      overwrites.push({
+        id: me.id,
+        allow: [
+          PermissionsBitField.Flags.ViewChannel,
+          PermissionsBitField.Flags.Connect,
+          PermissionsBitField.Flags.SendMessages,
+          PermissionsBitField.Flags.EmbedLinks,
+          PermissionsBitField.Flags.ReadMessageHistory,
+          PermissionsBitField.Flags.ManageChannels,
+          PermissionsBitField.Flags.MoveMembers
+        ]
+      });
+    }
+
+    // Owner permissions
+    overwrites.push({
+      id: member.id,
+      allow: [
+        PermissionsBitField.Flags.ViewChannel,
+        PermissionsBitField.Flags.Connect,
+        PermissionsBitField.Flags.SendMessages,
+        PermissionsBitField.Flags.ReadMessageHistory
+      ]
+    });
+
     if (hub.private_enabled) {
       overwrites.push({ id: guild.roles.everyone.id, deny: [PermissionsBitField.Flags.Connect] });
-      overwrites.push({ id: member.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.Connect] });
       if (hub.staff_role_id) {
-        overwrites.push({ id: hub.staff_role_id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.Connect, PermissionsBitField.Flags.ManageChannels, PermissionsBitField.Flags.MoveMembers] });
+        overwrites.push({
+          id: hub.staff_role_id,
+          allow: [
+            PermissionsBitField.Flags.ViewChannel,
+            PermissionsBitField.Flags.Connect,
+            PermissionsBitField.Flags.SendMessages,
+            PermissionsBitField.Flags.ReadMessageHistory,
+            PermissionsBitField.Flags.ManageChannels,
+            PermissionsBitField.Flags.MoveMembers
+          ]
+        });
       }
-      if (me) {
-        overwrites.push({ id: me.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.Connect, PermissionsBitField.Flags.ManageChannels, PermissionsBitField.Flags.MoveMembers] });
-      }
-    } else if (hub.owner_controls_enabled) {
-      overwrites.push({ id: member.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.Connect] });
     }
 
     const channel = await guild.channels.create({
@@ -784,13 +815,13 @@ class JoinCreateService {
     );
     const channelId = temp?.channel_id || channel?.id;
 
-    // Row 1: Access Controls
+    // Row 1: Access Controls & Personal Menu
     const row1 = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`${CustomIds.JoinCreateOwnerPanelPrefix}${channelId}`).setLabel('Control Menu').setEmoji('🎛️').setStyle(ButtonStyle.Primary),
       new ButtonBuilder().setCustomId(`${CustomIds.JoinCreateLockPrefix}${channelId}`).setLabel('Lock').setEmoji('🔒').setStyle(ButtonStyle.Secondary).setDisabled(locked),
       new ButtonBuilder().setCustomId(`${CustomIds.JoinCreateUnlockPrefix}${channelId}`).setLabel('Unlock').setEmoji('🔓').setStyle(ButtonStyle.Secondary).setDisabled(!locked),
       new ButtonBuilder().setCustomId(`${CustomIds.JoinCreateHidePrefix}${channelId}`).setLabel('Hide').setEmoji('👁️‍🗨️').setStyle(ButtonStyle.Secondary).setDisabled(hidden),
-      new ButtonBuilder().setCustomId(`${CustomIds.JoinCreateUnhidePrefix}${channelId}`).setLabel('Unhide').setEmoji('👁️').setStyle(ButtonStyle.Secondary).setDisabled(!hidden),
-      new ButtonBuilder().setCustomId(`${CustomIds.JoinCreateClaimPrefix}${channelId}`).setLabel('Claim').setEmoji('👑').setStyle(ButtonStyle.Primary)
+      new ButtonBuilder().setCustomId(`${CustomIds.JoinCreateUnhidePrefix}${channelId}`).setLabel('Unhide').setEmoji('👁️').setStyle(ButtonStyle.Secondary).setDisabled(!hidden)
     );
 
     // Row 2: Room Settings & User Management
@@ -804,6 +835,7 @@ class JoinCreateService {
 
     // Row 3: Moderation & Danger
     const row3 = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`${CustomIds.JoinCreateClaimPrefix}${channelId}`).setLabel('Claim').setEmoji('👑').setStyle(ButtonStyle.Secondary),
       new ButtonBuilder().setCustomId(`${CustomIds.JoinCreateBanPrefix}${channelId}`).setLabel('Block / Ban').setEmoji('⛔').setStyle(ButtonStyle.Danger),
       new ButtonBuilder().setCustomId(`${CustomIds.JoinCreateTransferPrefix}${channelId}`).setLabel('Transfer').setEmoji('🔄').setStyle(ButtonStyle.Secondary),
       new ButtonBuilder().setCustomId(`${CustomIds.JoinCreateDeletePrefix}${channelId}`).setLabel('Delete Room').setEmoji('🗑️').setStyle(ButtonStyle.Danger)
@@ -825,6 +857,35 @@ class JoinCreateService {
         embeds: [createBaseEmbed({
           title: '🎙️ Temporary Voice Control Dashboard',
           description: 'You are not currently in or managing an active temporary voice channel.\n\nJoin a **Join-to-Create** hub channel to generate your personal temporary voice room.',
+          color: SlickBotColors.WARNING
+        })]
+      };
+    }
+
+    if (!this.canManageTemp(member, temp)) {
+      const channel = await member.guild.channels.fetch(temp.channel_id).catch(() => null);
+      const ownerMember = temp.owner_user_id ? await member.guild.members.fetch(temp.owner_user_id).catch(() => null) : null;
+      const ownerInChannel = ownerMember?.voice?.channelId === temp.channel_id;
+
+      if (!ownerInChannel && member.voice?.channelId === temp.channel_id) {
+        return {
+          embeds: [createBaseEmbed({
+            title: '👑 Claim Temporary Voice Channel',
+            description: `The original owner of <#${temp.channel_id}> has left the voice room.\n\nYou can claim ownership of this channel using the button below.`,
+            color: SlickBotColors.Gold
+          })],
+          components: [
+            new ActionRowBuilder().addComponents(
+              new ButtonBuilder().setCustomId(`${CustomIds.JoinCreateClaimPrefix}${temp.channel_id}`).setLabel('👑 Claim Room Ownership').setStyle(ButtonStyle.Primary)
+            )
+          ]
+        };
+      }
+
+      return {
+        embeds: [createBaseEmbed({
+          title: '🎙️ Temporary Voice Control Dashboard',
+          description: `This voice channel (<#${temp.channel_id}>) is managed by <@${temp.owner_user_id}>.\n\nOnly the room owner or server staff can modify channel settings.`,
           color: SlickBotColors.WARNING
         })]
       };

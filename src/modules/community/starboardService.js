@@ -436,28 +436,36 @@ class StarboardService {
 
   async getTopMessages(guildId, limit = 10) {
     if (!guildId) return [];
-    const result = await query(
-      `SELECT * FROM starboard_entries
-       WHERE guild_id = $1
-       ORDER BY star_count DESC, created_at DESC
-       LIMIT $2`,
-      [guildId, limit]
-    );
-    return result?.rows || [];
+    try {
+      const result = await query(
+        `SELECT * FROM starboard_entries
+         WHERE guild_id = $1
+         ORDER BY star_count DESC, created_at DESC
+         LIMIT $2`,
+        [guildId, limit]
+      );
+      return result?.rows || [];
+    } catch {
+      return [];
+    }
   }
 
   async getTopAuthors(guildId, limit = 10) {
     if (!guildId) return [];
-    const result = await query(
-      `SELECT author_user_id, author_tag, SUM(star_count)::int as total_stars, COUNT(*)::int as post_count
-       FROM starboard_entries
-       WHERE guild_id = $1
-       GROUP BY author_user_id, author_tag
-       ORDER BY total_stars DESC, post_count DESC
-       LIMIT $2`,
-      [guildId, limit]
-    );
-    return result?.rows || [];
+    try {
+      const result = await query(
+        `SELECT author_user_id, author_tag, SUM(star_count)::int as total_stars, COUNT(*)::int as post_count
+         FROM starboard_entries
+         WHERE guild_id = $1
+         GROUP BY author_user_id, author_tag
+         ORDER BY total_stars DESC, post_count DESC
+         LIMIT $2`,
+        [guildId, limit]
+      );
+      return result?.rows || [];
+    } catch {
+      return [];
+    }
   }
 }
 
