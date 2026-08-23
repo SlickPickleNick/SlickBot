@@ -469,7 +469,8 @@ test('Auto-Mod & Anti-Raid Engine Tests', async (t) => {
     const service = new AutoModService();
     await service.upsertConfig(guildId, { anti_spam_action: 'WARN' });
     const updatedPanel = await buildAutoModManagerPanel(guildId, 'FILTERS', 'anti_spam');
-    assert.match(updatedPanel.embeds[0].data.fields[0].value, /Warn & Delete/i);
+    const rulesField = updatedPanel.embeds[0].data.fields.find((f) => f.name === 'Active Filter Rules');
+    assert.match(rulesField.value, /Warn & Delete/i);
     assert.match(updatedPanel.embeds[1].data.description, /Current Action:.*Warn & Delete/i);
   });
 
@@ -512,9 +513,18 @@ test('Auto-Mod & Anti-Raid Engine Tests', async (t) => {
     const { buildModuleDetailPanel } = require('../../src/modules/ui/panels');
     const guildId = 'guild-setup-test';
 
-    // 1. Detail panel includes 'Open Manager' button for AUTOMOD and implemented modules
+    // 1. Detail panel reflects correct unconfigured/partial status when timeout role is missing
+    mockDb.addHandler('SELECT module_key, enabled FROM module_configs', () => ({
+      rows: [{ module_key: ModuleKeys.AUTOMOD, enabled: true }],
+      rowCount: 1
+    }));
+    mockDb.addHandler('SELECT enabled, timeout_role_id, raid_alert_channel_id, alert_channel_id', () => ({
+      rows: [{ enabled: true, timeout_role_id: null, raid_alert_channel_id: 'chan-1' }],
+      rowCount: 1
+    }));
     const detailPanel = await buildModuleDetailPanel(guildId, ModuleKeys.AUTOMOD);
     assert.ok(detailPanel.components.length > 0);
+    assert.match(detailPanel.embeds[0].data.description, /Partially Configured.*Timeout role not configured/i);
     const detailButtons = detailPanel.components[0].components;
     assert.ok(detailButtons.some((b) => b.data.custom_id === `${CustomIds.SetupOpenManagerPrefix}${ModuleKeys.AUTOMOD}`));
     assert.ok(detailButtons.some((b) => b.data.custom_id === CustomIds.SetupRefresh));

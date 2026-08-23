@@ -289,86 +289,90 @@ class AutoModService {
     let syncedChannelsCount = 0;
     let exemptCount = 0;
 
-    for (const channel of channelList) {
-      if (!channel) continue;
+    const BATCH_SIZE = 5;
+    for (let i = 0; i < channelList.length; i += BATCH_SIZE) {
+      const batch = channelList.slice(i, i + BATCH_SIZE);
+      await Promise.all(batch.map(async (channel) => {
+        if (!channel) return;
 
-      // Skip tickets (which have opener-specific permissions)
-      const isTicket = channel.name?.toLowerCase().startsWith('ticket-') || channel.topic?.includes('SlickBot ticket #');
-      if (isTicket) continue;
+        // Skip tickets (which have opener-specific permissions)
+        const isTicket = channel.name?.toLowerCase().startsWith('ticket-') || channel.topic?.includes('SlickBot ticket #');
+        if (isTicket) return;
 
-      const isAppeals = channel.id === appealsChannelId;
-      const isExempt = exemptIds.has(channel.id);
+        const isAppeals = channel.id === appealsChannelId;
+        const isExempt = exemptIds.has(channel.id);
 
-      if (isAppeals || isExempt) {
-        exemptCount++;
-        // Appeals and exempt channels: View & Read only (deny send/react)
-        await channel.permissionOverwrites?.edit(roleId, {
-          ViewChannel: true,
-          ReadMessageHistory: true,
-          SendMessages: false,
-          SendMessagesInThreads: false,
-          CreatePublicThreads: false,
-          CreatePrivateThreads: false,
-          AddReactions: false
-        }, { reason: 'SlickBot Timeout Role Appeals/Exempt Access' }).catch(() => {});
-        syncedChannelsCount++;
-      } else {
-        // Standard channels
-        if (mode === 'MUTE_ONLY') {
-          if (channel.type === ChannelType.GuildVoice || channel.type === ChannelType.GuildStageVoice) {
-            await channel.permissionOverwrites?.edit(roleId, {
-              ViewChannel: true,
-              Connect: false,
-              Speak: false,
-              Stream: false,
-              RequestToSpeak: false
-            }, { reason: 'SlickBot Timeout Role Mute Permissions' }).catch(() => {});
-          } else if (channel.type === ChannelType.GuildCategory) {
-            await channel.permissionOverwrites?.edit(roleId, {
-              ViewChannel: true,
-              SendMessages: false,
-              Connect: false
-            }, { reason: 'SlickBot Timeout Role Mute Permissions' }).catch(() => {});
-          } else {
-            await channel.permissionOverwrites?.edit(roleId, {
-              ViewChannel: true,
-              ReadMessageHistory: true,
-              SendMessages: false,
-              SendMessagesInThreads: false,
-              CreatePublicThreads: false,
-              CreatePrivateThreads: false,
-              AddReactions: false
-            }, { reason: 'SlickBot Timeout Role Mute Permissions' }).catch(() => {});
-          }
+        if (isAppeals || isExempt) {
+          exemptCount++;
+          // Appeals and exempt channels: View & Read only (deny send/react)
+          await channel.permissionOverwrites?.edit(roleId, {
+            ViewChannel: true,
+            ReadMessageHistory: true,
+            SendMessages: false,
+            SendMessagesInThreads: false,
+            CreatePublicThreads: false,
+            CreatePrivateThreads: false,
+            AddReactions: false
+          }, { reason: 'SlickBot Timeout Role Appeals/Exempt Access' }).catch(() => {});
+          syncedChannelsCount++;
         } else {
-          // 'HIDE' mode (Default)
-          if (channel.type === ChannelType.GuildVoice || channel.type === ChannelType.GuildStageVoice) {
-            await channel.permissionOverwrites?.edit(roleId, {
-              ViewChannel: false,
-              Connect: false,
-              Speak: false,
-              Stream: false,
-              RequestToSpeak: false
-            }, { reason: 'SlickBot Timeout Role Hide Permissions' }).catch(() => {});
-          } else if (channel.type === ChannelType.GuildCategory) {
-            await channel.permissionOverwrites?.edit(roleId, {
-              ViewChannel: false,
-              SendMessages: false,
-              Connect: false
-            }, { reason: 'SlickBot Timeout Role Hide Permissions' }).catch(() => {});
+          // Standard channels
+          if (mode === 'MUTE_ONLY') {
+            if (channel.type === ChannelType.GuildVoice || channel.type === ChannelType.GuildStageVoice) {
+              await channel.permissionOverwrites?.edit(roleId, {
+                ViewChannel: true,
+                Connect: false,
+                Speak: false,
+                Stream: false,
+                RequestToSpeak: false
+              }, { reason: 'SlickBot Timeout Role Mute Permissions' }).catch(() => {});
+            } else if (channel.type === ChannelType.GuildCategory) {
+              await channel.permissionOverwrites?.edit(roleId, {
+                ViewChannel: true,
+                SendMessages: false,
+                Connect: false
+              }, { reason: 'SlickBot Timeout Role Mute Permissions' }).catch(() => {});
+            } else {
+              await channel.permissionOverwrites?.edit(roleId, {
+                ViewChannel: true,
+                ReadMessageHistory: true,
+                SendMessages: false,
+                SendMessagesInThreads: false,
+                CreatePublicThreads: false,
+                CreatePrivateThreads: false,
+                AddReactions: false
+              }, { reason: 'SlickBot Timeout Role Mute Permissions' }).catch(() => {});
+            }
           } else {
-            await channel.permissionOverwrites?.edit(roleId, {
-              ViewChannel: false,
-              SendMessages: false,
-              SendMessagesInThreads: false,
-              CreatePublicThreads: false,
-              CreatePrivateThreads: false,
-              AddReactions: false
-            }, { reason: 'SlickBot Timeout Role Hide Permissions' }).catch(() => {});
+            // 'HIDE' mode (Default)
+            if (channel.type === ChannelType.GuildVoice || channel.type === ChannelType.GuildStageVoice) {
+              await channel.permissionOverwrites?.edit(roleId, {
+                ViewChannel: false,
+                Connect: false,
+                Speak: false,
+                Stream: false,
+                RequestToSpeak: false
+              }, { reason: 'SlickBot Timeout Role Hide Permissions' }).catch(() => {});
+            } else if (channel.type === ChannelType.GuildCategory) {
+              await channel.permissionOverwrites?.edit(roleId, {
+                ViewChannel: false,
+                SendMessages: false,
+                Connect: false
+              }, { reason: 'SlickBot Timeout Role Hide Permissions' }).catch(() => {});
+            } else {
+              await channel.permissionOverwrites?.edit(roleId, {
+                ViewChannel: false,
+                SendMessages: false,
+                SendMessagesInThreads: false,
+                CreatePublicThreads: false,
+                CreatePrivateThreads: false,
+                AddReactions: false
+              }, { reason: 'SlickBot Timeout Role Hide Permissions' }).catch(() => {});
+            }
           }
+          syncedChannelsCount++;
         }
-        syncedChannelsCount++;
-      }
+      }));
     }
 
     return { ok: true, syncedChannelsCount, exemptCount, mode };

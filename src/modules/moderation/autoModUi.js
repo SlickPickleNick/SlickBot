@@ -380,11 +380,24 @@ async function buildAutoModManagerPanel(guildId, tab = 'FILTERS', selectedRuleKe
   }
 
   // --- TAB: FILTERS (Default) ---
+  const hasTimeoutRole = Boolean(config.timeout_role_id);
+  const timeoutDisplay = hasTimeoutRole ? `<@&${config.timeout_role_id}> (${config.timeout_role_mode === 'MUTE_ONLY' ? 'Mute Only' : 'Hide Channels'})` : '🟠 _Not Configured_';
+  const alertDisplay = config.raid_alert_channel_id ? `<#${config.raid_alert_channel_id}>` : (config.alert_channel_id ? `<#${config.alert_channel_id}>` : '🟠 _Not Configured_');
+
   const embed = createBaseEmbed({
     title: '🛡️ Auto-Mod Protection Engine',
-    description: `System Master Status: ${config.enabled ? '`🟢 Active`' : '`🔴 Paused`'}\nSelect any rule from the dropdown below to customize its action or thresholds.`,
-    color: SlickBotColors.PRIMARY
+    description: [
+      `System Master Status: ${config.enabled ? '`🟢 Active`' : '`🔴 Paused`'}`,
+      !hasTimeoutRole ? '⚠️ **Setup Notice:** A Timeout Role has not been selected. Punishments with timeouts will only apply native Discord timeouts until a role is assigned in the **Timeout Role** tab.' : '',
+      'Select any rule from the dropdown below to customize its action or thresholds.'
+    ].filter(Boolean).join('\n\n'),
+    color: config.enabled && hasTimeoutRole ? SlickBotColors.PRIMARY : SlickBotColors.WARNING
   }).addFields(
+    {
+      name: 'System Integrations',
+      value: `• **Timeout Role:** ${timeoutDisplay}\n• **Raid Alerts:** ${alertDisplay}`,
+      inline: false
+    },
     {
       name: 'Active Filter Rules',
       value: [

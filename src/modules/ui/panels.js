@@ -100,6 +100,18 @@ const MODULE_SETUP_CATALOG = Object.freeze({
     nextSteps: ['Use `/temp-role add` to assign a temporary role.', 'Use `/temp-role manager` or `/temp-role list` to review active assignments.', 'Use `/temp-role remove` to end an assignment early.'],
     usefulCommands: ['/temp-role manager', '/temp-role add', '/temp-role remove', '/temp-role list']
   },
+  [ModuleKeys.UTILITY]: {
+    name: 'Utility & Tools', category: 'Core Setup', description: 'Essential server tools: message purge, custom embeds, interactive polls, timed reminders, AFK status, and media quick-lookup.',
+    managerCommand: '/utility manager', setupCommand: '/utility manager',
+    nextSteps: ['Open `/utility manager` to toggle tools.', 'Use `/poll create` or `/embed create` for rich interactive posts.', 'Use `/reminder set` or `/afk set` for personal workflows.'],
+    usefulCommands: ['/utility manager', '/purge', '/embed create', '/poll create', '/reminder set', '/afk set']
+  },
+  [ModuleKeys.AUTOMOD]: {
+    name: 'Auto-Mod & Anti-Raid', category: 'Core Setup', description: 'Automated protection against phishing links, invites, spam, duplicate messages, mentions, and join raids with dedicated timeout role support.',
+    managerCommand: '/automod manager', setupCommand: '/automod setup',
+    nextSteps: ['Run `/automod setup` to choose a 1-click protection preset.', 'Configure the @Timeout role with `/automod manager` -> Timeout Role.', 'Set the emergency raid alert channel in `/automod manager` -> Anti-Raid.'],
+    usefulCommands: ['/automod manager', '/automod setup', '/automod rule', '/automod raid', '/automod reset']
+  },
   [ModuleKeys.TICKETS]: {
     name: 'Tickets', category: 'Support Systems', description: 'Creates private support channels with ticket types, questions, staff assignment, escalation, transcripts, and panels.',
     managerCommand: '/ticket manager', setupCommand: '/ticket setup',
@@ -588,16 +600,45 @@ async function getModuleStatus(guildId, row) {
   if (isCoreModule(row.module_key)) return { moduleKey: row.module_key, core: true, state: 'READY', emoji: '✅', label: 'Ready', note: 'Core' };
 
   if (row.module_key === 'MODERATION') {
-    const [logCfg, cases, notes] = await Promise.all([
+    const [logCfg, autoModCfg, cases, notes] = await Promise.all([
       query(`SELECT channel_id, enabled, delivery_mode FROM log_module_settings WHERE guild_id = $1 AND module_key = 'moderation' LIMIT 1`, [guildId]).catch(() => ({ rows: [] })),
+      query(`SELECT timeout_role_id FROM automod_configs WHERE guild_id = $1 LIMIT 1`, [guildId]).catch(() => ({ rows: [] })),
       query(`SELECT COUNT(*)::int AS total, COUNT(*) FILTER (WHERE status = 'OPEN')::int AS open_count FROM moderation_cases WHERE guild_id = $1`, [guildId]).catch(() => ({ rows: [{ total: 0, open_count: 0 }] })),
       query(`SELECT COUNT(*)::int AS total FROM user_notes WHERE guild_id = $1 AND is_active = true`, [guildId]).catch(() => ({ rows: [{ total: 0 }] }))
     ]);
     const logReady = Boolean(logCfg.rows[0]?.channel_id && logCfg.rows[0]?.enabled !== false && logCfg.rows[0]?.delivery_mode !== 'DISABLED');
+    const hasTimeoutRole = Boolean(autoModCfg.rows[0]?.timeout_role_id);
     const caseTotal = cases.rows[0]?.total || 0;
     const noteTotal = notes.rows[0]?.total || 0;
-    if (logReady) return { moduleKey: row.module_key, core: false, state: 'READY', emoji: '✅', label: 'Ready', note: `${caseTotal} case(s), ${noteTotal} note(s)` };
+
+    if (logReady && hasTimeoutRole) return { moduleKey: row.module_key, core: false, state: 'READY', emoji: '✅', label: 'Ready', note: `${caseTotal} case(s), timeout role ready` };
+    if (!hasTimeoutRole && !logReady) return { moduleKey: row.module_key, core: false, state: 'NEEDS_CONFIG', emoji: '🟣', label: 'Needs Setup', note: 'Timeout role and log channel missing' };
+    if (!hasTimeoutRole) return { moduleKey: row.module_key, core: false, state: 'PARTIAL', emoji: '🟠', label: 'Partially Configured', note: 'Actions ready; timeout role missing' };
     return { moduleKey: row.module_key, core: false, state: 'PARTIAL', emoji: '🟠', label: 'Partially Configured', note: 'Actions ready; moderation log channel missing' };
+  }
+
+  if (row.module_key === 'AUTOMOD') {
+    const res = await query(`SELECT enabled, timeout_role_id, raid_alert_channel_id, alert_channel_id, anti_invites_enabled, anti_links_enabled, anti_spam_enabled FROM automod_configs WHERE guild_id = $1 LIMIT 1`, [guildId]).catch(() => ({ rows: [] }));
+    const config = res.rows[0];
+    if (!config) {
+      return { moduleKey: row.module_key, core: false, state: 'NEEDS_CONFIG', emoji: '🟣', label: 'Needs Setup', note: 'Run /automod setup' };
+    }
+    if (config.enabled === false) {
+      return { moduleKey: row.module_key, core: false, state: 'DISABLED', emoji: '⏸️', label: 'Disabled', note: 'Protection paused' };
+    }
+    const hasTimeoutRole = Boolean(config.timeout_role_id);
+    const hasAlertChannel = Boolean(config.raid_alert_channel_id || config.alert_channel_id);
+
+    if (hasTimeoutRole && hasAlertChannel) {
+      return { moduleKey: row.module_key, core: false, state: 'READY', emoji: '✅', label: 'Ready', note: 'Protection & timeout role active' };
+    }
+    if (!hasTimeoutRole && !hasAlertChannel) {
+      return { moduleKey: row.module_key, core: false, state: 'NEEDS_CONFIG', emoji: '🟣', label: 'Needs Setup', note: 'Timeout role and alert channel missing' };
+    }
+    if (!hasTimeoutRole) {
+      return { moduleKey: row.module_key, core: false, state: 'PARTIAL', emoji: '🟠', label: 'Partially Configured', note: 'Timeout role not configured' };
+    }
+    return { moduleKey: row.module_key, core: false, state: 'PARTIAL', emoji: '🟠', label: 'Partially Configured', note: 'Raid alert channel missing' };
   }
 
   if (row.module_key === 'TICKETS') {

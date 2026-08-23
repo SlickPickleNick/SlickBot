@@ -671,6 +671,7 @@ async function handleButton(interaction, ctx) {
 
   if (id === CustomIds.AutoModTimeoutRoleCreate) {
     if (!(await requireAction(interaction, ctx, ActionKeys.AutoModManage, ModuleKeys.AUTOMOD))) return true;
+    await interaction.deferUpdate().catch(() => {});
     const res = await autoMod.createTimeoutRole(interaction.guild);
     if (!res.ok) {
       await replyPrivate(interaction, { embeds: [createWarningEmbed('Role Creation Failed', res.reason || 'Could not create timeout role.')] });
@@ -683,6 +684,7 @@ async function handleButton(interaction, ctx) {
 
   if (id === CustomIds.AutoModTimeoutRoleSync) {
     if (!(await requireAction(interaction, ctx, ActionKeys.AutoModManage, ModuleKeys.AUTOMOD))) return true;
+    await interaction.deferUpdate().catch(() => {});
     const res = await autoMod.syncTimeoutRolePermissions(interaction.guild);
     if (!res.ok) {
       await replyPrivate(interaction, { embeds: [createWarningEmbed('Channel Sync Failed', res.reason || 'Could not sync timeout role permissions.')] });
@@ -695,6 +697,7 @@ async function handleButton(interaction, ctx) {
 
   if (id === CustomIds.AutoModTimeoutRoleModeToggle) {
     if (!(await requireAction(interaction, ctx, ActionKeys.AutoModManage, ModuleKeys.AUTOMOD))) return true;
+    await interaction.deferUpdate().catch(() => {});
     const config = await autoMod.getConfig(interaction.guildId);
     const nextMode = (config.timeout_role_mode || 'HIDE') === 'HIDE' ? 'MUTE_ONLY' : 'HIDE';
     await autoMod.upsertConfig(interaction.guildId, { timeout_role_mode: nextMode });
@@ -1154,6 +1157,7 @@ async function handleButton(interaction, ctx) {
     const sessionId = id.slice(CustomIds.OnboardingAutoCreatePrefix.length);
     const session = onboarding.getSession(sessionId, interaction.user.id);
     if (!session) return replyPrivate(interaction, { embeds: [createWarningEmbed('Onboarding Expired', 'This onboarding session has expired or belongs to another user. Please launch onboarding again.')], deleteAfterSeconds: 10 });
+    await interaction.deferUpdate().catch(() => {});
     const currentStep = session.steps[session.stepIndex];
     let createdResult = null;
     if (currentStep && typeof currentStep.autoCreate === 'function') {
@@ -2425,6 +2429,7 @@ async function handleSelect(interaction, ctx) {
     const sessionId = id.slice(prefix.length);
     const session = onboarding.getSession(sessionId, interaction.user.id);
     if (!session) return replyPrivate(interaction, { embeds: [createWarningEmbed('Session Expired', 'This onboarding session has expired. Please launch onboarding again.')], deleteAfterSeconds: 10 });
+    await interaction.deferUpdate().catch(() => {});
 
     const selectedValue = interaction.values?.[0];
     const currentStep = session.steps[session.stepIndex];
@@ -2706,6 +2711,7 @@ async function handleSelect(interaction, ctx) {
 
   if (id === CustomIds.AutoModTimeoutRoleSelect) {
     if (!(await requireAction(interaction, ctx, ActionKeys.AutoModManage, ModuleKeys.AUTOMOD))) return true;
+    await interaction.deferUpdate().catch(() => {});
     const roleId = interaction.values?.[0] || null;
     await autoMod.upsertConfig(interaction.guildId, { timeout_role_id: roleId });
     if (roleId) {
@@ -2717,6 +2723,7 @@ async function handleSelect(interaction, ctx) {
 
   if (id === CustomIds.AutoModTimeoutRoleExemptSelect) {
     if (!(await requireAction(interaction, ctx, ActionKeys.AutoModWhitelist, ModuleKeys.AUTOMOD))) return true;
+    await interaction.deferUpdate().catch(() => {});
     await autoMod.upsertConfig(interaction.guildId, { timeout_role_exempt_channel_ids: interaction.values || [] });
     await autoMod.syncTimeoutRolePermissions(interaction.guild);
     await updatePanel(interaction, await buildAutoModManagerPanel(interaction.guildId, 'TIMEOUT'));
