@@ -69,7 +69,7 @@ class JoinCreateService {
 
   async getHubBySource(guildId, sourceChannelId) {
     const result = await query(
-      `SELECT * FROM join_create_hubs WHERE guild_id = $1 AND source_channel_id = $2 AND enabled = true LIMIT 1`,
+      `SELECT * FROM join_create_hubs WHERE guild_id = $1 AND source_channel_id = $2 AND (enabled = true OR enabled IS NULL) LIMIT 1`,
       [guildId, sourceChannelId]
     );
     return result.rows[0] || null;
@@ -852,11 +852,35 @@ class JoinCreateService {
     if (!temp) {
       temp = await this.findUserTempChannel(member).catch(() => null);
     }
+    if (!temp && member.voice?.channelId) {
+      const voiceChannel = await member.guild.channels.fetch(member.voice.channelId).catch(() => null);
+      if (voiceChannel) {
+        const hubRes = await query(
+          `SELECT * FROM join_create_hubs WHERE guild_id = $1 AND (category_id = $2 OR source_channel_id = $3) LIMIT 1`,
+          [member.guild.id, voiceChannel.parentId, voiceChannel.id]
+        ).catch(() => ({ rows: [] }));
+
+        if (hubRes.rows.length > 0) {
+          const adopted = await query(
+            `INSERT INTO join_create_temp_channels (guild_id, hub_id, channel_id, owner_user_id, status, name, locked, user_limit)
+             VALUES ($1, $2, $3, $4, 'ACTIVE', $5, false, $6)
+             ON CONFLICT (channel_id) DO UPDATE SET status = 'ACTIVE', updated_at = NOW()
+             RETURNING *`,
+            [member.guild.id, hubRes.rows[0].id, voiceChannel.id, member.id, voiceChannel.name, voiceChannel.userLimit || 0]
+          ).catch(() => ({ rows: [] }));
+
+          if (adopted.rows[0]) {
+            temp = { ...adopted.rows[0], ...hubRes.rows[0] };
+          }
+        }
+      }
+    }
+
     if (!temp) {
       return {
         embeds: [createBaseEmbed({
           title: '🎙️ Temporary Voice Control Dashboard',
-          description: 'You are not currently in or managing an active temporary voice channel.\n\nJoin a **Join-to-Create** hub channel to generate your personal temporary voice room.',
+          description: 'You are not currently in or managing an active temporary voice channel.\n\nJoin a **Join-to-Create** hub channel to generate your personal temporary voice room, or use `/vc` while inside your temporary channel.',
           color: SlickBotColors.WARNING
         })]
       };
@@ -1028,23 +1052,35 @@ class JoinCreateService {
   }
 
   async postControlPanel(guild, temp, logger = null) {
-    const channel = await guild.channels.fetch(temp.channel_id).catch(() => null);
+    let channel = await guild.channels.fetch(temp.channel_id).catch(() => null);
     if (!channel || typeof channel.send !== 'function') {
       const reason = 'SlickBot could not post the temporary voice control panel because the channel does not support messages or the bot lacks access.';
       await query(`UPDATE join_create_temp_channels SET control_message_error = $2, updated_at = NOW() WHERE channel_id = $1`, [temp.channel_id, reason]).catch(() => {});
-      await logger?.log({
-        guildId: guild.id,
-        eventKey: 'join-create-error',
-        title: 'Temp Voice Control Panel Not Posted',
-        body: [`Channel: <#${temp.channel_id}>`, reason].join('\n'),
-        metadata: { channelId: temp.channel_id }
-      }).catch(() => {});
       return { ok: false, reason };
     }
     const fullTemp = await this.findActiveTempByChannel(guild.id, temp.channel_id).catch(() => temp);
     const payload = this.buildTempControlPayload(fullTemp || temp, channel);
-    const message = await channel.send(payload).catch(async (error) => {
-      const reason = error instanceof Error ? error.message : String(error);
+
+    let message = null;
+    let lastError = null;
+
+    try {
+      message = await channel.send(payload);
+    } catch (err) {
+      lastError = err;
+      // Retry after a brief delay in case voice text channel permissions were propagating
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      channel = await guild.channels.fetch(temp.channel_id).catch(() => null);
+      if (channel && typeof channel.send === 'function') {
+        message = await channel.send(payload).catch((retryErr) => {
+          lastError = retryErr;
+          return null;
+        });
+      }
+    }
+
+    if (!message) {
+      const reason = lastError instanceof Error ? lastError.message : String(lastError || 'Message send failed.');
       await query(`UPDATE join_create_temp_channels SET control_message_error = $2, updated_at = NOW() WHERE channel_id = $1`, [temp.channel_id, reason]).catch(() => {});
       await logger?.log({
         guildId: guild.id,
@@ -1053,9 +1089,9 @@ class JoinCreateService {
         body: [`Channel: <#${temp.channel_id}>`, `Reason: ${reason}`].join('\n'),
         metadata: { channelId: temp.channel_id, reason }
       }).catch(() => {});
-      return null;
-    });
-    if (!message) return { ok: false, reason: 'Message send failed.' };
+      return { ok: false, reason };
+    }
+
     await query(`UPDATE join_create_temp_channels SET control_message_id = $2, control_message_error = NULL, updated_at = NOW() WHERE channel_id = $1`, [temp.channel_id, message.id]).catch(() => {});
     return { ok: true, message };
   }

@@ -823,7 +823,7 @@ const ONBOARDING_STEPS = Object.freeze({
       autoCreateLabel: 'Auto-Create "➕ Join to Create"',
       autoCreateDescription: 'Creates a voice hub channel ready for instant use.',
       async getCurrent(guild) {
-        const res = await query(`SELECT channel_id FROM join_create_hubs WHERE guild_id = $1 AND enabled = true LIMIT 1`, [guild.id]).catch(() => ({ rows: [] }));
+        const res = await query(`SELECT source_channel_id as channel_id FROM join_create_hubs WHERE guild_id = $1 AND (enabled = true OR enabled IS NULL) LIMIT 1`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.channel_id ? `<#${res.rows[0].channel_id}>` : null;
       },
       async applyDefault() {
