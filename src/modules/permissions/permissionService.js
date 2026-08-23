@@ -134,6 +134,19 @@ class PermissionService {
       return guildModules.get(moduleKey);
     }
 
+    const defaultCfg = defaultModules.find((m) => m.key === moduleKey);
+    if (defaultCfg) {
+      const isEnabled = Boolean(defaultCfg.enabled);
+      guildModules.set(moduleKey, isEnabled);
+      await query(
+        `INSERT INTO module_configs (guild_id, module_key, enabled)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (guild_id, module_key) DO NOTHING`,
+        [guildId, moduleKey, isEnabled]
+      ).catch(() => {});
+      return isEnabled;
+    }
+
     return false;
   }
 
@@ -418,7 +431,18 @@ class PermissionService {
 
     if (this.isBotOwner(interaction.user.id)) return { allowed: true };
 
-    const moduleEnabled = await this.isModuleEnabled(interaction.guildId, moduleKey);
+    const isConfigAction = actionKey === ActionKeys.Setup ||
+      actionKey === ActionKeys.ModulesManage ||
+      actionKey.endsWith('.view') ||
+      actionKey.endsWith('.configure') ||
+      actionKey.endsWith('.manage') ||
+      actionKey.endsWith('.setup') ||
+      actionKey.endsWith('.blacklist') ||
+      actionKey.endsWith('.whitelist') ||
+      actionKey.endsWith('.raid') ||
+      actionKey.endsWith('.reset');
+
+    const moduleEnabled = isConfigAction || (await this.isModuleEnabled(interaction.guildId, moduleKey));
     if (!moduleEnabled) {
       return { allowed: false, reason: `The ${moduleKey} module is disabled.` };
     }
