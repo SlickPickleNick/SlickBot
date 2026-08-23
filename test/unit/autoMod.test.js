@@ -30,6 +30,7 @@ const mockDb = new MockDatabase();
 test('Auto-Mod & Anti-Raid Engine Tests', async (t) => {
   t.beforeEach(() => {
     mockDb.install();
+    new AutoModService().clearAllCaches();
   });
 
   t.afterEach(() => {
@@ -448,6 +449,7 @@ test('Auto-Mod & Anti-Raid Engine Tests', async (t) => {
     const rulePanel = await buildAutoModManagerPanel(guildId, 'FILTERS', 'anti_spam');
     assert.equal(rulePanel.embeds.length, 2); // Master summary + Rule Settings card
     assert.ok(rulePanel.components.length >= 3);
+    assert.match(rulePanel.embeds[1].data.description, /Current Action:.*Delete/i);
 
     // 3. Blacklist tab
     const blacklistPanel = await buildAutoModManagerPanel(guildId, 'BLACKLIST');
@@ -462,6 +464,13 @@ test('Auto-Mod & Anti-Raid Engine Tests', async (t) => {
     const raidPanel = await buildAutoModManagerPanel(guildId, 'RAID');
     assert.match(raidPanel.embeds[0].data.title, /Anti-Raid/i);
     assert.equal(raidPanel.components.length, 5); // Nav + ChannelSelect + SensitivitySelect + AgeSelect + Toggle
+
+    // 6. Test that updating action to WARN updates cache and renders 'Warn & Delete' immediately
+    const service = new AutoModService();
+    await service.upsertConfig(guildId, { anti_spam_action: 'WARN' });
+    const updatedPanel = await buildAutoModManagerPanel(guildId, 'FILTERS', 'anti_spam');
+    assert.match(updatedPanel.embeds[0].data.fields[0].value, /Warn & Delete/i);
+    assert.match(updatedPanel.embeds[1].data.description, /Current Action:.*Warn & Delete/i);
   });
 
   await t.test('buildThresholdTuneModal and buildDomainWhitelistModal construct valid modals', () => {
@@ -520,6 +529,220 @@ test('Auto-Mod & Anti-Raid Engine Tests', async (t) => {
     const managerButtons = manager.components[2].components;
     assert.ok(managerButtons.some((b) => b.data.custom_id === CustomIds.SetupCategoryCore));
     assert.ok(managerButtons.some((b) => b.data.custom_id === CustomIds.SetupRefresh));
+  });
+
+  await t.test('Timeout Role: createTimeoutRole, sync permissions, and exempt appeals & ticket channels', async () => {
+    const service = new AutoModService();
+    service.clearAllCaches();
+    mockDb.addHandler('SELECT * FROM automod_configs', () => ({ rows: [], rowCount: 0 }));
+    mockDb.addHandler('SELECT review_channel_id FROM appeal_configs', () => ({ rows: [{ review_channel_id: 'chan-appeals' }] }));
+    mockDb.addHandler('INSERT INTO automod_configs', (sql, params) => ({ rows: [{ guild_id: params[0], timeout_role_id: params[44] }] }));
+
+    const editedOverwrites = [];
+    const mockGeneralChan = {
+      id: 'chan-general',
+      name: 'general',
+      type: 0, // GuildText
+      permissionOverwrites: {
+        edit: async (roleId, perms, opts) => {
+          editedOverwrites.push({ channelId: 'chan-general', roleId, perms, opts });
+        }
+      }
+    };
+    const mockAppealsChan = {
+      id: 'chan-appeals',
+      name: 'appeals',
+      type: 0,
+      permissionOverwrites: {
+        edit: async (roleId, perms, opts) => {
+          editedOverwrites.push({ channelId: 'chan-appeals', roleId, perms, opts });
+        }
+      }
+    };
+    const mockTicketChan = {
+      id: 'chan-ticket',
+      name: 'ticket-0001',
+      type: 0,
+      topic: 'SlickBot ticket #1 opened by user',
+      permissionOverwrites: {
+        edit: async (roleId, perms, opts) => {
+          editedOverwrites.push({ channelId: 'chan-ticket', roleId, perms, opts });
+        }
+      }
+    };
+
+    const channelsMap = new Map([
+      ['chan-general', mockGeneralChan],
+      ['chan-appeals', mockAppealsChan],
+      ['chan-ticket', mockTicketChan]
+    ]);
+
+    const createdRoles = [];
+    const mockGuild = {
+      id: guildId,
+      roles: {
+        cache: new Map(),
+        create: async (roleData) => {
+          const role = { id: 'role-timeout-123', name: roleData.name, ...roleData };
+          createdRoles.push(role);
+          return role;
+        }
+      },
+      channels: {
+        cache: channelsMap,
+        fetch: async () => channelsMap
+      }
+    };
+
+    // 1. Create timeout role & sync
+    const res = await service.createTimeoutRole(mockGuild);
+    assert.equal(res.ok, true);
+    assert.equal(res.role.id, 'role-timeout-123');
+    assert.equal(res.syncResult.ok, true);
+    assert.equal(res.syncResult.syncedChannelsCount, 2); // general and appeals
+    assert.equal(res.syncResult.exemptCount, 1); // appeals
+
+    // Verify general channel was hidden (ViewChannel: false)
+    const genEdit = editedOverwrites.find((e) => e.channelId === 'chan-general');
+    assert.ok(genEdit);
+    assert.equal(genEdit.perms.ViewChannel, false);
+    assert.equal(genEdit.perms.SendMessages, false);
+
+    // Verify appeals channel allows View & Read but denies SendMessages
+    const appEdit = editedOverwrites.find((e) => e.channelId === 'chan-appeals');
+    assert.ok(appEdit);
+    assert.equal(appEdit.perms.ViewChannel, true);
+    assert.equal(appEdit.perms.ReadMessageHistory, true);
+    assert.equal(appEdit.perms.SendMessages, false);
+
+    // Verify ticket channel was skipped entirely
+    const ticketEdit = editedOverwrites.find((e) => e.channelId === 'chan-ticket');
+    assert.equal(ticketEdit, undefined);
+  });
+
+  await t.test('Timeout Role: handleChannelCreate auto-locks newly created channels unless ticket/appeals', async () => {
+    const service = new AutoModService();
+    service.clearAllCaches();
+    mockDb.addHandler('SELECT * FROM automod_configs', () => ({
+      rows: [{ guild_id: guildId, timeout_role_id: 'role-timeout-123', timeout_role_lock_new_channels: true, timeout_role_mode: 'HIDE' }],
+      rowCount: 1
+    }));
+    mockDb.addHandler('SELECT review_channel_id FROM appeal_configs', () => ({ rows: [{ review_channel_id: 'chan-appeals' }] }));
+
+    const editedOverwrites = [];
+    const newChan = {
+      id: 'chan-new-announcements',
+      name: 'announcements',
+      guild: { id: guildId },
+      permissionOverwrites: {
+        edit: async (roleId, perms, opts) => {
+          editedOverwrites.push({ channelId: 'chan-new-announcements', roleId, perms, opts });
+        }
+      }
+    };
+
+    await service.handleChannelCreate(newChan);
+    assert.equal(editedOverwrites.length, 1);
+    assert.equal(editedOverwrites[0].roleId, 'role-timeout-123');
+    assert.equal(editedOverwrites[0].perms.ViewChannel, false);
+
+    // Test that ticket channel creation is ignored
+    const newTicketChan = {
+      id: 'chan-ticket-99',
+      name: 'ticket-9999',
+      guild: { id: guildId },
+      permissionOverwrites: {
+        edit: async (roleId, perms, opts) => {
+          editedOverwrites.push({ channelId: 'chan-ticket-99', roleId, perms, opts });
+        }
+      }
+    };
+    await service.handleChannelCreate(newTicketChan);
+    assert.equal(editedOverwrites.some((e) => e.channelId === 'chan-ticket-99'), false);
+  });
+
+  await t.test('Timeout Role: applyTimeout and removeTimeout apply Discord timeout and temporary role', async () => {
+    const service = new AutoModService();
+    service.clearAllCaches();
+    mockDb.addHandler('SELECT * FROM automod_configs', () => ({
+      rows: [{ guild_id: guildId, timeout_role_id: 'role-timeout-123' }],
+      rowCount: 1
+    }));
+    mockDb.addHandler('INSERT INTO temporary_role_assignments', (sql, params) => ({
+      rows: [{ id: 'temp-assign-1', guild_id: params[0], user_id: params[1], role_id: params[3] }]
+    }));
+    mockDb.addHandler('SELECT * FROM temporary_role_assignments', () => ({
+      rows: [{ id: 'temp-assign-1', guild_id: guildId, user_id: 'user-violator', role_id: 'role-timeout-123', active: true }]
+    }));
+    mockDb.addHandler('UPDATE temporary_role_assignments', () => ({ rowCount: 1 }));
+
+    let timedOutMs = null;
+    let rolesAdded = [];
+    let rolesRemoved = [];
+
+    const mockMember = {
+      id: 'user-violator',
+      user: { id: 'user-violator', tag: 'BadActor#0001', bot: false },
+      moderatable: true,
+      isCommunicationDisabled: () => timedOutMs !== null,
+      timeout: async (ms) => {
+        timedOutMs = ms;
+      },
+      roles: {
+        add: async (roleId) => {
+          rolesAdded.push(roleId);
+        },
+        remove: async (roleId) => {
+          rolesRemoved.push(roleId);
+        }
+      },
+      guild: {
+        id: guildId,
+        roles: {
+          cache: new Map([
+            ['role-timeout-123', { id: 'role-timeout-123', name: 'Timeout', managed: false }]
+          ])
+        },
+        members: {
+          fetch: async () => mockMember
+        }
+      }
+    };
+
+    // 1. Apply timeout for 300s
+    const applyRes = await service.applyTimeout(mockMember, 300, 'Test violation', { id: 'mod-1', tag: 'Mod#0001' });
+    assert.equal(applyRes.nativeTimeout, true);
+    assert.equal(applyRes.roleApplied, true);
+    assert.equal(timedOutMs, 300 * 1000);
+    assert.deepEqual(rolesAdded, ['role-timeout-123']);
+
+    // 2. Remove timeout
+    const removeRes = await service.removeTimeout(mockMember, 'Untimeout by staff', { id: 'mod-1', tag: 'Mod#0001' });
+    assert.equal(removeRes.nativeUntimeout, true);
+    assert.equal(removeRes.roleRemoved, true);
+    assert.equal(timedOutMs, null);
+    assert.deepEqual(rolesRemoved, ['role-timeout-123']);
+  });
+
+  await t.test('buildAutoModManagerPanel renders TIMEOUT tab correctly', async () => {
+    mockDb.addHandler('SELECT * FROM automod_configs', () => ({
+      rows: [{ guild_id: guildId, timeout_role_id: 'role-timeout-123', timeout_role_mode: 'HIDE', timeout_role_lock_new_channels: true }],
+      rowCount: 1
+    }));
+    mockDb.addHandler('SELECT * FROM automod_blacklists', () => ({ rows: [], rowCount: 0 }));
+
+    const panel = await buildAutoModManagerPanel(guildId, 'TIMEOUT');
+    assert.equal(panel.embeds.length, 1);
+    assert.match(panel.embeds[0].data.title, /Timeout Role/i);
+    assert.match(panel.embeds[0].data.fields[0].value, /<@&role-timeout-123>/i);
+    assert.match(panel.embeds[0].data.fields[1].value, /Hide Channels/i);
+    assert.equal(panel.components.length, 4); // Nav + RoleSelect + ExemptSelect + ActionButtons
+    const buttons = panel.components[3].components;
+    assert.ok(buttons.some((b) => b.data.custom_id === CustomIds.AutoModTimeoutRoleCreate));
+    assert.ok(buttons.some((b) => b.data.custom_id === CustomIds.AutoModTimeoutRoleSync));
+    assert.ok(buttons.some((b) => b.data.custom_id === CustomIds.AutoModTimeoutRoleModeToggle));
+    assert.ok(buttons.some((b) => b.data.custom_id === CustomIds.AutoModTimeoutRoleLockToggle));
+    assert.ok(buttons.some((b) => b.data.custom_id === CustomIds.AutoModTimeoutRoleClear));
   });
 });
 

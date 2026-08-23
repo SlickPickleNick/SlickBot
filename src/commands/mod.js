@@ -153,6 +153,9 @@ async function handleWarn(interaction, ctx) {
   await replyPrivate(interaction, { embeds: [embed] });
 }
 
+const { AutoModService } = require('../modules/moderation/autoModService');
+const autoMod = new AutoModService();
+
 async function handleTimeout(interaction, ctx) {
   const target = interaction.options.getUser('user', true);
   const minutes = interaction.options.getInteger('minutes', true);
@@ -165,7 +168,7 @@ async function handleTimeout(interaction, ctx) {
     return;
   }
 
-  await member.timeout(minutes * 60 * 1000, reason);
+  await autoMod.applyTimeout(member, minutes * 60, reason, interaction.user);
   const expiresAt = new Date(Date.now() + minutes * 60 * 1000).toISOString();
   const caseRecord = await createAndLogCase(interaction, ctx, {
     target,
@@ -189,7 +192,7 @@ async function handleUntimeout(interaction, ctx) {
     return;
   }
 
-  await member.timeout(null, reason);
+  await autoMod.removeTimeout(member, reason, interaction.user);
   const caseRecord = await createAndLogCase(interaction, ctx, {
     target,
     actionType: 'UNTIMEOUT',

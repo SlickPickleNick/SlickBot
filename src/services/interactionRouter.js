@@ -669,6 +669,59 @@ async function handleButton(interaction, ctx) {
     return true;
   }
 
+  if (id === CustomIds.AutoModTimeoutRoleCreate) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.AutoModManage, ModuleKeys.AUTOMOD))) return true;
+    const res = await autoMod.createTimeoutRole(interaction.guild);
+    if (!res.ok) {
+      await replyPrivate(interaction, { embeds: [createWarningEmbed('Role Creation Failed', res.reason || 'Could not create timeout role.')] });
+      return true;
+    }
+    await updatePanel(interaction, await buildAutoModManagerPanel(interaction.guildId, 'TIMEOUT'));
+    await replyPrivate(interaction, { embeds: [createSuccessEmbed('Timeout Role Ready', `Created and synced <@&${res.role.id}> across server channels (with Appeals & Ticket exemptions).`)] });
+    return true;
+  }
+
+  if (id === CustomIds.AutoModTimeoutRoleSync) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.AutoModManage, ModuleKeys.AUTOMOD))) return true;
+    const res = await autoMod.syncTimeoutRolePermissions(interaction.guild);
+    if (!res.ok) {
+      await replyPrivate(interaction, { embeds: [createWarningEmbed('Channel Sync Failed', res.reason || 'Could not sync timeout role permissions.')] });
+      return true;
+    }
+    await updatePanel(interaction, await buildAutoModManagerPanel(interaction.guildId, 'TIMEOUT'));
+    await replyPrivate(interaction, { embeds: [createSuccessEmbed('Channel Permissions Synced', `Updated permissions across **${res.syncedChannelsCount} channel(s)** (exempted **${res.exemptCount} channel(s)**).`)] });
+    return true;
+  }
+
+  if (id === CustomIds.AutoModTimeoutRoleModeToggle) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.AutoModManage, ModuleKeys.AUTOMOD))) return true;
+    const config = await autoMod.getConfig(interaction.guildId);
+    const nextMode = (config.timeout_role_mode || 'HIDE') === 'HIDE' ? 'MUTE_ONLY' : 'HIDE';
+    await autoMod.upsertConfig(interaction.guildId, { timeout_role_mode: nextMode });
+    if (config.timeout_role_id) {
+      await autoMod.syncTimeoutRolePermissions(interaction.guild, { mode: nextMode });
+    }
+    await updatePanel(interaction, await buildAutoModManagerPanel(interaction.guildId, 'TIMEOUT'));
+    return true;
+  }
+
+  if (id === CustomIds.AutoModTimeoutRoleLockToggle) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.AutoModManage, ModuleKeys.AUTOMOD))) return true;
+    const config = await autoMod.getConfig(interaction.guildId);
+    const nextVal = config.timeout_role_lock_new_channels === false;
+    await autoMod.upsertConfig(interaction.guildId, { timeout_role_lock_new_channels: nextVal });
+    await updatePanel(interaction, await buildAutoModManagerPanel(interaction.guildId, 'TIMEOUT'));
+    return true;
+  }
+
+  if (id === CustomIds.AutoModTimeoutRoleClear) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.AutoModManage, ModuleKeys.AUTOMOD))) return true;
+    await autoMod.upsertConfig(interaction.guildId, { timeout_role_id: null });
+    await updatePanel(interaction, await buildAutoModManagerPanel(interaction.guildId, 'TIMEOUT'));
+    await replyPrivate(interaction, { embeds: [createSuccessEmbed('Timeout Role Cleared', 'Detached timeout role from Auto-Mod and Moderation.')] });
+    return true;
+  }
+
   if (id.startsWith(CustomIds.AutoModRaidDismissPrefix)) {
     if (!(await requireAction(interaction, ctx, ActionKeys.AutoModView, ModuleKeys.AUTOMOD))) return true;
     await updatePanel(interaction, {
@@ -2648,6 +2701,25 @@ async function handleSelect(interaction, ctx) {
     const hours = Number(interaction.values[0]);
     await autoMod.upsertConfig(interaction.guildId, { raid_min_account_age_hours: hours });
     await updatePanel(interaction, await buildAutoModManagerPanel(interaction.guildId, 'RAID'));
+    return true;
+  }
+
+  if (id === CustomIds.AutoModTimeoutRoleSelect) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.AutoModManage, ModuleKeys.AUTOMOD))) return true;
+    const roleId = interaction.values?.[0] || null;
+    await autoMod.upsertConfig(interaction.guildId, { timeout_role_id: roleId });
+    if (roleId) {
+      await autoMod.syncTimeoutRolePermissions(interaction.guild, { timeoutRoleId: roleId });
+    }
+    await updatePanel(interaction, await buildAutoModManagerPanel(interaction.guildId, 'TIMEOUT'));
+    return true;
+  }
+
+  if (id === CustomIds.AutoModTimeoutRoleExemptSelect) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.AutoModWhitelist, ModuleKeys.AUTOMOD))) return true;
+    await autoMod.upsertConfig(interaction.guildId, { timeout_role_exempt_channel_ids: interaction.values || [] });
+    await autoMod.syncTimeoutRolePermissions(interaction.guild);
+    await updatePanel(interaction, await buildAutoModManagerPanel(interaction.guildId, 'TIMEOUT'));
     return true;
   }
 

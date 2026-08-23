@@ -62,7 +62,11 @@ const DEFAULT_AUTOMOD_CONFIG = Object.freeze({
   raid_join_threshold: 8,
   raid_join_seconds: 10,
   raid_min_account_age_hours: 24,
-  raid_alert_channel_id: null
+  raid_alert_channel_id: null,
+  timeout_role_id: null,
+  timeout_role_mode: 'HIDE',
+  timeout_role_lock_new_channels: true,
+  timeout_role_exempt_channel_ids: []
 });
 
 // Standard curated built-in blacklist of known phishing/scam terms & malicious patterns
@@ -86,13 +90,32 @@ const DISCORD_INVITE_REGEX = /(?:https?:\/\/)?(?:www\.)?(?:discord\.(?:gg|io|me|
 const URL_REGEX = /https?:\/\/(?:www\.)?[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_+.~#?&//=]*)/gi;
 const EMOJI_REGEX = /(?:<a?:[a-zA-Z0-9_]+:\d+>|[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}])/gu;
 
+const configCache = new Map(); // guildId -> config
+const blacklistCache = new Map(); // guildId -> rows
+const messageHistory = new Map(); // guildId:userId -> array of { text, timestamp }
+const joinHistory = new Map(); // guildId -> array of { userId, userTag, joinedAt, createdAt }
+const activeRaidAlerts = new Map(); // guildId -> { alertTimestamp, recentJoins }
+
 class AutoModService {
   constructor() {
-    this.configCache = new Map(); // guildId -> config
-    this.blacklistCache = new Map(); // guildId -> rows
-    this.messageHistory = new Map(); // guildId:userId -> array of { text, timestamp }
-    this.joinHistory = new Map(); // guildId -> array of { userId, userTag, joinedAt, createdAt }
-    this.activeRaidAlerts = new Map(); // guildId -> { alertTimestamp, recentJoins }
+    this.configCache = configCache;
+    this.blacklistCache = blacklistCache;
+    this.messageHistory = messageHistory;
+    this.joinHistory = joinHistory;
+    this.activeRaidAlerts = activeRaidAlerts;
+  }
+
+  clearAllCaches() {
+    configCache.clear();
+    blacklistCache.clear();
+    messageHistory.clear();
+    joinHistory.clear();
+    activeRaidAlerts.clear();
+  }
+
+  invalidateConfigCache(guildId) {
+    if (guildId) configCache.delete(guildId);
+    else configCache.clear();
   }
 
   // --- Configuration & Cache Management ---
@@ -129,11 +152,12 @@ class AutoModService {
         exempt_roles, exempt_channels, exempt_users, whitelisted_domains, whitelisted_invites,
         dm_notification_enabled, alert_channel_id,
         raid_shield_enabled, raid_join_threshold, raid_join_seconds, raid_min_account_age_hours, raid_alert_channel_id,
+        timeout_role_id, timeout_role_mode, timeout_role_lock_new_channels, timeout_role_exempt_channel_ids,
         updated_at
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
         $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38,
-        $39, $40, $41, $42, $43, $44, NOW()
+        $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, NOW()
       ) ON CONFLICT (guild_id) DO UPDATE SET
         enabled = EXCLUDED.enabled,
         anti_invites_enabled = EXCLUDED.anti_invites_enabled,
@@ -178,6 +202,10 @@ class AutoModService {
         raid_join_seconds = EXCLUDED.raid_join_seconds,
         raid_min_account_age_hours = EXCLUDED.raid_min_account_age_hours,
         raid_alert_channel_id = EXCLUDED.raid_alert_channel_id,
+        timeout_role_id = EXCLUDED.timeout_role_id,
+        timeout_role_mode = EXCLUDED.timeout_role_mode,
+        timeout_role_lock_new_channels = EXCLUDED.timeout_role_lock_new_channels,
+        timeout_role_exempt_channel_ids = EXCLUDED.timeout_role_exempt_channel_ids,
         updated_at = NOW()
       RETURNING *`,
       [
@@ -193,13 +221,267 @@ class AutoModService {
         merged.default_blacklist_enabled, merged.word_blacklist_action, merged.word_blacklist_timeout_seconds,
         merged.exempt_roles, merged.exempt_channels, merged.exempt_users, merged.whitelisted_domains, merged.whitelisted_invites,
         merged.dm_notification_enabled, merged.alert_channel_id,
-        merged.raid_shield_enabled, merged.raid_join_threshold, merged.raid_join_seconds, merged.raid_min_account_age_hours, merged.raid_alert_channel_id
+        merged.raid_shield_enabled, merged.raid_join_threshold, merged.raid_join_seconds, merged.raid_min_account_age_hours, merged.raid_alert_channel_id,
+        merged.timeout_role_id || null, merged.timeout_role_mode || 'HIDE', Boolean(merged.timeout_role_lock_new_channels), merged.timeout_role_exempt_channel_ids || []
       ]
     );
 
     const saved = res.rows[0] ? { ...DEFAULT_AUTOMOD_CONFIG, ...res.rows[0] } : merged;
     this.configCache.set(guildId, saved);
     return saved;
+  }
+
+  // --- Timeout Role Management & Synchronization ---
+
+  async createTimeoutRole(guild) {
+    if (!guild || typeof guild.roles?.create !== 'function') {
+      return { ok: false, reason: 'Guild role manager not available.' };
+    }
+
+    let role = null;
+    if (guild.roles?.cache) {
+      if (typeof guild.roles.cache.find === 'function') {
+        role = guild.roles.cache.find((r) => r.name?.toLowerCase() === 'timeout' || r.name?.toLowerCase() === 'muted');
+      } else {
+        role = Array.from(guild.roles.cache.values()).find((r) => r.name?.toLowerCase() === 'timeout' || r.name?.toLowerCase() === 'muted');
+      }
+    }
+    if (!role) {
+      role = await guild.roles.create({
+        name: 'Timeout',
+        color: '#546e7a',
+        permissions: [],
+        reason: 'SlickBot AutoMod/Moderation Timeout Role'
+      });
+    }
+
+    await this.upsertConfig(guild.id, {
+      timeout_role_id: role.id
+    });
+
+    const syncResult = await this.syncTimeoutRolePermissions(guild, { timeoutRoleId: role.id });
+    return { ok: true, role, syncResult };
+  }
+
+  async syncTimeoutRolePermissions(guild, options = {}) {
+    if (!guild || !guild.channels) {
+      return { ok: false, reason: 'Guild channel manager not available.' };
+    }
+
+    const config = await this.getConfig(guild.id);
+    const roleId = options.timeoutRoleId || config.timeout_role_id;
+    if (!roleId) {
+      return { ok: false, reason: 'No timeout role configured.' };
+    }
+
+    // Resolve Appeals review channel ID
+    const appealRes = await query(`SELECT review_channel_id FROM appeal_configs WHERE guild_id = $1 LIMIT 1`, [guild.id]).catch(() => ({ rows: [] }));
+    const appealsChannelId = appealRes.rows[0]?.review_channel_id || null;
+
+    const exemptIds = new Set([
+      ...(config.timeout_role_exempt_channel_ids || [])
+    ]);
+    if (appealsChannelId) exemptIds.add(appealsChannelId);
+
+    const mode = options.mode || config.timeout_role_mode || 'HIDE';
+    const channels = await guild.channels.fetch().catch(() => guild.channels.cache);
+    const channelList = channels instanceof Map || (channels && typeof channels.values === 'function') ? Array.from(channels.values()) : Array.isArray(channels) ? channels : [];
+    let syncedChannelsCount = 0;
+    let exemptCount = 0;
+
+    for (const channel of channelList) {
+      if (!channel) continue;
+
+      // Skip tickets (which have opener-specific permissions)
+      const isTicket = channel.name?.toLowerCase().startsWith('ticket-') || channel.topic?.includes('SlickBot ticket #');
+      if (isTicket) continue;
+
+      const isAppeals = channel.id === appealsChannelId;
+      const isExempt = exemptIds.has(channel.id);
+
+      if (isAppeals || isExempt) {
+        exemptCount++;
+        // Appeals and exempt channels: View & Read only (deny send/react)
+        await channel.permissionOverwrites?.edit(roleId, {
+          ViewChannel: true,
+          ReadMessageHistory: true,
+          SendMessages: false,
+          SendMessagesInThreads: false,
+          CreatePublicThreads: false,
+          CreatePrivateThreads: false,
+          AddReactions: false
+        }, { reason: 'SlickBot Timeout Role Appeals/Exempt Access' }).catch(() => {});
+        syncedChannelsCount++;
+      } else {
+        // Standard channels
+        if (mode === 'MUTE_ONLY') {
+          if (channel.type === ChannelType.GuildVoice || channel.type === ChannelType.GuildStageVoice) {
+            await channel.permissionOverwrites?.edit(roleId, {
+              ViewChannel: true,
+              Connect: false,
+              Speak: false,
+              Stream: false,
+              RequestToSpeak: false
+            }, { reason: 'SlickBot Timeout Role Mute Permissions' }).catch(() => {});
+          } else if (channel.type === ChannelType.GuildCategory) {
+            await channel.permissionOverwrites?.edit(roleId, {
+              ViewChannel: true,
+              SendMessages: false,
+              Connect: false
+            }, { reason: 'SlickBot Timeout Role Mute Permissions' }).catch(() => {});
+          } else {
+            await channel.permissionOverwrites?.edit(roleId, {
+              ViewChannel: true,
+              ReadMessageHistory: true,
+              SendMessages: false,
+              SendMessagesInThreads: false,
+              CreatePublicThreads: false,
+              CreatePrivateThreads: false,
+              AddReactions: false
+            }, { reason: 'SlickBot Timeout Role Mute Permissions' }).catch(() => {});
+          }
+        } else {
+          // 'HIDE' mode (Default)
+          if (channel.type === ChannelType.GuildVoice || channel.type === ChannelType.GuildStageVoice) {
+            await channel.permissionOverwrites?.edit(roleId, {
+              ViewChannel: false,
+              Connect: false,
+              Speak: false,
+              Stream: false,
+              RequestToSpeak: false
+            }, { reason: 'SlickBot Timeout Role Hide Permissions' }).catch(() => {});
+          } else if (channel.type === ChannelType.GuildCategory) {
+            await channel.permissionOverwrites?.edit(roleId, {
+              ViewChannel: false,
+              SendMessages: false,
+              Connect: false
+            }, { reason: 'SlickBot Timeout Role Hide Permissions' }).catch(() => {});
+          } else {
+            await channel.permissionOverwrites?.edit(roleId, {
+              ViewChannel: false,
+              SendMessages: false,
+              SendMessagesInThreads: false,
+              CreatePublicThreads: false,
+              CreatePrivateThreads: false,
+              AddReactions: false
+            }, { reason: 'SlickBot Timeout Role Hide Permissions' }).catch(() => {});
+          }
+        }
+        syncedChannelsCount++;
+      }
+    }
+
+    return { ok: true, syncedChannelsCount, exemptCount, mode };
+  }
+
+  async handleChannelCreate(channel) {
+    if (!channel || !channel.guild) return;
+    const isTicket = channel.name?.toLowerCase().startsWith('ticket-') || channel.topic?.includes('SlickBot ticket #');
+    if (isTicket) return;
+
+    const config = await this.getConfig(channel.guild.id);
+    if (!config.timeout_role_id || config.timeout_role_lock_new_channels === false) return;
+
+    // Check if appeals channel
+    const appealRes = await query(`SELECT review_channel_id FROM appeal_configs WHERE guild_id = $1 LIMIT 1`, [channel.guild.id]).catch(() => ({ rows: [] }));
+    const appealsChannelId = appealRes.rows[0]?.review_channel_id || null;
+    if (channel.id === appealsChannelId || (config.timeout_role_exempt_channel_ids || []).includes(channel.id)) {
+      await channel.permissionOverwrites?.edit(config.timeout_role_id, {
+        ViewChannel: true,
+        ReadMessageHistory: true,
+        SendMessages: false,
+        SendMessagesInThreads: false,
+        AddReactions: false
+      }, { reason: 'SlickBot Timeout Role Auto-Lock Exempt Channel' }).catch(() => {});
+      return;
+    }
+
+    const mode = config.timeout_role_mode || 'HIDE';
+    if (mode === 'MUTE_ONLY') {
+      await channel.permissionOverwrites?.edit(config.timeout_role_id, {
+        ViewChannel: true,
+        ReadMessageHistory: true,
+        SendMessages: false,
+        SendMessagesInThreads: false,
+        AddReactions: false,
+        Connect: false,
+        Speak: false
+      }, { reason: 'SlickBot Timeout Role Auto-Lock Channel' }).catch(() => {});
+    } else {
+      await channel.permissionOverwrites?.edit(config.timeout_role_id, {
+        ViewChannel: false,
+        SendMessages: false,
+        SendMessagesInThreads: false,
+        AddReactions: false,
+        Connect: false,
+        Speak: false
+      }, { reason: 'SlickBot Timeout Role Auto-Lock Channel' }).catch(() => {});
+    }
+  }
+
+  async applyTimeout(member, durationSeconds, reason, actorUser, options = {}) {
+    if (!member || !member.guild) return { ok: false, reason: 'Invalid guild member.' };
+    const guild = member.guild;
+    const config = await this.getConfig(guild.id);
+    const secs = Math.max(1, Number(durationSeconds) || 60);
+    const timeoutMs = secs * 1000;
+    const results = { nativeTimeout: false, roleApplied: false };
+
+    // 1. Native Discord Timeout (up to 28 days max in Discord API)
+    if (member.moderatable && timeoutMs > 0 && timeoutMs <= 28 * 24 * 60 * 60 * 1000) {
+      await member.timeout(timeoutMs, reason || 'Applied by SlickBot').then(() => { results.nativeTimeout = true; }).catch(() => {});
+    }
+
+    // 2. Timeout Role Application (tracked via TemporaryRoleService)
+    if (config.timeout_role_id) {
+      const role = guild.roles.cache ? (guild.roles.cache.get(config.timeout_role_id) || await guild.roles.fetch(config.timeout_role_id).catch(() => null)) : null;
+      if (role) {
+        const { TemporaryRoleService } = require('./tempRoleService');
+        const tempRoles = new TemporaryRoleService();
+        const tempRes = await tempRoles.addTemporaryRole({
+          guild,
+          user: member.user || { id: member.id, tag: member.user?.tag || member.id },
+          role,
+          durationText: `${secs}s`,
+          actorUser: actorUser || { id: guild.client?.user?.id || 'AUTOMOD', tag: 'SlickBot AutoMod' },
+          reason: reason || 'SlickBot Timeout'
+        });
+        results.roleApplied = tempRes.ok;
+      }
+    }
+
+    return results;
+  }
+
+  async removeTimeout(member, reason, actorUser) {
+    if (!member || !member.guild) return { ok: false, reason: 'Invalid guild member.' };
+    const guild = member.guild;
+    const config = await this.getConfig(guild.id);
+    const results = { nativeUntimeout: false, roleRemoved: false };
+
+    // 1. Native Untimeout
+    if (member.isCommunicationDisabled && member.isCommunicationDisabled()) {
+      await member.timeout(null, reason || 'Untimeout by staff').then(() => { results.nativeUntimeout = true; }).catch(() => {});
+    }
+
+    // 2. Remove Timeout Role
+    if (config.timeout_role_id) {
+      const role = guild.roles.cache ? (guild.roles.cache.get(config.timeout_role_id) || await guild.roles.fetch(config.timeout_role_id).catch(() => null)) : null;
+      if (role) {
+        const { TemporaryRoleService } = require('./tempRoleService');
+        const tempRoles = new TemporaryRoleService();
+        const tempRes = await tempRoles.removeTemporaryRole({
+          guild,
+          user: member.user || { id: member.id, tag: member.user?.tag || member.id },
+          role,
+          actorUser,
+          reason: reason || 'Untimeout by staff'
+        });
+        results.roleRemoved = tempRes.ok;
+      }
+    }
+
+    return results;
   }
 
   // --- Blacklist Management ---
@@ -606,9 +888,14 @@ class AutoModService {
 
     // 2. Apply Timeout (if action is TIMEOUT)
     let timedOut = false;
-    const timeoutMs = (violation.timeoutSeconds || 60) * 1000;
-    if (action === 'TIMEOUT' && timeoutMs > 0 && member && member.moderatable) {
-      await member.timeout(timeoutMs, reason).then(() => { timedOut = true; }).catch(() => {});
+    if (action === 'TIMEOUT' && member) {
+      const timeoutRes = await this.applyTimeout(
+        member,
+        violation.timeoutSeconds || 60,
+        reason,
+        { id: message.client?.user?.id || 'AUTOMOD', tag: 'SlickBot AutoMod' }
+      );
+      timedOut = timeoutRes.nativeTimeout || timeoutRes.roleApplied;
     }
 
     // 3. Create Moderation Case

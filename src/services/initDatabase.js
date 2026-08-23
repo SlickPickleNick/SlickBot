@@ -2037,10 +2037,19 @@ async function initDatabase() {
       raid_min_account_age_hours INTEGER NOT NULL DEFAULT 24,
       raid_alert_channel_id TEXT,
       last_raid_alert_at TIMESTAMPTZ,
+      timeout_role_id TEXT,
+      timeout_role_mode TEXT NOT NULL DEFAULT 'HIDE',
+      timeout_role_lock_new_channels BOOLEAN NOT NULL DEFAULT true,
+      timeout_role_exempt_channel_ids TEXT[] NOT NULL DEFAULT '{}',
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
+
+  await query(`ALTER TABLE automod_configs ADD COLUMN IF NOT EXISTS timeout_role_id TEXT;`).catch(() => {});
+  await query(`ALTER TABLE automod_configs ADD COLUMN IF NOT EXISTS timeout_role_mode TEXT NOT NULL DEFAULT 'HIDE';`).catch(() => {});
+  await query(`ALTER TABLE automod_configs ADD COLUMN IF NOT EXISTS timeout_role_lock_new_channels BOOLEAN NOT NULL DEFAULT true;`).catch(() => {});
+  await query(`ALTER TABLE automod_configs ADD COLUMN IF NOT EXISTS timeout_role_exempt_channel_ids TEXT[] NOT NULL DEFAULT '{}';`).catch(() => {});
 
   await query(`
     CREATE TABLE IF NOT EXISTS automod_blacklists (

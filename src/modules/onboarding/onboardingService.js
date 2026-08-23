@@ -952,6 +952,42 @@ const ONBOARDING_STEPS = Object.freeze({
         await logging.setupLogGroup(guild.id, 'MODERATION_SAFETY', channel.id);
         return { created: `#${channel.name}` };
       }
+    },
+    {
+      id: 'mod_timeout_role',
+      moduleKey: ModuleKeys.MODERATION,
+      title: 'Server Timeout & Restriction Role',
+      description: 'Select or auto-create a dedicated @Timeout role given to timed-out members to restrict access server-wide while preserving appeals channel access.',
+      pickerType: 'ROLE',
+      autoCreateLabel: 'Auto-Create @Timeout Role',
+      autoCreateDescription: 'Creates @Timeout role and syncs channel permissions server-wide with appeals exemption.',
+      async getCurrent(guild) {
+        const res = await query(`SELECT timeout_role_id FROM automod_configs WHERE guild_id = $1 LIMIT 1`, [guild.id]).catch(() => ({ rows: [] }));
+        return res.rows[0]?.timeout_role_id ? `<@&${res.rows[0].timeout_role_id}>` : null;
+      },
+      async applyDefault(guild) {
+        const existing = guild.roles?.cache?.find((r) => ['timeout', 'muted', 'mute'].includes(r.name.toLowerCase()));
+        if (existing) {
+          const { AutoModService } = require('../moderation/autoModService');
+          const autoMod = new AutoModService();
+          await autoMod.upsertConfig(guild.id, { timeout_role_id: existing.id });
+          await autoMod.syncTimeoutRolePermissions(guild, { timeoutRoleId: existing.id });
+          return { result: `Assigned existing <@&${existing.id}>` };
+        }
+        return { result: 'Default timeout settings saved' };
+      },
+      async applySelection(guild, roleId) {
+        const { AutoModService } = require('../moderation/autoModService');
+        const autoMod = new AutoModService();
+        await autoMod.upsertConfig(guild.id, { timeout_role_id: roleId });
+        await autoMod.syncTimeoutRolePermissions(guild, { timeoutRoleId: roleId });
+      },
+      async autoCreate(guild) {
+        const { AutoModService } = require('../moderation/autoModService');
+        const autoMod = new AutoModService();
+        const res = await autoMod.createTimeoutRole(guild);
+        return { created: `@${res.role?.name || 'Timeout'}` };
+      }
     }
   ],
 
@@ -1501,6 +1537,42 @@ const ONBOARDING_STEPS = Object.freeze({
           [guild.id, channel.id]
         );
         return { created: `#${channel.name}` };
+      }
+    },
+    {
+      id: 'automod_timeout_role',
+      moduleKey: ModuleKeys.AUTOMOD,
+      title: 'Auto-Mod Timeout & Restriction Role',
+      description: 'Configure a dedicated server role given to members punished with timeouts to restrict channel access (exempting appeals).',
+      pickerType: 'ROLE',
+      autoCreateLabel: 'Auto-Create @Timeout Role',
+      autoCreateDescription: 'Creates @Timeout role and syncs channel permissions with appeals exemption.',
+      async getCurrent(guild) {
+        const res = await query(`SELECT timeout_role_id FROM automod_configs WHERE guild_id = $1 LIMIT 1`, [guild.id]).catch(() => ({ rows: [] }));
+        return res.rows[0]?.timeout_role_id ? `<@&${res.rows[0].timeout_role_id}>` : null;
+      },
+      async applyDefault(guild) {
+        const existing = guild.roles?.cache?.find((r) => ['timeout', 'muted', 'mute'].includes(r.name.toLowerCase()));
+        if (existing) {
+          const { AutoModService } = require('../moderation/autoModService');
+          const autoMod = new AutoModService();
+          await autoMod.upsertConfig(guild.id, { timeout_role_id: existing.id });
+          await autoMod.syncTimeoutRolePermissions(guild, { timeoutRoleId: existing.id });
+          return { result: `Assigned existing <@&${existing.id}>` };
+        }
+        return { result: 'Auto-Mod timeout configuration saved' };
+      },
+      async applySelection(guild, roleId) {
+        const { AutoModService } = require('../moderation/autoModService');
+        const autoMod = new AutoModService();
+        await autoMod.upsertConfig(guild.id, { timeout_role_id: roleId });
+        await autoMod.syncTimeoutRolePermissions(guild, { timeoutRoleId: roleId });
+      },
+      async autoCreate(guild) {
+        const { AutoModService } = require('../moderation/autoModService');
+        const autoMod = new AutoModService();
+        const res = await autoMod.createTimeoutRole(guild);
+        return { created: `@${res.role?.name || 'Timeout'}` };
       }
     }
   ]

@@ -23,6 +23,15 @@ const { AutoModService, AUTOMOD_PRESETS, RULE_KEYS } = require('./autoModService
 
 const autoMod = new AutoModService();
 
+function formatAction(action) {
+  const norm = String(action || '').toUpperCase();
+  if (norm === 'WARN') return 'Warn & Delete';
+  if (norm === 'DELETE') return 'Delete';
+  if (norm === 'TIMEOUT') return 'Timeout';
+  if (norm === 'LOG_ONLY') return 'Log Only';
+  return action || 'Delete';
+}
+
 // --- 1-Click Setup Wizard ---
 
 async function buildAutoModWizard(guildId) {
@@ -107,6 +116,11 @@ async function buildAutoModManagerPanel(guildId, tab = 'FILTERS', selectedRuleKe
       .setEmoji('🛡️')
       .setStyle(tab === 'FILTERS' ? ButtonStyle.Primary : ButtonStyle.Secondary),
     new ButtonBuilder()
+      .setCustomId(`${CustomIds.AutoModTabPrefix}TIMEOUT`)
+      .setLabel('Timeout Role')
+      .setEmoji('⏳')
+      .setStyle(tab === 'TIMEOUT' ? ButtonStyle.Primary : ButtonStyle.Secondary),
+    new ButtonBuilder()
       .setCustomId(`${CustomIds.AutoModTabPrefix}BLACKLIST`)
       .setLabel(`Blacklist (${blacklists.length})`)
       .setEmoji('🚫')
@@ -122,6 +136,72 @@ async function buildAutoModManagerPanel(guildId, tab = 'FILTERS', selectedRuleKe
       .setEmoji('🚨')
       .setStyle(tab === 'RAID' ? ButtonStyle.Primary : ButtonStyle.Secondary)
   );
+
+  // --- TAB: TIMEOUT ROLE ---
+  if (tab === 'TIMEOUT') {
+    const roleDisplay = config.timeout_role_id ? `<@&${config.timeout_role_id}>` : '_None configured_';
+    const modeDisplay = (config.timeout_role_mode || 'HIDE') === 'HIDE' ? '🔒 **Hide Channels**' : '🔇 **Mute Only**';
+    const autoLockDisplay = config.timeout_role_lock_new_channels !== false ? '`🟢 Enabled`' : '`🔴 Disabled`';
+    const exemptChannels = (config.timeout_role_exempt_channel_ids || []).map((c) => `<#${c}>`).join(', ') || 'None';
+
+    const embed = createBaseEmbed({
+      title: '⏳ Timeout Role & Server Restriction System',
+      description: 'Configure a dedicated server role applied to timed-out members. Restricts channel access while automatically preserving access to the Appeals channel and active support tickets.',
+      color: SlickBotColors.PRIMARY
+    }).addFields(
+      { name: 'Assigned Timeout Role', value: roleDisplay, inline: true },
+      { name: 'Restriction Mode', value: modeDisplay, inline: true },
+      { name: 'Auto-Lock Future Channels', value: autoLockDisplay, inline: true },
+      { name: 'Exempt Channels', value: `${exemptChannels}\n_(Appeals channel and Support Tickets are always automatically exempt)_`, inline: false }
+    );
+
+    const rolePickerRow = new ActionRowBuilder().addComponents(
+      new RoleSelectMenuBuilder()
+        .setCustomId(CustomIds.AutoModTimeoutRoleSelect)
+        .setPlaceholder('Select an existing Timeout / Muted role...')
+        .setMinValues(0)
+        .setMaxValues(1)
+    );
+
+    const exemptChannelPickerRow = new ActionRowBuilder().addComponents(
+      new ChannelSelectMenuBuilder()
+        .setCustomId(CustomIds.AutoModTimeoutRoleExemptSelect)
+        .setPlaceholder('Select additional exempt channels (up to 10)...')
+        .setChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)
+        .setMinValues(0)
+        .setMaxValues(10)
+    );
+
+    const actionButtonRow = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(CustomIds.AutoModTimeoutRoleCreate)
+        .setLabel('Auto-Create @Timeout')
+        .setEmoji('✨')
+        .setStyle(ButtonStyle.Success),
+      new ButtonBuilder()
+        .setCustomId(CustomIds.AutoModTimeoutRoleSync)
+        .setLabel('Sync Channels')
+        .setEmoji('🔒')
+        .setStyle(ButtonStyle.Primary),
+      new ButtonBuilder()
+        .setCustomId(CustomIds.AutoModTimeoutRoleModeToggle)
+        .setLabel((config.timeout_role_mode || 'HIDE') === 'HIDE' ? 'Switch: Mute Only' : 'Switch: Hide Channels')
+        .setEmoji('👁️')
+        .setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder()
+        .setCustomId(CustomIds.AutoModTimeoutRoleLockToggle)
+        .setLabel(config.timeout_role_lock_new_channels !== false ? 'Auto-Lock: ON' : 'Auto-Lock: OFF')
+        .setEmoji('🛡️')
+        .setStyle(config.timeout_role_lock_new_channels !== false ? ButtonStyle.Secondary : ButtonStyle.Danger),
+      new ButtonBuilder()
+        .setCustomId(CustomIds.AutoModTimeoutRoleClear)
+        .setLabel('Clear Role')
+        .setEmoji('🗑️')
+        .setStyle(ButtonStyle.Danger)
+    );
+
+    return { embeds: [embed], components: [navRow, rolePickerRow, exemptChannelPickerRow, actionButtonRow] };
+  }
 
   // --- TAB: BLACKLIST ---
   if (tab === 'BLACKLIST') {
@@ -308,15 +388,15 @@ async function buildAutoModManagerPanel(guildId, tab = 'FILTERS', selectedRuleKe
     {
       name: 'Active Filter Rules',
       value: [
-        `• **Anti-Invites:** ${fmt(config.anti_invites_enabled)} [Action: \`${config.anti_invites_action}\`]` ,
-        `• **Anti-Links:** ${fmt(config.anti_links_enabled)} [Action: \`${config.anti_links_action}\`]` ,
-        `• **Anti-Spam:** ${fmt(config.anti_spam_enabled)} [${config.anti_spam_max_messages} msgs/${config.anti_spam_seconds}s ➔ \`${config.anti_spam_action}\`]` ,
-        `• **Anti-Duplicates:** ${fmt(config.anti_duplicates_enabled)} [${config.anti_duplicates_max_count} repeats ➔ \`${config.anti_duplicates_action}\`]` ,
-        `• **Anti-Mentions:** ${fmt(config.anti_mentions_enabled)} [Max: ${config.anti_mentions_max_count} pings ➔ \`${config.anti_mentions_action}\`]` ,
-        `• **Anti-Caps:** ${fmt(config.anti_caps_enabled)} [Min: ${config.anti_caps_min_chars} chars, >${config.anti_caps_percent}% ➔ \`${config.anti_caps_action}\`]` ,
-        `• **Anti-Emojis:** ${fmt(config.anti_emojis_enabled)} [Max: ${config.anti_emojis_max_count} ➔ \`${config.anti_emojis_action}\`]` ,
-        `• **Anti-Zalgo:** ${fmt(config.anti_zalgo_enabled)} [Action: \`${config.anti_zalgo_action}\`]` ,
-        `• **Phishing Filter:** ${fmt(config.default_blacklist_enabled)} [Action: \`${config.word_blacklist_action}\`]`
+        `• **Anti-Invites:** ${fmt(config.anti_invites_enabled)} [Action: \`${formatAction(config.anti_invites_action)}\`]` ,
+        `• **Anti-Links:** ${fmt(config.anti_links_enabled)} [Action: \`${formatAction(config.anti_links_action)}\`]` ,
+        `• **Anti-Spam:** ${fmt(config.anti_spam_enabled)} [${config.anti_spam_max_messages} msgs/${config.anti_spam_seconds}s ➔ \`${formatAction(config.anti_spam_action)}\`]` ,
+        `• **Anti-Duplicates:** ${fmt(config.anti_duplicates_enabled)} [${config.anti_duplicates_max_count} repeats ➔ \`${formatAction(config.anti_duplicates_action)}\`]` ,
+        `• **Anti-Mentions:** ${fmt(config.anti_mentions_enabled)} [Max: ${config.anti_mentions_max_count} pings ➔ \`${formatAction(config.anti_mentions_action)}\`]` ,
+        `• **Anti-Caps:** ${fmt(config.anti_caps_enabled)} [Min: ${config.anti_caps_min_chars} chars, >${config.anti_caps_percent}% ➔ \`${formatAction(config.anti_caps_action)}\`]` ,
+        `• **Anti-Emojis:** ${fmt(config.anti_emojis_enabled)} [Max: ${config.anti_emojis_max_count} ➔ \`${formatAction(config.anti_emojis_action)}\`]` ,
+        `• **Anti-Zalgo:** ${fmt(config.anti_zalgo_enabled)} [Action: \`${formatAction(config.anti_zalgo_action)}\`]` ,
+        `• **Phishing Filter:** ${fmt(config.default_blacklist_enabled)} [Action: \`${formatAction(config.word_blacklist_action)}\`]`
       ].join('\n'),
       inline: false
     }
@@ -378,10 +458,11 @@ function buildRuleEditComponents(config, ruleKey) {
   const ruleMeta = RULE_KEYS.find((r) => r.key === ruleKey) || { label: ruleKey, description: '' };
   const isEnabled = ruleKey === 'default_blacklist' ? config.default_blacklist_enabled : config[`${ruleKey}_enabled`];
   const currentAction = ruleKey === 'default_blacklist' ? config.word_blacklist_action : config[`${ruleKey}_action`];
+  const displayAction = formatAction(currentAction || 'DELETE');
 
   const embed = createBaseEmbed({
     title: `⚙️ Rule Settings: ${ruleMeta.label}`,
-    description: `${ruleMeta.description}\n\n**Status:** ${isEnabled ? '`🟢 ENABLED`' : '`🔴 DISABLED`'}\n**Current Action:** \`${currentAction || 'DELETE'}\``,
+    description: `${ruleMeta.description}\n\n**Status:** ${isEnabled ? '`🟢 ENABLED`' : '`🔴 DISABLED`'}\n**Current Action:** \`${displayAction}\``,
     color: isEnabled ? SlickBotColors.SUCCESS : SlickBotColors.MUTED
   });
 

@@ -57,6 +57,9 @@ async function buildModerationPanel(guildId) {
   const moderationLog = logConfig.rows[0];
   const logReady = Boolean(moderationLog?.channel_id && moderationLog.enabled !== false && moderationLog.delivery_mode !== 'DISABLED');
 
+  const timeoutCfg = await query(`SELECT timeout_role_id, timeout_role_mode FROM automod_configs WHERE guild_id = $1 LIMIT 1`, [guildId]).catch(() => ({ rows: [] }));
+  const timeoutRoleId = timeoutCfg.rows[0]?.timeout_role_id;
+
   const embed = createBaseEmbed({
     title: 'SlickBot Core Setup',
     description: [
@@ -66,6 +69,7 @@ async function buildModerationPanel(guildId) {
       '✅ Moderation commands are available through `/mod`.',
       '✅ Case tracking is active. Every moderation action creates or updates a case.',
       '✅ User notes are active through `/note`.',
+      `${timeoutRoleId ? '✅' : '🟠'} Timeout Role: ${timeoutRoleId ? `<@&${timeoutRoleId}>` : 'Not configured'}`,
       `${logReady ? '✅' : '🟠'} Moderation Logs: ${logReady ? `<#${moderationLog.channel_id}>` : 'Not configured'}`,
       '',
       '**Lockdown / Safety**',
@@ -78,6 +82,7 @@ async function buildModerationPanel(guildId) {
       '',
       '**Setup Checklist**',
       logReady ? '• Logging is configured for moderation events.' : '• Select a channel below to assign your moderation log hub.',
+      timeoutRoleId ? '• Timeout role is configured with server channel restrictions.' : '• Configure a timeout role using Quick Setup or the Auto-Mod panel.',
       '• Review staff command access in `/permissions panel`.',
       '• Use `/case panel` to review recent cases and `/note add` for private staff notes.',
       '',
@@ -92,7 +97,7 @@ async function buildModerationPanel(guildId) {
       '',
       'Reverse actions are available through `/mod untimeout` and `/mod unban`.'
     ].join('\n'),
-    color: logReady ? SlickBotColors.PRIMARY : SlickBotColors.WARNING
+    color: logReady && timeoutRoleId ? SlickBotColors.PRIMARY : SlickBotColors.WARNING
   });
 
   const channelSelect = new ActionRowBuilder().addComponents(
@@ -104,7 +109,8 @@ async function buildModerationPanel(guildId) {
 
   const row1 = createButtonRow([
     createPanelButton(`${CustomIds.OnboardingModulePrefix}MODERATION`, 'Quick Setup', ButtonStyle.Success, '🚀'),
-    createPanelButton(CustomIds.CasesRefresh, 'Recent Cases', ButtonStyle.Secondary, '🗂️'),
+    createPanelButton(CustomIds.AutoModRefresh, 'Auto-Mod & Timeouts', ButtonStyle.Primary, '🛡️'),
+    createPanelButton(CustomIds.CasesRefresh, 'Cases', ButtonStyle.Secondary, '🗂️'),
     createPanelButton(CustomIds.LockdownRefresh, 'Lockdown', ButtonStyle.Secondary, '🔒'),
     createPanelButton(CustomIds.TempRolesRefresh, 'Temp Roles', ButtonStyle.Secondary, '⏳')
   ]);

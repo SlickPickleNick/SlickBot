@@ -212,6 +212,13 @@ client.on(Events.GuildCreate, async (guild) => {
   }
 });
 
+client.on(Events.ChannelCreate, async (channel) => {
+  try {
+    await autoMod.handleChannelCreate(channel);
+  } catch (err) {
+    console.error('Failed to apply timeout role permissions on channelCreate:', err);
+  }
+});
 
 client.on(Events.GuildMemberAdd, async (member) => {
   await logger.log({

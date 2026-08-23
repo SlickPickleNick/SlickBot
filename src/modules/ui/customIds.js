@@ -340,7 +340,15 @@ const CustomIds = Object.freeze({
   AutoModRaidLockdownConfirmPrefix: 'slickbot:automod:raid:confirm-lockdown:',
   AutoModRaidDismissPrefix: 'slickbot:automod:raid:dismiss:',
   AutoModResetConfirmPrefix: 'slickbot:automod:reset:confirm:',
-  AutoModResetCancelPrefix: 'slickbot:automod:reset:cancel:'
+  AutoModResetCancelPrefix: 'slickbot:automod:reset:cancel:',
+
+  AutoModTimeoutRoleSelect: 'slickbot:automod:timeout-role-select',
+  AutoModTimeoutRoleCreate: 'slickbot:automod:timeout-role-create',
+  AutoModTimeoutRoleSync: 'slickbot:automod:timeout-role-sync',
+  AutoModTimeoutRoleModeToggle: 'slickbot:automod:timeout-role-mode',
+  AutoModTimeoutRoleLockToggle: 'slickbot:automod:timeout-role-lock-toggle',
+  AutoModTimeoutRoleExemptSelect: 'slickbot:automod:timeout-role-exempt-select',
+  AutoModTimeoutRoleClear: 'slickbot:automod:timeout-role-clear'
 });
 
 module.exports = { CustomIds };
