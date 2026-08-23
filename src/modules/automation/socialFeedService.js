@@ -33,7 +33,7 @@ const PLATFORM_META = Object.freeze({
 });
 
 const DEFAULT_TEMPLATES = Object.freeze({
-  TWITCH_LIVE: '🔴 **{author}** is now LIVE on Twitch playing **{game}**!\n**{title}**\n{url}',
+  TWITCH_LIVE: '🔴 **{author}** is now live on {platform}!',
   TWITCH_OFFLINE: '⚫ **{author}** has ended their stream. Streamed for **{duration}**.',
   YOUTUBE_VIDEO: '📹 **{author}** posted a new YouTube video!\n**{title}**\n{url}',
   YOUTUBE_SHORTS: '⚡ **{author}** uploaded a new YouTube Short!\n**{title}**\n{url}'
@@ -366,7 +366,21 @@ class SocialFeedService {
     return result.rows;
   }
 
-  async resetModule(guildId) {
+  async resetModule(guildId, client = null) {
+    const config = await this.getConfig(guildId).catch(() => null);
+    if (config?.live_directory_channel_id && config?.live_directory_message_id && client) {
+      try {
+        const guild = client.guilds?.cache?.get(guildId);
+        if (guild) {
+          const channel = guild.channels?.cache?.get(config.live_directory_channel_id) || await guild.channels?.fetch?.(config.live_directory_channel_id).catch(() => null);
+          if (channel && channel.isTextBased()) {
+            const msg = await channel.messages?.fetch?.(config.live_directory_message_id).catch(() => null);
+            if (msg) await msg.delete().catch(() => {});
+          }
+        }
+      } catch (_) {}
+    }
+
     const [configBefore, feedsBefore, historyBefore] = await Promise.all([
       query(`SELECT COUNT(*)::int AS count FROM social_feed_configs WHERE guild_id = $1`, [guildId]),
       query(`SELECT COUNT(*)::int AS count FROM social_feeds WHERE guild_id = $1`, [guildId]),
@@ -814,7 +828,20 @@ class SocialFeedService {
             .setTimestamp(endedAt)
             .setFooter({ text: `SlickBot Social Feeds · Stream Ended` });
 
-          await message.edit({ embeds: [embed] }).catch(() => {});
+          const isGlobalPing = feed.ping_role_id === 'everyone' || feed.ping_role_id === guild.id || feed.ping_role_id === 'here';
+          const offlineComponents = [];
+          if (!isGlobalPing) {
+            const buttonRow = new ActionRowBuilder().addComponents(
+              new ButtonBuilder()
+                .setCustomId(`${CustomIds.FeedsToggleAlertsPrefix}${feed.id}`)
+                .setLabel('Get Alerts')
+                .setStyle(ButtonStyle.Secondary)
+                .setEmoji('🔔')
+            );
+            offlineComponents.push(buttonRow);
+          }
+
+          await message.edit({ embeds: [embed], components: offlineComponents }).catch(() => {});
         }
       }
     }
@@ -1107,27 +1134,16 @@ class SocialFeedService {
         '',
         ...lines,
         '',
-        'Click below to tune in and support our community creators!'
+        'Click the channel links above to tune in and support our community creators!'
       ].join('\n'),
       color: SlickBotColors.PRIMARY,
       footer: 'SlickBot Live Hub • Auto-updates when streams go live / offline'
     });
 
-    const buttonRow = new ActionRowBuilder();
-    for (const f of liveFeeds.slice(0, 4)) {
-      const meta = PLATFORM_META[f.platform] || { icon: '🎮' };
-      buttonRow.addComponents(
-        new ButtonBuilder()
-          .setLabel(`Watch ${f.account_name.slice(0, 20)}`)
-          .setURL(f.account_url || meta.defaultUrl(f.account_id))
-          .setStyle(ButtonStyle.Link)
-          .setEmoji(meta.buttonEmoji || meta.icon || '🎮')
-      );
-    }
-    buttonRow.addComponents(
+    const buttonRow = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId(`${CustomIds.FeedsLiveDirectoryRefreshPrefix}${guildId}`)
-        .setLabel('Refresh')
+        .setLabel('Refresh Status')
         .setStyle(ButtonStyle.Secondary)
         .setEmoji('🔄')
     );
@@ -1182,28 +1198,48 @@ class SocialFeedService {
     if (!guild) return false;
 
     const channel = guild.channels.cache.get(config.live_directory_channel_id) || await guild.channels.fetch(config.live_directory_channel_id).catch(() => null);
-    if (!channel || !channel.isTextBased()) return false;
+    if (!channel || !channel.isTextBased()) {
+      await query(
+        `UPDATE social_feed_configs
+         SET live_directory_channel_id = NULL,
+             live_directory_message_id = NULL,
+             updated_at = NOW()
+         WHERE guild_id = $1`,
+        [guildId]
+      );
+      config.live_directory_channel_id = null;
+      config.live_directory_message_id = null;
+      const cached = this.configCache.get(guildId);
+      if (cached) {
+        cached.live_directory_channel_id = null;
+        cached.live_directory_message_id = null;
+      }
+      return false;
+    }
 
     const message = await channel.messages.fetch(config.live_directory_message_id).catch(() => null);
-    const payload = await this.buildLiveDirectoryPayload(guildId, client);
-
-    if (message) {
-      await message.edit(payload).catch(() => {});
-      return true;
-    }
-
-    // If previously tracked message was deleted, send a new one and update reference
-    const newMessage = await channel.send(payload).catch(() => null);
-    if (newMessage) {
-      await newMessage.pin().catch(() => {});
+    if (!message) {
+      // If the directory message was deleted in Discord, do NOT recreate it. Clear the configuration permanently.
       await query(
-        `UPDATE social_feed_configs SET live_directory_message_id = $2, updated_at = NOW() WHERE guild_id = $1`,
-        [guildId, newMessage.id]
+        `UPDATE social_feed_configs
+         SET live_directory_channel_id = NULL,
+             live_directory_message_id = NULL,
+             updated_at = NOW()
+         WHERE guild_id = $1`,
+        [guildId]
       );
-      config.live_directory_message_id = newMessage.id;
+      config.live_directory_channel_id = null;
+      config.live_directory_message_id = null;
       const cached = this.configCache.get(guildId);
-      if (cached) cached.live_directory_message_id = newMessage.id;
+      if (cached) {
+        cached.live_directory_channel_id = null;
+        cached.live_directory_message_id = null;
+      }
+      return false;
     }
+
+    const payload = await this.buildLiveDirectoryPayload(guildId, client);
+    await message.edit(payload).catch(() => {});
     return true;
   }
 
@@ -1229,6 +1265,8 @@ class SocialFeedService {
       [guildId]
     );
 
+    config.live_directory_channel_id = null;
+    config.live_directory_message_id = null;
     const cached = this.configCache.get(guildId);
     if (cached) {
       cached.live_directory_channel_id = null;

@@ -419,7 +419,7 @@ async function handleButton(interaction, ctx) {
       return true;
     }
     if (!(await requireAction(interaction, ctx, ActionKeys.FeedsReset, ModuleKeys.SOCIAL_FEEDS))) return true;
-    const result = await socialFeeds.resetModule(interaction.guildId);
+    const result = await socialFeeds.resetModule(interaction.guildId, ctx.client);
     await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'setup', title: 'Social Feeds Module Reset', body: `Social Feeds module data was reset by ${interaction.user.tag}.`, actorUserId: interaction.user.id, metadata: { before: result.before } }).catch(() => {});
     await updatePanel(interaction, { embeds: [createSuccessEmbed('Social Feeds Reset Complete', 'All tracked social feeds and configurations have been cleared.')], components: [] });
     return true;

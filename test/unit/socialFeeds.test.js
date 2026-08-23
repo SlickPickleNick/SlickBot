@@ -362,6 +362,57 @@ test('Social Feeds Subscriptions and Live Directory System', async (t) => {
     assert.ok(livePayload.embeds[0].data.description.includes('VALORANT'));
     assert.ok(livePayload.embeds[0].data.description.includes('500000000000000001'));
     assert.ok(livePayload.components.length > 0);
+    assert.equal(livePayload.components[0].components.length, 1);
+  });
+
+  await t.test('handleStreamOffline removes watch stream button and retains get alerts button', async () => {
+    let editedPayload = null;
+    db.addHandler('UPDATE social_feeds', () => ({ rows: [], rowCount: 1 }));
+
+    const mockMessage = {
+      id: 'announcement-msg-1',
+      edit: async (payload) => {
+        editedPayload = payload;
+        return mockMessage;
+      }
+    };
+
+    const mockChannel = {
+      id: '300000000000000001',
+      isTextBased: () => true,
+      messages: {
+        fetch: async () => mockMessage
+      }
+    };
+
+    const mockGuild = createMockGuild({ id: guildId });
+    mockGuild.channels = {
+      cache: new Map([[mockChannel.id, mockChannel]])
+    };
+
+    const mockClient = { guilds: { cache: new Map([[guildId, mockGuild]]) } };
+
+    const feed = {
+      id: feedId,
+      guild_id: guildId,
+      platform: 'TWITCH',
+      account_id: 'ninja',
+      account_name: 'Ninja',
+      channel_id: mockChannel.id,
+      last_announcement_channel_id: mockChannel.id,
+      last_announcement_message_id: mockMessage.id,
+      last_status: 'LIVE',
+      live_started_at: new Date(Date.now() - 3600000),
+      ping_role_id: null
+    };
+
+    await service.handleStreamOffline(mockClient, feed, null);
+    assert.ok(editedPayload);
+    assert.ok(editedPayload.embeds);
+    assert.equal(editedPayload.components.length, 1);
+    assert.equal(editedPayload.components[0].components.length, 1);
+    assert.equal(editedPayload.components[0].components[0].data.label, 'Get Alerts');
+    assert.equal(feed.last_status, 'OFFLINE');
   });
 
   await t.test('updateLiveStreamAnnouncement updates message embed and database with latest viewers', async () => {
@@ -491,6 +542,52 @@ test('Social Feeds Subscriptions and Live Directory System', async (t) => {
     assert.ok(editedEmbeds);
   });
 
+  await t.test('updateLiveDirectory clears config and does not resurrect message if deleted in Discord', async () => {
+    service.configCache.clear();
+    let queryRun = false;
+
+    const directoryConfig = {
+      guild_id: guildId,
+      live_directory_channel_id: '300000000000000001',
+      live_directory_message_id: 'deleted-dir-msg'
+    };
+
+    db.addHandler('SELECT * FROM social_feed_configs', () => ({
+      rows: [directoryConfig],
+      rowCount: 1
+    }));
+    db.addHandler('live_directory_channel_id = null', () => {
+      queryRun = true;
+      return { rows: [], rowCount: 1 };
+    });
+
+    let sentNewMessage = false;
+    const mockChannel = {
+      id: '300000000000000001',
+      isTextBased: () => true,
+      messages: {
+        fetch: async () => null // simulate message was deleted
+      },
+      send: async () => {
+        sentNewMessage = true;
+        return { id: 'new-msg' };
+      }
+    };
+
+    const mockGuild = createMockGuild({ id: guildId });
+    mockGuild.channels = {
+      cache: new Map([[mockChannel.id, mockChannel]])
+    };
+
+    const mockClient = { guilds: { cache: new Map([[guildId, mockGuild]]) } };
+    const updated = await service.updateLiveDirectory(guildId, mockClient);
+    assert.equal(updated, false);
+    assert.equal(sentNewMessage, false);
+    assert.equal(queryRun, true);
+    assert.equal(directoryConfig.live_directory_channel_id, null);
+    assert.equal(directoryConfig.live_directory_message_id, null);
+  });
+
   await t.test('sendAnnouncement applies member avatar as thumbnail and auto-updates directory', async () => {
     service.configCache.clear();
     let directoryEdited = false;
@@ -577,6 +674,7 @@ test('Social Feeds Subscriptions and Live Directory System', async (t) => {
     const result = await service.sendAnnouncement(mockClient, feed, updateData, null);
     assert.equal(result.ok, true);
     assert.ok(sentPayload);
+    assert.equal(sentPayload.content, '🔴 **Ninja** is now live on Twitch!');
     assert.ok(sentPayload.embeds[0].data.thumbnail.url.includes('avatar.png'));
     assert.ok(sentPayload.embeds[0].data.footer.text.includes('StreamerNick'));
     assert.equal(directoryEdited, true);
