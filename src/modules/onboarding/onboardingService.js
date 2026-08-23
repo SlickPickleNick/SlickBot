@@ -1456,47 +1456,48 @@ const ONBOARDING_STEPS = Object.freeze({
     }
   ],
 
-  [ModuleKeys.STICKY_MESSAGES]: [
+  [ModuleKeys.AUTOMOD]: [
     {
-      id: 'sticky_channel',
-      moduleKey: ModuleKeys.STICKY_MESSAGES,
-      title: 'Starter Sticky Notice Channel',
-      description: 'Select a channel where you want to pin a persistent guidelines notice.',
+      id: 'automod_raid_alert',
+      moduleKey: ModuleKeys.AUTOMOD,
+      title: 'Anti-Raid Emergency Alert Channel',
+      description: 'Select the moderation or staff channel where emergency join surge alerts and lockdown prompts will be dispatched.',
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildText, ChannelType.GuildAnnouncement],
-      autoCreateLabel: 'Use #rules / #general',
-      autoCreateDescription: 'Creates sample rules sticky notice.',
+      autoCreateLabel: 'Use #mod-log / #staff',
+      autoCreateDescription: 'Sets up emergency raid notification routing.',
       async getCurrent(guild) {
-        const res = await query(`SELECT channel_id FROM sticky_messages WHERE guild_id = $1 LIMIT 1`, [guild.id]).catch(() => ({ rows: [] }));
-        return res.rows[0]?.channel_id ? `<#${res.rows[0].channel_id}>` : null;
+        const res = await query(`SELECT raid_alert_channel_id, alert_channel_id FROM automod_configs WHERE guild_id = $1 LIMIT 1`, [guild.id]).catch(() => ({ rows: [] }));
+        const id = res.rows[0]?.raid_alert_channel_id || res.rows[0]?.alert_channel_id;
+        return id ? `<#${id}>` : null;
       },
       async applyDefault(guild) {
-        const target = guild.channels?.cache?.find((c) => ['rules', 'guidelines', 'general'].includes(c.name.toLowerCase()));
+        const target = guild.channels?.cache?.find((c) => ['mod-log', 'mod-logs', 'staff', 'admin-logs'].includes(c.name.toLowerCase()));
         if (target) {
           await query(
-            `INSERT INTO sticky_messages (guild_id, channel_id, embed_title, embed_description, enabled)
-             VALUES ($1, $2, '📌 Server Guidelines', 'Welcome to the server! Please be respectful and follow Discord Community Guidelines.', true)
-             ON CONFLICT (guild_id, channel_id) DO NOTHING`,
+            `INSERT INTO automod_configs (guild_id, raid_alert_channel_id, enabled, raid_shield_enabled)
+             VALUES ($1, $2, true, true)
+             ON CONFLICT (guild_id) DO UPDATE SET raid_alert_channel_id = EXCLUDED.raid_alert_channel_id, updated_at = NOW()`,
             [guild.id, target.id]
           );
-          return { result: `Created starter sticky in <#${target.id}>` };
+          return { result: `Assigned raid alerts to <#${target.id}>` };
         }
-        return { result: 'Sticky messages module ready' };
+        return { result: 'Auto-Mod & Anti-Raid shield ready' };
       },
       async applySelection(guild, channelId) {
         await query(
-          `INSERT INTO sticky_messages (guild_id, channel_id, embed_title, embed_description, enabled)
-           VALUES ($1, $2, '📌 Channel Guidelines', 'Welcome! Please adhere to our channel rules and guidelines.', true)
-           ON CONFLICT (guild_id, channel_id) DO NOTHING`,
+          `INSERT INTO automod_configs (guild_id, raid_alert_channel_id, enabled, raid_shield_enabled)
+           VALUES ($1, $2, true, true)
+           ON CONFLICT (guild_id) DO UPDATE SET raid_alert_channel_id = EXCLUDED.raid_alert_channel_id, updated_at = NOW()`,
           [guild.id, channelId]
         );
       },
       async autoCreate(guild) {
-        const channel = await autoCreateChannel(guild, { name: 'rules', isPrivate: false, topic: 'Server rules & guidelines' });
+        const channel = await autoCreateChannel(guild, { name: 'mod-log', isPrivate: true, topic: 'Moderation logs and emergency raid alerts' });
         await query(
-          `INSERT INTO sticky_messages (guild_id, channel_id, embed_title, embed_description, enabled)
-           VALUES ($1, $2, '📌 Server Rules', 'Welcome to the server! Please be kind and respectful.', true)
-           ON CONFLICT (guild_id, channel_id) DO NOTHING`,
+          `INSERT INTO automod_configs (guild_id, raid_alert_channel_id, enabled, raid_shield_enabled)
+           VALUES ($1, $2, true, true)
+           ON CONFLICT (guild_id) DO UPDATE SET raid_alert_channel_id = EXCLUDED.raid_alert_channel_id, updated_at = NOW()`,
           [guild.id, channel.id]
         );
         return { created: `#${channel.name}` };
@@ -1510,7 +1511,8 @@ const CATEGORY_ONBOARDING_MAP = Object.freeze({
     ...ONBOARDING_STEPS[ModuleKeys.PERMISSIONS],
     ONBOARDING_STEPS[ModuleKeys.LOGGING][0],
     ...ONBOARDING_STEPS[ModuleKeys.MODERATION],
-    ...ONBOARDING_STEPS[ModuleKeys.LOCKDOWN]
+    ...ONBOARDING_STEPS[ModuleKeys.LOCKDOWN],
+    ...ONBOARDING_STEPS[ModuleKeys.AUTOMOD]
   ],
   SUPPORT: [
     ...ONBOARDING_STEPS[ModuleKeys.TICKETS],
@@ -1528,8 +1530,7 @@ const CATEGORY_ONBOARDING_MAP = Object.freeze({
   AUTOMATION: [
     ...ONBOARDING_STEPS[ModuleKeys.BOT_UPDATES],
     ...ONBOARDING_STEPS[ModuleKeys.SOCIAL_FEEDS],
-    ...ONBOARDING_STEPS[ModuleKeys.SCHEDULED_MESSAGES],
-    ...ONBOARDING_STEPS[ModuleKeys.STICKY_MESSAGES]
+    ...ONBOARDING_STEPS[ModuleKeys.SCHEDULED_MESSAGES]
   ]
 });
 

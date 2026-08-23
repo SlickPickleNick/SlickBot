@@ -1991,31 +1991,72 @@ async function initDatabase() {
   await query(`CREATE INDEX IF NOT EXISTS idx_utility_afk_lookup ON utility_afk_users(guild_id, user_id);`);
 
   await query(`
-    CREATE TABLE IF NOT EXISTS sticky_messages (
-      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
-      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
-      channel_id TEXT NOT NULL,
-      message_content TEXT,
-      embed_title TEXT,
-      embed_description TEXT,
-      embed_color TEXT,
-      embed_footer TEXT,
-      embed_image_url TEXT,
-      embed_thumbnail_url TEXT,
-      last_message_id TEXT,
-      cooldown_seconds INTEGER NOT NULL DEFAULT 10,
-      message_count_threshold INTEGER NOT NULL DEFAULT 5,
-      message_count_since_last INTEGER NOT NULL DEFAULT 0,
-      last_reposted_at TIMESTAMPTZ,
+    CREATE TABLE IF NOT EXISTS automod_configs (
+      guild_id TEXT PRIMARY KEY REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
       enabled BOOLEAN NOT NULL DEFAULT true,
-      created_by_user_id TEXT,
+      anti_invites_enabled BOOLEAN NOT NULL DEFAULT true,
+      anti_invites_action TEXT NOT NULL DEFAULT 'DELETE',
+      anti_invites_timeout_seconds INTEGER NOT NULL DEFAULT 0,
+      anti_links_enabled BOOLEAN NOT NULL DEFAULT false,
+      anti_links_action TEXT NOT NULL DEFAULT 'DELETE',
+      anti_links_timeout_seconds INTEGER NOT NULL DEFAULT 0,
+      anti_spam_enabled BOOLEAN NOT NULL DEFAULT true,
+      anti_spam_action TEXT NOT NULL DEFAULT 'DELETE',
+      anti_spam_max_messages INTEGER NOT NULL DEFAULT 5,
+      anti_spam_seconds INTEGER NOT NULL DEFAULT 4,
+      anti_spam_timeout_seconds INTEGER NOT NULL DEFAULT 60,
+      anti_duplicates_enabled BOOLEAN NOT NULL DEFAULT true,
+      anti_duplicates_action TEXT NOT NULL DEFAULT 'DELETE',
+      anti_duplicates_max_count INTEGER NOT NULL DEFAULT 3,
+      anti_duplicates_seconds INTEGER NOT NULL DEFAULT 10,
+      anti_mentions_enabled BOOLEAN NOT NULL DEFAULT true,
+      anti_mentions_action TEXT NOT NULL DEFAULT 'DELETE',
+      anti_mentions_max_count INTEGER NOT NULL DEFAULT 5,
+      anti_caps_enabled BOOLEAN NOT NULL DEFAULT false,
+      anti_caps_action TEXT NOT NULL DEFAULT 'DELETE',
+      anti_caps_min_chars INTEGER NOT NULL DEFAULT 12,
+      anti_caps_percent INTEGER NOT NULL DEFAULT 70,
+      anti_emojis_enabled BOOLEAN NOT NULL DEFAULT false,
+      anti_emojis_action TEXT NOT NULL DEFAULT 'DELETE',
+      anti_emojis_max_count INTEGER NOT NULL DEFAULT 8,
+      anti_zalgo_enabled BOOLEAN NOT NULL DEFAULT true,
+      anti_zalgo_action TEXT NOT NULL DEFAULT 'DELETE',
+      default_blacklist_enabled BOOLEAN NOT NULL DEFAULT true,
+      word_blacklist_action TEXT NOT NULL DEFAULT 'DELETE',
+      word_blacklist_timeout_seconds INTEGER NOT NULL DEFAULT 0,
+      exempt_roles TEXT[] NOT NULL DEFAULT '{}',
+      exempt_channels TEXT[] NOT NULL DEFAULT '{}',
+      exempt_users TEXT[] NOT NULL DEFAULT '{}',
+      whitelisted_domains TEXT[] NOT NULL DEFAULT '{"youtube.com", "youtu.be", "twitch.tv", "twitter.com", "x.com", "github.com", "tenor.com", "giphy.com"}',
+      whitelisted_invites TEXT[] NOT NULL DEFAULT '{}',
+      dm_notification_enabled BOOLEAN NOT NULL DEFAULT true,
+      alert_channel_id TEXT,
+      raid_shield_enabled BOOLEAN NOT NULL DEFAULT true,
+      raid_join_threshold INTEGER NOT NULL DEFAULT 8,
+      raid_join_seconds INTEGER NOT NULL DEFAULT 10,
+      raid_min_account_age_hours INTEGER NOT NULL DEFAULT 24,
+      raid_alert_channel_id TEXT,
+      last_raid_alert_at TIMESTAMPTZ,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      UNIQUE (guild_id, channel_id)
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
 
-  await query(`CREATE INDEX IF NOT EXISTS idx_sticky_messages_guild_channel ON sticky_messages(guild_id, channel_id);`);
+  await query(`
+    CREATE TABLE IF NOT EXISTS automod_blacklists (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      pattern TEXT NOT NULL,
+      match_type TEXT NOT NULL DEFAULT 'WORD',
+      severity TEXT NOT NULL DEFAULT 'DELETE',
+      created_by_user_id TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await query(`CREATE INDEX IF NOT EXISTS idx_automod_configs_guild ON automod_configs(guild_id);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_automod_blacklists_guild ON automod_blacklists(guild_id);`);
 }
 
 if (require.main === module) {

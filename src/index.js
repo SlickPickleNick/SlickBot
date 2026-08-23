@@ -25,7 +25,7 @@ const { FaqService } = require('./modules/community/faqService');
 const { TemporaryRoleService } = require('./modules/moderation/tempRoleService');
 const { AchievementService, ACHIEVEMENT_KEYS } = require('./modules/community/achievementService');
 const { SocialFeedService } = require('./modules/automation/socialFeedService');
-const { StickyMessageService } = require('./modules/automation/stickyMessageService');
+const { AutoModService } = require('./modules/moderation/autoModService');
 const { UtilityService } = require('./modules/utility/utilityService');
 const { handleReactionRole, syncAllPublishedReactionPanels } = require('./modules/community/rolePanelService');
 const { handleComponentInteraction } = require('./services/interactionRouter');
@@ -65,7 +65,7 @@ const faq = new FaqService();
 const tempRoles = new TemporaryRoleService();
 const achievements = new AchievementService();
 const socialFeeds = new SocialFeedService();
-const stickyMessages = new StickyMessageService();
+const autoMod = new AutoModService();
 const utility = new UtilityService();
 const healthServer = startHealthServer(client);
 
@@ -524,6 +524,15 @@ client.on(Events.MessageCreate, async (message) => {
   if (message.guild) {
     if (await permissions.isIgnored(message.guild.id, message.author.id).catch(() => false)) return;
 
+    const autoModEnabled = await permissions.isModuleEnabled(message.guild.id, ModuleKeys.AUTOMOD).catch(() => false);
+    if (autoModEnabled) {
+      const autoModResult = await autoMod.handleMessage(message, logger, moderation).catch((error) => {
+        console.error('Failed to process AutoMod message check:', error);
+        return { handled: false };
+      });
+      if (autoModResult?.handled) return;
+    }
+
     let countingResult = { handled: false, suppressNormalXp: false };
     const activeCountingConfig = await communityGames.getActiveCountingConfigForChannel(message.guild.id, message.channelId).catch(() => null);
     if (activeCountingConfig) {
@@ -571,11 +580,6 @@ client.on(Events.MessageCreate, async (message) => {
     const utilityEnabled = await permissions.isModuleEnabled(message.guild.id, ModuleKeys.UTILITY).catch(() => false);
     if (utilityEnabled) {
       await utility.handleMessageAfkCheck(message).catch((error) => console.error('Failed to process AFK check:', error));
-    }
-
-    const stickyEnabled = await permissions.isModuleEnabled(message.guild.id, ModuleKeys.STICKY_MESSAGES).catch(() => false);
-    if (stickyEnabled) {
-      await stickyMessages.handleMessage(message, logger).catch((error) => console.error('Failed to process sticky message:', error));
     }
 
     const levelingEnabled = await permissions.isModuleEnabled(message.guild.id, 'LEVELING').catch(() => false);
@@ -965,6 +969,16 @@ client.on(Events.AutoModerationActionExecution, async (execution) => {
     color: 0xed4245,
     metadata: { userId: execution.userId, ruleTriggerType: execution.ruleTriggerType, action: execution.action }
   }).catch((error) => console.error('Failed to log automod execution:', error));
+});
+
+client.on(Events.GuildMemberAdd, async (member) => {
+  if (!member.guild) return;
+  const autoModEnabled = await permissions.isModuleEnabled(member.guild.id, ModuleKeys.AUTOMOD).catch(() => false);
+  if (autoModEnabled) {
+    await autoMod.handleGuildMemberAdd(member, logger, client).catch((error) => {
+      console.error('Failed to process AutoMod member join:', error);
+    });
+  }
 });
 
 client.on(Events.MessageReactionAdd, async (reaction, user) => {

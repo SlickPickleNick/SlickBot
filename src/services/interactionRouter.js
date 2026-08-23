@@ -33,14 +33,9 @@ const { FaqService } = require('../modules/community/faqService');
 const { SuggestionService } = require('../modules/community/suggestionService');
 const { ReferralService, buildReferralsConfigModal } = require('../modules/community/referralService');
 const { TemporaryRoleService } = require('../modules/moderation/tempRoleService');
-const { AchievementService, ACHIEVEMENT_KEYS } = require('../modules/community/achievementService');
-const { LockdownService } = require('../modules/safety/lockdownService');
+const { LockdownService, DEFAULT_PRESET } = require('../modules/safety/lockdownService');
 const { SocialFeedService, PLATFORM_META } = require('../modules/automation/socialFeedService');
-const {
-  StickyMessageService,
-  buildStickyCreateModal,
-  buildStickyEditModal
-} = require('../modules/automation/stickyMessageService');
+const { AutoModService, buildBlacklistAddModal } = require('../modules/moderation/autoModService');
 const { BotUpdatesService } = require('../modules/status/botUpdatesService');
 const { buildRoleManagerPanel, toggleRole } = require('../modules/community/rolePanelService');
 const { JoinCreateService } = require('../modules/voice/joinCreateService');
@@ -86,10 +81,9 @@ const faq = new FaqService();
 const suggestions = new SuggestionService();
 const referrals = new ReferralService();
 const tempRoles = new TemporaryRoleService();
-const achievements = new AchievementService();
 const lockdown = new LockdownService();
 const socialFeeds = new SocialFeedService();
-const stickyMessages = new StickyMessageService();
+const autoMod = new AutoModService();
 const botUpdates = new BotUpdatesService();
 const onboarding = new OnboardingService();
 const utility = new UtilityService();
@@ -555,88 +549,145 @@ async function handleButton(interaction, ctx) {
     return true;
   }
 
-  if (id === CustomIds.StickyManager || id === CustomIds.StickyRefresh) {
-    if (!(await requireAction(interaction, ctx, ActionKeys.StickyView, ModuleKeys.STICKY_MESSAGES))) return true;
-    await updatePanel(interaction, await stickyMessages.buildManagerPanel(interaction.guildId));
+  // --- Auto-Mod & Anti-Raid Interactions ---
+
+  if (id === CustomIds.AutoModManager || id === CustomIds.AutoModRefresh) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.AutoModView, ModuleKeys.AUTOMOD))) return true;
+    await updatePanel(interaction, await autoMod.buildManagerPanel(interaction.guildId, 'FILTERS'));
     return true;
   }
 
-  if (id === CustomIds.StickyCreateModal) {
-    if (!(await requireAction(interaction, ctx, ActionKeys.StickyManage, ModuleKeys.STICKY_MESSAGES))) return true;
-    await interaction.showModal(buildStickyCreateModal(interaction.channelId));
+  if (id.startsWith(CustomIds.AutoModTabPrefix)) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.AutoModView, ModuleKeys.AUTOMOD))) return true;
+    const tab = id.slice(CustomIds.AutoModTabPrefix.length);
+    await updatePanel(interaction, await autoMod.buildManagerPanel(interaction.guildId, tab));
     return true;
   }
 
-  if (id.startsWith(CustomIds.StickyEditModalPrefix)) {
-    if (!(await requireAction(interaction, ctx, ActionKeys.StickyManage, ModuleKeys.STICKY_MESSAGES))) return true;
-    const channelId = id.slice(CustomIds.StickyEditModalPrefix.length);
-    const sticky = await stickyMessages.getSticky(interaction.guildId, channelId);
-    if (!sticky) {
-      await replyPrivate(interaction, { embeds: [createWarningEmbed('Sticky Not Found', 'No sticky message found for that channel.')] });
-      return true;
+  if (id.startsWith(CustomIds.AutoModToggleRulePrefix)) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.AutoModManage, ModuleKeys.AUTOMOD))) return true;
+    const ruleKey = id.slice(CustomIds.AutoModToggleRulePrefix.length);
+    const config = await autoMod.getConfig(interaction.guildId);
+
+    const updates = {};
+    if (ruleKey === 'master') {
+      updates.enabled = !config.enabled;
+    } else if (ruleKey === 'default_blacklist') {
+      updates.default_blacklist_enabled = !config.default_blacklist_enabled;
+    } else {
+      const current = config[`${ruleKey}_enabled`];
+      updates[`${ruleKey}_enabled`] = !current;
     }
-    await interaction.showModal(buildStickyEditModal(sticky));
+
+    await autoMod.upsertConfig(interaction.guildId, updates);
+    await updatePanel(interaction, await autoMod.buildManagerPanel(interaction.guildId, ruleKey === 'default_blacklist' ? 'BLACKLIST' : 'FILTERS'));
     return true;
   }
 
-  if (id.startsWith(CustomIds.StickyTogglePrefix)) {
-    if (!(await requireAction(interaction, ctx, ActionKeys.StickyManage, ModuleKeys.STICKY_MESSAGES))) return true;
-    const channelId = id.slice(CustomIds.StickyTogglePrefix.length);
-    const toggled = await stickyMessages.toggleSticky(interaction.guildId, channelId, ctx.client);
-    if (!toggled) {
-      await replyPrivate(interaction, { embeds: [createWarningEmbed('Sticky Not Found', 'No sticky message found for that channel.')] });
-      return true;
-    }
-    await updatePanel(interaction, await stickyMessages.buildManagerPanel(interaction.guildId));
+  if (id === CustomIds.AutoModBlacklistAddModal) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.AutoModBlacklist, ModuleKeys.AUTOMOD))) return true;
+    await interaction.showModal(buildBlacklistAddModal());
     return true;
   }
 
-  if (id.startsWith(CustomIds.StickyDeletePrefix)) {
-    if (!(await requireAction(interaction, ctx, ActionKeys.StickyManage, ModuleKeys.STICKY_MESSAGES))) return true;
-    const channelId = id.slice(CustomIds.StickyDeletePrefix.length);
-    await stickyMessages.removeSticky(interaction.guildId, channelId, ctx.client);
-    await updatePanel(interaction, await stickyMessages.buildManagerPanel(interaction.guildId));
+  if (id === CustomIds.AutoModRaidShieldToggle) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.AutoModRaid, ModuleKeys.AUTOMOD))) return true;
+    const config = await autoMod.getConfig(interaction.guildId);
+    await autoMod.upsertConfig(interaction.guildId, { raid_shield_enabled: !config.raid_shield_enabled });
+    await updatePanel(interaction, await autoMod.buildManagerPanel(interaction.guildId, 'RAID'));
     return true;
   }
 
-  if (id.startsWith(CustomIds.StickyRepostPrefix)) {
-    if (!(await requireAction(interaction, ctx, ActionKeys.StickyRepost, ModuleKeys.STICKY_MESSAGES))) return true;
-    const channelId = id.slice(CustomIds.StickyRepostPrefix.length);
-    const reposted = await stickyMessages.repostSticky(interaction.guildId, channelId, ctx.client, { force: true });
-    if (!reposted) {
-      await replyPrivate(interaction, { embeds: [createWarningEmbed('Repost Failed', 'Could not repost sticky notice in that channel.')] });
-      return true;
-    }
-    await replyPrivate(interaction, { embeds: [createSuccessEmbed('Sticky Reposted', `Successfully reposted sticky message in <#${channelId}>.`)] });
-    return true;
-  }
-
-  if (id.startsWith(CustomIds.StickyResetConfirmPrefix)) {
-    const requestedByUserId = id.slice(CustomIds.StickyResetConfirmPrefix.length);
-    if (requestedByUserId !== interaction.user.id) {
-      await replyPrivate(interaction, { embeds: [createWarningEmbed('Confirmation Not Yours', 'Only the user who opened this reset confirmation can confirm it.')] });
-      return true;
-    }
-    if (!(await requireAction(interaction, ctx, ActionKeys.StickyReset, ModuleKeys.STICKY_MESSAGES))) return true;
-    const result = await stickyMessages.resetModule(interaction.guildId, ctx.client);
-    await ctx.logger.log({
-      guildId: interaction.guildId,
-      eventKey: 'sticky-reset',
-      title: 'Sticky Messages Reset',
-      body: `All sticky messages were reset and deleted by ${interaction.user.tag}.`,
-      actorUserId: interaction.user.id,
-      metadata: { deletedCount: result.deletedCount }
-    }).catch(() => {});
+  if (id.startsWith(CustomIds.AutoModRaidDismissPrefix)) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.AutoModView, ModuleKeys.AUTOMOD))) return true;
     await updatePanel(interaction, {
-      embeds: [createSuccessEmbed('Sticky Messages Reset Complete', `Successfully removed and unpinned ${result.deletedCount} sticky message(s).`)],
+      embeds: [createSuccessEmbed('Raid Alert Dismissed', `Alert dismissed by <@${interaction.user.id}>. Server status normal.`)],
       components: []
     });
     return true;
   }
 
-  if (id.startsWith(CustomIds.StickyResetCancelPrefix)) {
+  if (id.startsWith(CustomIds.AutoModRaidLockdownPromptPrefix)) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.AutoModEnactLockdown, ModuleKeys.AUTOMOD))) return true;
+    const confirmRow = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`${CustomIds.AutoModRaidLockdownConfirmPrefix}${interaction.guildId}`)
+        .setLabel('Confirm Emergency Lockdown')
+        .setEmoji('🚨')
+        .setStyle(ButtonStyle.Danger),
+      new ButtonBuilder()
+        .setCustomId(`${CustomIds.AutoModRaidDismissPrefix}${interaction.guildId}`)
+        .setLabel('Cancel / Dismiss')
+        .setStyle(ButtonStyle.Secondary)
+    );
+
+    await replyPrivate(interaction, {
+      embeds: [
+        createWarningEmbed(
+          '🚨 Confirm Emergency Lockdown',
+          `Are you sure you want to initiate an emergency lockdown for **${interaction.guild.name}**?\n\nThis will lock down all controlled channels in the \`${DEFAULT_PRESET}\` preset to stop raid activity.`
+        )
+      ],
+      components: [confirmRow]
+    });
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.AutoModRaidLockdownConfirmPrefix)) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.LockdownManage, ModuleKeys.LOCKDOWN))) return true;
+    const result = await lockdown.startLockdown({
+      guild: interaction.guild,
+      presetName: DEFAULT_PRESET,
+      actorUser: interaction.user,
+      reason: '[Anti-Raid] Moderator initiated emergency lockdown due to detected join surge.',
+      logger: ctx.logger
+    });
+
+    if (!result.ok) {
+      await updatePanel(interaction, {
+        embeds: [createErrorEmbed('Lockdown Failed', result.reason || 'Could not start lockdown.')],
+        components: []
+      });
+      return true;
+    }
+
     await updatePanel(interaction, {
-      embeds: [createSuccessEmbed('Reset Cancelled', 'No sticky messages were modified.')],
+      embeds: [
+        createSuccessEmbed(
+          '🚨 Emergency Lockdown Activated',
+          `Successfully enacted emergency lockdown across **${result.session.channel_count} channel(s)** by <@${interaction.user.id}>.\nUse \`/lockdown end\` to restore normal permissions once safe.`
+        )
+      ],
+      components: []
+    });
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.AutoModResetConfirmPrefix)) {
+    const requestedByUserId = id.slice(CustomIds.AutoModResetConfirmPrefix.length);
+    if (requestedByUserId !== interaction.user.id) {
+      await replyPrivate(interaction, { embeds: [createWarningEmbed('Confirmation Not Yours', 'Only the user who opened this reset confirmation can confirm it.')] });
+      return true;
+    }
+    if (!(await requireAction(interaction, ctx, ActionKeys.AutoModReset, ModuleKeys.AUTOMOD))) return true;
+    await autoMod.resetModule(interaction.guildId);
+    await ctx.logger.log({
+      guildId: interaction.guildId,
+      eventKey: 'automod-reset',
+      title: 'Auto-Mod Reset',
+      body: `Auto-Mod settings and custom blacklists were reset to default by ${interaction.user.tag}.`,
+      actorUserId: interaction.user.id
+    }).catch(() => {});
+    await updatePanel(interaction, {
+      embeds: [createSuccessEmbed('Auto-Mod Reset Complete', 'Successfully reset all Auto-Mod rules, blacklists, and exemptions back to server defaults.')],
+      components: []
+    });
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.AutoModResetCancelPrefix)) {
+    await updatePanel(interaction, {
+      embeds: [createSuccessEmbed('Reset Cancelled', 'Auto-Mod settings were not changed.')],
       components: []
     });
     return true;
@@ -2984,87 +3035,35 @@ async function handleModal(interaction, ctx) {
     return true;
   }
 
-  if (id === CustomIds.StickyCreateModal) {
-    if (!(await requireAction(interaction, ctx, ActionKeys.StickyManage, ModuleKeys.STICKY_MESSAGES))) return true;
-    const rawChannel = interaction.fields.getTextInputValue('channel_id');
-    const channelId = extractUserId(rawChannel) || rawChannel.replace(/[<#>]/g, '').trim();
-    const channel = interaction.guild.channels.cache.get(channelId) || await interaction.guild.channels.fetch(channelId).catch(() => null);
-    if (!channel || !channel.isTextBased()) {
-      return replyPrivate(interaction, { embeds: [createWarningEmbed('Invalid Channel', 'Please provide a valid text or announcement channel ID in this server.')] });
-    }
+  if (id === CustomIds.AutoModBlacklistAddModal) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.AutoModBlacklist, ModuleKeys.AUTOMOD))) return true;
+    const pattern = interaction.fields.getTextInputValue('pattern');
+    const matchType = interaction.fields.getTextInputValue('match_type') || 'WORD';
+    const severity = interaction.fields.getTextInputValue('severity') || 'DELETE';
 
-    const title = interaction.fields.getTextInputValue('embed_title') || null;
-    const desc = interaction.fields.getTextInputValue('embed_description') || null;
-    const message = interaction.fields.getTextInputValue('message_content') || null;
-    const cooldown = interaction.fields.getTextInputValue('cooldown_seconds') || null;
-
-    const result = await stickyMessages.setSticky({
-      guildId: interaction.guildId,
-      channelId: channel.id,
-      messageContent: message,
-      embedTitle: title,
-      embedDescription: desc,
-      cooldownSeconds: cooldown,
-      createdByUserId: interaction.user.id,
-      client: ctx.client
-    });
-
-    if (!result.ok) {
-      return replyPrivate(interaction, { embeds: [createWarningEmbed('Sticky Notice Failed', result.reason || 'Could not configure sticky notice.')] });
-    }
-
-    await ctx.logger.log({
-      guildId: interaction.guildId,
-      eventKey: 'sticky-create',
-      title: 'Sticky Message Configured',
-      body: `Configured sticky message in <#${channel.id}> by ${interaction.user.tag}.`,
-      actorUserId: interaction.user.id,
-      metadata: { channelId: channel.id, sticky: result.sticky }
-    }).catch(() => {});
-
-    await replyPrivate(interaction, {
-      embeds: [createSuccessEmbed('Sticky Message Created', `Successfully configured and posted sticky message in <#${channel.id}>!`)]
-    });
-    return true;
-  }
-
-  if (id.startsWith(CustomIds.StickyEditModalPrefix)) {
-    if (!(await requireAction(interaction, ctx, ActionKeys.StickyManage, ModuleKeys.STICKY_MESSAGES))) return true;
-    const channelId = id.slice(CustomIds.StickyEditModalPrefix.length);
-    const title = interaction.fields.getTextInputValue('embed_title') || null;
-    const desc = interaction.fields.getTextInputValue('embed_description') || null;
-    const message = interaction.fields.getTextInputValue('message_content') || null;
-    const cooldown = interaction.fields.getTextInputValue('cooldown_seconds') || null;
-    const threshold = interaction.fields.getTextInputValue('threshold_messages') || null;
-
-    const updated = await stickyMessages.editSticky(
+    const result = await autoMod.addBlacklistEntry(
       interaction.guildId,
-      channelId,
-      {
-        embedTitle: title,
-        embedDescription: desc,
-        messageContent: message,
-        cooldownSeconds: cooldown,
-        messageCountThreshold: threshold
-      },
-      ctx.client
+      pattern,
+      matchType,
+      severity,
+      interaction.user.id
     );
 
-    if (!updated) {
-      return replyPrivate(interaction, { embeds: [createWarningEmbed('Sticky Not Found', 'Could not find the sticky message for that channel.')] });
+    if (!result.ok) {
+      return replyPrivate(interaction, { embeds: [createWarningEmbed('Add Failed', result.reason || 'Could not add blacklist pattern.')] });
     }
 
     await ctx.logger.log({
       guildId: interaction.guildId,
-      eventKey: 'sticky-update',
-      title: 'Sticky Message Updated',
-      body: `Updated sticky message in <#${channelId}> by ${interaction.user.tag}.`,
+      eventKey: 'automod-blacklist-add',
+      title: 'Blacklist Pattern Added',
+      body: `Added \`${pattern}\` [${matchType}] ➔ \`${severity}\` by ${interaction.user.tag}.`,
       actorUserId: interaction.user.id,
-      metadata: { channelId, sticky: updated }
+      metadata: { pattern, matchType, severity }
     }).catch(() => {});
 
     await replyPrivate(interaction, {
-      embeds: [createSuccessEmbed('Sticky Message Updated', `Successfully updated the sticky notice for <#${channelId}>.`)]
+      embeds: [createSuccessEmbed('Blacklist Entry Added', `Added \`${pattern}\` [${matchType}] to the Auto-Mod blacklist.`)]
     });
     return true;
   }

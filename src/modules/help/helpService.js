@@ -590,20 +590,20 @@ const HELP_CATALOG = Object.freeze([
     ]
   },
   {
-    name: 'sticky',
-    command: '/sticky',
-    syntax: '/sticky <set|edit|remove|list|repost|toggle|manager|reset>',
-    description: 'Keep important guidelines, rules, and announcements pinned at the bottom of active text channels with automated reposting.',
-    category: 'AUTOMATION',
-    moduleKey: ModuleKeys.STICKY_MESSAGES,
-    actionKey: ActionKeys.StickyManage,
-    level: PermissionLevels.ADMIN,
+    name: 'automod',
+    command: '/automod',
+    syntax: '/automod <manager|status|rule|blacklist-add|blacklist-remove|blacklist-list|whitelist-add|whitelist-remove|raid|reset>',
+    description: 'Automated spam filtering, invite/link blocking, mass mention limits, custom word blacklists, and anti-raid join velocity monitoring with moderator lockdown prompts.',
+    category: 'CORE',
+    moduleKey: ModuleKeys.AUTOMOD,
+    actionKey: ActionKeys.AutoModManage,
+    level: PermissionLevels.SENIOR_MODERATOR,
     examples: [
-      '/sticky set channel:#general title:"📌 Chat Guidelines" description:"Be respectful and follow Discord TOS."',
-      '/sticky repost channel:#general',
-      '/sticky toggle channel:#general',
-      '/sticky manager',
-      '/sticky list'
+      '/automod manager',
+      '/automod rule filter:"Anti-Invites" enabled:true action:"Delete Message"',
+      '/automod blacklist-add pattern:"scam-link" match_type:"Exact Word Match" action:"Timeout Member & Delete"',
+      '/automod whitelist-add category:"Role Exemption" value:@VIP',
+      '/automod raid enabled:true join_threshold:8 join_seconds:10'
     ]
   }
 ]);

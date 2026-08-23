@@ -56,10 +56,10 @@ const STATUS_META = Object.freeze({
 });
 
 const MODULE_CATEGORIES = Object.freeze([
-  { key: 'CORE', label: 'Core Setup', modules: [ModuleKeys.PERMISSIONS, ModuleKeys.LOGGING, ModuleKeys.STATUS, ModuleKeys.MODERATION, ModuleKeys.LOCKDOWN, ModuleKeys.TEMP_ROLES, ModuleKeys.UTILITY] },
+  { key: 'CORE', label: 'Core Setup', modules: [ModuleKeys.PERMISSIONS, ModuleKeys.LOGGING, ModuleKeys.STATUS, ModuleKeys.MODERATION, ModuleKeys.LOCKDOWN, ModuleKeys.AUTOMOD, ModuleKeys.TEMP_ROLES, ModuleKeys.UTILITY] },
   { key: 'SUPPORT', label: 'Support Systems', modules: [ModuleKeys.TICKETS, ModuleKeys.REPORTS, ModuleKeys.APPLICATIONS, ModuleKeys.APPEALS] },
   { key: 'COMMUNITY', label: 'Community Systems', modules: [ModuleKeys.WELCOME, ModuleKeys.REACTION_ROLES, ModuleKeys.GIVEAWAYS, ModuleKeys.BIRTHDAYS, ModuleKeys.LEVELING, ModuleKeys.COMMUNITY_GAMES, ModuleKeys.FAQ, ModuleKeys.SUGGESTIONS, ModuleKeys.REFERRALS, ModuleKeys.ACHIEVEMENTS, ModuleKeys.SERVER_STATS, ModuleKeys.CUSTOM_COMMANDS, ModuleKeys.JOIN_TO_CREATE] },
-  { key: 'AUTOMATION', label: 'Automation Systems', modules: [ModuleKeys.SCHEDULED_MESSAGES, ModuleKeys.BOT_UPDATES, ModuleKeys.SOCIAL_FEEDS, ModuleKeys.STICKY_MESSAGES] },
+  { key: 'AUTOMATION', label: 'Automation Systems', modules: [ModuleKeys.SCHEDULED_MESSAGES, ModuleKeys.BOT_UPDATES, ModuleKeys.SOCIAL_FEEDS] },
   { key: 'BACKLOG', label: 'Coming Soon', modules: [] }
 ]);
 
@@ -226,11 +226,11 @@ const MODULE_SETUP_CATALOG = Object.freeze({
     nextSteps: ['Run `/utility setup` to configure default channels and limits.', 'Use `/purge` to clean up chat messages.', 'Use `/userinfo` or right-click a user to view detailed profile cards.', 'Use `/poll create` to launch interactive votes.'],
     usefulCommands: ['/utility manager', '/utility setup', '/purge', '/userinfo', '/serverinfo', '/avatar', '/banner', '/poll create', '/remind set', '/embed create', '/afk', '/snipe']
   },
-  [ModuleKeys.STICKY_MESSAGES]: {
-    name: 'Sticky Messages', category: 'Automation Systems', description: 'Keeps important rules, guidelines, or announcements pinned as the newest message at the bottom of active text channels.',
-    managerCommand: '/sticky manager', setupCommand: '/sticky set',
-    nextSteps: ['Run `/sticky set` in a channel with guidelines or rules.', 'Use `/sticky manager` to review active channel stickies and cooldown throttles.', 'Use `/sticky edit` to adjust message content or colors.'],
-    usefulCommands: ['/sticky manager', '/sticky set', '/sticky edit', '/sticky repost', '/sticky toggle', '/sticky list', '/sticky remove']
+  [ModuleKeys.AUTOMOD]: {
+    name: 'Auto-Mod & Anti-Raid', category: 'Core Setup', description: 'Automated spam filtering, invite/link blocking, mass pings, custom blacklists, and anti-raid join velocity monitoring with moderator lockdown prompts.',
+    managerCommand: '/automod manager', setupCommand: '/automod rule',
+    nextSteps: ['Run `/automod manager` to review active filter rules.', 'Use `/automod blacklist-add` to add prohibited keywords.', 'Configure join surge velocity with `/automod raid`.'],
+    usefulCommands: ['/automod manager', '/automod status', '/automod rule', '/automod blacklist-add', '/automod blacklist-list', '/automod whitelist-add', '/automod raid', '/automod reset']
   }
 });
 
@@ -825,16 +825,11 @@ async function getModuleStatus(guildId, row) {
     return { moduleKey: row.module_key, core: false, state: 'READY', emoji: '✅', label: 'Ready', note: 'Essential tools active' };
   }
 
-  if (row.module_key === 'STICKY_MESSAGES') {
-    const res = await query(
-      `SELECT COUNT(*)::int AS total, COUNT(*) FILTER (WHERE enabled = true)::int AS active FROM sticky_messages WHERE guild_id = $1`,
-      [guildId]
-    ).catch(() => ({ rows: [{ total: 0, active: 0 }] }));
-    const total = res.rows[0]?.total || 0;
-    const active = res.rows[0]?.active || 0;
-    if (active > 0) return { moduleKey: row.module_key, core: false, state: 'READY', emoji: '✅', label: 'Ready', note: `${active}/${total} sticky message(s)` };
-    if (total > 0) return { moduleKey: row.module_key, core: false, state: 'PARTIAL', emoji: '🟠', label: 'Partially Configured', note: `${total} paused sticky message(s)` };
-    return { moduleKey: row.module_key, core: false, state: 'NEEDS_CONFIG', emoji: '🟣', label: 'Needs Setup', note: 'Run /sticky set' };
+  if (row.module_key === 'AUTOMOD') {
+    const res = await query(`SELECT enabled, raid_shield_enabled, default_blacklist_enabled FROM automod_configs WHERE guild_id = $1 LIMIT 1`, [guildId]).catch(() => ({ rows: [] }));
+    const config = res.rows[0];
+    if (config && config.enabled === false) return { moduleKey: row.module_key, core: false, state: 'DISABLED', emoji: '⏸️', label: 'Disabled', note: 'Auto-Mod protection paused' };
+    return { moduleKey: row.module_key, core: false, state: 'READY', emoji: '✅', label: 'Ready', note: 'Filters & Raid Shield active' };
   }
 
   return { moduleKey: row.module_key, core: false, state: 'PARTIAL', emoji: '🟠', label: 'Partially Configured', note: 'Module shell only' };
