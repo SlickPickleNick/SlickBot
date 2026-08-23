@@ -296,9 +296,23 @@ class SocialFeedService {
     return result.rows[0] || null;
   }
 
-  async toggleSubscription(guildId, feedId, userId) {
+  async getEffectivePingRoleId(guildId, feed) {
+    if (feed?.ping_role_id) return feed.ping_role_id;
+    const config = await this.getConfig(guildId).catch(() => null);
+    return config?.default_ping_role_id || null;
+  }
+
+  async toggleSubscription(guildId, feedId, userId, member = null) {
     const feed = await this.getFeed(guildId, feedId);
     if (!feed) return { ok: false, reason: 'Feed not found' };
+
+    const effectiveRoleId = await this.getEffectivePingRoleId(guildId, feed);
+    const isValidRole = Boolean(
+      effectiveRoleId &&
+      effectiveRoleId !== 'everyone' &&
+      effectiveRoleId !== 'here' &&
+      effectiveRoleId !== guildId
+    );
 
     const existing = await query(
       `SELECT id FROM social_feed_subscribers WHERE feed_id = $1 AND user_id = $2 LIMIT 1`,
@@ -310,7 +324,23 @@ class SocialFeedService {
         `DELETE FROM social_feed_subscribers WHERE feed_id = $1 AND user_id = $2`,
         [feed.id, userId]
       );
-      return { ok: true, subscribed: false, feed };
+
+      let roleRemoved = false;
+      if (isValidRole && member) {
+        // Check if member is still subscribed to any other feed in this guild using the same role
+        const remainingSubs = await this.getUserSubscriptions(guildId, userId);
+        const config = await this.getConfig(guildId).catch(() => null);
+        const stillNeedsRole = remainingSubs.some((f) => (f.ping_role_id || config?.default_ping_role_id) === effectiveRoleId);
+        if (!stillNeedsRole && member.roles) {
+          const hasRole = member.roles.cache ? member.roles.cache.has(effectiveRoleId) : true;
+          if (hasRole && typeof member.roles.remove === 'function') {
+            await member.roles.remove(effectiveRoleId, `SlickBot feed alert unsubscribed: ${feed.account_name} (${feed.platform})`).catch(() => {});
+            roleRemoved = true;
+          }
+        }
+      }
+
+      return { ok: true, subscribed: false, feed, roleId: isValidRole ? effectiveRoleId : null, roleRemoved };
     }
 
     await query(
@@ -319,7 +349,17 @@ class SocialFeedService {
        ON CONFLICT (feed_id, user_id) DO NOTHING`,
       [guildId, feed.id, userId]
     );
-    return { ok: true, subscribed: true, feed };
+
+    let roleAssigned = false;
+    if (isValidRole && member && member.roles) {
+      const hasRole = member.roles.cache ? member.roles.cache.has(effectiveRoleId) : false;
+      if (!hasRole && typeof member.roles.add === 'function') {
+        await member.roles.add(effectiveRoleId, `SlickBot feed alert subscribed: ${feed.account_name} (${feed.platform})`).catch(() => {});
+        roleAssigned = true;
+      }
+    }
+
+    return { ok: true, subscribed: true, feed, roleId: isValidRole ? effectiveRoleId : null, roleAssigned };
   }
 
   async getSubscribers(feedId) {

@@ -471,24 +471,25 @@ module.exports = {
 
     if (subcommand === 'subscribe') {
       const feedId = interaction.options.getString('feed', true);
-      const result = await feeds.toggleSubscription(interaction.guildId, feedId, interaction.user.id);
+      const result = await feeds.toggleSubscription(interaction.guildId, feedId, interaction.user.id, interaction.member);
       if (!result.ok) {
         return replyPrivate(interaction, { embeds: [createWarningEmbed('Subscription Failed', result.reason || 'Feed not found.')] });
       }
 
       const meta = PLATFORM_META[result.feed.platform] || { icon: '🌐', label: result.feed.platform };
+      const roleNotice = result.roleId ? (result.roleAssigned ? `\nRole assigned: <@&${result.roleId}>` : result.roleRemoved ? `\nRole removed: <@&${result.roleId}>` : '') : '';
       if (result.subscribed) {
         return replyPrivate(interaction, {
           embeds: [createSuccessEmbed(
             'Alerts Subscribed',
-            `🔔 You will now receive notifications when ${meta.icon} **${result.feed.account_name}** (${meta.label}) goes live or posts new content!`
+            `🔔 You will now receive notifications when ${meta.icon} **${result.feed.account_name}** (${meta.label}) goes live or posts new content!${roleNotice}`
           )]
         });
       } else {
         return replyPrivate(interaction, {
           embeds: [createSuccessEmbed(
             'Alerts Muted',
-            `🔕 You have unsubscribed from notifications for ${meta.icon} **${result.feed.account_name}** (${meta.label}).`
+            `🔕 You have unsubscribed from notifications for ${meta.icon} **${result.feed.account_name}** (${meta.label}).${roleNotice}`
           )]
         });
       }
@@ -501,16 +502,39 @@ module.exports = {
         return replyPrivate(interaction, { embeds: [createWarningEmbed('Feed Not Found', 'Could not find the requested social feed.')] });
       }
 
+      const effectiveRoleId = await feeds.getEffectivePingRoleId(interaction.guildId, feed);
+      const isValidRole = Boolean(
+        effectiveRoleId &&
+        effectiveRoleId !== 'everyone' &&
+        effectiveRoleId !== 'here' &&
+        effectiveRoleId !== interaction.guildId
+      );
+
       await query(
         `DELETE FROM social_feed_subscribers WHERE feed_id = $1 AND user_id = $2`,
         [feed.id, interaction.user.id]
       );
 
+      let roleRemoved = false;
+      if (isValidRole && interaction.member?.roles) {
+        const remainingSubs = await feeds.getUserSubscriptions(interaction.guildId, interaction.user.id);
+        const config = await feeds.getConfig(interaction.guildId).catch(() => null);
+        const stillNeedsRole = remainingSubs.some((f) => (f.ping_role_id || config?.default_ping_role_id) === effectiveRoleId);
+        if (!stillNeedsRole) {
+          const hasRole = interaction.member.roles.cache ? interaction.member.roles.cache.has(effectiveRoleId) : true;
+          if (hasRole && typeof interaction.member.roles.remove === 'function') {
+            await interaction.member.roles.remove(effectiveRoleId, `SlickBot feed alert unsubscribed: ${feed.account_name} (${feed.platform})`).catch(() => {});
+            roleRemoved = true;
+          }
+        }
+      }
+
       const meta = PLATFORM_META[feed.platform] || { icon: '🌐', label: feed.platform };
+      const roleNotice = roleRemoved ? `\nRole removed: <@&${effectiveRoleId}>` : '';
       return replyPrivate(interaction, {
         embeds: [createSuccessEmbed(
           'Alerts Muted',
-          `🔕 You have unsubscribed from notifications for ${meta.icon} **${feed.account_name}** (${meta.label}).`
+          `🔕 You have unsubscribed from notifications for ${meta.icon} **${feed.account_name}** (${meta.label}).${roleNotice}`
         )]
       });
     }

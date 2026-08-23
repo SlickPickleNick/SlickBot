@@ -309,6 +309,72 @@ test('Social Feeds Subscriptions and Live Directory System', async (t) => {
     assert.equal(unsubResult.subscribed, false);
   });
 
+  await t.test('toggleSubscription assigns and removes designated ping role to guild member', async () => {
+    let subscriberRows = [];
+    const pingRoleId = '600000000000000001';
+
+    db.addHandler('SELECT * FROM social_feeds', () => {
+      return {
+        rows: [{
+          id: feedId,
+          guild_id: guildId,
+          platform: 'TWITCH',
+          account_id: 'ninja',
+          account_name: 'Ninja',
+          channel_id: '300000000000000001',
+          ping_role_id: pingRoleId
+        }],
+        rowCount: 1
+      };
+    });
+
+    db.addHandler('SELECT id FROM social_feed_subscribers', (sql, params) => {
+      const match = subscriberRows.find((r) => r.feed_id === params[0] && r.user_id === params[1]);
+      return { rows: match ? [match] : [], rowCount: match ? 1 : 0 };
+    });
+
+    db.addHandler('INSERT INTO social_feed_subscribers', (sql, params) => {
+      subscriberRows.push({ id: 'sub-1', guild_id: params[0], feed_id: params[1], user_id: params[2] });
+      return { rows: [], rowCount: 1 };
+    });
+
+    db.addHandler('DELETE FROM social_feed_subscribers', (sql, params) => {
+      subscriberRows = subscriberRows.filter((r) => !(r.feed_id === params[0] && r.user_id === params[1]));
+      return { rows: [], rowCount: 1 };
+    });
+
+    const memberRoles = new Set();
+    const mockMember = {
+      roles: {
+        cache: {
+          has: (roleId) => memberRoles.has(roleId)
+        },
+        add: async (roleId) => {
+          memberRoles.add(roleId);
+        },
+        remove: async (roleId) => {
+          memberRoles.delete(roleId);
+        }
+      }
+    };
+
+    // Subscribe -> adds role
+    const subRes = await service.toggleSubscription(guildId, feedId, userId, mockMember);
+    assert.equal(subRes.ok, true);
+    assert.equal(subRes.subscribed, true);
+    assert.equal(subRes.roleAssigned, true);
+    assert.equal(subRes.roleId, pingRoleId);
+    assert.equal(memberRoles.has(pingRoleId), true);
+
+    // Unsubscribe -> removes role
+    const unsubRes = await service.toggleSubscription(guildId, feedId, userId, mockMember);
+    assert.equal(unsubRes.ok, true);
+    assert.equal(unsubRes.subscribed, false);
+    assert.equal(unsubRes.roleRemoved, true);
+    assert.equal(unsubRes.roleId, pingRoleId);
+    assert.equal(memberRoles.has(pingRoleId), false);
+  });
+
   await t.test('buildLiveDirectoryPayload generates valid embed for 0 and >0 live streams', async () => {
     // Case 1: 0 live streams
     db.addHandler('SELECT * FROM social_feeds', () => {

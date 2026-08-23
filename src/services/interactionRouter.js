@@ -441,19 +441,20 @@ async function handleButton(interaction, ctx) {
 
   if (id.startsWith(CustomIds.FeedsToggleAlertsPrefix)) {
     const feedId = id.slice(CustomIds.FeedsToggleAlertsPrefix.length);
-    const result = await socialFeeds.toggleSubscription(interaction.guildId, feedId, interaction.user.id);
+    const result = await socialFeeds.toggleSubscription(interaction.guildId, feedId, interaction.user.id, interaction.member);
     if (!result.ok) {
       await replyPrivate(interaction, { embeds: [createWarningEmbed('Alerts', result.reason || 'Feed not found.')] });
       return true;
     }
     const meta = PLATFORM_META[result.feed.platform] || { icon: '🌐', label: result.feed.platform };
+    const roleNotice = result.roleId ? (result.roleAssigned ? `\nRole assigned: <@&${result.roleId}>` : result.roleRemoved ? `\nRole removed: <@&${result.roleId}>` : '') : '';
     if (result.subscribed) {
       await replyPrivate(interaction, {
-        embeds: [createSuccessEmbed('Alerts Enabled', `🔔 You will now receive notifications when ${meta.icon} **${result.feed.account_name}** (${meta.label}) goes live or posts new content!`)]
+        embeds: [createSuccessEmbed('Alerts Enabled', `🔔 You will now receive notifications when ${meta.icon} **${result.feed.account_name}** (${meta.label}) goes live or posts new content!${roleNotice}`)]
       });
     } else {
       await replyPrivate(interaction, {
-        embeds: [createSuccessEmbed('Alerts Muted', `🔕 You have unsubscribed from notifications for ${meta.icon} **${result.feed.account_name}** (${meta.label}).`)]
+        embeds: [createSuccessEmbed('Alerts Muted', `🔕 You have unsubscribed from notifications for ${meta.icon} **${result.feed.account_name}** (${meta.label}).${roleNotice}`)]
       });
     }
     return true;
