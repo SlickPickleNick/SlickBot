@@ -35,7 +35,16 @@ const { ReferralService, buildReferralsConfigModal } = require('../modules/commu
 const { TemporaryRoleService } = require('../modules/moderation/tempRoleService');
 const { LockdownService, DEFAULT_PRESET } = require('../modules/safety/lockdownService');
 const { SocialFeedService, PLATFORM_META } = require('../modules/automation/socialFeedService');
-const { AutoModService, buildBlacklistAddModal } = require('../modules/moderation/autoModService');
+const {
+  AutoModService,
+  buildBlacklistAddModal
+} = require('../modules/moderation/autoModService');
+const {
+  buildAutoModWizard,
+  buildAutoModManagerPanel,
+  buildThresholdTuneModal,
+  buildDomainWhitelistModal
+} = require('../modules/moderation/autoModUi');
 const { BotUpdatesService } = require('../modules/status/botUpdatesService');
 const { buildRoleManagerPanel, toggleRole } = require('../modules/community/rolePanelService');
 const { JoinCreateService } = require('../modules/voice/joinCreateService');
@@ -551,16 +560,118 @@ async function handleButton(interaction, ctx) {
 
   // --- Auto-Mod & Anti-Raid Interactions ---
 
+  if (id === CustomIds.AutoModSetupWizard) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.AutoModManage, ModuleKeys.AUTOMOD))) return true;
+    await updatePanel(interaction, await buildAutoModWizard(interaction.guildId));
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.AutoModPresetPrefix)) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.AutoModManage, ModuleKeys.AUTOMOD))) return true;
+    const presetKey = id.slice(CustomIds.AutoModPresetPrefix.length);
+    const result = await autoMod.applyPreset(interaction.guildId, presetKey);
+    if (!result.ok) {
+      await replyPrivate(interaction, { embeds: [createWarningEmbed('Preset Failed', result.reason || 'Could not apply preset.')] });
+      return true;
+    }
+
+    await ctx.logger.log({
+      guildId: interaction.guildId,
+      eventKey: 'automod-preset',
+      title: 'Auto-Mod Preset Applied',
+      body: `Applied preset **${result.preset}** by ${interaction.user.tag}.`,
+      actorUserId: interaction.user.id
+    }).catch(() => {});
+
+    await updatePanel(interaction, await buildAutoModManagerPanel(interaction.guildId, 'FILTERS'));
+    await replyPrivate(interaction, { embeds: [createSuccessEmbed('Preset Activated', `Successfully configured Auto-Mod with **${result.preset}** settings.`)] });
+    return true;
+  }
+
   if (id === CustomIds.AutoModManager || id === CustomIds.AutoModRefresh) {
     if (!(await requireAction(interaction, ctx, ActionKeys.AutoModView, ModuleKeys.AUTOMOD))) return true;
-    await updatePanel(interaction, await autoMod.buildManagerPanel(interaction.guildId, 'FILTERS'));
+    await updatePanel(interaction, await buildAutoModManagerPanel(interaction.guildId, 'FILTERS'));
     return true;
   }
 
   if (id.startsWith(CustomIds.AutoModTabPrefix)) {
     if (!(await requireAction(interaction, ctx, ActionKeys.AutoModView, ModuleKeys.AUTOMOD))) return true;
     const tab = id.slice(CustomIds.AutoModTabPrefix.length);
-    await updatePanel(interaction, await autoMod.buildManagerPanel(interaction.guildId, tab));
+    await updatePanel(interaction, await buildAutoModManagerPanel(interaction.guildId, tab));
+    return true;
+  }
+
+  if (id === CustomIds.AutoModRuleSelect) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.AutoModView, ModuleKeys.AUTOMOD))) return true;
+    const ruleKey = interaction.values[0];
+    await updatePanel(interaction, await buildAutoModManagerPanel(interaction.guildId, 'FILTERS', ruleKey));
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.AutoModSetActionPrefix)) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.AutoModManage, ModuleKeys.AUTOMOD))) return true;
+    const payload = id.slice(CustomIds.AutoModSetActionPrefix.length);
+    const [ruleKey, action] = payload.split(':');
+    const updates = {};
+    if (ruleKey === 'default_blacklist') {
+      updates.word_blacklist_action = action;
+    } else {
+      updates[`${ruleKey}_action`] = action;
+    }
+    await autoMod.upsertConfig(interaction.guildId, updates);
+    await updatePanel(interaction, await buildAutoModManagerPanel(interaction.guildId, 'FILTERS', ruleKey));
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.AutoModThresholdEditPrefix)) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.AutoModManage, ModuleKeys.AUTOMOD))) return true;
+    const ruleKey = id.slice(CustomIds.AutoModThresholdEditPrefix.length);
+    const config = await autoMod.getConfig(interaction.guildId);
+    await interaction.showModal(buildThresholdTuneModal(ruleKey, config));
+    return true;
+  }
+
+  if (id === CustomIds.AutoModRoleExemptSelect) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.AutoModWhitelist, ModuleKeys.AUTOMOD))) return true;
+    await autoMod.upsertConfig(interaction.guildId, { exempt_roles: interaction.values });
+    await updatePanel(interaction, await buildAutoModManagerPanel(interaction.guildId, 'WHITELIST'));
+    return true;
+  }
+
+  if (id === CustomIds.AutoModChannelExemptSelect) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.AutoModWhitelist, ModuleKeys.AUTOMOD))) return true;
+    await autoMod.upsertConfig(interaction.guildId, { exempt_channels: interaction.values });
+    await updatePanel(interaction, await buildAutoModManagerPanel(interaction.guildId, 'WHITELIST'));
+    return true;
+  }
+
+  if (id === CustomIds.AutoModDomainAddModal) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.AutoModWhitelist, ModuleKeys.AUTOMOD))) return true;
+    await interaction.showModal(buildDomainWhitelistModal());
+    return true;
+  }
+
+  if (id === CustomIds.AutoModRaidChannelSelect) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.AutoModRaid, ModuleKeys.AUTOMOD))) return true;
+    const channelId = interaction.values[0];
+    await autoMod.upsertConfig(interaction.guildId, { raid_alert_channel_id: channelId });
+    await updatePanel(interaction, await buildAutoModManagerPanel(interaction.guildId, 'RAID'));
+    return true;
+  }
+
+  if (id === CustomIds.AutoModRaidSensitivitySelect) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.AutoModRaid, ModuleKeys.AUTOMOD))) return true;
+    const [threshold, seconds] = interaction.values[0].split(':').map(Number);
+    await autoMod.upsertConfig(interaction.guildId, { raid_join_threshold: threshold, raid_join_seconds: seconds });
+    await updatePanel(interaction, await buildAutoModManagerPanel(interaction.guildId, 'RAID'));
+    return true;
+  }
+
+  if (id === CustomIds.AutoModRaidAgeSelect) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.AutoModRaid, ModuleKeys.AUTOMOD))) return true;
+    const hours = Number(interaction.values[0]);
+    await autoMod.upsertConfig(interaction.guildId, { raid_min_account_age_hours: hours });
+    await updatePanel(interaction, await buildAutoModManagerPanel(interaction.guildId, 'RAID'));
     return true;
   }
 
@@ -580,7 +691,7 @@ async function handleButton(interaction, ctx) {
     }
 
     await autoMod.upsertConfig(interaction.guildId, updates);
-    await updatePanel(interaction, await autoMod.buildManagerPanel(interaction.guildId, ruleKey === 'default_blacklist' ? 'BLACKLIST' : 'FILTERS'));
+    await updatePanel(interaction, await buildAutoModManagerPanel(interaction.guildId, ruleKey === 'default_blacklist' ? 'BLACKLIST' : 'FILTERS', ruleKey === 'master' ? null : ruleKey));
     return true;
   }
 
@@ -594,7 +705,7 @@ async function handleButton(interaction, ctx) {
     if (!(await requireAction(interaction, ctx, ActionKeys.AutoModRaid, ModuleKeys.AUTOMOD))) return true;
     const config = await autoMod.getConfig(interaction.guildId);
     await autoMod.upsertConfig(interaction.guildId, { raid_shield_enabled: !config.raid_shield_enabled });
-    await updatePanel(interaction, await autoMod.buildManagerPanel(interaction.guildId, 'RAID'));
+    await updatePanel(interaction, await buildAutoModManagerPanel(interaction.guildId, 'RAID'));
     return true;
   }
 
@@ -3064,6 +3175,80 @@ async function handleModal(interaction, ctx) {
 
     await replyPrivate(interaction, {
       embeds: [createSuccessEmbed('Blacklist Entry Added', `Added \`${pattern}\` [${matchType}] to the Auto-Mod blacklist.`)]
+    });
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.AutoModThresholdModalPrefix)) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.AutoModManage, ModuleKeys.AUTOMOD))) return true;
+    const ruleKey = id.slice(CustomIds.AutoModThresholdModalPrefix.length);
+    const updates = {};
+
+    if (ruleKey === 'anti_spam') {
+      const maxMsgs = parseInt(interaction.fields.getTextInputValue('max_messages'), 10);
+      const secs = parseInt(interaction.fields.getTextInputValue('seconds'), 10);
+      const timeoutSec = parseInt(interaction.fields.getTextInputValue('timeout_seconds'), 10);
+      if (!isNaN(maxMsgs) && maxMsgs > 0) updates.anti_spam_max_messages = maxMsgs;
+      if (!isNaN(secs) && secs > 0) updates.anti_spam_seconds = secs;
+      if (!isNaN(timeoutSec) && timeoutSec >= 0) updates.anti_spam_timeout_seconds = timeoutSec;
+    } else if (ruleKey === 'anti_duplicates') {
+      const maxCount = parseInt(interaction.fields.getTextInputValue('max_count'), 10);
+      const secs = parseInt(interaction.fields.getTextInputValue('seconds'), 10);
+      if (!isNaN(maxCount) && maxCount > 0) updates.anti_duplicates_max_count = maxCount;
+      if (!isNaN(secs) && secs > 0) updates.anti_duplicates_seconds = secs;
+    } else if (ruleKey === 'anti_mentions') {
+      const maxCount = parseInt(interaction.fields.getTextInputValue('max_count'), 10);
+      if (!isNaN(maxCount) && maxCount > 0) updates.anti_mentions_max_count = maxCount;
+    } else if (ruleKey === 'anti_caps') {
+      const minChars = parseInt(interaction.fields.getTextInputValue('min_chars'), 10);
+      const percent = parseInt(interaction.fields.getTextInputValue('percent'), 10);
+      if (!isNaN(minChars) && minChars > 0) updates.anti_caps_min_chars = minChars;
+      if (!isNaN(percent) && percent > 0 && percent <= 100) updates.anti_caps_percent = percent;
+    } else if (ruleKey === 'anti_emojis') {
+      const maxCount = parseInt(interaction.fields.getTextInputValue('max_count'), 10);
+      if (!isNaN(maxCount) && maxCount > 0) updates.anti_emojis_max_count = maxCount;
+    } else {
+      const timeoutSec = parseInt(interaction.fields.getTextInputValue('timeout_seconds'), 10);
+      if (!isNaN(timeoutSec) && timeoutSec >= 0) updates[`${ruleKey}_timeout_seconds`] = timeoutSec;
+    }
+
+    await autoMod.upsertConfig(interaction.guildId, updates);
+    await ctx.logger.log({
+      guildId: interaction.guildId,
+      eventKey: 'automod-tune',
+      title: 'Auto-Mod Limits Updated',
+      body: `Thresholds tuned for rule **${ruleKey}** by ${interaction.user.tag}.`,
+      actorUserId: interaction.user.id
+    }).catch(() => {});
+
+    await replyPrivate(interaction, {
+      embeds: [createSuccessEmbed('Limits Updated', `Successfully updated configuration limits for **${ruleKey}**.`)]
+    });
+    return true;
+  }
+
+  if (id === CustomIds.AutoModDomainAddModal) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.AutoModWhitelist, ModuleKeys.AUTOMOD))) return true;
+    const domain = interaction.fields.getTextInputValue('domain')?.trim().toLowerCase();
+    if (!domain) {
+      return replyPrivate(interaction, { embeds: [createWarningEmbed('Invalid Domain', 'Please enter a valid domain name.')] });
+    }
+
+    const result = await autoMod.addWhitelistItem(interaction.guildId, 'DOMAIN', domain);
+    if (!result.ok) {
+      return replyPrivate(interaction, { embeds: [createWarningEmbed('Add Failed', result.reason || 'Could not add domain.')] });
+    }
+
+    await ctx.logger.log({
+      guildId: interaction.guildId,
+      eventKey: 'automod-whitelist-domain',
+      title: 'Domain Whitelisted',
+      body: `Whitelisted domain \`${domain}\` by ${interaction.user.tag}.`,
+      actorUserId: interaction.user.id
+    }).catch(() => {});
+
+    await replyPrivate(interaction, {
+      embeds: [createSuccessEmbed('Domain Whitelisted', `Approved external domain: \`${domain}\`.`)]
     });
     return true;
   }

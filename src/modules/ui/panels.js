@@ -228,9 +228,9 @@ const MODULE_SETUP_CATALOG = Object.freeze({
   },
   [ModuleKeys.AUTOMOD]: {
     name: 'Auto-Mod & Anti-Raid', category: 'Core Setup', description: 'Automated spam filtering, invite/link blocking, mass pings, custom blacklists, and anti-raid join velocity monitoring with moderator lockdown prompts.',
-    managerCommand: '/automod manager', setupCommand: '/automod rule',
-    nextSteps: ['Run `/automod manager` to review active filter rules.', 'Use `/automod blacklist-add` to add prohibited keywords.', 'Configure join surge velocity with `/automod raid`.'],
-    usefulCommands: ['/automod manager', '/automod status', '/automod rule', '/automod blacklist-add', '/automod blacklist-list', '/automod whitelist-add', '/automod raid', '/automod reset']
+    managerCommand: '/automod manager', setupCommand: '/automod setup',
+    nextSteps: ['Run `/automod setup` to choose a 1-click protection preset.', 'Open `/automod manager` to customize filter rules and punishment actions.', 'Use the visual role and channel pickers to configure bypass exemptions.'],
+    usefulCommands: ['/automod setup', '/automod manager', '/automod status', '/automod rule', '/automod blacklist-add', '/automod blacklist-list', '/automod whitelist-add', '/automod raid', '/automod reset']
   }
 });
 

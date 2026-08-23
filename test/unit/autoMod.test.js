@@ -4,8 +4,17 @@ const {
   AutoModService,
   DEFAULT_AUTOMOD_CONFIG,
   DEFAULT_BLACKLIST_PATTERNS,
+  AUTOMOD_PRESETS,
+  RULE_KEYS,
   buildBlacklistAddModal
 } = require('../../src/modules/moderation/autoModService');
+const {
+  buildAutoModWizard,
+  buildAutoModManagerPanel,
+  buildRuleEditComponents,
+  buildThresholdTuneModal,
+  buildDomainWhitelistModal
+} = require('../../src/modules/moderation/autoModUi');
 const { MockDatabase } = require('../helpers/mockDb');
 const { createMockChannel, createMockGuild, createMockUser } = require('../helpers/mockDiscord');
 const { ModuleKeys } = require('../../src/modules/moduleRegistry');
@@ -374,6 +383,96 @@ test('Auto-Mod & Anti-Raid Engine Tests', async (t) => {
     assert.equal(modal.components.length, 3);
   });
 
+  await t.test('applyPreset configures Balanced, Strict, and Lightweight baselines', async () => {
+    const service = new AutoModService();
+    let savedRow = null;
+
+    mockDb.addHandler('SELECT * FROM automod_configs', () => ({ rows: savedRow ? [savedRow] : [], rowCount: savedRow ? 1 : 0 }));
+    mockDb.addHandler('INSERT INTO automod_configs', (sql, params) => {
+      savedRow = {
+        guild_id: params[0],
+        enabled: params[1],
+        anti_invites_enabled: params[2],
+        anti_links_enabled: params[5],
+        anti_spam_enabled: params[8],
+        anti_spam_max_messages: params[10],
+        anti_caps_enabled: params[20],
+        raid_shield_enabled: params[39],
+        raid_join_threshold: params[40]
+      };
+      return { rows: [savedRow], rowCount: 1 };
+    });
+
+    // 1. Balanced
+    const balancedResult = await service.applyPreset(guildId, 'BALANCED');
+    assert.equal(balancedResult.ok, true);
+    assert.match(balancedResult.preset, /Balanced/i);
+    assert.equal(balancedResult.config.anti_invites_enabled, true);
+    assert.equal(balancedResult.config.anti_links_enabled, false);
+
+    // 2. Strict
+    const strictResult = await service.applyPreset(guildId, 'STRICT');
+    assert.equal(strictResult.ok, true);
+    assert.match(strictResult.preset, /Strict/i);
+    assert.equal(strictResult.config.anti_links_enabled, true);
+    assert.equal(strictResult.config.anti_caps_enabled, true);
+
+    // 3. Lightweight
+    const lightResult = await service.applyPreset(guildId, 'LIGHTWEIGHT');
+    assert.equal(lightResult.ok, true);
+    assert.match(lightResult.preset, /Anti-Spam/i);
+    assert.equal(lightResult.config.anti_invites_enabled, false);
+  });
+
+  await t.test('buildAutoModWizard returns preset buttons and setup instructions', async () => {
+    mockDb.addHandler('SELECT * FROM automod_configs', () => ({ rows: [], rowCount: 0 }));
+    const wizard = await buildAutoModWizard(guildId);
+    assert.equal(wizard.embeds.length, 1);
+    assert.match(wizard.embeds[0].data.title, /Setup Wizard/i);
+    assert.equal(wizard.components.length, 2);
+    // Preset row has 3 buttons
+    assert.equal(wizard.components[0].components.length, 3);
+  });
+
+  await t.test('buildAutoModManagerPanel renders all tabs, select menus, and rule cards', async () => {
+    mockDb.addHandler('SELECT * FROM automod_configs', () => ({ rows: [], rowCount: 0 }));
+    mockDb.addHandler('SELECT * FROM automod_blacklists', () => ({ rows: [], rowCount: 0 }));
+
+    // 1. Filters tab (default)
+    const filtersPanel = await buildAutoModManagerPanel(guildId, 'FILTERS');
+    assert.equal(filtersPanel.embeds.length, 1);
+    assert.equal(filtersPanel.components.length, 3); // Nav + Rule Select + Quick Toggles
+
+    // 2. Filters tab with selected rule (e.g. anti_spam)
+    const rulePanel = await buildAutoModManagerPanel(guildId, 'FILTERS', 'anti_spam');
+    assert.equal(rulePanel.embeds.length, 2); // Master summary + Rule Settings card
+    assert.ok(rulePanel.components.length >= 3);
+
+    // 3. Blacklist tab
+    const blacklistPanel = await buildAutoModManagerPanel(guildId, 'BLACKLIST');
+    assert.match(blacklistPanel.embeds[0].data.title, /Blacklist Manager/i);
+
+    // 4. Whitelist tab with Role and Channel Select Menus
+    const whitelistPanel = await buildAutoModManagerPanel(guildId, 'WHITELIST');
+    assert.match(whitelistPanel.embeds[0].data.title, /Exemptions & Whitelists/i);
+    assert.equal(whitelistPanel.components.length, 4); // Nav + RoleSelect + ChannelSelect + Domain button
+
+    // 5. Raid tab with Channel, Sensitivity, and Age Select Menus
+    const raidPanel = await buildAutoModManagerPanel(guildId, 'RAID');
+    assert.match(raidPanel.embeds[0].data.title, /Anti-Raid/i);
+    assert.equal(raidPanel.components.length, 5); // Nav + ChannelSelect + SensitivitySelect + AgeSelect + Toggle
+  });
+
+  await t.test('buildThresholdTuneModal and buildDomainWhitelistModal construct valid modals', () => {
+    const spamModal = buildThresholdTuneModal('anti_spam', { anti_spam_max_messages: 5, anti_spam_seconds: 4 });
+    assert.match(spamModal.data.title, /anti_spam/i);
+    assert.equal(spamModal.components.length, 3);
+
+    const domainModal = buildDomainWhitelistModal();
+    assert.equal(domainModal.data.title, 'Add Whitelisted Domain');
+    assert.equal(domainModal.components.length, 1);
+  });
+
   await t.test('/automod command and all application payloads pass validation', () => {
     assert.equal(automodCmd.data.name, 'automod');
     assert.equal(automodCmd.moduleKey, ModuleKeys.AUTOMOD);
@@ -383,6 +482,7 @@ test('Auto-Mod & Anti-Raid Engine Tests', async (t) => {
     });
 
     assert.equal(automodCmd.getActionKey(makeInteraction('status')), ActionKeys.AutoModView);
+    assert.equal(automodCmd.getActionKey(makeInteraction('setup')), ActionKeys.AutoModManage);
     assert.equal(automodCmd.getActionKey(makeInteraction('manager')), ActionKeys.AutoModManage);
     assert.equal(automodCmd.getActionKey(makeInteraction('rule')), ActionKeys.AutoModManage);
     assert.equal(automodCmd.getActionKey(makeInteraction('blacklist-add')), ActionKeys.AutoModBlacklist);

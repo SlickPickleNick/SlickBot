@@ -981,9 +981,140 @@ function buildBlacklistAddModal() {
     );
 }
 
+const AUTOMOD_PRESETS = Object.freeze({
+  BALANCED: {
+    key: 'BALANCED',
+    label: '🛡️ Balanced (Recommended)',
+    description: 'Standard protections against invites, spam, duplicate flood, mass pings, zalgo, phishing scams, and join raids.',
+    config: {
+      enabled: true,
+      anti_invites_enabled: true,
+      anti_invites_action: 'DELETE',
+      anti_invites_timeout_seconds: 0,
+      anti_links_enabled: false,
+      anti_links_action: 'DELETE',
+      anti_spam_enabled: true,
+      anti_spam_action: 'DELETE',
+      anti_spam_max_messages: 5,
+      anti_spam_seconds: 4,
+      anti_spam_timeout_seconds: 60,
+      anti_duplicates_enabled: true,
+      anti_duplicates_action: 'DELETE',
+      anti_duplicates_max_count: 3,
+      anti_duplicates_seconds: 10,
+      anti_mentions_enabled: true,
+      anti_mentions_action: 'DELETE',
+      anti_mentions_max_count: 5,
+      anti_caps_enabled: false,
+      anti_emojis_enabled: false,
+      anti_zalgo_enabled: true,
+      anti_zalgo_action: 'DELETE',
+      default_blacklist_enabled: true,
+      word_blacklist_action: 'DELETE',
+      raid_shield_enabled: true,
+      raid_join_threshold: 8,
+      raid_join_seconds: 10,
+      raid_min_account_age_hours: 24
+    }
+  },
+  STRICT: {
+    key: 'STRICT',
+    label: '🔒 Strict Security',
+    description: 'Maximum security: blocks all unapproved links, caps spam, emoji clutter, 5m timeouts, and strict 48h account age gates.',
+    config: {
+      enabled: true,
+      anti_invites_enabled: true,
+      anti_invites_action: 'TIMEOUT',
+      anti_invites_timeout_seconds: 300,
+      anti_links_enabled: true,
+      anti_links_action: 'DELETE',
+      anti_spam_enabled: true,
+      anti_spam_action: 'TIMEOUT',
+      anti_spam_max_messages: 4,
+      anti_spam_seconds: 4,
+      anti_spam_timeout_seconds: 300,
+      anti_duplicates_enabled: true,
+      anti_duplicates_action: 'TIMEOUT',
+      anti_duplicates_max_count: 2,
+      anti_duplicates_seconds: 15,
+      anti_mentions_enabled: true,
+      anti_mentions_action: 'TIMEOUT',
+      anti_mentions_max_count: 3,
+      anti_caps_enabled: true,
+      anti_caps_action: 'DELETE',
+      anti_caps_min_chars: 10,
+      anti_caps_percent: 65,
+      anti_emojis_enabled: true,
+      anti_emojis_action: 'DELETE',
+      anti_emojis_max_count: 6,
+      anti_zalgo_enabled: true,
+      anti_zalgo_action: 'DELETE',
+      default_blacklist_enabled: true,
+      word_blacklist_action: 'TIMEOUT',
+      word_blacklist_timeout_seconds: 600,
+      raid_shield_enabled: true,
+      raid_join_threshold: 5,
+      raid_join_seconds: 5,
+      raid_min_account_age_hours: 48
+    }
+  },
+  LIGHTWEIGHT: {
+    key: 'LIGHTWEIGHT',
+    label: '⚡ Anti-Spam & Phishing Only',
+    description: 'Lightweight shield: blocks message flooding, repetitive duplicate spam, phishing domains, and join raids.',
+    config: {
+      enabled: true,
+      anti_invites_enabled: false,
+      anti_links_enabled: false,
+      anti_spam_enabled: true,
+      anti_spam_action: 'DELETE',
+      anti_spam_max_messages: 6,
+      anti_spam_seconds: 4,
+      anti_spam_timeout_seconds: 60,
+      anti_duplicates_enabled: true,
+      anti_duplicates_action: 'DELETE',
+      anti_duplicates_max_count: 4,
+      anti_duplicates_seconds: 10,
+      anti_mentions_enabled: false,
+      anti_caps_enabled: false,
+      anti_emojis_enabled: false,
+      anti_zalgo_enabled: false,
+      default_blacklist_enabled: true,
+      word_blacklist_action: 'DELETE',
+      raid_shield_enabled: true,
+      raid_join_threshold: 12,
+      raid_join_seconds: 10,
+      raid_min_account_age_hours: 12
+    }
+  }
+});
+
+const RULE_KEYS = Object.freeze([
+  { key: 'anti_invites', label: 'Anti-Invites', description: 'Blocks Discord server invite links' },
+  { key: 'anti_links', label: 'Anti-Links', description: 'Blocks unapproved external website URLs' },
+  { key: 'anti_spam', label: 'Anti-Spam', description: 'Blocks rapid message floods' },
+  { key: 'anti_duplicates', label: 'Anti-Duplicates', description: 'Blocks repeated identical messages' },
+  { key: 'anti_mentions', label: 'Anti-Mentions', description: 'Blocks excessive user/role pings' },
+  { key: 'anti_caps', label: 'Anti-Caps', description: 'Blocks messages with high uppercase %' },
+  { key: 'anti_emojis', label: 'Anti-Emojis', description: 'Blocks excessive emoji clutter' },
+  { key: 'anti_zalgo', label: 'Anti-Zalgo', description: 'Blocks glitch/zalgo text formatting' },
+  { key: 'default_blacklist', label: 'Phishing Filter', description: 'Blocks known Nitro scams & IP loggers' }
+]);
+
+AutoModService.prototype.applyPreset = async function(guildId, presetKey) {
+  const key = String(presetKey || '').toUpperCase();
+  const preset = AUTOMOD_PRESETS[key];
+  if (!preset) return { ok: false, reason: 'Invalid preset key.' };
+
+  const saved = await this.upsertConfig(guildId, preset.config);
+  return { ok: true, preset: preset.label, config: saved };
+};
+
 module.exports = {
   AutoModService,
   DEFAULT_AUTOMOD_CONFIG,
   DEFAULT_BLACKLIST_PATTERNS,
+  AUTOMOD_PRESETS,
+  RULE_KEYS,
   buildBlacklistAddModal
 };

@@ -2,6 +2,7 @@ const { SlashCommandBuilder, ChannelType, ActionRowBuilder, ButtonBuilder, Butto
 const { ModuleKeys } = require('../modules/moduleRegistry');
 const { ActionKeys } = require('../modules/permissions/actionKeys');
 const { AutoModService } = require('../modules/moderation/autoModService');
+const { buildAutoModWizard, buildAutoModManagerPanel } = require('../modules/moderation/autoModUi');
 const { createSuccessEmbed, createWarningEmbed, createBaseEmbed, SlickBotColors } = require('../modules/ui/uiService');
 const { CustomIds } = require('../modules/ui/customIds');
 const { replyPrivate } = require('../utils/reply');
@@ -12,6 +13,7 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('automod')
     .setDescription('Automated moderation, content filters, and anti-raid protection shield.')
+    .addSubcommand((sub) => sub.setName('setup').setDescription('Open the interactive Auto-Mod Setup Wizard with 1-click presets.'))
     .addSubcommand((sub) => sub.setName('manager').setDescription('Open the interactive Auto-Mod manager dashboard.'))
     .addSubcommand((sub) => sub.setName('status').setDescription('View current Auto-Mod protection status and active filters.'))
     .addSubcommand((sub) =>
@@ -141,7 +143,7 @@ module.exports = {
   getActionKey(interaction) {
     const sub = interaction.options.getSubcommand();
     if (sub === 'status') return ActionKeys.AutoModView;
-    if (sub === 'manager' || sub === 'rule') return ActionKeys.AutoModManage;
+    if (sub === 'setup' || sub === 'manager' || sub === 'rule') return ActionKeys.AutoModManage;
     if (sub.startsWith('blacklist')) return ActionKeys.AutoModBlacklist;
     if (sub.startsWith('whitelist')) return ActionKeys.AutoModWhitelist;
     if (sub === 'raid') return ActionKeys.AutoModRaid;
@@ -153,13 +155,13 @@ module.exports = {
     const sub = interaction.options.getSubcommand();
     const guildId = interaction.guildId;
 
-    if (sub === 'manager') {
-      const panel = await autoMod.buildManagerPanel(guildId, 'FILTERS');
-      return replyPrivate(interaction, panel);
+    if (sub === 'setup') {
+      const wizard = await buildAutoModWizard(guildId);
+      return replyPrivate(interaction, wizard);
     }
 
-    if (sub === 'status') {
-      const panel = await autoMod.buildManagerPanel(guildId, 'FILTERS');
+    if (sub === 'manager' || sub === 'status') {
+      const panel = await buildAutoModManagerPanel(guildId, 'FILTERS');
       return replyPrivate(interaction, panel);
     }
 
