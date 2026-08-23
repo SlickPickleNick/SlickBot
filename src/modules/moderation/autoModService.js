@@ -23,10 +23,10 @@ const DEFAULT_AUTOMOD_CONFIG = Object.freeze({
   enabled: true,
   anti_invites_enabled: true,
   anti_invites_action: 'DELETE',
-  anti_invites_timeout_seconds: 0,
+  anti_invites_timeout_seconds: 60,
   anti_links_enabled: false,
   anti_links_action: 'DELETE',
-  anti_links_timeout_seconds: 0,
+  anti_links_timeout_seconds: 60,
   anti_spam_enabled: true,
   anti_spam_action: 'DELETE',
   anti_spam_max_messages: 5,
@@ -36,21 +36,26 @@ const DEFAULT_AUTOMOD_CONFIG = Object.freeze({
   anti_duplicates_action: 'DELETE',
   anti_duplicates_max_count: 3,
   anti_duplicates_seconds: 10,
+  anti_duplicates_timeout_seconds: 60,
   anti_mentions_enabled: true,
   anti_mentions_action: 'DELETE',
   anti_mentions_max_count: 5,
+  anti_mentions_timeout_seconds: 60,
   anti_caps_enabled: false,
   anti_caps_action: 'DELETE',
   anti_caps_min_chars: 12,
   anti_caps_percent: 70,
+  anti_caps_timeout_seconds: 60,
   anti_emojis_enabled: false,
   anti_emojis_action: 'DELETE',
   anti_emojis_max_count: 8,
+  anti_emojis_timeout_seconds: 60,
   anti_zalgo_enabled: true,
   anti_zalgo_action: 'DELETE',
+  anti_zalgo_timeout_seconds: 60,
   default_blacklist_enabled: true,
   word_blacklist_action: 'DELETE',
-  word_blacklist_timeout_seconds: 0,
+  word_blacklist_timeout_seconds: 300,
   exempt_roles: [],
   exempt_channels: [],
   exempt_users: [],
@@ -143,11 +148,11 @@ class AutoModService {
         anti_invites_enabled, anti_invites_action, anti_invites_timeout_seconds,
         anti_links_enabled, anti_links_action, anti_links_timeout_seconds,
         anti_spam_enabled, anti_spam_action, anti_spam_max_messages, anti_spam_seconds, anti_spam_timeout_seconds,
-        anti_duplicates_enabled, anti_duplicates_action, anti_duplicates_max_count, anti_duplicates_seconds,
-        anti_mentions_enabled, anti_mentions_action, anti_mentions_max_count,
-        anti_caps_enabled, anti_caps_action, anti_caps_min_chars, anti_caps_percent,
-        anti_emojis_enabled, anti_emojis_action, anti_emojis_max_count,
-        anti_zalgo_enabled, anti_zalgo_action,
+        anti_duplicates_enabled, anti_duplicates_action, anti_duplicates_max_count, anti_duplicates_seconds, anti_duplicates_timeout_seconds,
+        anti_mentions_enabled, anti_mentions_action, anti_mentions_max_count, anti_mentions_timeout_seconds,
+        anti_caps_enabled, anti_caps_action, anti_caps_min_chars, anti_caps_percent, anti_caps_timeout_seconds,
+        anti_emojis_enabled, anti_emojis_action, anti_emojis_max_count, anti_emojis_timeout_seconds,
+        anti_zalgo_enabled, anti_zalgo_action, anti_zalgo_timeout_seconds,
         default_blacklist_enabled, word_blacklist_action, word_blacklist_timeout_seconds,
         exempt_roles, exempt_channels, exempt_users, whitelisted_domains, whitelisted_invites,
         dm_notification_enabled, alert_channel_id,
@@ -157,7 +162,7 @@ class AutoModService {
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
         $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38,
-        $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, NOW()
+        $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51, $52, $53, NOW()
       ) ON CONFLICT (guild_id) DO UPDATE SET
         enabled = EXCLUDED.enabled,
         anti_invites_enabled = EXCLUDED.anti_invites_enabled,
@@ -175,18 +180,23 @@ class AutoModService {
         anti_duplicates_action = EXCLUDED.anti_duplicates_action,
         anti_duplicates_max_count = EXCLUDED.anti_duplicates_max_count,
         anti_duplicates_seconds = EXCLUDED.anti_duplicates_seconds,
+        anti_duplicates_timeout_seconds = EXCLUDED.anti_duplicates_timeout_seconds,
         anti_mentions_enabled = EXCLUDED.anti_mentions_enabled,
         anti_mentions_action = EXCLUDED.anti_mentions_action,
         anti_mentions_max_count = EXCLUDED.anti_mentions_max_count,
+        anti_mentions_timeout_seconds = EXCLUDED.anti_mentions_timeout_seconds,
         anti_caps_enabled = EXCLUDED.anti_caps_enabled,
         anti_caps_action = EXCLUDED.anti_caps_action,
         anti_caps_min_chars = EXCLUDED.anti_caps_min_chars,
         anti_caps_percent = EXCLUDED.anti_caps_percent,
+        anti_caps_timeout_seconds = EXCLUDED.anti_caps_timeout_seconds,
         anti_emojis_enabled = EXCLUDED.anti_emojis_enabled,
         anti_emojis_action = EXCLUDED.anti_emojis_action,
         anti_emojis_max_count = EXCLUDED.anti_emojis_max_count,
+        anti_emojis_timeout_seconds = EXCLUDED.anti_emojis_timeout_seconds,
         anti_zalgo_enabled = EXCLUDED.anti_zalgo_enabled,
         anti_zalgo_action = EXCLUDED.anti_zalgo_action,
+        anti_zalgo_timeout_seconds = EXCLUDED.anti_zalgo_timeout_seconds,
         default_blacklist_enabled = EXCLUDED.default_blacklist_enabled,
         word_blacklist_action = EXCLUDED.word_blacklist_action,
         word_blacklist_timeout_seconds = EXCLUDED.word_blacklist_timeout_seconds,
@@ -213,11 +223,11 @@ class AutoModService {
         merged.anti_invites_enabled, merged.anti_invites_action, merged.anti_invites_timeout_seconds,
         merged.anti_links_enabled, merged.anti_links_action, merged.anti_links_timeout_seconds,
         merged.anti_spam_enabled, merged.anti_spam_action, merged.anti_spam_max_messages, merged.anti_spam_seconds, merged.anti_spam_timeout_seconds,
-        merged.anti_duplicates_enabled, merged.anti_duplicates_action, merged.anti_duplicates_max_count, merged.anti_duplicates_seconds,
-        merged.anti_mentions_enabled, merged.anti_mentions_action, merged.anti_mentions_max_count,
-        merged.anti_caps_enabled, merged.anti_caps_action, merged.anti_caps_min_chars, merged.anti_caps_percent,
-        merged.anti_emojis_enabled, merged.anti_emojis_action, merged.anti_emojis_max_count,
-        merged.anti_zalgo_enabled, merged.anti_zalgo_action,
+        merged.anti_duplicates_enabled, merged.anti_duplicates_action, merged.anti_duplicates_max_count, merged.anti_duplicates_seconds, merged.anti_duplicates_timeout_seconds,
+        merged.anti_mentions_enabled, merged.anti_mentions_action, merged.anti_mentions_max_count, merged.anti_mentions_timeout_seconds,
+        merged.anti_caps_enabled, merged.anti_caps_action, merged.anti_caps_min_chars, merged.anti_caps_percent, merged.anti_caps_timeout_seconds,
+        merged.anti_emojis_enabled, merged.anti_emojis_action, merged.anti_emojis_max_count, merged.anti_emojis_timeout_seconds,
+        merged.anti_zalgo_enabled, merged.anti_zalgo_action, merged.anti_zalgo_timeout_seconds,
         merged.default_blacklist_enabled, merged.word_blacklist_action, merged.word_blacklist_timeout_seconds,
         merged.exempt_roles, merged.exempt_channels, merged.exempt_users, merged.whitelisted_domains, merged.whitelisted_invites,
         merged.dm_notification_enabled, merged.alert_channel_id,
@@ -429,29 +439,62 @@ class AutoModService {
     const config = await this.getConfig(guild.id);
     const secs = Math.max(1, Number(durationSeconds) || 60);
     const timeoutMs = secs * 1000;
-    const results = { nativeTimeout: false, roleApplied: false };
+    const results = {
+      ok: true,
+      nativeTimeout: false,
+      roleApplied: false,
+      timeoutRoleId: config.timeout_role_id || null,
+      roleName: null,
+      roleError: null
+    };
 
     // 1. Native Discord Timeout (up to 28 days max in Discord API)
     if (member.moderatable && timeoutMs > 0 && timeoutMs <= 28 * 24 * 60 * 60 * 1000) {
-      await member.timeout(timeoutMs, reason || 'Applied by SlickBot').then(() => { results.nativeTimeout = true; }).catch(() => {});
+      await member.timeout(timeoutMs, reason || 'Applied by SlickBot').then(() => { results.nativeTimeout = true; }).catch((err) => {
+        results.nativeError = err.message;
+      });
     }
 
-    // 2. Timeout Role Application (tracked via TemporaryRoleService)
+    // 2. Timeout Role Application (tracked via TemporaryRoleService with direct fallback)
     if (config.timeout_role_id) {
-      const role = guild.roles.cache ? (guild.roles.cache.get(config.timeout_role_id) || await guild.roles.fetch(config.timeout_role_id).catch(() => null)) : null;
-      if (role) {
-        const { TemporaryRoleService } = require('./tempRoleService');
-        const tempRoles = new TemporaryRoleService();
-        const tempRes = await tempRoles.addTemporaryRole({
-          guild,
-          user: member.user || { id: member.id, tag: member.user?.tag || member.id },
-          role,
-          durationText: `${secs}s`,
-          actorUser: actorUser || { id: guild.client?.user?.id || 'AUTOMOD', tag: 'SlickBot AutoMod' },
-          reason: reason || 'SlickBot Timeout'
-        });
-        results.roleApplied = tempRes.ok;
+      let role = null;
+      if (guild.roles) {
+        role = guild.roles.cache?.get(config.timeout_role_id) || await guild.roles.fetch(config.timeout_role_id).catch(() => null);
       }
+      if (role) {
+        results.roleName = role.name;
+        let assigned = false;
+        try {
+          const { TemporaryRoleService } = require('./tempRoleService');
+          const tempRoles = new TemporaryRoleService();
+          const tempRes = await tempRoles.addTemporaryRole({
+            guild,
+            user: member.user || { id: member.id, tag: member.user?.tag || member.id },
+            role,
+            durationText: `${secs}s`,
+            actorUser: actorUser || { id: guild.client?.user?.id || 'AUTOMOD', tag: 'SlickBot AutoMod' },
+            reason: reason || 'SlickBot Timeout'
+          });
+          assigned = Boolean(tempRes && tempRes.ok);
+        } catch {}
+
+        if (!assigned) {
+          const directAdded = await member.roles?.add(role.id, reason || 'SlickBot Timeout').then(() => true).catch((err) => {
+            results.roleError = err.message;
+            return false;
+          });
+          if (directAdded) {
+            assigned = true;
+            results.roleError = null;
+          }
+        }
+
+        results.roleApplied = assigned;
+      } else {
+        results.roleError = 'Configured timeout role was not found in server.';
+      }
+    } else {
+      results.roleError = 'No timeout role configured in Auto-Mod / Moderation settings.';
     }
 
     return results;
@@ -461,7 +504,14 @@ class AutoModService {
     if (!member || !member.guild) return { ok: false, reason: 'Invalid guild member.' };
     const guild = member.guild;
     const config = await this.getConfig(guild.id);
-    const results = { nativeUntimeout: false, roleRemoved: false };
+    const results = {
+      ok: true,
+      nativeUntimeout: false,
+      roleRemoved: false,
+      timeoutRoleId: config.timeout_role_id || null,
+      roleName: null,
+      roleError: null
+    };
 
     // 1. Native Untimeout
     if (member.isCommunicationDisabled && member.isCommunicationDisabled()) {
@@ -470,18 +520,31 @@ class AutoModService {
 
     // 2. Remove Timeout Role
     if (config.timeout_role_id) {
-      const role = guild.roles.cache ? (guild.roles.cache.get(config.timeout_role_id) || await guild.roles.fetch(config.timeout_role_id).catch(() => null)) : null;
+      let role = null;
+      if (guild.roles) {
+        role = guild.roles.cache?.get(config.timeout_role_id) || await guild.roles.fetch(config.timeout_role_id).catch(() => null);
+      }
       if (role) {
-        const { TemporaryRoleService } = require('./tempRoleService');
-        const tempRoles = new TemporaryRoleService();
-        const tempRes = await tempRoles.removeTemporaryRole({
-          guild,
-          user: member.user || { id: member.id, tag: member.user?.tag || member.id },
-          role,
-          actorUser,
-          reason: reason || 'Untimeout by staff'
-        });
-        results.roleRemoved = tempRes.ok;
+        results.roleName = role.name;
+        let removed = false;
+        try {
+          const { TemporaryRoleService } = require('./tempRoleService');
+          const tempRoles = new TemporaryRoleService();
+          const tempRes = await tempRoles.removeTemporaryRole({
+            guild,
+            user: member.user || { id: member.id, tag: member.user?.tag || member.id },
+            role,
+            actorUser,
+            reason
+          });
+          removed = Boolean(tempRes && tempRes.ok);
+        } catch {}
+
+        if (!removed) {
+          const directRemoved = await member.roles?.remove(role.id, reason || 'Untimeout by staff').then(() => true).catch(() => false);
+          if (directRemoved) removed = true;
+        }
+        results.roleRemoved = removed;
       }
     }
 
@@ -629,7 +692,7 @@ class AutoModService {
           rule: 'ANTI_INVITES',
           label: 'Discord Server Invite Link',
           action: config.anti_invites_action || 'DELETE',
-          timeoutSeconds: config.anti_invites_timeout_seconds || 0,
+          timeoutSeconds: config.anti_invites_timeout_seconds || 60,
           matched: match[0]
         };
       }
@@ -651,7 +714,7 @@ class AutoModService {
           rule: 'ANTI_LINKS',
           label: 'Unauthorized External Link',
           action: config.anti_links_action || 'DELETE',
-          timeoutSeconds: config.anti_links_timeout_seconds || 0,
+          timeoutSeconds: config.anti_links_timeout_seconds || 60,
           matched: match[0]
         };
       }
@@ -671,7 +734,7 @@ class AutoModService {
         rule: 'ANTI_MENTIONS',
         label: `Mass Mentions (${total}/${maxCount} pings)`,
         action: config.anti_mentions_action || 'DELETE',
-        timeoutSeconds: 60,
+        timeoutSeconds: config.anti_mentions_timeout_seconds || 60,
         matched: `${total} mentions`
       };
     }
@@ -693,7 +756,7 @@ class AutoModService {
         rule: 'ANTI_CAPS',
         label: `Excessive Capitalization (${percent}% caps)`,
         action: config.anti_caps_action || 'DELETE',
-        timeoutSeconds: 0,
+        timeoutSeconds: config.anti_caps_timeout_seconds || 60,
         matched: `${percent}% uppercase`
       };
     }
@@ -709,7 +772,7 @@ class AutoModService {
         rule: 'ANTI_EMOJIS',
         label: `Excessive Emoji Spam (${matches.length} emojis)`,
         action: config.anti_emojis_action || 'DELETE',
-        timeoutSeconds: 0,
+        timeoutSeconds: config.anti_emojis_timeout_seconds || 60,
         matched: `${matches.length} emojis`
       };
     }
@@ -724,7 +787,7 @@ class AutoModService {
         rule: 'ANTI_ZALGO',
         label: 'Glitch / Zalgo Text Formatting',
         action: config.anti_zalgo_action || 'DELETE',
-        timeoutSeconds: 0,
+        timeoutSeconds: config.anti_zalgo_timeout_seconds || 60,
         matched: 'Zalgo unicode combining characters'
       };
     }
@@ -761,7 +824,7 @@ class AutoModService {
             rule: 'WORD_BLACKLIST',
             label: `Banned Keyword: "${pat}"`,
             action: entry.severity || config.word_blacklist_action || 'DELETE',
-            timeoutSeconds: config.word_blacklist_timeout_seconds || 0,
+            timeoutSeconds: config.word_blacklist_timeout_seconds || 300,
             matched: pat
           };
         }
@@ -771,7 +834,7 @@ class AutoModService {
             rule: 'WORD_BLACKLIST',
             label: `Banned Term: "${pat}"`,
             action: entry.severity || config.word_blacklist_action || 'DELETE',
-            timeoutSeconds: config.word_blacklist_timeout_seconds || 0,
+            timeoutSeconds: config.word_blacklist_timeout_seconds || 300,
             matched: pat
           };
         }
@@ -783,7 +846,7 @@ class AutoModService {
               rule: 'REGEX_BLACKLIST',
               label: `Banned Regex Pattern: /${pat}/i`,
               action: entry.severity || config.word_blacklist_action || 'DELETE',
-              timeoutSeconds: config.word_blacklist_timeout_seconds || 0,
+              timeoutSeconds: config.word_blacklist_timeout_seconds || 300,
               matched: pat
             };
           }
@@ -833,7 +896,7 @@ class AutoModService {
             rule: 'ANTI_DUPLICATES',
             label: `Repeated Duplicate Message (${sameMessages.length + 1} times)`,
             action: config.anti_duplicates_action || 'DELETE',
-            timeoutSeconds: 60,
+            timeoutSeconds: config.anti_duplicates_timeout_seconds || 60,
             matched: truncate(cleanContent, 40)
           };
         }

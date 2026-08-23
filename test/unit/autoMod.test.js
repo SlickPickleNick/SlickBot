@@ -64,7 +64,7 @@ test('Auto-Mod & Anti-Raid Engine Tests', async (t) => {
         enabled: params[1],
         anti_invites_enabled: params[2],
         anti_spam_max_messages: params[10],
-        raid_join_threshold: params[40]
+        raid_join_threshold: params[45]
       };
       return { rows: [savedRow], rowCount: 1 };
     });
@@ -398,11 +398,11 @@ test('Auto-Mod & Anti-Raid Engine Tests', async (t) => {
         anti_links_enabled: params[5],
         anti_spam_enabled: params[8],
         anti_spam_max_messages: params[10],
-        anti_caps_enabled: params[20],
-        raid_shield_enabled: params[39],
-        raid_join_threshold: params[40]
+        anti_caps_enabled: params[22],
+        raid_shield_enabled: params[44],
+        raid_join_threshold: params[45]
       };
-      return { rows: [savedRow], rowCount: 1 };
+      return { rows: [{ ...DEFAULT_AUTOMOD_CONFIG, ...savedRow }], rowCount: 1 };
     });
 
     // 1. Balanced
@@ -753,6 +753,124 @@ test('Auto-Mod & Anti-Raid Engine Tests', async (t) => {
     assert.ok(buttons.some((b) => b.data.custom_id === CustomIds.AutoModTimeoutRoleModeToggle));
     assert.ok(buttons.some((b) => b.data.custom_id === CustomIds.AutoModTimeoutRoleLockToggle));
     assert.ok(buttons.some((b) => b.data.custom_id === CustomIds.AutoModTimeoutRoleClear));
+  });
+
+  await t.test('Per-rule timeout duration tuning and Timeout & Delete action', async () => {
+    const service = new AutoModService();
+    const cfg = await service.upsertConfig(guildId, {
+      anti_invites_enabled: true,
+      anti_invites_timeout_seconds: 3600,
+      anti_invites_action: 'TIMEOUT',
+      anti_links_enabled: true,
+      anti_links_timeout_seconds: 1800,
+      anti_links_action: 'TIMEOUT'
+    });
+
+    // 1. Check checkAntiInvites returns 3600s timeout
+    const inviteViolation = service.checkAntiInvites('Join discord.gg/illegalcode', cfg);
+    assert.equal(inviteViolation.action, 'TIMEOUT');
+    assert.equal(inviteViolation.timeoutSeconds, 3600);
+
+    // 2. Check checkAntiLinks returns 1800s timeout
+    const linkViolation = service.checkAntiLinks('Check out https://scam-site.org', cfg);
+    assert.equal(linkViolation.action, 'TIMEOUT');
+    assert.equal(linkViolation.timeoutSeconds, 1800);
+
+    // 3. Check buildRuleEditComponents displays Timeout & Delete and duration
+    const rulePanel = buildRuleEditComponents(cfg, 'anti_invites');
+    assert.match(rulePanel.embed.data.description, /Current Action:.*Timeout & Delete/i);
+    assert.match(rulePanel.embed.data.description, /Rule Timeout Duration:.*1h/i);
+    const actionButtons = rulePanel.components[1].components;
+    assert.ok(actionButtons.some((b) => b.data.label === 'Timeout & Delete'));
+
+    // 4. Check buildThresholdTuneModal includes timeout_duration input
+    const modal = buildThresholdTuneModal('anti_invites', cfg);
+    assert.equal(modal.components.length, 1);
+    assert.equal(modal.components[0].components[0].data.custom_id, 'timeout_duration');
+  });
+
+  await t.test('/mod timeout command supports flexible duration strings and options', async () => {
+    const modCmd = require('../../src/commands/mod');
+    assert.equal(modCmd.data.name, 'mod');
+    new AutoModService().clearAllCaches();
+
+    let replyPayload = null;
+    let timedOutMemberMs = null;
+    let addedRole = null;
+
+    mockDb.addHandler('SELECT * FROM automod_configs', () => ({
+      rows: [{ guild_id: guildId, timeout_role_id: 'role-timeout-123' }],
+      rowCount: 1
+    }));
+    mockDb.addHandler('INSERT INTO moderation_cases', () => ({
+      rows: [{ id: 'case-1', case_number: 42, action_type: 'TIMEOUT', target_user_id: 'user-violator' }]
+    }));
+    mockDb.addHandler('INSERT INTO temporary_role_assignments', () => ({
+      rows: [{ id: 'temp-1' }]
+    }));
+
+    const mockTarget = { id: 'user-violator', tag: 'Violator#1234' };
+    const mockMember = {
+      id: 'user-violator',
+      user: mockTarget,
+      moderatable: true,
+      timeout: async (ms) => { timedOutMemberMs = ms; },
+      roles: {
+        add: async (r) => { addedRole = r; }
+      },
+      guild: {
+        id: guildId,
+        roles: {
+          cache: new Map([['role-timeout-123', { id: 'role-timeout-123', name: 'Timeout', managed: false }]])
+        },
+        members: {
+          fetch: async () => mockMember
+        }
+      }
+    };
+
+    const mockInteraction = {
+      guildId,
+      user: { id: 'mod-1', tag: 'Mod#0001' },
+      guild: {
+        id: guildId,
+        members: {
+          fetch: async () => mockMember
+        },
+        roles: {
+          cache: new Map([['role-timeout-123', { id: 'role-timeout-123', name: 'Timeout', managed: false }]])
+        }
+      },
+      options: {
+        getSubcommand: () => 'timeout',
+        getUser: () => mockTarget,
+        getString: (name) => (name === 'duration' ? '2h' : name === 'reason' ? 'Disruptive behavior' : null),
+        getInteger: (name) => null
+      },
+      reply: async (payload) => { replyPayload = payload; }
+    };
+
+    const ctx = {
+      db: mockDb,
+      logger: { log: async () => {}, writeAudit: async () => {} },
+      permissions: {
+        ensureGuildConfig: async () => ({})
+      },
+      moderation: {
+        ensureGuildConfig: async () => ({}),
+        createCase: async () => ({ id: 'case-1', case_number: 42, action_type: 'TIMEOUT', target_user_id: 'user-violator' })
+      }
+    };
+
+    await modCmd.execute(mockInteraction, ctx);
+
+    assert.equal(timedOutMemberMs, 2 * 3600 * 1000);
+    assert.equal(addedRole, 'role-timeout-123');
+    assert.ok(replyPayload);
+    assert.match(replyPayload.embeds[0].data.title, /Timeout Applied/i);
+    const dualField = replyPayload.embeds[0].data.fields.find((f) => f.name === 'Dual-Layer Enforcement');
+    assert.match(dualField.value, /Discord Timeout:.*✅ Applied/i);
+    assert.match(dualField.value, /Timeout Role:.*✅ Assigned.*role-timeout-123/i);
   });
 });
 

@@ -19,6 +19,7 @@ const {
 } = require('../ui/uiService');
 const { CustomIds } = require('../ui/customIds');
 const { truncate } = require('../../utils/format');
+const { formatDuration } = require('../../utils/time');
 const { AutoModService, AUTOMOD_PRESETS, RULE_KEYS } = require('./autoModService');
 
 const autoMod = new AutoModService();
@@ -27,7 +28,7 @@ function formatAction(action) {
   const norm = String(action || '').toUpperCase();
   if (norm === 'WARN') return 'Warn & Delete';
   if (norm === 'DELETE') return 'Delete';
-  if (norm === 'TIMEOUT') return 'Timeout';
+  if (norm === 'TIMEOUT') return 'Timeout & Delete';
   if (norm === 'LOG_ONLY') return 'Log Only';
   return action || 'Delete';
 }
@@ -472,10 +473,13 @@ function buildRuleEditComponents(config, ruleKey) {
   const isEnabled = ruleKey === 'default_blacklist' ? config.default_blacklist_enabled : config[`${ruleKey}_enabled`];
   const currentAction = ruleKey === 'default_blacklist' ? config.word_blacklist_action : config[`${ruleKey}_action`];
   const displayAction = formatAction(currentAction || 'DELETE');
+  const timeoutKey = ruleKey === 'default_blacklist' ? 'word_blacklist_timeout_seconds' : `${ruleKey}_timeout_seconds`;
+  const timeoutSecs = config[timeoutKey] || (ruleKey === 'default_blacklist' ? 300 : 60);
+  const timeoutFmt = formatDuration(timeoutSecs * 1000);
 
   const embed = createBaseEmbed({
     title: `⚙️ Rule Settings: ${ruleMeta.label}`,
-    description: `${ruleMeta.description}\n\n**Status:** ${isEnabled ? '`🟢 ENABLED`' : '`🔴 DISABLED`'}\n**Current Action:** \`${displayAction}\``,
+    description: `${ruleMeta.description}\n\n**Status:** ${isEnabled ? '`🟢 ENABLED`' : '`🔴 DISABLED`'}\n**Current Action:** \`${displayAction}\`\n**Rule Timeout Duration:** \`${timeoutFmt}\` (${timeoutSecs}s)`,
     color: isEnabled ? SlickBotColors.SUCCESS : SlickBotColors.MUTED
   });
 
@@ -487,7 +491,7 @@ function buildRuleEditComponents(config, ruleKey) {
       .setEmoji(isEnabled ? '🔴' : '🟢'),
     new ButtonBuilder()
       .setCustomId(`${CustomIds.AutoModThresholdEditPrefix}${ruleKey}`)
-      .setLabel('Tune Limits & Thresholds')
+      .setLabel('Tune Limits & Timeout')
       .setEmoji('⚙️')
       .setStyle(ButtonStyle.Primary),
     new ButtonBuilder()
@@ -513,7 +517,7 @@ function buildRuleEditComponents(config, ruleKey) {
       .setStyle(currentAction === 'WARN' ? ButtonStyle.Primary : ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId(`${CustomIds.AutoModSetActionPrefix}${ruleKey}:TIMEOUT`)
-      .setLabel('Timeout Member')
+      .setLabel('Timeout & Delete')
       .setStyle(currentAction === 'TIMEOUT' ? ButtonStyle.Primary : ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId(`${CustomIds.AutoModSetActionPrefix}${ruleKey}:LOG_ONLY`)
@@ -530,6 +534,17 @@ function buildThresholdTuneModal(ruleKey, config) {
   const modal = new ModalBuilder()
     .setCustomId(`${CustomIds.AutoModThresholdModalPrefix}${ruleKey}`)
     .setTitle(`Tune Limits: ${ruleKey}`);
+
+  const timeoutKey = ruleKey === 'default_blacklist' ? 'word_blacklist_timeout_seconds' : `${ruleKey}_timeout_seconds`;
+  const currentTimeoutSec = config[timeoutKey] || (ruleKey === 'default_blacklist' ? 300 : 60);
+
+  const timeoutInput = new TextInputBuilder()
+    .setCustomId('timeout_duration')
+    .setLabel('Timeout Duration (e.g. 60s, 5m, 1h, 1d)')
+    .setStyle(TextInputStyle.Short)
+    .setValue(`${currentTimeoutSec}s`)
+    .setPlaceholder('60s, 5m, 1h, 1d')
+    .setRequired(false);
 
   if (ruleKey === 'anti_spam') {
     modal.addComponents(
@@ -549,14 +564,7 @@ function buildThresholdTuneModal(ruleKey, config) {
           .setValue(String(config.anti_spam_seconds || 4))
           .setRequired(true)
       ),
-      new ActionRowBuilder().addComponents(
-        new TextInputBuilder()
-          .setCustomId('timeout_seconds')
-          .setLabel('Timeout Duration (seconds)')
-          .setStyle(TextInputStyle.Short)
-          .setValue(String(config.anti_spam_timeout_seconds || 60))
-          .setRequired(false)
-      )
+      new ActionRowBuilder().addComponents(timeoutInput)
     );
   } else if (ruleKey === 'anti_duplicates') {
     modal.addComponents(
@@ -575,7 +583,8 @@ function buildThresholdTuneModal(ruleKey, config) {
           .setStyle(TextInputStyle.Short)
           .setValue(String(config.anti_duplicates_seconds || 10))
           .setRequired(true)
-      )
+      ),
+      new ActionRowBuilder().addComponents(timeoutInput)
     );
   } else if (ruleKey === 'anti_mentions') {
     modal.addComponents(
@@ -586,7 +595,8 @@ function buildThresholdTuneModal(ruleKey, config) {
           .setStyle(TextInputStyle.Short)
           .setValue(String(config.anti_mentions_max_count || 5))
           .setRequired(true)
-      )
+      ),
+      new ActionRowBuilder().addComponents(timeoutInput)
     );
   } else if (ruleKey === 'anti_caps') {
     modal.addComponents(
@@ -605,7 +615,8 @@ function buildThresholdTuneModal(ruleKey, config) {
           .setStyle(TextInputStyle.Short)
           .setValue(String(config.anti_caps_percent || 70))
           .setRequired(true)
-      )
+      ),
+      new ActionRowBuilder().addComponents(timeoutInput)
     );
   } else if (ruleKey === 'anti_emojis') {
     modal.addComponents(
@@ -616,18 +627,12 @@ function buildThresholdTuneModal(ruleKey, config) {
           .setStyle(TextInputStyle.Short)
           .setValue(String(config.anti_emojis_max_count || 8))
           .setRequired(true)
-      )
+      ),
+      new ActionRowBuilder().addComponents(timeoutInput)
     );
   } else {
     modal.addComponents(
-      new ActionRowBuilder().addComponents(
-        new TextInputBuilder()
-          .setCustomId('timeout_seconds')
-          .setLabel('Timeout Duration (seconds)')
-          .setStyle(TextInputStyle.Short)
-          .setValue(String(config[`${ruleKey}_timeout_seconds`] || 60))
-          .setRequired(true)
-      )
+      new ActionRowBuilder().addComponents(timeoutInput)
     );
   }
 

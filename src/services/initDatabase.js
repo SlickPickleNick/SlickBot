@@ -2050,6 +2050,15 @@ async function initDatabase() {
   await query(`ALTER TABLE automod_configs ADD COLUMN IF NOT EXISTS timeout_role_mode TEXT NOT NULL DEFAULT 'HIDE';`).catch(() => {});
   await query(`ALTER TABLE automod_configs ADD COLUMN IF NOT EXISTS timeout_role_lock_new_channels BOOLEAN NOT NULL DEFAULT true;`).catch(() => {});
   await query(`ALTER TABLE automod_configs ADD COLUMN IF NOT EXISTS timeout_role_exempt_channel_ids TEXT[] NOT NULL DEFAULT '{}';`).catch(() => {});
+  await query(`ALTER TABLE automod_configs ADD COLUMN IF NOT EXISTS anti_invites_timeout_seconds INTEGER NOT NULL DEFAULT 60;`).catch(() => {});
+  await query(`ALTER TABLE automod_configs ADD COLUMN IF NOT EXISTS anti_links_timeout_seconds INTEGER NOT NULL DEFAULT 60;`).catch(() => {});
+  await query(`ALTER TABLE automod_configs ADD COLUMN IF NOT EXISTS anti_spam_timeout_seconds INTEGER NOT NULL DEFAULT 60;`).catch(() => {});
+  await query(`ALTER TABLE automod_configs ADD COLUMN IF NOT EXISTS anti_duplicates_timeout_seconds INTEGER NOT NULL DEFAULT 60;`).catch(() => {});
+  await query(`ALTER TABLE automod_configs ADD COLUMN IF NOT EXISTS anti_mentions_timeout_seconds INTEGER NOT NULL DEFAULT 60;`).catch(() => {});
+  await query(`ALTER TABLE automod_configs ADD COLUMN IF NOT EXISTS anti_caps_timeout_seconds INTEGER NOT NULL DEFAULT 60;`).catch(() => {});
+  await query(`ALTER TABLE automod_configs ADD COLUMN IF NOT EXISTS anti_emojis_timeout_seconds INTEGER NOT NULL DEFAULT 60;`).catch(() => {});
+  await query(`ALTER TABLE automod_configs ADD COLUMN IF NOT EXISTS anti_zalgo_timeout_seconds INTEGER NOT NULL DEFAULT 60;`).catch(() => {});
+  await query(`ALTER TABLE automod_configs ADD COLUMN IF NOT EXISTS word_blacklist_timeout_seconds INTEGER NOT NULL DEFAULT 300;`).catch(() => {});
 
   await query(`
     CREATE TABLE IF NOT EXISTS automod_blacklists (

@@ -3280,13 +3280,25 @@ async function handleModal(interaction, ctx) {
     const ruleKey = id.slice(CustomIds.AutoModThresholdModalPrefix.length);
     const updates = {};
 
+    // 1. Universal timeout duration parsing across all rules
+    let durationInput = null;
+    try { durationInput = interaction.fields.getTextInputValue('timeout_duration')?.trim(); } catch {}
+    if (!durationInput) {
+      try { durationInput = interaction.fields.getTextInputValue('timeout_seconds')?.trim(); } catch {}
+    }
+    if (durationInput) {
+      const { parseDurationToMs: parseTimeMs } = require('../utils/time');
+      const ms = parseTimeMs(durationInput, { maxDurationMs: 28 * 24 * 60 * 60 * 1000, fallback: 0 });
+      const sec = Math.floor(ms / 1000);
+      const timeoutField = ruleKey === 'default_blacklist' ? 'word_blacklist_timeout_seconds' : `${ruleKey}_timeout_seconds`;
+      if (sec > 0) updates[timeoutField] = sec;
+    }
+
     if (ruleKey === 'anti_spam') {
       const maxMsgs = parseInt(interaction.fields.getTextInputValue('max_messages'), 10);
       const secs = parseInt(interaction.fields.getTextInputValue('seconds'), 10);
-      const timeoutSec = parseInt(interaction.fields.getTextInputValue('timeout_seconds'), 10);
       if (!isNaN(maxMsgs) && maxMsgs > 0) updates.anti_spam_max_messages = maxMsgs;
       if (!isNaN(secs) && secs > 0) updates.anti_spam_seconds = secs;
-      if (!isNaN(timeoutSec) && timeoutSec >= 0) updates.anti_spam_timeout_seconds = timeoutSec;
     } else if (ruleKey === 'anti_duplicates') {
       const maxCount = parseInt(interaction.fields.getTextInputValue('max_count'), 10);
       const secs = parseInt(interaction.fields.getTextInputValue('seconds'), 10);
@@ -3303,9 +3315,6 @@ async function handleModal(interaction, ctx) {
     } else if (ruleKey === 'anti_emojis') {
       const maxCount = parseInt(interaction.fields.getTextInputValue('max_count'), 10);
       if (!isNaN(maxCount) && maxCount > 0) updates.anti_emojis_max_count = maxCount;
-    } else {
-      const timeoutSec = parseInt(interaction.fields.getTextInputValue('timeout_seconds'), 10);
-      if (!isNaN(timeoutSec) && timeoutSec >= 0) updates[`${ruleKey}_timeout_seconds`] = timeoutSec;
     }
 
     await autoMod.upsertConfig(interaction.guildId, updates);
@@ -3313,12 +3322,12 @@ async function handleModal(interaction, ctx) {
       guildId: interaction.guildId,
       eventKey: 'automod-tune',
       title: 'Auto-Mod Limits Updated',
-      body: `Thresholds tuned for rule **${ruleKey}** by ${interaction.user.tag}.`,
+      body: `Thresholds and timeout duration tuned for rule **${ruleKey}** by ${interaction.user.tag}.`,
       actorUserId: interaction.user.id
     }).catch(() => {});
 
     await replyPrivate(interaction, {
-      embeds: [createSuccessEmbed('Limits Updated', `Successfully updated configuration limits for **${ruleKey}**.`)]
+      embeds: [createSuccessEmbed('Limits & Timeout Updated', `Successfully updated configuration limits and timeout duration for **${ruleKey}**.`)]
     });
     return true;
   }

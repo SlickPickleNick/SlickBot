@@ -28,8 +28,11 @@ module.exports = {
         .setName('timeout')
         .setDescription('Timeout a user and create a moderation case.')
         .addUserOption((option) => option.setName('user').setDescription('User to timeout.').setRequired(true))
-        .addIntegerOption((option) => option.setName('minutes').setDescription('Timeout duration in minutes.').setRequired(true).setMinValue(1).setMaxValue(40320))
         .addStringOption((option) => option.setName('reason').setDescription('Reason for the timeout.').setRequired(true).setMaxLength(1000))
+        .addStringOption((option) => option.setName('duration').setDescription('Flexible duration (e.g. 10m, 2h, 1d, 7d, 28d). Or use days/hours/minutes below.').setRequired(false))
+        .addIntegerOption((option) => option.setName('days').setDescription('Timeout duration in days (up to 28 days).').setRequired(false).setMinValue(1).setMaxValue(28))
+        .addIntegerOption((option) => option.setName('hours').setDescription('Timeout duration in hours.').setRequired(false).setMinValue(1).setMaxValue(672))
+        .addIntegerOption((option) => option.setName('minutes').setDescription('Timeout duration in minutes.').setRequired(false).setMinValue(1).setMaxValue(40320))
         .addStringOption((option) => option.setName('evidence').setDescription('Optional evidence or context.').setRequired(false).setMaxLength(1000))
     )
     .addSubcommand((subcommand) =>
@@ -153,14 +156,34 @@ async function handleWarn(interaction, ctx) {
   await replyPrivate(interaction, { embeds: [embed] });
 }
 
+const { parseDurationToMs } = require('../utils/time');
 const { AutoModService } = require('../modules/moderation/autoModService');
 const autoMod = new AutoModService();
 
 async function handleTimeout(interaction, ctx) {
   const target = interaction.options.getUser('user', true);
-  const minutes = interaction.options.getInteger('minutes', true);
+  const durationStr = interaction.options.getString('duration');
+  const days = interaction.options.getInteger('days') || 0;
+  const hours = interaction.options.getInteger('hours') || 0;
+  const minutes = interaction.options.getInteger('minutes') || 0;
   const reason = interaction.options.getString('reason', true);
   const evidence = interaction.options.getString('evidence', false);
+
+  let durationSeconds = 0;
+  if (durationStr) {
+    const ms = parseDurationToMs(durationStr, { maxDurationMs: 28 * 24 * 60 * 60 * 1000, fallback: 0 });
+    durationSeconds = Math.floor(ms / 1000);
+  }
+  if (!durationSeconds) {
+    durationSeconds = (days * 86400) + (hours * 3600) + (minutes * 60);
+  }
+  if (durationSeconds <= 0) {
+    durationSeconds = 600; // default to 10 minutes
+  }
+  if (durationSeconds > 28 * 86400) {
+    durationSeconds = 28 * 86400; // 28 days max
+  }
+
   const member = await interaction.guild.members.fetch(target.id).catch(() => null);
 
   if (!member) {
@@ -168,18 +191,28 @@ async function handleTimeout(interaction, ctx) {
     return;
   }
 
-  await autoMod.applyTimeout(member, minutes * 60, reason, interaction.user);
-  const expiresAt = new Date(Date.now() + minutes * 60 * 1000).toISOString();
+  const timeoutRes = await autoMod.applyTimeout(member, durationSeconds, reason, interaction.user);
+  const expiresAt = new Date(Date.now() + durationSeconds * 1000).toISOString();
   const caseRecord = await createAndLogCase(interaction, ctx, {
     target,
     actionType: 'TIMEOUT',
     reason,
     evidence,
-    durationSeconds: minutes * 60,
+    durationSeconds,
     expiresAt
   });
 
-  await replyPrivate(interaction, { embeds: [buildCaseEmbed(caseRecord, 'Timeout Applied')] });
+  const embed = buildCaseEmbed(caseRecord, 'Timeout Applied')
+    .addFields({
+      name: 'Dual-Layer Enforcement',
+      value: [
+        `• **Discord Timeout:** ${timeoutRes.nativeTimeout ? '`✅ Applied`' : '`⚠️ Skipped/Failed`' + (timeoutRes.nativeError ? ` (${timeoutRes.nativeError})` : '')}`,
+        `• **Timeout Role:** ${timeoutRes.roleApplied ? `\`✅ Assigned\` <@&${timeoutRes.timeoutRoleId}>` : `\`⚠️ Not Assigned\` (${timeoutRes.roleError || 'No role set'})`}`
+      ].join('\n'),
+      inline: false
+    });
+
+  await replyPrivate(interaction, { embeds: [embed] });
 }
 
 async function handleUntimeout(interaction, ctx) {
@@ -192,7 +225,7 @@ async function handleUntimeout(interaction, ctx) {
     return;
   }
 
-  await autoMod.removeTimeout(member, reason, interaction.user);
+  const untimeoutRes = await autoMod.removeTimeout(member, reason, interaction.user);
   const caseRecord = await createAndLogCase(interaction, ctx, {
     target,
     actionType: 'UNTIMEOUT',
@@ -200,7 +233,17 @@ async function handleUntimeout(interaction, ctx) {
     status: 'CLOSED'
   });
 
-  await replyPrivate(interaction, { embeds: [buildCaseEmbed(caseRecord, 'Timeout Removed')] });
+  const embed = buildCaseEmbed(caseRecord, 'Timeout Removed')
+    .addFields({
+      name: 'Enforcement Clearance',
+      value: [
+        `• **Discord Timeout:** ${untimeoutRes.nativeUntimeout ? '`✅ Cleared`' : '`ℹ️ None Active`'}`,
+        `• **Timeout Role:** ${untimeoutRes.roleRemoved ? '`✅ Role Removed`' : '`ℹ️ No Role Active`'}`
+      ].join('\n'),
+      inline: false
+    });
+
+  await replyPrivate(interaction, { embeds: [embed] });
 }
 
 async function handleKick(interaction, ctx) {
