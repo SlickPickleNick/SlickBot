@@ -601,13 +601,6 @@ async function handleButton(interaction, ctx) {
     return true;
   }
 
-  if (id === CustomIds.AutoModRuleSelect) {
-    if (!(await requireAction(interaction, ctx, ActionKeys.AutoModView, ModuleKeys.AUTOMOD))) return true;
-    const ruleKey = interaction.values[0];
-    await updatePanel(interaction, await buildAutoModManagerPanel(interaction.guildId, 'FILTERS', ruleKey));
-    return true;
-  }
-
   if (id.startsWith(CustomIds.AutoModSetActionPrefix)) {
     if (!(await requireAction(interaction, ctx, ActionKeys.AutoModManage, ModuleKeys.AUTOMOD))) return true;
     const payload = id.slice(CustomIds.AutoModSetActionPrefix.length);
@@ -631,48 +624,15 @@ async function handleButton(interaction, ctx) {
     return true;
   }
 
-  if (id === CustomIds.AutoModRoleExemptSelect) {
-    if (!(await requireAction(interaction, ctx, ActionKeys.AutoModWhitelist, ModuleKeys.AUTOMOD))) return true;
-    await autoMod.upsertConfig(interaction.guildId, { exempt_roles: interaction.values });
-    await updatePanel(interaction, await buildAutoModManagerPanel(interaction.guildId, 'WHITELIST'));
-    return true;
-  }
-
-  if (id === CustomIds.AutoModChannelExemptSelect) {
-    if (!(await requireAction(interaction, ctx, ActionKeys.AutoModWhitelist, ModuleKeys.AUTOMOD))) return true;
-    await autoMod.upsertConfig(interaction.guildId, { exempt_channels: interaction.values });
-    await updatePanel(interaction, await buildAutoModManagerPanel(interaction.guildId, 'WHITELIST'));
-    return true;
-  }
-
   if (id === CustomIds.AutoModDomainAddModal) {
     if (!(await requireAction(interaction, ctx, ActionKeys.AutoModWhitelist, ModuleKeys.AUTOMOD))) return true;
     await interaction.showModal(buildDomainWhitelistModal());
     return true;
   }
 
-  if (id === CustomIds.AutoModRaidChannelSelect) {
-    if (!(await requireAction(interaction, ctx, ActionKeys.AutoModRaid, ModuleKeys.AUTOMOD))) return true;
-    const channelId = interaction.values[0];
-    await autoMod.upsertConfig(interaction.guildId, { raid_alert_channel_id: channelId });
-    await updatePanel(interaction, await buildAutoModManagerPanel(interaction.guildId, 'RAID'));
-    return true;
-  }
-
-  if (id === CustomIds.AutoModRaidSensitivitySelect) {
-    if (!(await requireAction(interaction, ctx, ActionKeys.AutoModRaid, ModuleKeys.AUTOMOD))) return true;
-    const [threshold, seconds] = interaction.values[0].split(':').map(Number);
-    await autoMod.upsertConfig(interaction.guildId, { raid_join_threshold: threshold, raid_join_seconds: seconds });
-    await updatePanel(interaction, await buildAutoModManagerPanel(interaction.guildId, 'RAID'));
-    return true;
-  }
-
-  if (id === CustomIds.AutoModRaidAgeSelect) {
-    if (!(await requireAction(interaction, ctx, ActionKeys.AutoModRaid, ModuleKeys.AUTOMOD))) return true;
-    const hours = Number(interaction.values[0]);
-    await autoMod.upsertConfig(interaction.guildId, { raid_min_account_age_hours: hours });
-    await updatePanel(interaction, await buildAutoModManagerPanel(interaction.guildId, 'RAID'));
-    return true;
+  if (id.startsWith(CustomIds.SetupOpenManagerPrefix)) {
+    const moduleKey = id.slice(CustomIds.SetupOpenManagerPrefix.length);
+    return routeModuleToManager(interaction, ctx, moduleKey);
   }
 
   if (id.startsWith(CustomIds.AutoModToggleRulePrefix)) {
@@ -1056,6 +1016,9 @@ async function handleButton(interaction, ctx) {
     switch (moduleKey) {
       case ModuleKeys.MODERATION:
         await updatePanel(interaction, await buildModerationPanel(interaction.guildId));
+        break;
+      case ModuleKeys.AUTOMOD:
+        await updatePanel(interaction, await buildAutoModManagerPanel(interaction.guildId, 'FILTERS'));
         break;
       case ModuleKeys.TEMP_ROLES:
         await updatePanel(interaction, await tempRoles.buildManagerPanel(interaction.guildId));
@@ -2175,6 +2138,102 @@ async function handleButton(interaction, ctx) {
   return false;
 }
 
+async function routeModuleToManager(interaction, ctx, moduleKey) {
+  if (!(await requireAction(interaction, ctx, ActionKeys.Setup, ModuleKeys.PERMISSIONS))) return true;
+  if (!moduleKey) return true;
+
+  switch (moduleKey) {
+    case ModuleKeys.PERMISSIONS:
+      await updatePanel(interaction, await buildPermissionsPanel(interaction.guildId));
+      break;
+    case ModuleKeys.LOGGING:
+      await updatePanel(interaction, await buildLoggingPanel(interaction.guildId));
+      break;
+    case ModuleKeys.STATUS:
+      await updatePanel(interaction, await buildStatusPanel(interaction.guildId, ctx));
+      break;
+    case ModuleKeys.MODERATION:
+      await updatePanel(interaction, await buildModerationPanel(interaction.guildId));
+      break;
+    case ModuleKeys.AUTOMOD:
+      await updatePanel(interaction, await buildAutoModManagerPanel(interaction.guildId, 'FILTERS'));
+      break;
+    case ModuleKeys.TEMP_ROLES:
+      await updatePanel(interaction, await tempRoles.buildManagerPanel(interaction.guildId));
+      break;
+    case ModuleKeys.LOCKDOWN:
+      await updatePanel(interaction, await lockdown.buildManagerPanel(interaction.guildId));
+      break;
+    case ModuleKeys.TICKETS:
+      await updatePanel(interaction, await buildTicketsPanel(interaction.guildId));
+      break;
+    case ModuleKeys.REPORTS:
+      await updatePanel(interaction, await buildReportsPanel(interaction.guildId));
+      break;
+    case ModuleKeys.APPLICATIONS:
+      await updatePanel(interaction, await buildApplicationsPanel(interaction.guildId));
+      break;
+    case ModuleKeys.APPEALS:
+      await updatePanel(interaction, await buildAppealsPanel(interaction.guildId));
+      break;
+    case ModuleKeys.WELCOME:
+      await updatePanel(interaction, await buildWelcomePanel(interaction.guildId));
+      break;
+    case ModuleKeys.REACTION_ROLES:
+      await updatePanel(interaction, await buildRoleManagerPanel(interaction.guildId));
+      break;
+    case ModuleKeys.GIVEAWAYS:
+      await updatePanel(interaction, await giveaways.buildManagerPanel(interaction.guildId));
+      break;
+    case ModuleKeys.BIRTHDAYS:
+      await updatePanel(interaction, await birthdays.buildManagerPanel(interaction.guildId));
+      break;
+    case ModuleKeys.LEVELING:
+      await updatePanel(interaction, await leveling.buildManagerPanel(interaction.guildId));
+      break;
+    case ModuleKeys.ACHIEVEMENTS:
+      await updatePanel(interaction, await achievements.buildManagerPanel(interaction.guildId));
+      break;
+    case ModuleKeys.COMMUNITY_GAMES:
+      await updatePanel(interaction, await communityGames.buildManagerPanel(interaction.guildId));
+      break;
+    case ModuleKeys.SUGGESTIONS:
+      await updatePanel(interaction, await suggestions.buildManagerPanel(interaction.guildId));
+      break;
+    case ModuleKeys.FAQ:
+      await updatePanel(interaction, await faq.buildManagerPanel(interaction.guildId));
+      break;
+    case ModuleKeys.REFERRALS:
+      await updatePanel(interaction, await referrals.buildManagerPanel(interaction.guildId));
+      break;
+    case ModuleKeys.SERVER_STATS:
+      await updatePanel(interaction, await serverStats.buildManagerPanel(interaction.guild));
+      break;
+    case ModuleKeys.CUSTOM_COMMANDS:
+      await updatePanel(interaction, await customCommands.buildManagerPanel(interaction.guildId));
+      break;
+    case ModuleKeys.JOIN_TO_CREATE:
+      await updatePanel(interaction, await joinCreate.buildManagerPanel(interaction.guild));
+      break;
+    case ModuleKeys.SCHEDULED_MESSAGES:
+      await updatePanel(interaction, await scheduledMessages.buildManagerPanel(interaction.guildId));
+      break;
+    case ModuleKeys.BOT_UPDATES:
+      await updatePanel(interaction, await botUpdates.buildStatusPanel(interaction.guildId));
+      break;
+    case ModuleKeys.SOCIAL_FEEDS:
+      await updatePanel(interaction, await socialFeeds.buildManagerPanel(interaction.guildId));
+      break;
+    case ModuleKeys.UTILITY:
+      await updatePanel(interaction, await buildUtilityManagerPanel(interaction.guildId));
+      break;
+    default:
+      await updatePanel(interaction, await buildModuleDetailPanel(interaction.guildId, moduleKey));
+      break;
+  }
+  return true;
+}
+
 async function handleSelect(interaction, ctx) {
   const id = interaction.customId;
 
@@ -2191,97 +2250,8 @@ async function handleSelect(interaction, ctx) {
   }
 
   if (id === CustomIds.SetupModuleSelect || id === CustomIds.ModulesDetailSelect) {
-    if (!(await requireAction(interaction, ctx, ActionKeys.Setup, ModuleKeys.PERMISSIONS))) return true;
     const moduleKey = interaction.values?.[0];
-    if (!moduleKey) return true;
-
-    switch (moduleKey) {
-      case ModuleKeys.PERMISSIONS:
-        await updatePanel(interaction, await buildPermissionsPanel(interaction.guildId));
-        break;
-      case ModuleKeys.LOGGING:
-        await updatePanel(interaction, await buildLoggingPanel(interaction.guildId));
-        break;
-      case ModuleKeys.STATUS:
-        await updatePanel(interaction, await buildStatusPanel(interaction.guildId, ctx));
-        break;
-      case ModuleKeys.MODERATION:
-        await updatePanel(interaction, await buildModerationPanel(interaction.guildId));
-        break;
-      case ModuleKeys.TEMP_ROLES:
-        await updatePanel(interaction, await tempRoles.buildManagerPanel(interaction.guildId));
-        break;
-      case ModuleKeys.LOCKDOWN:
-        await updatePanel(interaction, await lockdown.buildManagerPanel(interaction.guildId));
-        break;
-      case ModuleKeys.TICKETS:
-        await updatePanel(interaction, await buildTicketsPanel(interaction.guildId));
-        break;
-      case ModuleKeys.REPORTS:
-        await updatePanel(interaction, await buildReportsPanel(interaction.guildId));
-        break;
-      case ModuleKeys.APPLICATIONS:
-        await updatePanel(interaction, await buildApplicationsPanel(interaction.guildId));
-        break;
-      case ModuleKeys.APPEALS:
-        await updatePanel(interaction, await buildAppealsPanel(interaction.guildId));
-        break;
-      case ModuleKeys.WELCOME:
-        await updatePanel(interaction, await buildWelcomePanel(interaction.guildId));
-        break;
-      case ModuleKeys.REACTION_ROLES:
-        await updatePanel(interaction, await buildRoleManagerPanel(interaction.guildId));
-        break;
-      case ModuleKeys.GIVEAWAYS:
-        await updatePanel(interaction, await giveaways.buildManagerPanel(interaction.guildId));
-        break;
-      case ModuleKeys.BIRTHDAYS:
-        await updatePanel(interaction, await birthdays.buildManagerPanel(interaction.guildId));
-        break;
-      case ModuleKeys.LEVELING:
-        await updatePanel(interaction, await leveling.buildManagerPanel(interaction.guildId));
-        break;
-      case ModuleKeys.ACHIEVEMENTS:
-        await updatePanel(interaction, await achievements.buildManagerPanel(interaction.guildId));
-        break;
-      case ModuleKeys.COMMUNITY_GAMES:
-        await updatePanel(interaction, await communityGames.buildManagerPanel(interaction.guildId));
-        break;
-      case ModuleKeys.SUGGESTIONS:
-        await updatePanel(interaction, await suggestions.buildManagerPanel(interaction.guildId));
-        break;
-      case ModuleKeys.FAQ:
-        await updatePanel(interaction, await faq.buildManagerPanel(interaction.guildId));
-        break;
-      case ModuleKeys.REFERRALS:
-        await updatePanel(interaction, await referrals.buildManagerPanel(interaction.guildId));
-        break;
-      case ModuleKeys.SERVER_STATS:
-        await updatePanel(interaction, await serverStats.buildManagerPanel(interaction.guild));
-        break;
-      case ModuleKeys.CUSTOM_COMMANDS:
-        await updatePanel(interaction, await customCommands.buildManagerPanel(interaction.guildId));
-        break;
-      case ModuleKeys.JOIN_TO_CREATE:
-        await updatePanel(interaction, await joinCreate.buildManagerPanel(interaction.guild));
-        break;
-      case ModuleKeys.SCHEDULED_MESSAGES:
-        await updatePanel(interaction, await scheduledMessages.buildManagerPanel(interaction.guildId));
-        break;
-      case ModuleKeys.BOT_UPDATES:
-        await updatePanel(interaction, await botUpdates.buildStatusPanel(interaction.guildId));
-        break;
-      case ModuleKeys.SOCIAL_FEEDS:
-        await updatePanel(interaction, await socialFeeds.buildManagerPanel(interaction.guildId));
-        break;
-      case ModuleKeys.UTILITY:
-        await updatePanel(interaction, await buildUtilityManagerPanel(interaction.guildId));
-        break;
-      default:
-        await updatePanel(interaction, await buildModuleDetailPanel(interaction.guildId, moduleKey));
-        break;
-    }
-    return true;
+    return routeModuleToManager(interaction, ctx, moduleKey);
   }
 
   if (id === CustomIds.PermissionsSetAdminRole) {
@@ -2631,6 +2601,53 @@ async function handleSelect(interaction, ctx) {
     const result = await toggleRole({ interaction, panelId, optionId, logger: ctx.logger });
     if (!result.ok) return replyPrivate(interaction, { embeds: [createWarningEmbed('Role Not Updated', result.reason)], deleteAfterSeconds: 10 });
     await acknowledgeQuietly(interaction);
+    return true;
+  }
+
+  // --- Auto-Mod Select Menus ---
+
+  if (id === CustomIds.AutoModRuleSelect) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.AutoModView, ModuleKeys.AUTOMOD))) return true;
+    const ruleKey = interaction.values[0];
+    await updatePanel(interaction, await buildAutoModManagerPanel(interaction.guildId, 'FILTERS', ruleKey));
+    return true;
+  }
+
+  if (id === CustomIds.AutoModRoleExemptSelect) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.AutoModWhitelist, ModuleKeys.AUTOMOD))) return true;
+    await autoMod.upsertConfig(interaction.guildId, { exempt_roles: interaction.values });
+    await updatePanel(interaction, await buildAutoModManagerPanel(interaction.guildId, 'WHITELIST'));
+    return true;
+  }
+
+  if (id === CustomIds.AutoModChannelExemptSelect) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.AutoModWhitelist, ModuleKeys.AUTOMOD))) return true;
+    await autoMod.upsertConfig(interaction.guildId, { exempt_channels: interaction.values });
+    await updatePanel(interaction, await buildAutoModManagerPanel(interaction.guildId, 'WHITELIST'));
+    return true;
+  }
+
+  if (id === CustomIds.AutoModRaidChannelSelect) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.AutoModRaid, ModuleKeys.AUTOMOD))) return true;
+    const channelId = interaction.values[0];
+    await autoMod.upsertConfig(interaction.guildId, { raid_alert_channel_id: channelId });
+    await updatePanel(interaction, await buildAutoModManagerPanel(interaction.guildId, 'RAID'));
+    return true;
+  }
+
+  if (id === CustomIds.AutoModRaidSensitivitySelect) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.AutoModRaid, ModuleKeys.AUTOMOD))) return true;
+    const [threshold, seconds] = interaction.values[0].split(':').map(Number);
+    await autoMod.upsertConfig(interaction.guildId, { raid_join_threshold: threshold, raid_join_seconds: seconds });
+    await updatePanel(interaction, await buildAutoModManagerPanel(interaction.guildId, 'RAID'));
+    return true;
+  }
+
+  if (id === CustomIds.AutoModRaidAgeSelect) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.AutoModRaid, ModuleKeys.AUTOMOD))) return true;
+    const hours = Number(interaction.values[0]);
+    await autoMod.upsertConfig(interaction.guildId, { raid_min_account_age_hours: hours });
+    await updatePanel(interaction, await buildAutoModManagerPanel(interaction.guildId, 'RAID'));
     return true;
   }
 

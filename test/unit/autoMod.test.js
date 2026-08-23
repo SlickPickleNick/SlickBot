@@ -22,6 +22,7 @@ const { ActionKeys } = require('../../src/modules/permissions/actionKeys');
 const automodCmd = require('../../src/commands/automod');
 const { commands, commandMap } = require('../../src/commands');
 const { validateCommandPayloads } = require('../../src/utils/commandValidation');
+const { CustomIds } = require('../../src/modules/ui/customIds');
 const { PermissionFlagsBits } = require('discord.js');
 
 const mockDb = new MockDatabase();
@@ -497,4 +498,28 @@ test('Auto-Mod & Anti-Raid Engine Tests', async (t) => {
     const errors = validateCommandPayloads(payloads);
     assert.deepEqual(errors, []);
   });
+
+  await t.test('Setup Center navigation and Open Manager integration', async () => {
+    const { buildModuleDetailPanel } = require('../../src/modules/ui/panels');
+    const guildId = 'guild-setup-test';
+
+    // 1. Detail panel includes 'Open Manager' button for AUTOMOD and implemented modules
+    const detailPanel = await buildModuleDetailPanel(guildId, ModuleKeys.AUTOMOD);
+    assert.ok(detailPanel.components.length > 0);
+    const detailButtons = detailPanel.components[0].components;
+    assert.ok(detailButtons.some((b) => b.data.custom_id === `${CustomIds.SetupOpenManagerPrefix}${ModuleKeys.AUTOMOD}`));
+    assert.ok(detailButtons.some((b) => b.data.custom_id === CustomIds.SetupRefresh));
+
+    // 2. Wizard and Manager panels include Core Setup and Setup Center buttons
+    const wizard = await buildAutoModWizard(guildId);
+    const wizardButtons = wizard.components[1].components;
+    assert.ok(wizardButtons.some((b) => b.data.custom_id === CustomIds.SetupCategoryCore));
+    assert.ok(wizardButtons.some((b) => b.data.custom_id === CustomIds.SetupRefresh));
+
+    const manager = await buildAutoModManagerPanel(guildId, 'FILTERS');
+    const managerButtons = manager.components[2].components;
+    assert.ok(managerButtons.some((b) => b.data.custom_id === CustomIds.SetupCategoryCore));
+    assert.ok(managerButtons.some((b) => b.data.custom_id === CustomIds.SetupRefresh));
+  });
 });
+

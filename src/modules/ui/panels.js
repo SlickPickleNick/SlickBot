@@ -550,12 +550,17 @@ async function buildModuleDetailPanel(guildId, moduleKey) {
     color: statusMeta(status.state).color
   });
 
-  const buttons = createButtonRow([
+  const buttonList = [];
+  if (isImplementedModule(moduleKey)) {
+    buttonList.push(createPanelButton(`${CustomIds.SetupOpenManagerPrefix}${moduleKey}`, 'Open Manager', ButtonStyle.Primary, '⚙️'));
+  }
+  buttonList.push(
     createPanelButton(`${CustomIds.OnboardingModulePrefix}${moduleKey}`, 'Guided Setup', ButtonStyle.Success, '🚀'),
-    createPanelButton(CustomIds.ModulesRefresh, 'Back to Modules', ButtonStyle.Primary, '↩️'),
+    createPanelButton(CustomIds.ModulesRefresh, 'Back to Modules', ButtonStyle.Secondary, '↩️'),
     createPanelButton(CustomIds.SetupRefresh, 'Setup Center', ButtonStyle.Secondary, '⚙️')
-  ]);
+  );
 
+  const buttons = createButtonRow(buttonList);
   return { embeds: [embed], components: [buttons] };
 }
 

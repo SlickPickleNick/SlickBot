@@ -73,6 +73,16 @@ async function buildAutoModWizard(guildId) {
       .setCustomId(CustomIds.AutoModManager)
       .setLabel('Open Control Center')
       .setEmoji('⚙️')
+      .setStyle(ButtonStyle.Primary),
+    new ButtonBuilder()
+      .setCustomId(CustomIds.SetupCategoryCore)
+      .setLabel('Core Setup')
+      .setEmoji('🛡️')
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId(CustomIds.SetupRefresh)
+      .setLabel('Setup Center')
+      .setEmoji('⚙️')
       .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId(CustomIds.AutoModRefresh)
@@ -137,6 +147,16 @@ async function buildAutoModManagerPanel(guildId, tab = 'FILTERS', selectedRuleKe
         .setEmoji('🛡️')
         .setStyle(config.default_blacklist_enabled ? ButtonStyle.Danger : ButtonStyle.Primary),
       new ButtonBuilder()
+        .setCustomId(CustomIds.SetupCategoryCore)
+        .setLabel('Core Setup')
+        .setEmoji('🛡️')
+        .setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder()
+        .setCustomId(CustomIds.SetupRefresh)
+        .setLabel('Setup Center')
+        .setEmoji('⚙️')
+        .setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder()
         .setCustomId(CustomIds.AutoModRefresh)
         .setLabel('Refresh')
         .setEmoji('🔄')
@@ -185,6 +205,16 @@ async function buildAutoModManagerPanel(guildId, tab = 'FILTERS', selectedRuleKe
         .setLabel('Add Whitelisted Domain')
         .setEmoji('➕')
         .setStyle(ButtonStyle.Primary),
+      new ButtonBuilder()
+        .setCustomId(CustomIds.SetupCategoryCore)
+        .setLabel('Core Setup')
+        .setEmoji('🛡️')
+        .setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder()
+        .setCustomId(CustomIds.SetupRefresh)
+        .setLabel('Setup Center')
+        .setEmoji('⚙️')
+        .setStyle(ButtonStyle.Secondary),
       new ButtonBuilder()
         .setCustomId(CustomIds.AutoModRefresh)
         .setLabel('Refresh')
@@ -250,6 +280,16 @@ async function buildAutoModManagerPanel(guildId, tab = 'FILTERS', selectedRuleKe
         .setEmoji('🚨')
         .setStyle(config.raid_shield_enabled ? ButtonStyle.Danger : ButtonStyle.Success),
       new ButtonBuilder()
+        .setCustomId(CustomIds.SetupCategoryCore)
+        .setLabel('Core Setup')
+        .setEmoji('🛡️')
+        .setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder()
+        .setCustomId(CustomIds.SetupRefresh)
+        .setLabel('Setup Center')
+        .setEmoji('⚙️')
+        .setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder()
         .setCustomId(CustomIds.AutoModRefresh)
         .setLabel('Refresh')
         .setEmoji('🔄')
@@ -313,6 +353,16 @@ async function buildAutoModManagerPanel(guildId, tab = 'FILTERS', selectedRuleKe
       .setLabel(config.enabled ? 'Pause Auto-Mod' : 'Resume Auto-Mod')
       .setStyle(config.enabled ? ButtonStyle.Danger : ButtonStyle.Primary),
     new ButtonBuilder()
+      .setCustomId(CustomIds.SetupCategoryCore)
+      .setLabel('Core Setup')
+      .setEmoji('🛡️')
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId(CustomIds.SetupRefresh)
+      .setLabel('Setup Center')
+      .setEmoji('⚙️')
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
       .setCustomId(CustomIds.AutoModRefresh)
       .setLabel('Refresh')
       .setEmoji('🔄')
@@ -345,7 +395,17 @@ function buildRuleEditComponents(config, ruleKey) {
       .setCustomId(`${CustomIds.AutoModThresholdEditPrefix}${ruleKey}`)
       .setLabel('Tune Limits & Thresholds')
       .setEmoji('⚙️')
-      .setStyle(ButtonStyle.Primary)
+      .setStyle(ButtonStyle.Primary),
+    new ButtonBuilder()
+      .setCustomId(CustomIds.AutoModManager)
+      .setLabel('Back to Rules')
+      .setEmoji('↩️')
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId(CustomIds.SetupRefresh)
+      .setLabel('Setup Center')
+      .setEmoji('⚙️')
+      .setStyle(ButtonStyle.Secondary)
   );
 
   const actionSelectRow = new ActionRowBuilder().addComponents(
