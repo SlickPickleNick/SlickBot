@@ -178,6 +178,8 @@ async function initDatabase() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       UNIQUE(guild_id, note_number)
     );
+  `);
+
   await query(`
     CREATE TABLE IF NOT EXISTS moderation_escalation_rules (
       id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
