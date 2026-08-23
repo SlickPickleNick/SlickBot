@@ -373,4 +373,16 @@ test('Sticky Messages Automation Module Tests', async (t) => {
     assert.equal(stickyCmd.getActionKey(makeInteraction('toggle')), ActionKeys.StickyManage);
     assert.equal(stickyCmd.getActionKey(makeInteraction('manager')), ActionKeys.StickyManage);
   });
+
+  await t.test('sticky command is exported in commands/index and passes payload validation', () => {
+    const { commands, commandMap } = require('../../src/commands');
+    const { validateCommandPayloads } = require('../../src/utils/commandValidation');
+
+    assert.equal(commandMap.has('sticky'), true);
+    assert.equal(commandMap.get('sticky'), stickyCmd);
+
+    const payloads = commands.map((c) => c.data.toJSON());
+    const errors = validateCommandPayloads(payloads);
+    assert.deepEqual(errors, []);
+  });
 });

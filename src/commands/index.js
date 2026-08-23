@@ -50,6 +50,7 @@ const afkCommand = require('./afk');
 const snipeCommand = require('./snipe');
 const emojisCommand = require('./emojis');
 const stickersCommand = require('./stickers');
+const stickyCommand = require('./sticky');
 const userInfoContextCommand = require('./userInfoContext');
 const avatarContextCommand = require('./avatarContext');
 
@@ -106,6 +107,7 @@ const commands = [
   snipeCommand,
   emojisCommand,
   stickersCommand,
+  stickyCommand,
   userInfoContextCommand,
   avatarContextCommand
 ];
