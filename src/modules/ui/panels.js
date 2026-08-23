@@ -59,7 +59,7 @@ const MODULE_CATEGORIES = Object.freeze([
   { key: 'CORE', label: 'Core Setup', modules: [ModuleKeys.PERMISSIONS, ModuleKeys.LOGGING, ModuleKeys.STATUS, ModuleKeys.MODERATION, ModuleKeys.LOCKDOWN, ModuleKeys.TEMP_ROLES, ModuleKeys.UTILITY] },
   { key: 'SUPPORT', label: 'Support Systems', modules: [ModuleKeys.TICKETS, ModuleKeys.REPORTS, ModuleKeys.APPLICATIONS, ModuleKeys.APPEALS] },
   { key: 'COMMUNITY', label: 'Community Systems', modules: [ModuleKeys.WELCOME, ModuleKeys.REACTION_ROLES, ModuleKeys.GIVEAWAYS, ModuleKeys.BIRTHDAYS, ModuleKeys.LEVELING, ModuleKeys.COMMUNITY_GAMES, ModuleKeys.FAQ, ModuleKeys.SUGGESTIONS, ModuleKeys.REFERRALS, ModuleKeys.ACHIEVEMENTS, ModuleKeys.SERVER_STATS, ModuleKeys.CUSTOM_COMMANDS, ModuleKeys.JOIN_TO_CREATE] },
-  { key: 'AUTOMATION', label: 'Automation Systems', modules: [ModuleKeys.SCHEDULED_MESSAGES, ModuleKeys.BOT_UPDATES, ModuleKeys.SOCIAL_FEEDS] },
+  { key: 'AUTOMATION', label: 'Automation Systems', modules: [ModuleKeys.SCHEDULED_MESSAGES, ModuleKeys.BOT_UPDATES, ModuleKeys.SOCIAL_FEEDS, ModuleKeys.STICKY_MESSAGES] },
   { key: 'BACKLOG', label: 'Coming Soon', modules: [] }
 ]);
 
@@ -225,6 +225,12 @@ const MODULE_SETUP_CATALOG = Object.freeze({
     managerCommand: '/utility manager', setupCommand: '/utility setup',
     nextSteps: ['Run `/utility setup` to configure default channels and limits.', 'Use `/purge` to clean up chat messages.', 'Use `/userinfo` or right-click a user to view detailed profile cards.', 'Use `/poll create` to launch interactive votes.'],
     usefulCommands: ['/utility manager', '/utility setup', '/purge', '/userinfo', '/serverinfo', '/avatar', '/banner', '/poll create', '/remind set', '/embed create', '/afk', '/snipe']
+  },
+  [ModuleKeys.STICKY_MESSAGES]: {
+    name: 'Sticky Messages', category: 'Automation Systems', description: 'Keeps important rules, guidelines, or announcements pinned as the newest message at the bottom of active text channels.',
+    managerCommand: '/sticky manager', setupCommand: '/sticky set',
+    nextSteps: ['Run `/sticky set` in a channel with guidelines or rules.', 'Use `/sticky manager` to review active channel stickies and cooldown throttles.', 'Use `/sticky edit` to adjust message content or colors.'],
+    usefulCommands: ['/sticky manager', '/sticky set', '/sticky edit', '/sticky repost', '/sticky toggle', '/sticky list', '/sticky remove']
   }
 });
 
@@ -817,6 +823,18 @@ async function getModuleStatus(guildId, row) {
     const config = res.rows[0];
     if (config && config.enabled === false) return { moduleKey: row.module_key, core: false, state: 'DISABLED', emoji: '⏸️', label: 'Disabled', note: 'Utility tools disabled' };
     return { moduleKey: row.module_key, core: false, state: 'READY', emoji: '✅', label: 'Ready', note: 'Essential tools active' };
+  }
+
+  if (row.module_key === 'STICKY_MESSAGES') {
+    const res = await query(
+      `SELECT COUNT(*)::int AS total, COUNT(*) FILTER (WHERE enabled = true)::int AS active FROM sticky_messages WHERE guild_id = $1`,
+      [guildId]
+    ).catch(() => ({ rows: [{ total: 0, active: 0 }] }));
+    const total = res.rows[0]?.total || 0;
+    const active = res.rows[0]?.active || 0;
+    if (active > 0) return { moduleKey: row.module_key, core: false, state: 'READY', emoji: '✅', label: 'Ready', note: `${active}/${total} sticky message(s)` };
+    if (total > 0) return { moduleKey: row.module_key, core: false, state: 'PARTIAL', emoji: '🟠', label: 'Partially Configured', note: `${total} paused sticky message(s)` };
+    return { moduleKey: row.module_key, core: false, state: 'NEEDS_CONFIG', emoji: '🟣', label: 'Needs Setup', note: 'Run /sticky set' };
   }
 
   return { moduleKey: row.module_key, core: false, state: 'PARTIAL', emoji: '🟠', label: 'Partially Configured', note: 'Module shell only' };

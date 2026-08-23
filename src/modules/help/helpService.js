@@ -588,6 +588,23 @@ const HELP_CATALOG = Object.freeze([
       '/feed my-alerts',
       '/feed list'
     ]
+  },
+  {
+    name: 'sticky',
+    command: '/sticky',
+    syntax: '/sticky <set|edit|remove|list|repost|toggle|manager|reset>',
+    description: 'Keep important guidelines, rules, and announcements pinned at the bottom of active text channels with automated reposting.',
+    category: 'AUTOMATION',
+    moduleKey: ModuleKeys.STICKY_MESSAGES,
+    actionKey: ActionKeys.StickyManage,
+    level: PermissionLevels.ADMIN,
+    examples: [
+      '/sticky set channel:#general title:"📌 Chat Guidelines" description:"Be respectful and follow Discord TOS."',
+      '/sticky repost channel:#general',
+      '/sticky toggle channel:#general',
+      '/sticky manager',
+      '/sticky list'
+    ]
   }
 ]);
 

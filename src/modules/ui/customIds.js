@@ -313,7 +313,17 @@ const CustomIds = Object.freeze({
   EmbedSendPrefix: 'slickbot:embed:send:',
   EmbedCancelPrefix: 'slickbot:embed:cancel:',
   EmbedEditBtnPrefix: 'slickbot:embed:edit-btn:',
-  EmbedAddFieldBtnPrefix: 'slickbot:embed:add-field-btn:'
+  EmbedAddFieldBtnPrefix: 'slickbot:embed:add-field-btn:',
+
+  StickyManager: 'slickbot:sticky:manager',
+  StickyRefresh: 'slickbot:sticky:refresh',
+  StickyCreateModal: 'slickbot:modal:sticky-create',
+  StickyEditModalPrefix: 'slickbot:modal:sticky-edit:',
+  StickyTogglePrefix: 'slickbot:sticky:toggle:',
+  StickyDeletePrefix: 'slickbot:sticky:delete:',
+  StickyRepostPrefix: 'slickbot:sticky:repost:',
+  StickyResetConfirmPrefix: 'slickbot:sticky:reset:confirm:',
+  StickyResetCancelPrefix: 'slickbot:sticky:reset:cancel:'
 });
 
 module.exports = { CustomIds };

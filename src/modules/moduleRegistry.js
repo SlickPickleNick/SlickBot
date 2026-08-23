@@ -25,7 +25,8 @@ const ModuleKeys = Object.freeze({
   TEMP_ROLES: 'TEMP_ROLES',
   ACHIEVEMENTS: 'ACHIEVEMENTS',
   SOCIAL_FEEDS: 'SOCIAL_FEEDS',
-  UTILITY: 'UTILITY'
+  UTILITY: 'UTILITY',
+  STICKY_MESSAGES: 'STICKY_MESSAGES'
 });
 
 const coreModules = [ModuleKeys.PERMISSIONS, ModuleKeys.LOGGING, ModuleKeys.STATUS];
@@ -57,7 +58,8 @@ const defaultModules = [
   { key: ModuleKeys.TEMP_ROLES, enabled: true },
   { key: ModuleKeys.ACHIEVEMENTS, enabled: true },
   { key: ModuleKeys.SOCIAL_FEEDS, enabled: true },
-  { key: ModuleKeys.UTILITY, enabled: true }
+  { key: ModuleKeys.UTILITY, enabled: true },
+  { key: ModuleKeys.STICKY_MESSAGES, enabled: true }
 ];
 
 function isCoreModule(moduleKey) {
@@ -92,7 +94,8 @@ const implementedModules = Object.freeze([
   ModuleKeys.TEMP_ROLES,
   ModuleKeys.ACHIEVEMENTS,
   ModuleKeys.SOCIAL_FEEDS,
-  ModuleKeys.UTILITY
+  ModuleKeys.UTILITY,
+  ModuleKeys.STICKY_MESSAGES
 ]);
 
 function isImplementedModule(moduleKey) {

@@ -25,6 +25,7 @@ const { FaqService } = require('./modules/community/faqService');
 const { TemporaryRoleService } = require('./modules/moderation/tempRoleService');
 const { AchievementService, ACHIEVEMENT_KEYS } = require('./modules/community/achievementService');
 const { SocialFeedService } = require('./modules/automation/socialFeedService');
+const { StickyMessageService } = require('./modules/automation/stickyMessageService');
 const { UtilityService } = require('./modules/utility/utilityService');
 const { handleReactionRole, syncAllPublishedReactionPanels } = require('./modules/community/rolePanelService');
 const { handleComponentInteraction } = require('./services/interactionRouter');
@@ -64,6 +65,7 @@ const faq = new FaqService();
 const tempRoles = new TemporaryRoleService();
 const achievements = new AchievementService();
 const socialFeeds = new SocialFeedService();
+const stickyMessages = new StickyMessageService();
 const utility = new UtilityService();
 const healthServer = startHealthServer(client);
 
@@ -569,6 +571,11 @@ client.on(Events.MessageCreate, async (message) => {
     const utilityEnabled = await permissions.isModuleEnabled(message.guild.id, ModuleKeys.UTILITY).catch(() => false);
     if (utilityEnabled) {
       await utility.handleMessageAfkCheck(message).catch((error) => console.error('Failed to process AFK check:', error));
+    }
+
+    const stickyEnabled = await permissions.isModuleEnabled(message.guild.id, ModuleKeys.STICKY_MESSAGES).catch(() => false);
+    if (stickyEnabled) {
+      await stickyMessages.handleMessage(message, logger).catch((error) => console.error('Failed to process sticky message:', error));
     }
 
     const levelingEnabled = await permissions.isModuleEnabled(message.guild.id, 'LEVELING').catch(() => false);

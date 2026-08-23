@@ -178,6 +178,11 @@ const ActionKeys = Object.freeze({
   UtilitySnipeView: 'utility.snipe.view',
   UtilityReset: 'utility.reset',
 
+  StickyView: 'sticky.view',
+  StickyManage: 'sticky.manage',
+  StickyRepost: 'sticky.repost',
+  StickyReset: 'sticky.reset',
+
   PanelsConfigure: 'panels.configure',
 
   ServerReset: 'server.reset'
@@ -378,6 +383,11 @@ const defaultActionLevels = Object.freeze({
   [ActionKeys.UtilitySnipeView]: PermissionLevels.MODERATOR,
   [ActionKeys.UtilityReset]: PermissionLevels.OWNER,
 
+  [ActionKeys.StickyView]: PermissionLevels.MODERATOR,
+  [ActionKeys.StickyManage]: PermissionLevels.SENIOR_MODERATOR,
+  [ActionKeys.StickyRepost]: PermissionLevels.MODERATOR,
+  [ActionKeys.StickyReset]: PermissionLevels.OWNER,
+
   [ActionKeys.ServerReset]: PermissionLevels.OWNER
 });
 
@@ -408,7 +418,8 @@ const defaultModuleLevels = Object.freeze({
   [ModuleKeys.TEMP_ROLES]: PermissionLevels.MODERATOR,
   [ModuleKeys.ACHIEVEMENTS]: PermissionLevels.EVERYONE,
   [ModuleKeys.SOCIAL_FEEDS]: PermissionLevels.EVERYONE,
-  [ModuleKeys.UTILITY]: PermissionLevels.EVERYONE
+  [ModuleKeys.UTILITY]: PermissionLevels.EVERYONE,
+  [ModuleKeys.STICKY_MESSAGES]: PermissionLevels.MODERATOR
 });
 
 const defaultPublicActions = Object.freeze([

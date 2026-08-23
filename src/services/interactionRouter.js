@@ -36,6 +36,11 @@ const { TemporaryRoleService } = require('../modules/moderation/tempRoleService'
 const { AchievementService, ACHIEVEMENT_KEYS } = require('../modules/community/achievementService');
 const { LockdownService } = require('../modules/safety/lockdownService');
 const { SocialFeedService, PLATFORM_META } = require('../modules/automation/socialFeedService');
+const {
+  StickyMessageService,
+  buildStickyCreateModal,
+  buildStickyEditModal
+} = require('../modules/automation/stickyMessageService');
 const { BotUpdatesService } = require('../modules/status/botUpdatesService');
 const { buildRoleManagerPanel, toggleRole } = require('../modules/community/rolePanelService');
 const { JoinCreateService } = require('../modules/voice/joinCreateService');
@@ -84,6 +89,7 @@ const tempRoles = new TemporaryRoleService();
 const achievements = new AchievementService();
 const lockdown = new LockdownService();
 const socialFeeds = new SocialFeedService();
+const stickyMessages = new StickyMessageService();
 const botUpdates = new BotUpdatesService();
 const onboarding = new OnboardingService();
 const utility = new UtilityService();
@@ -545,6 +551,93 @@ async function handleButton(interaction, ctx) {
     const payload = await utility.buildEmojiListPayload(interaction.guild, 1);
     await interaction.update(payload).catch(async () => {
       await replyPrivate(interaction, payload);
+    });
+    return true;
+  }
+
+  if (id === CustomIds.StickyManager || id === CustomIds.StickyRefresh) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.StickyView, ModuleKeys.STICKY_MESSAGES))) return true;
+    await updatePanel(interaction, await stickyMessages.buildManagerPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id === CustomIds.StickyCreateModal) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.StickyManage, ModuleKeys.STICKY_MESSAGES))) return true;
+    await interaction.showModal(buildStickyCreateModal(interaction.channelId));
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.StickyEditModalPrefix)) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.StickyManage, ModuleKeys.STICKY_MESSAGES))) return true;
+    const channelId = id.slice(CustomIds.StickyEditModalPrefix.length);
+    const sticky = await stickyMessages.getSticky(interaction.guildId, channelId);
+    if (!sticky) {
+      await replyPrivate(interaction, { embeds: [createWarningEmbed('Sticky Not Found', 'No sticky message found for that channel.')] });
+      return true;
+    }
+    await interaction.showModal(buildStickyEditModal(sticky));
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.StickyTogglePrefix)) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.StickyManage, ModuleKeys.STICKY_MESSAGES))) return true;
+    const channelId = id.slice(CustomIds.StickyTogglePrefix.length);
+    const toggled = await stickyMessages.toggleSticky(interaction.guildId, channelId, ctx.client);
+    if (!toggled) {
+      await replyPrivate(interaction, { embeds: [createWarningEmbed('Sticky Not Found', 'No sticky message found for that channel.')] });
+      return true;
+    }
+    await updatePanel(interaction, await stickyMessages.buildManagerPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.StickyDeletePrefix)) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.StickyManage, ModuleKeys.STICKY_MESSAGES))) return true;
+    const channelId = id.slice(CustomIds.StickyDeletePrefix.length);
+    await stickyMessages.removeSticky(interaction.guildId, channelId, ctx.client);
+    await updatePanel(interaction, await stickyMessages.buildManagerPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.StickyRepostPrefix)) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.StickyRepost, ModuleKeys.STICKY_MESSAGES))) return true;
+    const channelId = id.slice(CustomIds.StickyRepostPrefix.length);
+    const reposted = await stickyMessages.repostSticky(interaction.guildId, channelId, ctx.client, { force: true });
+    if (!reposted) {
+      await replyPrivate(interaction, { embeds: [createWarningEmbed('Repost Failed', 'Could not repost sticky notice in that channel.')] });
+      return true;
+    }
+    await replyPrivate(interaction, { embeds: [createSuccessEmbed('Sticky Reposted', `Successfully reposted sticky message in <#${channelId}>.`)] });
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.StickyResetConfirmPrefix)) {
+    const requestedByUserId = id.slice(CustomIds.StickyResetConfirmPrefix.length);
+    if (requestedByUserId !== interaction.user.id) {
+      await replyPrivate(interaction, { embeds: [createWarningEmbed('Confirmation Not Yours', 'Only the user who opened this reset confirmation can confirm it.')] });
+      return true;
+    }
+    if (!(await requireAction(interaction, ctx, ActionKeys.StickyReset, ModuleKeys.STICKY_MESSAGES))) return true;
+    const result = await stickyMessages.resetModule(interaction.guildId, ctx.client);
+    await ctx.logger.log({
+      guildId: interaction.guildId,
+      eventKey: 'sticky-reset',
+      title: 'Sticky Messages Reset',
+      body: `All sticky messages were reset and deleted by ${interaction.user.tag}.`,
+      actorUserId: interaction.user.id,
+      metadata: { deletedCount: result.deletedCount }
+    }).catch(() => {});
+    await updatePanel(interaction, {
+      embeds: [createSuccessEmbed('Sticky Messages Reset Complete', `Successfully removed and unpinned ${result.deletedCount} sticky message(s).`)],
+      components: []
+    });
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.StickyResetCancelPrefix)) {
+    await updatePanel(interaction, {
+      embeds: [createSuccessEmbed('Reset Cancelled', 'No sticky messages were modified.')],
+      components: []
     });
     return true;
   }
@@ -2888,6 +2981,91 @@ async function handleModal(interaction, ctx) {
       return replyPrivate(interaction, { embeds: [createWarningEmbed('Schedule Failed', result.reason || 'Could not schedule message.')] });
     }
     await replyPrivate(interaction, { embeds: [createSuccessEmbed('Message Scheduled', `Schedule **#${result.schedule.schedule_number}** set for <t:${Math.floor(new Date(result.schedule.send_at).getTime() / 1000)}:f> in <#${interaction.channelId}>.`)] });
+    return true;
+  }
+
+  if (id === CustomIds.StickyCreateModal) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.StickyManage, ModuleKeys.STICKY_MESSAGES))) return true;
+    const rawChannel = interaction.fields.getTextInputValue('channel_id');
+    const channelId = extractUserId(rawChannel) || rawChannel.replace(/[<#>]/g, '').trim();
+    const channel = interaction.guild.channels.cache.get(channelId) || await interaction.guild.channels.fetch(channelId).catch(() => null);
+    if (!channel || !channel.isTextBased()) {
+      return replyPrivate(interaction, { embeds: [createWarningEmbed('Invalid Channel', 'Please provide a valid text or announcement channel ID in this server.')] });
+    }
+
+    const title = interaction.fields.getTextInputValue('embed_title') || null;
+    const desc = interaction.fields.getTextInputValue('embed_description') || null;
+    const message = interaction.fields.getTextInputValue('message_content') || null;
+    const cooldown = interaction.fields.getTextInputValue('cooldown_seconds') || null;
+
+    const result = await stickyMessages.setSticky({
+      guildId: interaction.guildId,
+      channelId: channel.id,
+      messageContent: message,
+      embedTitle: title,
+      embedDescription: desc,
+      cooldownSeconds: cooldown,
+      createdByUserId: interaction.user.id,
+      client: ctx.client
+    });
+
+    if (!result.ok) {
+      return replyPrivate(interaction, { embeds: [createWarningEmbed('Sticky Notice Failed', result.reason || 'Could not configure sticky notice.')] });
+    }
+
+    await ctx.logger.log({
+      guildId: interaction.guildId,
+      eventKey: 'sticky-create',
+      title: 'Sticky Message Configured',
+      body: `Configured sticky message in <#${channel.id}> by ${interaction.user.tag}.`,
+      actorUserId: interaction.user.id,
+      metadata: { channelId: channel.id, sticky: result.sticky }
+    }).catch(() => {});
+
+    await replyPrivate(interaction, {
+      embeds: [createSuccessEmbed('Sticky Message Created', `Successfully configured and posted sticky message in <#${channel.id}>!`)]
+    });
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.StickyEditModalPrefix)) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.StickyManage, ModuleKeys.STICKY_MESSAGES))) return true;
+    const channelId = id.slice(CustomIds.StickyEditModalPrefix.length);
+    const title = interaction.fields.getTextInputValue('embed_title') || null;
+    const desc = interaction.fields.getTextInputValue('embed_description') || null;
+    const message = interaction.fields.getTextInputValue('message_content') || null;
+    const cooldown = interaction.fields.getTextInputValue('cooldown_seconds') || null;
+    const threshold = interaction.fields.getTextInputValue('threshold_messages') || null;
+
+    const updated = await stickyMessages.editSticky(
+      interaction.guildId,
+      channelId,
+      {
+        embedTitle: title,
+        embedDescription: desc,
+        messageContent: message,
+        cooldownSeconds: cooldown,
+        messageCountThreshold: threshold
+      },
+      ctx.client
+    );
+
+    if (!updated) {
+      return replyPrivate(interaction, { embeds: [createWarningEmbed('Sticky Not Found', 'Could not find the sticky message for that channel.')] });
+    }
+
+    await ctx.logger.log({
+      guildId: interaction.guildId,
+      eventKey: 'sticky-update',
+      title: 'Sticky Message Updated',
+      body: `Updated sticky message in <#${channelId}> by ${interaction.user.tag}.`,
+      actorUserId: interaction.user.id,
+      metadata: { channelId, sticky: updated }
+    }).catch(() => {});
+
+    await replyPrivate(interaction, {
+      embeds: [createSuccessEmbed('Sticky Message Updated', `Successfully updated the sticky notice for <#${channelId}>.`)]
+    });
     return true;
   }
 

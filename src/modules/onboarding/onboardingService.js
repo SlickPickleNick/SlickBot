@@ -1454,6 +1454,54 @@ const ONBOARDING_STEPS = Object.freeze({
         return { created: `#${channel.name}` };
       }
     }
+  ],
+
+  [ModuleKeys.STICKY_MESSAGES]: [
+    {
+      id: 'sticky_channel',
+      moduleKey: ModuleKeys.STICKY_MESSAGES,
+      title: 'Starter Sticky Notice Channel',
+      description: 'Select a channel where you want to pin a persistent guidelines notice.',
+      pickerType: 'CHANNEL',
+      channelTypes: [ChannelType.GuildText, ChannelType.GuildAnnouncement],
+      autoCreateLabel: 'Use #rules / #general',
+      autoCreateDescription: 'Creates sample rules sticky notice.',
+      async getCurrent(guild) {
+        const res = await query(`SELECT channel_id FROM sticky_messages WHERE guild_id = $1 LIMIT 1`, [guild.id]).catch(() => ({ rows: [] }));
+        return res.rows[0]?.channel_id ? `<#${res.rows[0].channel_id}>` : null;
+      },
+      async applyDefault(guild) {
+        const target = guild.channels?.cache?.find((c) => ['rules', 'guidelines', 'general'].includes(c.name.toLowerCase()));
+        if (target) {
+          await query(
+            `INSERT INTO sticky_messages (guild_id, channel_id, embed_title, embed_description, enabled)
+             VALUES ($1, $2, '📌 Server Guidelines', 'Welcome to the server! Please be respectful and follow Discord Community Guidelines.', true)
+             ON CONFLICT (guild_id, channel_id) DO NOTHING`,
+            [guild.id, target.id]
+          );
+          return { result: `Created starter sticky in <#${target.id}>` };
+        }
+        return { result: 'Sticky messages module ready' };
+      },
+      async applySelection(guild, channelId) {
+        await query(
+          `INSERT INTO sticky_messages (guild_id, channel_id, embed_title, embed_description, enabled)
+           VALUES ($1, $2, '📌 Channel Guidelines', 'Welcome! Please adhere to our channel rules and guidelines.', true)
+           ON CONFLICT (guild_id, channel_id) DO NOTHING`,
+          [guild.id, channelId]
+        );
+      },
+      async autoCreate(guild) {
+        const channel = await autoCreateChannel(guild, { name: 'rules', isPrivate: false, topic: 'Server rules & guidelines' });
+        await query(
+          `INSERT INTO sticky_messages (guild_id, channel_id, embed_title, embed_description, enabled)
+           VALUES ($1, $2, '📌 Server Rules', 'Welcome to the server! Please be kind and respectful.', true)
+           ON CONFLICT (guild_id, channel_id) DO NOTHING`,
+          [guild.id, channel.id]
+        );
+        return { created: `#${channel.name}` };
+      }
+    }
   ]
 });
 
@@ -1480,7 +1528,8 @@ const CATEGORY_ONBOARDING_MAP = Object.freeze({
   AUTOMATION: [
     ...ONBOARDING_STEPS[ModuleKeys.BOT_UPDATES],
     ...ONBOARDING_STEPS[ModuleKeys.SOCIAL_FEEDS],
-    ...ONBOARDING_STEPS[ModuleKeys.SCHEDULED_MESSAGES]
+    ...ONBOARDING_STEPS[ModuleKeys.SCHEDULED_MESSAGES],
+    ...ONBOARDING_STEPS[ModuleKeys.STICKY_MESSAGES]
   ]
 });
 

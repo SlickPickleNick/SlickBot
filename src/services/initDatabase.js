@@ -1989,6 +1989,33 @@ async function initDatabase() {
   await query(`CREATE INDEX IF NOT EXISTS idx_utility_poll_votes_poll ON utility_poll_votes(poll_id);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_utility_poll_votes_user ON utility_poll_votes(poll_id, user_id);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_utility_afk_lookup ON utility_afk_users(guild_id, user_id);`);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS sticky_messages (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      channel_id TEXT NOT NULL,
+      message_content TEXT,
+      embed_title TEXT,
+      embed_description TEXT,
+      embed_color TEXT,
+      embed_footer TEXT,
+      embed_image_url TEXT,
+      embed_thumbnail_url TEXT,
+      last_message_id TEXT,
+      cooldown_seconds INTEGER NOT NULL DEFAULT 10,
+      message_count_threshold INTEGER NOT NULL DEFAULT 5,
+      message_count_since_last INTEGER NOT NULL DEFAULT 0,
+      last_reposted_at TIMESTAMPTZ,
+      enabled BOOLEAN NOT NULL DEFAULT true,
+      created_by_user_id TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (guild_id, channel_id)
+    );
+  `);
+
+  await query(`CREATE INDEX IF NOT EXISTS idx_sticky_messages_guild_channel ON sticky_messages(guild_id, channel_id);`);
 }
 
 if (require.main === module) {
