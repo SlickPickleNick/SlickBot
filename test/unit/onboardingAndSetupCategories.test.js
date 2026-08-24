@@ -1099,4 +1099,69 @@ test('reorderServerCategories syncs category positions based on STANDARD_CATEGOR
   assert.equal(setPositionsPayload.find((u) => u.channel === 'cat-logs')?.position, 8);
 });
 
+test('SuggestionService.prototype.buildPanelPayload returns valid interactive panel message payload', () => {
+  const { SuggestionService } = require('../../src/modules/community/suggestionService');
+  const suggestions = new SuggestionService();
+
+  const cfg = {
+    panel_title: 'Server Suggestions',
+    panel_description: 'Have an idea? Submit below!',
+    panel_header_image_url: null
+  };
+
+  const payload = suggestions.buildPanelPayload(cfg);
+  assert.ok(payload, 'Payload generated');
+  assert.ok(payload.embeds?.length > 0, 'Has embeds');
+  assert.ok(payload.components?.length > 0, 'Has components');
+  assert.equal(payload.embeds[0].data.title, 'Server Suggestions');
+});
+
+test('SERVER_ONBOARDING server_suggestions autoCreate provisions #suggestions and publishes panel', async () => {
+  const suggestionsStep = ONBOARDING_STEPS.SERVER_ONBOARDING.find((s) => s.id === 'server_suggestions');
+  assert.ok(suggestionsStep, 'server_suggestions exists in SERVER_ONBOARDING');
+
+  let sentMessagePayload = null;
+  const mockGuild = {
+    id: 'guild-sug-autocreate',
+    roles: {
+      everyone: { id: 'role-everyone-id' },
+      cache: []
+    },
+    channels: {
+      cache: [],
+      create: async (opts) => ({
+        id: 'chan-sug-99',
+        name: opts.name,
+        type: opts.type,
+        send: async (payload) => {
+          sentMessagePayload = payload;
+          return { id: 'msg-sug-panel' };
+        }
+      })
+    }
+  };
+
+  mockDb.addHandler('suggestion_configs', {
+    rows: [{
+      guild_id: 'guild-sug-autocreate',
+      channel_id: 'chan-sug-99',
+      default_anonymous: false,
+      auto_create_threads: true,
+      panel_title: 'Server Suggestions',
+      panel_description: 'Submit an idea!'
+    }],
+    rowCount: 1
+  });
+  mockDb.addHandler('suggestion_categories', {
+    rows: [{ id: 1, guild_id: 'guild-sug-autocreate', name: 'General', active: true, sort_order: 1 }],
+    rowCount: 1
+  });
+
+  const res = await suggestionsStep.autoCreate(mockGuild);
+  assert.ok(res.created);
+  assert.match(res.created, /suggestions/i);
+  assert.match(res.created, /Suggestion Panel published/i);
+  assert.ok(sentMessagePayload, 'Panel payload was sent to channel');
+});
+
 

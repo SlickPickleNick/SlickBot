@@ -37,6 +37,14 @@ class ReferralService {
     return result.rows[0];
   }
 
+  async upsertConfig(guildId, values = {}) {
+    return this.setup(guildId, values);
+  }
+
+  async updateConfig(guildId, values = {}) {
+    return this.setup(guildId, values);
+  }
+
   async setup(guildId, values = {}) {
     const current = await this.ensureConfig(guildId);
     const enabled = normalizeBoolean(values.enabled, current.enabled !== false);

@@ -417,6 +417,27 @@ class CommunityGameService {
     return { ok: true, config: result.rows[0] };
   }
 
+  async upsertGameConfig(guildId, options = {}) {
+    await this.ensureGameConfigs(guildId);
+    if (options.channelId) {
+      await this.updateBoardGameConfig(guildId, GAME_KEYS.TIC_TAC_TOE, { channelId: options.channelId });
+      await this.updateBoardGameConfig(guildId, GAME_KEYS.CONNECT_FOUR, { channelId: options.channelId });
+    }
+    if (options.enabled !== undefined) {
+      await this.setGameEnabled(guildId, GAME_KEYS.TIC_TAC_TOE, Boolean(options.enabled));
+      await this.setGameEnabled(guildId, GAME_KEYS.CONNECT_FOUR, Boolean(options.enabled));
+    }
+    return { ok: true };
+  }
+
+  async upsertCountingConfig(guildId, values = {}) {
+    return this.updateCountingConfig(guildId, values);
+  }
+
+  async upsertBoardGameConfig(guildId, gameKey, values = {}) {
+    return this.updateBoardGameConfig(guildId, gameKey, values);
+  }
+
   async updateBoardGameConfig(guildId, gameKey, values = {}) {
     await this.ensureGameConfigs(guildId);
     const current = await this.getGameConfig(guildId, gameKey);

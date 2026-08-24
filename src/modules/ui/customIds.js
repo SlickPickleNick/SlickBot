@@ -119,6 +119,7 @@ const CustomIds = Object.freeze({
 
   FaqRefresh: 'slickbot:faq:refresh',
   FaqRefreshIndex: 'slickbot:faq:refresh-index',
+  FaqSearchModal: 'slickbot:faq:search-modal',
 
   SuggestionsRefresh: 'slickbot:suggestions:refresh',
 

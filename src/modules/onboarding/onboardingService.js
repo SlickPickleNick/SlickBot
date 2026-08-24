@@ -2023,7 +2023,7 @@ const ONBOARDING_STEPS = Object.freeze({
         if (channel && typeof channel.send === 'function') {
           const sentMsg = await channel.send(dirPayload).catch(() => null);
           if (sentMsg?.id) {
-            await sentMsg.pin().catch(() => {});
+            if (typeof sentMsg.pin === 'function') await sentMsg.pin().catch(() => {});
             await query(`UPDATE social_feed_configs SET live_directory_message_id = $2 WHERE guild_id = $1`, [guild.id, sentMsg.id]).catch(() => {});
           }
         }
@@ -2254,6 +2254,9 @@ const ONBOARDING_STEPS = Object.freeze({
       moduleKey: ModuleKeys.TEMP_ROLES,
       title: 'Temporary Roles System',
       description: 'Enable timed role assignments with automatic background expiry sweeps.',
+      pickerType: 'ROLE',
+      autoCreateLabel: 'Initialize Temporary Roles',
+      autoCreateDescription: 'Activates automatic background temporary role expiration sweeps.',
       async getCurrent() {
         return 'Active & Ready';
       },
@@ -2805,6 +2808,9 @@ const ONBOARDING_STEPS = Object.freeze({
       moduleKey: ModuleKeys.CUSTOM_COMMANDS,
       title: 'Custom Commands Trigger Prefix',
       description: 'Set your server prefix for custom text triggers (e.g. `!` or `?`).',
+      pickerType: 'STRING',
+      autoCreateLabel: 'Configure Prefix & Default !rules',
+      autoCreateDescription: 'Sets default trigger prefix to "!" and creates standard !rules custom trigger.',
       async getCurrent(guild) {
         const res = await query(`SELECT prefix, enabled FROM custom_command_configs WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.prefix ? `Prefix: \`${res.rows[0].prefix}\`` : null;
@@ -3084,6 +3090,18 @@ class OnboardingService {
     return session;
   }
 
+  startServerOnboardingSession(guildId, userId) {
+    return this.startServerOnboarding(guildId, userId);
+  }
+
+  startCategoryOnboardingSession(guildId, userId, categoryKey) {
+    return this.startModuleOnboarding(guildId, userId, categoryKey);
+  }
+
+  startModuleOnboardingSession(guildId, userId, moduleKey) {
+    return this.startModuleOnboarding(guildId, userId, moduleKey);
+  }
+
   startModuleOnboarding(guildId, userId, moduleKey) {
     const key = String(moduleKey || '').toUpperCase();
     const steps = CATEGORY_ONBOARDING_MAP[key] || ONBOARDING_STEPS[key] || ONBOARDING_STEPS[moduleKey];
@@ -3312,6 +3330,10 @@ class OnboardingService {
     components.push(buttonRow);
 
     return { embeds: [embed], components };
+  }
+
+  buildWelcomePayload(guild) {
+    return this.buildGuildJoinGreetingPayload(guild);
   }
 
   buildGuildJoinGreetingPayload(guild) {

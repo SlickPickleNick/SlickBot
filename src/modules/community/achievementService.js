@@ -292,6 +292,18 @@ class AchievementService {
     return this.ensureConfig(guildId);
   }
 
+  async ensureDefaultTiers(guildId) {
+    return this.ensureDefaultDefinitions(guildId);
+  }
+
+  async updateConfig(guildId, values = {}) {
+    return this.setup(guildId, values);
+  }
+
+  async upsertConfig(guildId, values = {}) {
+    return this.setup(guildId, values);
+  }
+
   async setup(guildId, values = {}) {
     const current = await this.getConfig(guildId);
     const enabled = values.enabled ?? current.enabled ?? true;

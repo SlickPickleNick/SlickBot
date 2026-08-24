@@ -128,6 +128,10 @@ class BotUpdatesService {
     return { config: result.rows[0], roleIds: await this.getRoleIds(guildId) };
   }
 
+  async updateConfig(guildId, input = {}) {
+    return this.setup(guildId, input);
+  }
+
   async setChannel(guildId, channelId) {
     const result = await query(
       `INSERT INTO bot_update_configs (guild_id, channel_id, enabled)

@@ -679,6 +679,10 @@ class SuggestionService {
     return { ok: true, suggestion: updated };
   }
 
+  buildPanelPayload(config) {
+    return buildPanelPayload(config);
+  }
+
   async postPanel({ guild, channel, title, description, headerImageUrl }) {
     const config = await this.setPanelDesign({ guildId: guild.id, title, description, headerImageUrl });
     const message = await channel.send(buildPanelPayload(config));

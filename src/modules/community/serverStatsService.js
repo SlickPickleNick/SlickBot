@@ -57,6 +57,14 @@ class ServerStatsService {
     return created.rows[0];
   }
 
+  async upsertConfig(guildId, input = {}) {
+    return this.setup(guildId, input);
+  }
+
+  async updateConfig(guildId, input = {}) {
+    return this.setup(guildId, input);
+  }
+
   async setup(guildId, input = {}) {
     const result = await query(
       `INSERT INTO server_stats_configs (

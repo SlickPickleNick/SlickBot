@@ -175,6 +175,46 @@ class JoinCreateService {
     });
   }
 
+  async registerHub(guildOrGuildId, sourceChannelId, options = {}) {
+    const guild = typeof guildOrGuildId === 'object' && guildOrGuildId !== null ? guildOrGuildId : { id: guildOrGuildId };
+    if (!guild.channels?.fetch) {
+      const result = await query(
+        `INSERT INTO join_create_hubs (
+          guild_id, source_channel_id, category_id, hub_name, enabled, name_template, user_limit,
+          private_enabled, owner_controls_enabled, delete_when_empty, empty_delete_delay_seconds
+         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+         ON CONFLICT (guild_id, source_channel_id)
+         DO UPDATE SET
+           category_id = EXCLUDED.category_id,
+           hub_name = EXCLUDED.hub_name,
+           enabled = EXCLUDED.enabled,
+           updated_at = NOW()
+         RETURNING *`,
+        [
+          guild.id,
+          sourceChannelId,
+          options.categoryId || null,
+          options.hubName || options.name || '➕ Create Voice',
+          options.enabled ?? true,
+          options.nameTemplate || "{username}'s Voice",
+          options.userLimit ?? 0,
+          options.privateEnabled ?? false,
+          true,
+          true,
+          30
+        ]
+      );
+      return result.rows[0];
+    }
+    return this.setup(guild, {
+      sourceChannelId,
+      categoryId: options.categoryId || null,
+      enabled: options.enabled ?? true,
+      hubName: options.name || options.hubName || '➕ Create Voice',
+      ...options
+    });
+  }
+
   async setHubEnabled(guildId, hubId, enabled, actorUserId = null) {
     const result = await query(
       `UPDATE join_create_hubs

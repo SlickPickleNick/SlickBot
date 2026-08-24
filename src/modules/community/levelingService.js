@@ -103,6 +103,10 @@ class LevelingService {
     return null;
   }
 
+  async upsertConfig(guildId, values = {}) {
+    return this.saveConfig(guildId, values);
+  }
+
   async saveConfig(guildId, values = {}) {
     const current = await this.getConfig(guildId);
     const config = {

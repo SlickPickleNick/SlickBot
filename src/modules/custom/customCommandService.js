@@ -111,6 +111,26 @@ class CustomCommandService {
     return config;
   }
 
+  async upsertConfig(guildId, options = {}) {
+    const current = await this.getConfig(guildId);
+    const prefix = options.prefix !== undefined ? normalizePrefix(options.prefix) : (current?.prefix || DEFAULT_PREFIX);
+    const enabled = options.enabled !== undefined ? Boolean(options.enabled) : (current?.enabled ?? true);
+    const result = await query(
+      `INSERT INTO custom_command_configs (guild_id, prefix, enabled)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (guild_id) DO UPDATE SET prefix = EXCLUDED.prefix, enabled = EXCLUDED.enabled, updated_at = NOW()
+       RETURNING *`,
+      [guildId, prefix, enabled]
+    );
+    this.invalidateConfig(guildId);
+    this.invalidateCommands(guildId);
+    return result.rows[0];
+  }
+
+  async updateConfig(guildId, options = {}) {
+    return this.upsertConfig(guildId, options);
+  }
+
   async setPrefix(guildId, prefix) {
     const normalized = normalizePrefix(prefix);
     const result = await query(
