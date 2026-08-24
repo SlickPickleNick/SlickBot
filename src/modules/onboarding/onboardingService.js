@@ -833,13 +833,16 @@ const ONBOARDING_STEPS = Object.freeze({
         const channel = await autoCreateChannel(guild, { name: 'suggestions', categoryName: STANDARD_CATEGORIES.COMMUNITY.name, isPrivate: false, topic: 'Server suggestions & voting' });
         const { SuggestionService } = require('../community/suggestionService');
         const suggestions = new SuggestionService();
-        await suggestions.setup(guild.id, { channelId: channel.id, panelActive: true });
-        const cfg = await suggestions.getConfig(guild.id);
-        const panelPayload = suggestions.buildPanelPayload(cfg);
-        if (channel && typeof channel.send === 'function') {
-          await channel.send(panelPayload).catch(() => {});
-        }
-        return { created: `#${channel.name} (Suggestion Panel published)` };
+        await suggestions.setup(guild.id, { channelId: channel.id, autoCreateThreads: false, panelActive: true });
+        await suggestions.postPanel({ guild, channel, pin: true }).catch(async () => {
+          const cfg = await suggestions.getConfig(guild.id);
+          const panelPayload = suggestions.buildPanelPayload(cfg);
+          if (channel && typeof channel.send === 'function') {
+            const msg = await channel.send(panelPayload).catch(() => null);
+            if (msg && typeof msg.pin === 'function') await msg.pin().catch(() => {});
+          }
+        });
+        return { created: `#${channel.name} (Suggestion Panel published & pinned)` };
       }
     },
     {
@@ -1921,13 +1924,16 @@ const ONBOARDING_STEPS = Object.freeze({
         const channel = await autoCreateChannel(guild, { name: 'suggestions', categoryName: STANDARD_CATEGORIES.COMMUNITY.name, isPrivate: false, topic: 'Server suggestions & voting' });
         const { SuggestionService } = require('../community/suggestionService');
         const suggestions = new SuggestionService();
-        await suggestions.setup(guild.id, { channelId: channel.id, panelActive: true });
-        const cfg = await suggestions.getConfig(guild.id);
-        const panelPayload = suggestions.buildPanelPayload(cfg);
-        if (channel && typeof channel.send === 'function') {
-          await channel.send(panelPayload).catch(() => {});
-        }
-        return { created: `#${channel.name} (Suggestion Panel published)` };
+        await suggestions.setup(guild.id, { channelId: channel.id, autoCreateThreads: false, panelActive: true });
+        await suggestions.postPanel({ guild, channel, pin: true }).catch(async () => {
+          const cfg = await suggestions.getConfig(guild.id);
+          const panelPayload = suggestions.buildPanelPayload(cfg);
+          if (channel && typeof channel.send === 'function') {
+            const msg = await channel.send(panelPayload).catch(() => null);
+            if (msg && typeof msg.pin === 'function') await msg.pin().catch(() => {});
+          }
+        });
+        return { created: `#${channel.name} (Suggestion Panel published & pinned)` };
       }
     }
   ],

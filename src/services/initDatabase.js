@@ -1264,7 +1264,7 @@ async function initDatabase() {
       review_channel_id TEXT,
       log_channel_id TEXT,
       default_anonymous BOOLEAN NOT NULL DEFAULT true,
-      auto_create_threads BOOLEAN NOT NULL DEFAULT true,
+      auto_create_threads BOOLEAN NOT NULL DEFAULT false,
       next_suggestion_number INTEGER NOT NULL DEFAULT 1,
       panel_channel_id TEXT,
       panel_message_id TEXT,
@@ -1279,7 +1279,8 @@ async function initDatabase() {
   await query(`ALTER TABLE suggestion_configs ADD COLUMN IF NOT EXISTS review_channel_id TEXT;`);
   await query(`ALTER TABLE suggestion_configs ADD COLUMN IF NOT EXISTS log_channel_id TEXT;`);
   await query(`ALTER TABLE suggestion_configs ADD COLUMN IF NOT EXISTS default_anonymous BOOLEAN NOT NULL DEFAULT true;`);
-  await query(`ALTER TABLE suggestion_configs ADD COLUMN IF NOT EXISTS auto_create_threads BOOLEAN NOT NULL DEFAULT true;`);
+  await query(`ALTER TABLE suggestion_configs ADD COLUMN IF NOT EXISTS auto_create_threads BOOLEAN NOT NULL DEFAULT false;`);
+  await query(`ALTER TABLE suggestion_configs ALTER COLUMN auto_create_threads SET DEFAULT false;`).catch(() => {});
   await query(`ALTER TABLE suggestion_configs ADD COLUMN IF NOT EXISTS next_suggestion_number INTEGER NOT NULL DEFAULT 1;`);
   await query(`ALTER TABLE suggestion_configs ADD COLUMN IF NOT EXISTS panel_channel_id TEXT;`);
   await query(`ALTER TABLE suggestion_configs ADD COLUMN IF NOT EXISTS panel_message_id TEXT;`);

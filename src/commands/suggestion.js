@@ -21,7 +21,7 @@ module.exports = {
       .addChannelOption((option) => option.setName('review_channel').setDescription('Staff review channel for suggestion review embeds.').addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement).setRequired(false))
       .addChannelOption((option) => option.setName('log_channel').setDescription('Optional staff log channel for suggestion activity.').addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement).setRequired(false))
       .addBooleanOption((option) => option.setName('default_anonymous').setDescription('Default new suggestions to anonymous. Default: true.').setRequired(false))
-      .addBooleanOption((option) => option.setName('auto_create_threads').setDescription('Automatically create discussion threads under suggestion posts. Default: true.').setRequired(false)))
+      .addBooleanOption((option) => option.setName('auto_create_threads').setDescription('Automatically create discussion threads under suggestion posts. Default: false.').setRequired(false)))
     .addSubcommand((sub) => sub
       .setName('submit')
       .setDescription('Submit a server suggestion.')

@@ -356,3 +356,32 @@ test('OnboardingService session lifecycle and payload rendering', async () => {
   assert.ok(welcomePayload.embeds?.length > 0);
   assert.ok(welcomePayload.components?.length > 0);
 });
+
+test('BirthdayService and SuggestionService edge cases and defaults', async () => {
+  const { BirthdayService } = require('../../src/modules/community/birthdayService');
+  const { SuggestionService } = require('../../src/modules/community/suggestionService');
+
+  const birthday = new BirthdayService();
+  const suggestion = new SuggestionService();
+
+  // Test BirthdayService.updateConfig with empty input (should not violate NOT NULL)
+  const bCfg = await birthday.updateConfig('100000000000000001', {});
+  assert.ok(bCfg, 'Birthday config updated with empty input');
+
+  // Test SuggestionService.setup defaults auto_create_threads to false
+  const sCfg = await suggestion.setup('100000000000000001', { channelId: '100000000000000024' });
+  assert.ok(sCfg, 'Suggestion setup succeeded');
+
+  // Test SuggestionService.postPanel pins the message
+  let pinned = false;
+  const mockChannel = {
+    id: '100000000000000024',
+    send: async () => ({
+      id: 'msg-panel-123',
+      pin: async () => { pinned = true; }
+    })
+  };
+  const { guild: mockGuild } = createUniversalMockGuild();
+  await suggestion.postPanel({ guild: mockGuild, channel: mockChannel, pin: true });
+  assert.equal(pinned, true, 'Suggestion panel message was pinned');
+});

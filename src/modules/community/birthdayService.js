@@ -300,7 +300,8 @@ class BirthdayService {
     const result = await query(`SELECT * FROM birthday_configs WHERE guild_id = $1 LIMIT 1`, [guildId]);
     if (result.rows[0]) return result.rows[0];
     const created = await query(
-      `INSERT INTO birthday_configs (guild_id) VALUES ($1)
+      `INSERT INTO birthday_configs (guild_id, announcement_template, timezone, enabled)
+       VALUES ($1, 'Happy birthday, {user}! 🎉', 'America/New_York', true)
        ON CONFLICT (guild_id) DO UPDATE SET updated_at = NOW()
        RETURNING *`,
       [guildId]
@@ -308,25 +309,26 @@ class BirthdayService {
     return created.rows[0];
   }
 
-  async updateConfig(guildId, input) {
+  async updateConfig(guildId, input = {}) {
+    const current = await this.getConfig(guildId);
     const result = await query(
       `INSERT INTO birthday_configs (guild_id, channel_id, birthday_role_id, announcement_template, timezone, enabled)
-       VALUES ($1, $2, $3, $4, $5, $6)
+       VALUES ($1, $2, $3, COALESCE($4, 'Happy birthday, {user}! 🎉'), COALESCE($5, 'America/New_York'), $6)
        ON CONFLICT (guild_id) DO UPDATE SET
          channel_id = COALESCE(EXCLUDED.channel_id, birthday_configs.channel_id),
          birthday_role_id = COALESCE(EXCLUDED.birthday_role_id, birthday_configs.birthday_role_id),
-         announcement_template = COALESCE(EXCLUDED.announcement_template, birthday_configs.announcement_template),
-         timezone = COALESCE(EXCLUDED.timezone, birthday_configs.timezone),
+         announcement_template = COALESCE(EXCLUDED.announcement_template, birthday_configs.announcement_template, 'Happy birthday, {user}! 🎉'),
+         timezone = COALESCE(EXCLUDED.timezone, birthday_configs.timezone, 'America/New_York'),
          enabled = EXCLUDED.enabled,
          updated_at = NOW()
        RETURNING *`,
       [
         guildId,
-        input.channelId || null,
-        input.birthdayRoleId || null,
-        input.announcementTemplate || null,
-        input.timezone ? safeTimezone(input.timezone) : null,
-        typeof input.enabled === 'boolean' ? input.enabled : true
+        input.channelId || current?.channel_id || null,
+        input.birthdayRoleId || current?.birthday_role_id || null,
+        input.announcementTemplate || current?.announcement_template || 'Happy birthday, {user}! 🎉',
+        input.timezone ? safeTimezone(input.timezone) : (current?.timezone || 'America/New_York'),
+        typeof input.enabled === 'boolean' ? input.enabled : (current?.enabled ?? true)
       ]
     );
     return result.rows[0];

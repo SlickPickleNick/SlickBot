@@ -314,7 +314,7 @@ class SuggestionService {
   async ensureConfig(guildId) {
     const result = await query(
       `INSERT INTO suggestion_configs (guild_id, default_anonymous, auto_create_threads)
-       VALUES ($1, true, true)
+       VALUES ($1, true, false)
        ON CONFLICT (guild_id) DO NOTHING
        RETURNING *`,
       [guildId]
@@ -343,13 +343,13 @@ class SuggestionService {
     const current = await this.ensureConfig(guildId);
     const result = await query(
       `INSERT INTO suggestion_configs (guild_id, channel_id, review_channel_id, log_channel_id, default_anonymous, auto_create_threads)
-       VALUES ($1, $2, $3, $4, COALESCE($5, true), COALESCE($6, true))
+       VALUES ($1, $2, $3, $4, COALESCE($5, true), COALESCE($6, false))
        ON CONFLICT (guild_id) DO UPDATE SET
          channel_id = COALESCE(EXCLUDED.channel_id, suggestion_configs.channel_id),
          review_channel_id = CASE WHEN $3::text IS NULL THEN suggestion_configs.review_channel_id ELSE EXCLUDED.review_channel_id END,
          log_channel_id = CASE WHEN $4::text IS NULL THEN suggestion_configs.log_channel_id ELSE EXCLUDED.log_channel_id END,
          default_anonymous = COALESCE(EXCLUDED.default_anonymous, suggestion_configs.default_anonymous, true),
-         auto_create_threads = COALESCE(EXCLUDED.auto_create_threads, suggestion_configs.auto_create_threads, true),
+         auto_create_threads = COALESCE(EXCLUDED.auto_create_threads, suggestion_configs.auto_create_threads, false),
          updated_at = NOW()
        RETURNING *`,
       [
@@ -358,7 +358,7 @@ class SuggestionService {
         reviewChannelId === undefined ? null : reviewChannelId,
         logChannelId === undefined ? null : logChannelId,
         defaultAnonymous === undefined ? (current?.default_anonymous ?? true) : Boolean(defaultAnonymous),
-        autoCreateThreads === undefined ? (current?.auto_create_threads ?? true) : Boolean(autoCreateThreads)
+        autoCreateThreads === undefined ? (current?.auto_create_threads ?? false) : Boolean(autoCreateThreads)
       ]
     );
     await this.ensureDefaultCategories(guildId);
@@ -683,9 +683,12 @@ class SuggestionService {
     return buildPanelPayload(config);
   }
 
-  async postPanel({ guild, channel, title, description, headerImageUrl }) {
+  async postPanel({ guild, channel, title, description, headerImageUrl, pin = true }) {
     const config = await this.setPanelDesign({ guildId: guild.id, title, description, headerImageUrl });
     const message = await channel.send(buildPanelPayload(config));
+    if (pin && message && typeof message.pin === 'function') {
+      await message.pin().catch(() => {});
+    }
     const result = await query(
       `UPDATE suggestion_configs SET panel_channel_id = $2, panel_message_id = $3, panel_active = true, updated_at = NOW() WHERE guild_id = $1 RETURNING *`,
       [guild.id, channel.id, message.id]
@@ -707,7 +710,7 @@ class SuggestionService {
     return 1;
   }
 
-  async repostPanel(client, guildId) {
+  async repostPanel(client, guildId, { pin = true } = {}) {
     const config = await this.getConfig(guildId);
     if (!config?.panel_active || !config.panel_channel_id) return 0;
     const guild = await client.guilds.fetch(guildId).catch(() => null);
@@ -718,6 +721,9 @@ class SuggestionService {
       await oldMessage?.delete?.().catch(() => {});
     }
     const message = await channel.send(buildPanelPayload(config));
+    if (pin && message && typeof message.pin === 'function') {
+      await message.pin().catch(() => {});
+    }
     await query(`UPDATE suggestion_configs SET panel_message_id = $2, updated_at = NOW() WHERE guild_id = $1`, [guildId, message.id]);
     return 1;
   }
