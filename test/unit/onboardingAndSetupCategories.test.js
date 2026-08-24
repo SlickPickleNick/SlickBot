@@ -1061,4 +1061,15 @@ test('SERVER_ONBOARDING server_tickets autoCreate places #submit-tickets in Help
   assert.equal(submitTicketsChan.parent, helpSupportCat.id, 'submit-tickets is parented to Help & Support');
 });
 
+test('STANDARD_CATEGORIES defines requested category ordering: Stats > Start Here > Support > Community > Games > Voice > Staff > Logs', () => {
+  assert.equal(STANDARD_CATEGORIES.STATS.position, 0, 'Server Stats is position 0');
+  assert.equal(STANDARD_CATEGORIES.START_HERE.position, 1, 'Start Here is position 1');
+  assert.equal(STANDARD_CATEGORIES.SUPPORT.position, 2, 'Help & Support is position 2');
+  assert.equal(STANDARD_CATEGORIES.COMMUNITY.position, 4, 'Community Hub is position 4');
+  assert.equal(STANDARD_CATEGORIES.GAMES.position, 5, 'Games & Activities is position 5');
+  assert.equal(STANDARD_CATEGORIES.VOICE.position, 6, 'Dynamic Voice is position 6');
+  assert.equal(STANDARD_CATEGORIES.STAFF.position, 7, 'Staff Area is position 7');
+  assert.equal(STANDARD_CATEGORIES.LOGS.position, 8, 'Server Logs is position 8');
+});
+
 

@@ -19,14 +19,14 @@ function generateSessionId(guildId, userId) {
 }
 
 const STANDARD_CATEGORIES = Object.freeze({
-  START_HERE: Object.freeze({ name: '📌 Start Here', keywords: ['start here', 'start', 'welcome', 'info', 'information', 'rules', 'getting-started', 'read-first', 'guide'], isPrivate: false }),
-  COMMUNITY: Object.freeze({ name: '🎉 Community Hub', keywords: ['community hub', 'community', 'general', 'lounge', 'chat', 'social', 'hangout'], isPrivate: false }),
-  GAMES: Object.freeze({ name: '🎮 Games & Activities', keywords: ['games & activities', 'games and activities', 'game lounge', 'games', 'arcade', 'activities'], isPrivate: false }),
-  SUPPORT: Object.freeze({ name: '🎫 Help & Support', keywords: ['help & support', 'help and support', 'support hub', 'support desk', 'helpdesk', 'help center', 'assistance'], isPrivate: false }),
-  STAFF: Object.freeze({ name: '🛡️ Staff Area', keywords: ['staff area', 'staff', 'admin', 'mod', 'management', 'officers', 'moderation', 'team'], isPrivate: true }),
-  LOGS: Object.freeze({ name: '📋 Server Logs', keywords: ['server logs', 'logging', 'audit logs', 'log', 'logs', 'audit', 'records'], isPrivate: true }),
-  VOICE: Object.freeze({ name: '🔊 Dynamic Voice', keywords: ['dynamic voice', 'voice channels', 'voice', 'call', 'talk'], isPrivate: false }),
-  STATS: Object.freeze({ name: '📊 Server Stats', keywords: ['server stats', 'stats', 'counter', 'metric'], isPrivate: false })
+  STATS: Object.freeze({ name: '📊 Server Stats', position: 0, keywords: ['server stats', 'stats', 'counter', 'metric'], isPrivate: false }),
+  START_HERE: Object.freeze({ name: '📌 Start Here', position: 1, keywords: ['start here', 'start', 'welcome', 'info', 'information', 'rules', 'getting-started', 'read-first', 'guide'], isPrivate: false }),
+  SUPPORT: Object.freeze({ name: '🎫 Help & Support', position: 2, keywords: ['help & support', 'help and support', 'support hub', 'support desk', 'helpdesk', 'help center', 'assistance'], isPrivate: false }),
+  COMMUNITY: Object.freeze({ name: '🎉 Community Hub', position: 4, keywords: ['community hub', 'community', 'general', 'lounge', 'chat', 'social', 'hangout'], isPrivate: false }),
+  GAMES: Object.freeze({ name: '🎮 Games & Activities', position: 5, keywords: ['games & activities', 'games and activities', 'game lounge', 'games', 'arcade', 'activities'], isPrivate: false }),
+  VOICE: Object.freeze({ name: '🔊 Dynamic Voice', position: 6, keywords: ['dynamic voice', 'voice channels', 'voice', 'call', 'talk'], isPrivate: false }),
+  STAFF: Object.freeze({ name: '🛡️ Staff Area', position: 7, keywords: ['staff area', 'staff', 'admin', 'mod', 'management', 'officers', 'moderation', 'team'], isPrivate: true }),
+  LOGS: Object.freeze({ name: '📋 Server Logs', position: 8, keywords: ['server logs', 'logging', 'audit logs', 'log', 'logs', 'audit', 'records'], isPrivate: true })
 });
 
 async function autoCreateRole(guild, { name, color = null, mentionable = false, permissions = [], reason = 'SlickBot auto-role setup' }) {
@@ -55,12 +55,22 @@ async function autoCreateRole(guild, { name, color = null, mentionable = false, 
   return guild.roles.create(rolePayload);
 }
 
-async function ensureCategory(guild, { name, keywords = [], isPrivate = false, staffRoles = [], reason = 'SlickBot auto-provisioned category' }) {
+async function ensureCategory(guild, { name, keywords = [], isPrivate = false, staffRoles = [], position = undefined, reason = 'SlickBot auto-provisioned category' }) {
   if (!guild || typeof guild.channels?.create !== 'function') return null;
   const cacheList = Array.from(guild.channels.cache?.values?.() || guild.channels.cache || []);
 
   const cleanName = name.toLowerCase().trim();
   const strippedName = cleanName.replace(/^[^\w\s]+/, '').trim();
+
+  let targetPosition = position;
+  if (targetPosition === undefined) {
+    const meta = Object.values(STANDARD_CATEGORIES).find((c) => c.name === name);
+    if (meta && typeof meta.position === 'number') {
+      targetPosition = meta.position;
+    } else if (cleanName.includes('open tickets') || cleanName === 'tickets') {
+      targetPosition = 3;
+    }
+  }
 
   // 1. Exact match by full category name or stripped emoji name
   let existing = cacheList.find((c) => {
@@ -82,7 +92,12 @@ async function ensureCategory(guild, { name, keywords = [], isPrivate = false, s
     });
   }
 
-  if (existing) return existing;
+  if (existing) {
+    if (targetPosition !== undefined && typeof existing.setPosition === 'function' && existing.position !== targetPosition) {
+      await existing.setPosition(targetPosition).catch(() => {});
+    }
+    return existing;
+  }
 
   const overwrites = [];
   const everyoneId = guild.roles?.everyone?.id || guild.id;
@@ -132,6 +147,7 @@ async function ensureCategory(guild, { name, keywords = [], isPrivate = false, s
   return guild.channels.create({
     name,
     type: ChannelType.GuildCategory,
+    position: targetPosition !== undefined ? targetPosition : undefined,
     permissionOverwrites: overwrites.length ? overwrites : undefined,
     reason
   });
@@ -142,6 +158,7 @@ async function autoCreateChannel(guild, {
   type = ChannelType.GuildText,
   categoryName = null,
   parentId = null,
+  position = undefined,
   topic = null,
   isPrivate = false,
   staffRoles = [],
@@ -160,6 +177,7 @@ async function autoCreateChannel(guild, {
       name: catMeta.name,
       keywords: catMeta.keywords || [],
       isPrivate: catMeta.isPrivate ?? isPrivate,
+      position: catMeta.position,
       staffRoles
     });
     if (category?.id) {
