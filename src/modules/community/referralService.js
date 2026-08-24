@@ -234,6 +234,52 @@ class ReferralService {
       footer: 'SlickBot Referrals'
     });
   }
+
+  buildSubmitPanel(guild, config = {}) {
+    const referralXp = Number(config?.referral_xp || DEFAULT_REFERRAL_XP);
+    const embed = createBaseEmbed({
+      title: '🤝 Server Referral Program',
+      description: [
+        'Welcome to the server! Were you invited by a friend or another server member?',
+        '',
+        `Submit who referred you below to reward them with **${referralXp.toLocaleString()} Bonus XP**!`,
+        '',
+        '**Rules & Information:**',
+        '• Referrals are one-time only per member upon joining.',
+        '• You can specify their `@username`, tag, or User ID.',
+        '• Want to invite your friends? Run `/referral link` to get your personal invite link and earn XP!'
+      ].join('\n'),
+      color: SlickBotColors.PRIMARY,
+      footer: `SlickBot Referrals • ${referralXp} XP Reward`
+    });
+
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(CustomIds.ReferralsSubmitButton)
+        .setLabel('Submit Referrer')
+        .setStyle(ButtonStyle.Primary)
+        .setEmoji('🤝')
+    );
+
+    return { embeds: [embed], components: [row] };
+  }
+
+  buildSubmitModal(guildId) {
+    return new ModalBuilder()
+      .setCustomId(CustomIds.ReferralsSubmitModalSubmit)
+      .setTitle('Submit Who Referred You')
+      .addComponents(
+        new ActionRowBuilder().addComponents(
+          new TextInputBuilder()
+            .setCustomId('referrer_input')
+            .setLabel('Who invited you to the server?')
+            .setPlaceholder('@username, username, or User ID')
+            .setStyle(TextInputStyle.Short)
+            .setMaxLength(100)
+            .setRequired(true)
+        )
+      );
+  }
 }
 
 function buildReferralsConfigModal(config) {

@@ -202,6 +202,7 @@ async function autoCreateChannel(guild, {
   position = undefined,
   topic = null,
   isPrivate = false,
+  isReadOnly = false,
   staffRoles = [],
   allowedRoles = [],
   reason = 'SlickBot auto-channel setup'
@@ -229,6 +230,11 @@ async function autoCreateChannel(guild, {
   const overwrites = [];
   const everyoneId = guild.roles?.everyone?.id || guild.id;
   const botMember = guild.members?.me || (guild.client?.user ? guild.members?.cache?.get(guild.client.user.id) : null);
+  
+  // Find Timeout / Muted role if present in guild
+  const roleCacheList = Array.from(guild.roles?.cache?.values?.() || guild.roles?.cache || []);
+  const timeoutRole = roleCacheList.find((r) => r?.name && ['timeout', 'muted', 'mute'].includes(r.name.toLowerCase()));
+  const isAppealsChannel = ['submit-appeal', 'appeals', 'ban-appeals', 'appeal'].includes(name.toLowerCase());
 
   if (isPrivate && everyoneId) {
     overwrites.push({
@@ -274,6 +280,71 @@ async function autoCreateChannel(guild, {
           ]
         });
       }
+    }
+  } else if (!isPrivate && everyoneId) {
+    if (isReadOnly) {
+      overwrites.push({
+        id: everyoneId,
+        allow: [
+          PermissionFlagsBits.ViewChannel,
+          PermissionFlagsBits.ReadMessageHistory
+        ],
+        deny: [
+          PermissionFlagsBits.SendMessages,
+          PermissionFlagsBits.CreatePublicThreads,
+          PermissionFlagsBits.CreatePrivateThreads,
+          PermissionFlagsBits.SendMessagesInThreads
+        ]
+      });
+    } else {
+      overwrites.push({
+        id: everyoneId,
+        allow: [
+          PermissionFlagsBits.ViewChannel,
+          PermissionFlagsBits.ReadMessageHistory
+        ]
+      });
+    }
+
+    if (botMember) {
+      overwrites.push({
+        id: botMember.id,
+        allow: [
+          PermissionFlagsBits.ViewChannel,
+          PermissionFlagsBits.SendMessages,
+          PermissionFlagsBits.EmbedLinks,
+          PermissionFlagsBits.AttachFiles,
+          PermissionFlagsBits.ReadMessageHistory,
+          PermissionFlagsBits.ManageChannels
+        ]
+      });
+    }
+  }
+
+  // Enforce Timeout Role visibility: only allow in appeals channel, deny everywhere else
+  if (timeoutRole?.id) {
+    if (isAppealsChannel) {
+      overwrites.push({
+        id: timeoutRole.id,
+        allow: [
+          PermissionFlagsBits.ViewChannel,
+          PermissionFlagsBits.ReadMessageHistory
+        ],
+        deny: [
+          PermissionFlagsBits.SendMessages,
+          PermissionFlagsBits.CreatePublicThreads,
+          PermissionFlagsBits.CreatePrivateThreads,
+          PermissionFlagsBits.SendMessagesInThreads,
+          PermissionFlagsBits.AddReactions
+        ]
+      });
+    } else {
+      overwrites.push({
+        id: timeoutRole.id,
+        deny: [
+          PermissionFlagsBits.ViewChannel
+        ]
+      });
     }
   }
 
@@ -625,6 +696,102 @@ const ONBOARDING_STEPS = Object.freeze({
           await channel.send(panelPayload).catch(() => {});
         }
         return { created: `#${channel.name} (8 Color Roles & Dropdown Panel published)` };
+      }
+    },
+    {
+      id: 'server_faq',
+      moduleKey: ModuleKeys.FAQ,
+      moduleName: 'Knowledge Base & FAQ',
+      categoryKey: 'START_HERE',
+      categoryLabel: '📌 Start Here',
+      moduleOverview: 'Organize answers to common questions in a dedicated forum or text channel with automated thread discussions and interactive searching.',
+      title: 'Knowledge Base & FAQ Channel',
+      description: 'Select the channel where the FAQ master index and knowledge base topics will live.',
+      pickerType: 'CHANNEL',
+      channelTypes: [ChannelType.GuildForum, ChannelType.GuildText],
+      autoCreateLabel: 'Auto-Create #faq & Starter FAQs',
+      autoCreateDescription: 'Creates #faq in "📌 Start Here" (forum on Community servers, read-only text channel on standard servers) and publishes starter FAQ topics.',
+      async getCurrent(guild) {
+        const res = await query(`SELECT forum_channel_id FROM faq_configs WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
+        return res.rows[0]?.forum_channel_id ? `<#${res.rows[0].forum_channel_id}>` : null;
+      },
+      async applyDefault(guild) {
+        const existing = guild.channels?.cache?.find((c) => ['faq', 'knowledge-base', 'help-center', 'questions'].includes(c.name.toLowerCase()));
+        if (existing) {
+          const { FaqService } = require('../community/faqService');
+          const faq = new FaqService();
+          await faq.setup({ guild, channel: existing });
+          return { result: `Assigned existing <#${existing.id}>` };
+        }
+        return { result: 'FAQ knowledge base ready' };
+      },
+      async applySelection(guild, channelId) {
+        const channel = await guild.channels.fetch(channelId).catch(() => null);
+        if (channel) {
+          const { FaqService } = require('../community/faqService');
+          const faq = new FaqService();
+          await faq.setup({ guild, channel });
+        }
+      },
+      async autoCreate(guild) {
+        const isCommunity = Boolean(guild.features?.includes?.('COMMUNITY'));
+        let channel = null;
+        let isForum = false;
+
+        if (isCommunity) {
+          try {
+            channel = await autoCreateChannel(guild, {
+              name: 'faq',
+              type: ChannelType.GuildForum,
+              categoryName: STANDARD_CATEGORIES.START_HERE.name,
+              isPrivate: false,
+              topic: 'Frequently Asked Questions & Server Knowledge Base'
+            });
+            isForum = channel?.type === ChannelType.GuildForum;
+          } catch {
+            isForum = false;
+          }
+        }
+
+        if (!channel) {
+          channel = await autoCreateChannel(guild, {
+            name: 'faq',
+            type: ChannelType.GuildText,
+            categoryName: STANDARD_CATEGORIES.START_HERE.name,
+            isPrivate: false,
+            isReadOnly: true,
+            topic: 'Frequently Asked Questions & Server Knowledge Base'
+          });
+          isForum = false;
+        }
+
+        const { FaqService } = require('../community/faqService');
+        const faq = new FaqService();
+        await faq.setup({ guild, channel });
+
+        // Seed initial starter FAQs
+        await faq.addFaqEntry({
+          guild,
+          question: 'How do I get roles in the server?',
+          answer: 'Visit the <#get-roles> channel to select your self-assignable notification roles and chat username colors!',
+          category: 'Getting Started'
+        }).catch(() => {});
+
+        await faq.addFaqEntry({
+          guild,
+          question: 'How do I submit a support ticket or report?',
+          answer: 'Head to the **Help + Support** section to open tickets, report rule violations, or submit appeals!',
+          category: 'Support'
+        }).catch(() => {});
+
+        await faq.addFaqEntry({
+          guild,
+          question: 'How does leveling and XP work?',
+          answer: 'Earn XP by chatting in text channels and hanging out in voice channels! Check your rank with `/level rank` and customize your card with `/level card`!',
+          category: 'Community'
+        }).catch(() => {});
+
+        return { created: `#${channel.name} (${isForum ? 'Forum' : 'Text Channel with Threads'}) & 3 Starter FAQs` };
       }
     },
     {
@@ -1278,15 +1445,15 @@ const ONBOARDING_STEPS = Object.freeze({
       id: 'server_referrals',
       moduleKey: ModuleKeys.REFERRALS,
       moduleName: 'Member Referral Rewards',
-      categoryKey: 'COMMUNITY',
-      categoryLabel: 'Community & Engagement',
+      categoryKey: 'START_HERE',
+      categoryLabel: '📌 Start Here',
       moduleOverview: 'Reward members with bonus XP when their friends join using their personal invite links.',
       title: 'Member Referral Program Channel',
-      description: 'Select the channel where the referral program guide will be posted.',
+      description: 'Select the channel where the referral submission panel and program guide will be posted.',
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildText],
-      autoCreateLabel: 'Auto-Create #referrals & Referral Guide',
-      autoCreateDescription: 'Creates public #referrals in "🎉 Community Hub" and enables 500 XP bonus per invite.',
+      autoCreateLabel: 'Auto-Create #referrals & Submit Panel',
+      autoCreateDescription: 'Creates #referrals in "📌 Start Here", posts the interactive Referrer Submit button, and enables 500 XP bonus.',
       async getCurrent(guild) {
         const res = await query(`SELECT referral_xp, enabled FROM referral_configs WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.enabled !== false ? `${res.rows[0]?.referral_xp || 500} XP Bonus (Enabled)` : null;
@@ -1303,29 +1470,21 @@ const ONBOARDING_STEPS = Object.freeze({
         await referrals.upsertConfig(guild.id, { enabled: true, referralXp: 500 });
       },
       async autoCreate(guild) {
-        const channel = await autoCreateChannel(guild, { name: 'referrals', categoryName: STANDARD_CATEGORIES.COMMUNITY.name, isPrivate: false, topic: 'Invite friends and earn referral bonus XP' });
+        const channel = await autoCreateChannel(guild, {
+          name: 'referrals',
+          categoryName: STANDARD_CATEGORIES.START_HERE.name,
+          isPrivate: false,
+          isReadOnly: true,
+          topic: 'Submit who referred you and invite friends for bonus XP'
+        });
         const { ReferralService } = require('../community/referralService');
         const referrals = new ReferralService();
-        await referrals.upsertConfig(guild.id, { enabled: true, referralXp: 500 });
-        const refEmbed = createBaseEmbed({
-          title: '🤝 Member Referral Program',
-          description: [
-            'Invite your friends to the server and earn **500 Bonus XP** for every verified member who joins through your link!',
-            '',
-            '**How It Works:**',
-            '1. Run `/referral link` to generate your unique server invite link.',
-            '2. Share your link with friends.',
-            '3. When they join, your referral count increases and bonus XP is awarded automatically!',
-            '',
-            'Use `/referral stats` to track your total invites and bonus XP earned.'
-          ].join('\n'),
-          color: SlickBotColors.PRIMARY,
-          footer: 'SlickBot Referrals • 500 XP per invite'
-        });
+        const config = await referrals.upsertConfig(guild.id, { enabled: true, referralXp: 500 });
+        const panelPayload = referrals.buildSubmitPanel(guild, config);
         if (channel && typeof channel.send === 'function') {
-          await channel.send({ embeds: [refEmbed] }).catch(() => {});
+          await channel.send(panelPayload).catch(() => {});
         }
-        return { created: `#${channel.name} (Referral Guide published)` };
+        return { created: `#${channel.name} (Referral Submit Panel published)` };
       }
     },
     {
@@ -3005,6 +3164,144 @@ const ONBOARDING_STEPS = Object.freeze({
           await channel.send({ embeds: [starEmbed] }).catch(() => {});
         }
         return { created: `#${channel.name} (Hall of Fame Guide published)` };
+      }
+    }
+  ],
+  [ModuleKeys.REFERRALS]: [
+    {
+      id: 'referrals_config',
+      moduleKey: ModuleKeys.REFERRALS,
+      title: 'Member Referral Rewards Channel & Bonus XP',
+      description: 'Select the channel where the referral submission panel and program guide will be posted.',
+      pickerType: 'CHANNEL',
+      channelTypes: [ChannelType.GuildText],
+      autoCreateLabel: 'Auto-Create #referrals & Submit Panel',
+      autoCreateDescription: 'Creates #referrals in "📌 Start Here", posts the interactive Referrer Submit button, and enables 500 XP bonus.',
+      async getCurrent(guild) {
+        const res = await query(`SELECT referral_xp, enabled FROM referral_configs WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
+        return res.rows[0]?.enabled !== false ? `${res.rows[0]?.referral_xp || 500} XP Bonus (Enabled)` : null;
+      },
+      async applyDefault(guild) {
+        const { ReferralService } = require('../community/referralService');
+        const referrals = new ReferralService();
+        await referrals.upsertConfig(guild.id, { enabled: true, referralXp: 500 });
+        return { result: 'Referrals tracking enabled (500 bonus XP)' };
+      },
+      async applySelection(guild) {
+        const { ReferralService } = require('../community/referralService');
+        const referrals = new ReferralService();
+        await referrals.upsertConfig(guild.id, { enabled: true, referralXp: 500 });
+      },
+      async autoCreate(guild) {
+        const channel = await autoCreateChannel(guild, {
+          name: 'referrals',
+          categoryName: STANDARD_CATEGORIES.START_HERE.name,
+          isPrivate: false,
+          isReadOnly: true,
+          topic: 'Submit who referred you and invite friends for bonus XP'
+        });
+        const { ReferralService } = require('../community/referralService');
+        const referrals = new ReferralService();
+        const config = await referrals.upsertConfig(guild.id, { enabled: true, referralXp: 500 });
+        const panelPayload = referrals.buildSubmitPanel(guild, config);
+        if (channel && typeof channel.send === 'function') {
+          await channel.send(panelPayload).catch(() => {});
+        }
+        return { created: `#${channel.name} (Referral Submit Panel published)` };
+      }
+    }
+  ],
+  [ModuleKeys.FAQ]: [
+    {
+      id: 'faq_channel',
+      moduleKey: ModuleKeys.FAQ,
+      title: 'Knowledge Base & FAQ Channel',
+      description: 'Select the channel where the FAQ master index and knowledge base topics will live.',
+      pickerType: 'CHANNEL',
+      channelTypes: [ChannelType.GuildForum, ChannelType.GuildText],
+      autoCreateLabel: 'Auto-Create #faq & Starter FAQs',
+      autoCreateDescription: 'Creates #faq in "📌 Start Here" (forum on Community servers, read-only text channel on standard servers) and publishes starter FAQ topics.',
+      async getCurrent(guild) {
+        const res = await query(`SELECT forum_channel_id FROM faq_configs WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
+        return res.rows[0]?.forum_channel_id ? `<#${res.rows[0].forum_channel_id}>` : null;
+      },
+      async applyDefault(guild) {
+        const existing = guild.channels?.cache?.find((c) => ['faq', 'knowledge-base', 'help-center', 'questions'].includes(c.name.toLowerCase()));
+        if (existing) {
+          const { FaqService } = require('../community/faqService');
+          const faq = new FaqService();
+          await faq.setup({ guild, channel: existing });
+          return { result: `Assigned existing <#${existing.id}>` };
+        }
+        return { result: 'FAQ knowledge base ready' };
+      },
+      async applySelection(guild, channelId) {
+        const channel = await guild.channels.fetch(channelId).catch(() => null);
+        if (channel) {
+          const { FaqService } = require('../community/faqService');
+          const faq = new FaqService();
+          await faq.setup({ guild, channel });
+        }
+      },
+      async autoCreate(guild) {
+        const isCommunity = Boolean(guild.features?.includes?.('COMMUNITY'));
+        let channel = null;
+        let isForum = false;
+
+        if (isCommunity) {
+          try {
+            channel = await autoCreateChannel(guild, {
+              name: 'faq',
+              type: ChannelType.GuildForum,
+              categoryName: STANDARD_CATEGORIES.START_HERE.name,
+              isPrivate: false,
+              topic: 'Frequently Asked Questions & Server Knowledge Base'
+            });
+            isForum = channel?.type === ChannelType.GuildForum;
+          } catch {
+            isForum = false;
+          }
+        }
+
+        if (!channel) {
+          channel = await autoCreateChannel(guild, {
+            name: 'faq',
+            type: ChannelType.GuildText,
+            categoryName: STANDARD_CATEGORIES.START_HERE.name,
+            isPrivate: false,
+            isReadOnly: true,
+            topic: 'Frequently Asked Questions & Server Knowledge Base'
+          });
+          isForum = false;
+        }
+
+        const { FaqService } = require('../community/faqService');
+        const faq = new FaqService();
+        await faq.setup({ guild, channel });
+
+        // Seed initial starter FAQs
+        await faq.addFaqEntry({
+          guild,
+          question: 'How do I get roles in the server?',
+          answer: 'Visit the <#get-roles> channel to select your self-assignable notification roles and chat username colors!',
+          category: 'Getting Started'
+        }).catch(() => {});
+
+        await faq.addFaqEntry({
+          guild,
+          question: 'How do I submit a support ticket or report?',
+          answer: 'Head to the **Help + Support** section to open tickets, report rule violations, or submit appeals!',
+          category: 'Support'
+        }).catch(() => {});
+
+        await faq.addFaqEntry({
+          guild,
+          question: 'How does leveling and XP work?',
+          answer: 'Earn XP by chatting in text channels and hanging out in voice channels! Check your rank with `/level rank` and customize your card with `/level card`!',
+          category: 'Community'
+        }).catch(() => {});
+
+        return { created: `#${channel.name} (${isForum ? 'Forum' : 'Text Channel with Threads'}) & 3 Starter FAQs` };
       }
     }
   ]

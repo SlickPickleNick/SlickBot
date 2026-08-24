@@ -13,6 +13,45 @@ const CARD_THEME_COLORS = Object.freeze({
   ROSE: '#E056FD'
 });
 
+function resolveDirectMediaUrl(inputUrl) {
+  if (!inputUrl || typeof inputUrl !== 'string') return null;
+  const trimmed = inputUrl.trim();
+  if (!/^https?:\/\//i.test(trimmed)) return null;
+
+  // 1. Giphy webpage URLs
+  const giphyMatch = trimmed.match(/^https?:\/\/(?:www\.)?giphy\.com\/gifs\/(?:.*-)?([a-zA-Z0-9_-]+)/i);
+  if (giphyMatch && giphyMatch[1]) {
+    return `https://i.giphy.com/media/${giphyMatch[1]}/giphy.gif`;
+  }
+
+  // 2. Tenor webpage URLs
+  const tenorViewMatch = trimmed.match(/^https?:\/\/(?:www\.)?tenor\.com\/view\/(?:.*-)?(\d+)/i);
+  if (tenorViewMatch && tenorViewMatch[1]) {
+    return `https://media.tenor.com/${tenorViewMatch[1]}/tenor.gif`;
+  }
+
+  // 3. Tenor short URLs
+  const tenorShortMatch = trimmed.match(/^https?:\/\/(?:www\.)?tenor\.com\/([a-zA-Z0-9]+)(?:\.gif)?$/i);
+  if (tenorShortMatch && tenorShortMatch[1] && tenorShortMatch[1].toLowerCase() !== 'view') {
+    return `https://c.tenor.com/${tenorShortMatch[1]}/tenor.gif`;
+  }
+
+  // 4. Klipy URLs / Discord built-in GIF system
+  const klipyMatch = trimmed.match(/^https?:\/\/(?:www\.|media\.)?klipy\.com\/(?:gif|gifs|view)\/([a-zA-Z0-9_-]+)/i);
+  if (klipyMatch && klipyMatch[1]) {
+    const id = klipyMatch[1].replace(/\.gif$/i, '');
+    return `https://media.klipy.com/gifs/${id}.gif`;
+  }
+
+  // 5. Imgur webpage URLs
+  const imgurMatch = trimmed.match(/^https?:\/\/(?:www\.|i\.)?imgur\.com\/(?:gallery\/|r\/[a-zA-Z0-9_]+\/)?([a-zA-Z0-9]+)(?:\.[a-zA-Z0-9]+)?$/i);
+  if (imgurMatch && imgurMatch[1] && !['a', 'gallery', 'r'].includes(imgurMatch[1].toLowerCase())) {
+    return `https://i.imgur.com/${imgurMatch[1]}.gif`;
+  }
+
+  return trimmed;
+}
+
 function safeArray(value) {
   if (Array.isArray(value)) return value.map(String);
   if (typeof value === 'string') {
@@ -777,6 +816,7 @@ class LevelingService {
       return res.rows[0] || null;
     }
 
+    const resolvedBackgroundUrl = backgroundUrl ? resolveDirectMediaUrl(backgroundUrl) : undefined;
     const normalizedColor = color ? normalizeHexColor(color, null) : null;
     const normalizedTheme = theme ? String(theme).toUpperCase() : null;
     const res = await query(
@@ -788,7 +828,7 @@ class LevelingService {
          card_theme = CASE WHEN $5::text IS NOT NULL THEN $5::text ELSE leveling_profiles.card_theme END,
          updated_at = NOW()
        RETURNING *`,
-      [guildId, userId, backgroundUrl || null, normalizedColor, normalizedTheme]
+      [guildId, userId, resolvedBackgroundUrl || null, normalizedColor, normalizedTheme]
     );
     return res.rows[0];
   }
@@ -911,5 +951,6 @@ module.exports = {
   progressForProfile,
   normalizeAnnouncementMode,
   formatMultiplier,
-  buildLevelingConfigModal
+  buildLevelingConfigModal,
+  resolveDirectMediaUrl
 };

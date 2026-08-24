@@ -291,20 +291,23 @@ class AutoModService {
       return { ok: false, reason: 'Guild channel manager not available.' };
     }
 
+    const opts = typeof options === 'string' ? { timeoutRoleId: options } : (options || {});
     const config = await this.getConfig(guild.id);
-    const roleId = options.timeoutRoleId || config.timeout_role_id;
+    const roleId = opts.timeoutRoleId || config.timeout_role_id;
     if (!roleId) {
       return { ok: false, reason: 'No timeout role configured.' };
     }
 
-    // Resolve Appeals review channel ID
-    const appealRes = await query(`SELECT review_channel_id FROM appeal_configs WHERE guild_id = $1 LIMIT 1`, [guild.id]).catch(() => ({ rows: [] }));
-    const appealsChannelId = appealRes.rows[0]?.review_channel_id || null;
+    // Resolve Appeals panel/submit channel and review channel IDs
+    const appealRes = await query(`SELECT panel_channel_id, review_channel_id FROM appeal_configs WHERE guild_id = $1 LIMIT 1`, [guild.id]).catch(() => ({ rows: [] }));
+    const appealPanelChannelId = appealRes.rows[0]?.panel_channel_id || null;
+    const appealReviewChannelId = appealRes.rows[0]?.review_channel_id || null;
 
     const exemptIds = new Set([
       ...(config.timeout_role_exempt_channel_ids || [])
     ]);
-    if (appealsChannelId) exemptIds.add(appealsChannelId);
+    if (appealPanelChannelId) exemptIds.add(appealPanelChannelId);
+    if (appealReviewChannelId) exemptIds.add(appealReviewChannelId);
 
     const mode = options.mode || config.timeout_role_mode || 'HIDE';
     const channels = await guild.channels.fetch().catch(() => guild.channels.cache);
@@ -322,10 +325,11 @@ class AutoModService {
         const isTicket = channel.name?.toLowerCase().startsWith('ticket-') || channel.topic?.includes('SlickBot ticket #');
         if (isTicket) return;
 
-        const isAppeals = channel.id === appealsChannelId;
-        const isExempt = exemptIds.has(channel.id);
+        const isAppeals = channel.id === appealPanelChannelId ||
+          ['submit-appeal', 'appeals', 'ban-appeals', 'appeal'].includes(channel.name?.toLowerCase());
+        const isExempt = exemptIds.has(channel.id) || isAppeals;
 
-        if (isAppeals || isExempt) {
+        if (isExempt) {
           exemptCount++;
           // Appeals and exempt channels: View & Read only (deny send/react)
           await channel.permissionOverwrites?.edit(roleId, {

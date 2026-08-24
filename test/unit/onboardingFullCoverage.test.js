@@ -213,7 +213,7 @@ mockDb.addHandler(async (text, params = []) => {
 test('ALL SERVER_ONBOARDING steps have complete metadata and valid lifecycle functions', async () => {
   const steps = ONBOARDING_STEPS.SERVER_ONBOARDING;
   assert.ok(Array.isArray(steps), 'SERVER_ONBOARDING is an array');
-  assert.equal(steps.length, 24, 'SERVER_ONBOARDING has exactly 24 steps');
+  assert.equal(steps.length, 25, 'SERVER_ONBOARDING has exactly 25 steps');
 
   for (const step of steps) {
     assert.ok(step.id, `Step has id: ${step.id}`);

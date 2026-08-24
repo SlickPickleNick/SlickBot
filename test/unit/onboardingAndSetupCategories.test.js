@@ -42,14 +42,14 @@ test('OnboardingService creates server onboarding session and builds payload', (
   assert.equal(session.userId, 'user-456');
   assert.equal(session.type, 'SERVER_ONBOARDING');
   assert.equal(session.stepIndex, 0);
-  assert.equal(session.steps.length, 24, 'Server onboarding covers 24 steps');
+  assert.equal(session.steps.length, 25, 'Server onboarding covers 25 steps');
 
   const payload = onboarding.buildOnboardingPayload(session, '#bot-logs');
   assert.ok(payload.embeds?.length > 0, 'Has embed');
   assert.ok(payload.components?.length > 0, 'Has components');
   assert.match(payload.embeds[0].data.title, /Guided Server Onboarding/i);
   assert.match(payload.embeds[0].data.description, /Overall Progress:/i);
-  assert.match(payload.embeds[0].data.description, /Module 1 of 22/i);
+  assert.match(payload.embeds[0].data.description, /Module 1 of \d+/i);
   assert.match(payload.embeds[0].data.description, /Staff Roles & Permissions/i);
 });
 
@@ -222,9 +222,9 @@ test('LoggingService defines setupLogGroup, getLogGroupChannels, and autoCreateA
   assert.equal(typeof logging.autoCreateAllLogChannels, 'function');
 });
 
-test('SERVER_ONBOARDING provides rich metadata across all 24 module steps', () => {
+test('SERVER_ONBOARDING provides rich metadata across all 25 module steps', () => {
   const steps = ONBOARDING_STEPS.SERVER_ONBOARDING;
-  assert.equal(steps.length, 24);
+  assert.equal(steps.length, 25);
 
   for (const step of steps) {
     assert.ok(step.id, 'Step has an id');

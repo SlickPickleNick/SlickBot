@@ -568,6 +568,97 @@ async function handleButton(interaction, ctx) {
     return true;
   }
 
+  if (id === CustomIds.ReferralsRefresh) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.ReferralsView, ModuleKeys.REFERRALS))) return true;
+    await updatePanel(interaction, await referrals.buildManagerPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id === CustomIds.ReferralsToggle) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.ReferralsConfigure, ModuleKeys.REFERRALS))) return true;
+    const config = await referrals.ensureConfig(interaction.guildId);
+    const nextEnabled = !(config.enabled !== false);
+    await referrals.upsertConfig(interaction.guildId, { enabled: nextEnabled });
+    await updatePanel(interaction, await referrals.buildManagerPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id === CustomIds.ReferralsConfigModal) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.ReferralsConfigure, ModuleKeys.REFERRALS))) return true;
+    const config = await referrals.getConfig(interaction.guildId);
+    await interaction.showModal(buildReferralsConfigModal(config));
+    return true;
+  }
+
+  if (id === CustomIds.ReferralsConfigModalSubmit) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.ReferralsConfigure, ModuleKeys.REFERRALS))) return true;
+    const bonusXp = parseInt(interaction.fields.getTextInputValue('bonus_xp'), 10) || 500;
+    await referrals.upsertConfig(interaction.guildId, { referralXp: bonusXp });
+    await updatePanel(interaction, await referrals.buildManagerPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id === CustomIds.ReferralsSubmitButton) {
+    if (!(await requirePublicAction(interaction, ctx, ActionKeys.ReferralsSubmit, ModuleKeys.REFERRALS))) return true;
+    await interaction.showModal(referrals.buildSubmitModal(interaction.guildId));
+    return true;
+  }
+
+  if (id === CustomIds.ReferralsSubmitModalSubmit) {
+    if (!(await requirePublicAction(interaction, ctx, ActionKeys.ReferralsSubmit, ModuleKeys.REFERRALS))) return true;
+    const rawInput = interaction.fields.getTextInputValue('referrer_input')?.trim();
+    if (!rawInput) {
+      return replyPrivate(interaction, { embeds: [createWarningEmbed('Invalid Referrer', 'Please provide a username, @mention, or User ID.')] });
+    }
+
+    let targetUserId = null;
+    const mentionMatch = rawInput.match(/<@!?(\d{15,25})>/);
+    if (mentionMatch) {
+      targetUserId = mentionMatch[1];
+    } else if (/^\d{15,25}$/.test(rawInput)) {
+      targetUserId = rawInput;
+    }
+
+    let targetMember = null;
+    if (targetUserId) {
+      targetMember = await interaction.guild.members.fetch(targetUserId).catch(() => null);
+    }
+    if (!targetMember) {
+      const searchRes = await interaction.guild.members.fetch({ query: rawInput.replace(/^@/, ''), limit: 5 }).catch(() => null);
+      if (searchRes && searchRes.size > 0) {
+        targetMember = searchRes.first();
+      }
+    }
+
+    if (!targetMember) {
+      return replyPrivate(interaction, {
+        embeds: [createWarningEmbed('Member Not Found', `Could not find member **${rawInput}** in this server. Please ensure they are currently in the server and check the spelling.`)]
+      });
+    }
+
+    const result = await referrals.submitReferral({
+      guild: interaction.guild,
+      refereeUser: interaction.user,
+      referrerUser: targetMember.user,
+      actorUser: interaction.user,
+      logger: ctx.logger,
+      source: 'PANEL_MODAL'
+    });
+
+    if (!result.ok) {
+      return replyPrivate(interaction, { embeds: [createWarningEmbed('Referral Not Recorded', result.reason)] });
+    }
+
+    return replyPrivate(interaction, {
+      embeds: [
+        createSuccessEmbed(
+          'Referral Recorded! 🎉',
+          `You successfully recorded **${targetMember.user.tag || targetMember.user.username}** as your referrer!\n\nThey have been awarded **${Number(result.referral.xp_awarded || 0).toLocaleString()} Bonus XP**!`
+        )
+      ]
+    });
+  }
+
   // --- Auto-Mod & Anti-Raid Interactions ---
 
   if (id === CustomIds.AutoModSetupWizard) {

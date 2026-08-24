@@ -3,7 +3,7 @@ const { ModuleKeys } = require('../modules/moduleRegistry');
 const { ActionKeys } = require('../modules/permissions/actionKeys');
 const { replyPrivate, replyPublic } = require('../utils/reply');
 const { createSuccessEmbed, createWarningEmbed, createBaseEmbed, SlickBotColors } = require('../modules/ui/uiService');
-const { LevelingService, formatMultiplier } = require('../modules/community/levelingService');
+const { LevelingService, formatMultiplier, resolveDirectMediaUrl } = require('../modules/community/levelingService');
 
 const leveling = new LevelingService();
 
@@ -159,10 +159,13 @@ module.exports = {
         });
       }
 
-      if (backgroundUrl && !/^https?:\/\/.+/i.test(backgroundUrl)) {
-        return replyPrivate(interaction, {
-          embeds: [createWarningEmbed('Invalid Image URL', 'Please provide a valid direct image URL starting with `http://` or `https://`.')]
-        });
+      if (backgroundUrl) {
+        const resolved = resolveDirectMediaUrl(backgroundUrl);
+        if (!resolved) {
+          return replyPrivate(interaction, {
+            embeds: [createWarningEmbed('Invalid Image URL', 'Please provide a valid image or GIF URL (Tenor, Giphy, Klipy, Discord media link, or direct image URL).')]
+          });
+        }
       }
 
       await leveling.updateCardCustomization(interaction.guildId, interaction.user.id, {

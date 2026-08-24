@@ -1256,7 +1256,24 @@ async function initDatabase() {
   await query(`ALTER TABLE faq_configs ADD COLUMN IF NOT EXISTS ticket_channel_id TEXT;`);
   await query(`ALTER TABLE faq_configs ADD COLUMN IF NOT EXISTS master_title TEXT NOT NULL DEFAULT 'Knowledge Base / FAQ';`);
   await query(`ALTER TABLE faq_configs ADD COLUMN IF NOT EXISTS master_description TEXT NOT NULL DEFAULT 'Browse the FAQ posts below by category. Categories are based on this forum channel''s post tags.';`);
+  await query(`ALTER TABLE faq_configs ADD COLUMN IF NOT EXISTS channel_type TEXT NOT NULL DEFAULT 'FORUM';`);
   await query(`CREATE INDEX IF NOT EXISTS idx_faq_configs_forum ON faq_configs(guild_id, forum_channel_id);`);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS faq_entries (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      question TEXT NOT NULL,
+      answer TEXT NOT NULL,
+      category TEXT NOT NULL DEFAULT 'General',
+      channel_id TEXT,
+      message_id TEXT,
+      thread_id TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS idx_faq_entries_guild ON faq_entries(guild_id);`);
 
 
 

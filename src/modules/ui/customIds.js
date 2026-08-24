@@ -127,6 +127,8 @@ const CustomIds = Object.freeze({
   ReferralsToggle: 'slickbot:referrals:toggle',
   ReferralsConfigModal: 'slickbot:referrals:config-modal',
   ReferralsConfigModalSubmit: 'slickbot:modal:referrals-config',
+  ReferralsSubmitButton: 'slickbot:referrals:submit-btn',
+  ReferralsSubmitModalSubmit: 'slickbot:modal:referrals-submit',
 
   TempRolesRefresh: 'slickbot:temp-roles:refresh',
   TempRolesCleanup: 'slickbot:temp-roles:cleanup',
