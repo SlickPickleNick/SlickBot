@@ -1226,11 +1226,15 @@ main().catch(async (error) => {
 });
 
 async function shutdown() {
-  console.log('Shutting down SlickBot...');
+  console.log('Shutting down SlickBot gracefully...');
   taskScheduler.stop();
-  healthServer.close();
-  client.destroy();
-  await closeDatabase();
+  if (healthServer && typeof healthServer.close === 'function') {
+    await new Promise((resolve) => healthServer.close(() => resolve())).catch(() => {});
+  }
+  if (client) {
+    await client.destroy().catch(() => {});
+  }
+  await closeDatabase().catch(() => {});
   process.exit(0);
 }
 

@@ -14,6 +14,10 @@ const pool = new Pool({
   ssl: isLocalDb ? false : { rejectUnauthorized: false }
 });
 
+pool.on('error', (err) => {
+  console.warn('[Database] Unexpected error on idle client:', err.message);
+});
+
 let customQueryHandler = null;
 
 function setQueryHandler(handler) {
