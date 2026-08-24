@@ -1061,15 +1061,42 @@ test('SERVER_ONBOARDING server_tickets autoCreate places #submit-tickets in Help
   assert.equal(submitTicketsChan.parent, helpSupportCat.id, 'submit-tickets is parented to Help & Support');
 });
 
-test('STANDARD_CATEGORIES defines requested category ordering: Stats > Start Here > Support > Community > Games > Voice > Staff > Logs', () => {
+test('STANDARD_CATEGORIES defines requested category ordering: Stats > Start Here > Support > Open Tickets > Community > Games > Voice > Staff > Logs', () => {
   assert.equal(STANDARD_CATEGORIES.STATS.position, 0, 'Server Stats is position 0');
   assert.equal(STANDARD_CATEGORIES.START_HERE.position, 1, 'Start Here is position 1');
   assert.equal(STANDARD_CATEGORIES.SUPPORT.position, 2, 'Help & Support is position 2');
+  assert.equal(STANDARD_CATEGORIES.OPEN_TICKETS.position, 3, 'Open Tickets is position 3');
   assert.equal(STANDARD_CATEGORIES.COMMUNITY.position, 4, 'Community Hub is position 4');
   assert.equal(STANDARD_CATEGORIES.GAMES.position, 5, 'Games & Activities is position 5');
   assert.equal(STANDARD_CATEGORIES.VOICE.position, 6, 'Dynamic Voice is position 6');
   assert.equal(STANDARD_CATEGORIES.STAFF.position, 7, 'Staff Area is position 7');
   assert.equal(STANDARD_CATEGORIES.LOGS.position, 8, 'Server Logs is position 8');
+});
+
+test('reorderServerCategories syncs category positions based on STANDARD_CATEGORIES', async () => {
+  const { reorderServerCategories } = require('../../src/modules/onboarding/onboardingService');
+  let setPositionsPayload = null;
+
+  const mockGuild = {
+    channels: {
+      cache: [
+        { id: 'cat-logs', name: '📋 Server Logs', type: ChannelType.GuildCategory },
+        { id: 'cat-stats', name: '📊 Server Stats', type: ChannelType.GuildCategory },
+        { id: 'cat-tickets', name: '📁 Open Tickets', type: ChannelType.GuildCategory },
+        { id: 'cat-start', name: '📌 Start Here', type: ChannelType.GuildCategory }
+      ],
+      setPositions: async (updates) => {
+        setPositionsPayload = updates;
+      }
+    }
+  };
+
+  await reorderServerCategories(mockGuild);
+  assert.ok(setPositionsPayload, 'setPositions called');
+  assert.equal(setPositionsPayload.find((u) => u.channel === 'cat-stats')?.position, 0);
+  assert.equal(setPositionsPayload.find((u) => u.channel === 'cat-start')?.position, 1);
+  assert.equal(setPositionsPayload.find((u) => u.channel === 'cat-tickets')?.position, 3);
+  assert.equal(setPositionsPayload.find((u) => u.channel === 'cat-logs')?.position, 8);
 });
 
 

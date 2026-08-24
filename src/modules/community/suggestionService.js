@@ -313,8 +313,8 @@ class SuggestionService {
 
   async ensureConfig(guildId) {
     const result = await query(
-      `INSERT INTO suggestion_configs (guild_id)
-       VALUES ($1)
+      `INSERT INTO suggestion_configs (guild_id, default_anonymous, auto_create_threads)
+       VALUES ($1, true, true)
        ON CONFLICT (guild_id) DO NOTHING
        RETURNING *`,
       [guildId]
@@ -343,13 +343,13 @@ class SuggestionService {
     const current = await this.ensureConfig(guildId);
     const result = await query(
       `INSERT INTO suggestion_configs (guild_id, channel_id, review_channel_id, log_channel_id, default_anonymous, auto_create_threads)
-       VALUES ($1, $2, $3, $4, $5, $6)
+       VALUES ($1, $2, $3, $4, COALESCE($5, true), COALESCE($6, true))
        ON CONFLICT (guild_id) DO UPDATE SET
          channel_id = COALESCE(EXCLUDED.channel_id, suggestion_configs.channel_id),
          review_channel_id = CASE WHEN $3::text IS NULL THEN suggestion_configs.review_channel_id ELSE EXCLUDED.review_channel_id END,
          log_channel_id = CASE WHEN $4::text IS NULL THEN suggestion_configs.log_channel_id ELSE EXCLUDED.log_channel_id END,
-         default_anonymous = COALESCE(EXCLUDED.default_anonymous, suggestion_configs.default_anonymous),
-         auto_create_threads = COALESCE(EXCLUDED.auto_create_threads, suggestion_configs.auto_create_threads),
+         default_anonymous = COALESCE(EXCLUDED.default_anonymous, suggestion_configs.default_anonymous, true),
+         auto_create_threads = COALESCE(EXCLUDED.auto_create_threads, suggestion_configs.auto_create_threads, true),
          updated_at = NOW()
        RETURNING *`,
       [
@@ -357,8 +357,8 @@ class SuggestionService {
         channelId || current?.channel_id || null,
         reviewChannelId === undefined ? null : reviewChannelId,
         logChannelId === undefined ? null : logChannelId,
-        defaultAnonymous === undefined ? null : defaultAnonymous,
-        autoCreateThreads === undefined ? null : autoCreateThreads
+        defaultAnonymous === undefined ? (current?.default_anonymous ?? true) : Boolean(defaultAnonymous),
+        autoCreateThreads === undefined ? (current?.auto_create_threads ?? true) : Boolean(autoCreateThreads)
       ]
     );
     await this.ensureDefaultCategories(guildId);
