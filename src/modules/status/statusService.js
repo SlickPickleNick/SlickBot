@@ -215,8 +215,23 @@ class StatusService {
     };
   }
 
-  async applySavedPresence(guildId) {
-    const saved = guildId ? await this.getSavedPresence(guildId) : null;
+  async applySavedPresence(guildId = null) {
+    let saved = guildId ? await this.getSavedPresence(guildId) : null;
+    if (!saved) {
+      const latest = await query(`SELECT * FROM bot_presence_settings ORDER BY updated_at DESC LIMIT 1`).catch(() => ({ rows: [] }));
+      if (latest.rows[0]) {
+        const row = latest.rows[0];
+        saved = {
+          status: row.status,
+          activityType: row.activity_type,
+          activityText: row.activity_text,
+          activityUrl: row.activity_url,
+          streamUrl: row.stream_url || row.activity_url,
+          updatedAt: row.updated_at
+        };
+      }
+    }
+
     const fallback = saved || {
       status: env.DEFAULT_BOT_STATUS,
       activityType: env.DEFAULT_BOT_ACTIVITY_TYPE,

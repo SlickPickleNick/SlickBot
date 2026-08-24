@@ -10,6 +10,7 @@
   "scripts": {
     "start": "node src/index.js",
     "deploy:commands": "node src/deployCommands.js",
+    "deploy:commands:global": "node src/deployCommands.js --global",
     "db:init": "node src/services/initDatabase.js",
     "validate:commands": "node src/scripts/validateCommands.js",
     "test": "node --test",
