@@ -335,7 +335,11 @@ class SuggestionService {
     }
   }
 
-  async setup({ guildId, channelId, reviewChannelId = undefined, logChannelId = undefined, defaultAnonymous = undefined, autoCreateThreads = undefined }) {
+  async setup(firstArg, secondArg = {}) {
+    const options = typeof firstArg === 'object' && firstArg !== null ? firstArg : { ...secondArg, guildId: firstArg };
+    const guildId = options.guildId;
+    if (!guildId) throw new Error('guildId is required for suggestion setup');
+    const { channelId, reviewChannelId = undefined, logChannelId = undefined, defaultAnonymous = undefined, autoCreateThreads = undefined } = options;
     const current = await this.ensureConfig(guildId);
     const result = await query(
       `INSERT INTO suggestion_configs (guild_id, channel_id, review_channel_id, log_channel_id, default_anonymous, auto_create_threads)
@@ -361,7 +365,11 @@ class SuggestionService {
     return result.rows[0];
   }
 
-  async setPanelDesign({ guildId, title, description, headerImageUrl, clearHeader = false }) {
+  async setPanelDesign(firstArg, secondArg = {}) {
+    const options = typeof firstArg === 'object' && firstArg !== null ? firstArg : { ...secondArg, guildId: firstArg };
+    const guildId = options.guildId;
+    if (!guildId) throw new Error('guildId is required for suggestion setPanelDesign');
+    const { title, description, headerImageUrl, clearHeader = false } = options;
     await this.ensureConfig(guildId);
     const current = await this.getConfig(guildId);
     const result = await query(

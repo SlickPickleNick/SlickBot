@@ -941,4 +941,124 @@ test('SERVER_ONBOARDING bot updates autoCreate creates private #bot-news gated t
   assert.ok(botUpdatesOverwrite.allow.includes(PermissionFlagsBits.ReadMessageHistory), '@Bot Updates ReadMessageHistory is allowed');
 });
 
+test('SuggestionService.setup works with both (guildId, options) and ({ guildId, ...options })', async () => {
+  const { SuggestionService } = require('../../src/modules/community/suggestionService');
+  const suggestions = new SuggestionService();
+
+  mockDb.addHandler('suggestion_configs', {
+    rows: [{
+      guild_id: 'guild-sug-test',
+      channel_id: 'chan-sug-123',
+      review_channel_id: null,
+      log_channel_id: null,
+      default_anonymous: false,
+      auto_create_threads: true
+    }],
+    rowCount: 1
+  });
+  mockDb.addHandler('suggestion_categories', {
+    rows: [{ id: 1, guild_id: 'guild-sug-test', name: 'General', active: true, sort_order: 1 }],
+    rowCount: 1
+  });
+
+  // Call with positional (guildId, options)
+  const resultPositional = await suggestions.setup('guild-sug-test', { channelId: 'chan-sug-123', autoCreateThreads: true });
+  assert.ok(resultPositional, 'Positional setup returned config');
+
+  // Call with single object ({ guildId, ...options })
+  const resultObject = await suggestions.setup({ guildId: 'guild-sug-test', channelId: 'chan-sug-123' });
+  assert.ok(resultObject, 'Object setup returned config');
+});
+
+test('ensureCategory distinguishes between 📁 Open Tickets and 🎫 Help & Support', async () => {
+  const categories = [
+    { id: 'cat-open-tickets', name: '📁 Open Tickets', type: ChannelType.GuildCategory },
+    { id: 'cat-support', name: '🎫 Help & Support', type: ChannelType.GuildCategory }
+  ];
+
+  const mockGuild = {
+    channels: {
+      cache: categories,
+      create: async () => assert.fail('Should find existing category')
+    }
+  };
+
+  // Searching for Help & Support should NOT match Open Tickets
+  const foundSupport = await ensureCategory(mockGuild, {
+    name: STANDARD_CATEGORIES.SUPPORT.name,
+    keywords: STANDARD_CATEGORIES.SUPPORT.keywords,
+    isPrivate: false
+  });
+  assert.equal(foundSupport.id, 'cat-support', 'Found Help & Support category');
+
+  // Searching for Open Tickets should match Open Tickets
+  const foundTickets = await ensureCategory(mockGuild, {
+    name: '📁 Open Tickets',
+    keywords: ['open tickets', 'active tickets', 'ticket channels', 'tickets'],
+    isPrivate: true
+  });
+  assert.equal(foundTickets.id, 'cat-open-tickets', 'Found Open Tickets category');
+});
+
+test('SERVER_ONBOARDING server_tickets autoCreate places #submit-tickets in Help & Support and assigns Open Tickets to ticket_configs', async () => {
+  const ticketsStep = ONBOARDING_STEPS.SERVER_ONBOARDING.find((s) => s.id === 'server_tickets');
+  assert.ok(ticketsStep, 'Tickets step exists in SERVER_ONBOARDING');
+
+  const createdChannels = [];
+  const mockGuild = {
+    id: 'guild-tickets-isolation',
+    roles: {
+      everyone: { id: 'role-everyone-id' },
+      cache: [],
+      create: async (opts) => ({ id: `role-${opts.name.toLowerCase().replace(/\s+/g, '-')}`, name: opts.name })
+    },
+    channels: {
+      cache: [],
+      create: async (opts) => {
+        const id = `chan-${opts.name.toLowerCase().replace(/\s+/g, '-')}`;
+        const chan = {
+          id,
+          name: opts.name,
+          type: opts.type,
+          parent: opts.parent,
+          send: async () => ({ id: 'msg-panel' })
+        };
+        createdChannels.push(chan);
+        mockGuild.channels.cache.push(chan);
+        return chan;
+      }
+    }
+  };
+
+  mockDb.addHandler('ticket_configs', {
+    rows: [{
+      guild_id: 'guild-tickets-isolation',
+      category_id: 'chan-📁-open-tickets',
+      staff_role_id: 'role-support-staff',
+      transcripts_enabled: true
+    }],
+    rowCount: 1
+  });
+  mockDb.addHandler('ticket_types', {
+    rows: [{ id: '1', guild_id: 'guild-tickets-isolation', name: 'General Support', enabled: true, sort_order: 1 }],
+    rowCount: 1
+  });
+
+  const res = await ticketsStep.autoCreate(mockGuild);
+  assert.ok(res.created);
+  assert.match(res.created, /Open Tickets/i);
+  assert.match(res.created, /submit-tickets/i);
+
+  const openTicketsCat = createdChannels.find((c) => c.name.includes('Open Tickets'));
+  const helpSupportCat = createdChannels.find((c) => c.name.includes('Help & Support'));
+  const submitTicketsChan = createdChannels.find((c) => c.name === 'submit-tickets');
+
+  assert.ok(openTicketsCat, 'Open Tickets category created');
+  assert.ok(helpSupportCat, 'Help & Support category created');
+  assert.ok(submitTicketsChan, 'submit-tickets channel created');
+
+  // Submit tickets must be in Help & Support category, NOT Open Tickets category
+  assert.equal(submitTicketsChan.parent, helpSupportCat.id, 'submit-tickets is parented to Help & Support');
+});
+
 

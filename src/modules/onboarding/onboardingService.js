@@ -19,14 +19,14 @@ function generateSessionId(guildId, userId) {
 }
 
 const STANDARD_CATEGORIES = Object.freeze({
-  START_HERE: Object.freeze({ name: '📌 Start Here', keywords: ['start', 'welcome', 'info', 'information', 'rules', 'getting-started', 'read-first', 'guide'], isPrivate: false }),
-  COMMUNITY: Object.freeze({ name: '🎉 Community Hub', keywords: ['community', 'general', 'lounge', 'chat', 'social', 'hangout'], isPrivate: false }),
-  GAMES: Object.freeze({ name: '🎮 Games & Activities', keywords: ['game', 'games', 'arcade', 'fun', 'activities', 'entertainment', 'play'], isPrivate: false }),
-  SUPPORT: Object.freeze({ name: '🎫 Help & Support', keywords: ['support', 'help', 'tickets', 'desk', 'assistance', 'inquiries'], isPrivate: false }),
-  STAFF: Object.freeze({ name: '🛡️ Staff Area', keywords: ['staff', 'admin', 'mod', 'management', 'officers', 'moderation', 'team'], isPrivate: true }),
-  LOGS: Object.freeze({ name: '📋 Server Logs', keywords: ['log', 'logs', 'audit', 'records'], isPrivate: true }),
-  VOICE: Object.freeze({ name: '🔊 Dynamic Voice', keywords: ['voice', 'call', 'talk', 'channels'], isPrivate: false }),
-  STATS: Object.freeze({ name: '📊 Server Stats', keywords: ['stat', 'stats', 'counter', 'metric'], isPrivate: false })
+  START_HERE: Object.freeze({ name: '📌 Start Here', keywords: ['start here', 'start', 'welcome', 'info', 'information', 'rules', 'getting-started', 'read-first', 'guide'], isPrivate: false }),
+  COMMUNITY: Object.freeze({ name: '🎉 Community Hub', keywords: ['community hub', 'community', 'general', 'lounge', 'chat', 'social', 'hangout'], isPrivate: false }),
+  GAMES: Object.freeze({ name: '🎮 Games & Activities', keywords: ['games & activities', 'games and activities', 'game lounge', 'games', 'arcade', 'activities'], isPrivate: false }),
+  SUPPORT: Object.freeze({ name: '🎫 Help & Support', keywords: ['help & support', 'help and support', 'support hub', 'support desk', 'helpdesk', 'help center', 'assistance'], isPrivate: false }),
+  STAFF: Object.freeze({ name: '🛡️ Staff Area', keywords: ['staff area', 'staff', 'admin', 'mod', 'management', 'officers', 'moderation', 'team'], isPrivate: true }),
+  LOGS: Object.freeze({ name: '📋 Server Logs', keywords: ['server logs', 'logging', 'audit logs', 'log', 'logs', 'audit', 'records'], isPrivate: true }),
+  VOICE: Object.freeze({ name: '🔊 Dynamic Voice', keywords: ['dynamic voice', 'voice channels', 'voice', 'call', 'talk'], isPrivate: false }),
+  STATS: Object.freeze({ name: '📊 Server Stats', keywords: ['server stats', 'stats', 'counter', 'metric'], isPrivate: false })
 });
 
 async function autoCreateRole(guild, { name, color = null, mentionable = false, permissions = [], reason = 'SlickBot auto-role setup' }) {
@@ -59,17 +59,28 @@ async function ensureCategory(guild, { name, keywords = [], isPrivate = false, s
   if (!guild || typeof guild.channels?.create !== 'function') return null;
   const cacheList = Array.from(guild.channels.cache?.values?.() || guild.channels.cache || []);
 
-  const searchWords = [
-    name.toLowerCase(),
-    ...keywords.map((k) => k.toLowerCase()),
-    name.toLowerCase().replace(/^[^\w\s]+/, '').trim()
-  ].filter(Boolean);
+  const cleanName = name.toLowerCase().trim();
+  const strippedName = cleanName.replace(/^[^\w\s]+/, '').trim();
 
-  const existing = cacheList.find((c) => {
+  // 1. Exact match by full category name or stripped emoji name
+  let existing = cacheList.find((c) => {
     if (c?.type !== ChannelType.GuildCategory) return false;
-    const catName = c.name.toLowerCase();
-    return searchWords.some((word) => catName === word || catName.includes(word));
+    const catName = c.name.toLowerCase().trim();
+    const strippedCatName = catName.replace(/^[^\w\s]+/, '').trim();
+    return catName === cleanName || strippedCatName === strippedName;
   });
+
+  // 2. Match by specific keywords (excluding active ticket channels from matching Help & Support)
+  if (!existing && keywords.length > 0) {
+    const searchKeywords = keywords.map((k) => k.toLowerCase().trim()).filter(Boolean);
+    existing = cacheList.find((c) => {
+      if (c?.type !== ChannelType.GuildCategory) return false;
+      const catName = c.name.toLowerCase().trim();
+      const strippedCatName = catName.replace(/^[^\w\s]+/, '').trim();
+      if (!isPrivate && (catName === 'tickets' || catName === 'open tickets' || catName.includes('open tickets'))) return false;
+      return searchKeywords.some((word) => catName === word || strippedCatName === word || (word.length >= 4 && catName.includes(word)));
+    });
+  }
 
   if (existing) return existing;
 
@@ -108,6 +119,14 @@ async function ensureCategory(guild, { name, keywords = [], isPrivate = false, s
         });
       }
     }
+  } else if (!isPrivate && everyoneId) {
+    overwrites.push({
+      id: everyoneId,
+      allow: [
+        PermissionFlagsBits.ViewChannel,
+        PermissionFlagsBits.ReadMessageHistory
+      ]
+    });
   }
 
   return guild.channels.create({
@@ -191,7 +210,9 @@ async function autoCreateChannel(guild, {
             PermissionFlagsBits.ViewChannel,
             PermissionFlagsBits.ReadMessageHistory
           ],
-          deny: [PermissionFlagsBits.SendMessages]
+          deny: [
+            PermissionFlagsBits.SendMessages
+          ]
         });
       }
     }
@@ -559,7 +580,7 @@ const ONBOARDING_STEPS = Object.freeze({
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildCategory],
       autoCreateLabel: 'Auto-Create Tickets & Publish Panel',
-      autoCreateDescription: 'Creates "Tickets" category, #submit-tickets channel in "🎫 Help & Support", @Support Staff role, and posts the live interactive Ticket Panel.',
+      autoCreateDescription: 'Creates private "📁 Open Tickets" category, #submit-tickets in "🎫 Help & Support", @Support Staff role, and posts the live interactive Ticket Panel.',
       async getCurrent(guild) {
         const res = await query(`SELECT category_id FROM ticket_configs WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.category_id ? `Category <#${res.rows[0].category_id}>` : null;
@@ -567,7 +588,7 @@ const ONBOARDING_STEPS = Object.freeze({
       async applyDefault(guild) {
         const { TicketService } = require('../support/supportService');
         const tickets = new TicketService();
-        const existingCat = guild.channels.cache.find((c) => c.name.toLowerCase() === 'tickets' && c.type === ChannelType.GuildCategory);
+        const existingCat = guild.channels.cache.find((c) => (c.name.toLowerCase() === 'open tickets' || c.name.toLowerCase() === 'tickets') && c.type === ChannelType.GuildCategory);
         if (existingCat) {
           await tickets.updateConfig(guild.id, { categoryId: existingCat.id });
           return { result: `Assigned existing category <#${existingCat.id}>` };
@@ -581,9 +602,9 @@ const ONBOARDING_STEPS = Object.freeze({
         await tickets.updateConfig(guild.id, { categoryId });
       },
       async autoCreate(guild) {
-        const category = await autoCreateChannel(guild, { name: 'Tickets', type: ChannelType.GuildCategory, isPrivate: true });
-        const panelChannel = await autoCreateChannel(guild, { name: 'submit-tickets', categoryName: STANDARD_CATEGORIES.SUPPORT.name, isPrivate: false, topic: 'Open a support ticket with staff' });
         const staffRole = await autoCreateRole(guild, { name: 'Support Staff' });
+        const category = await ensureCategory(guild, { name: '📁 Open Tickets', keywords: ['open tickets', 'active tickets', 'ticket channels', 'tickets'], isPrivate: true, staffRoles: [staffRole], reason: 'SlickBot Open Tickets Category' });
+        const panelChannel = await autoCreateChannel(guild, { name: 'submit-tickets', categoryName: STANDARD_CATEGORIES.SUPPORT.name, isPrivate: false, topic: 'Open a support ticket with staff' });
         const { TicketService } = require('../support/supportService');
         const { buildPublicTicketPanel } = require('../support/supportUi');
         const tickets = new TicketService();
@@ -1651,7 +1672,7 @@ const ONBOARDING_STEPS = Object.freeze({
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildCategory],
       autoCreateLabel: 'Auto-Create Tickets & Publish Panel',
-      autoCreateDescription: 'Creates private "Tickets" category, #submit-tickets in "🎫 Help & Support", and posts the live Ticket Panel.',
+      autoCreateDescription: 'Creates private "📁 Open Tickets" category, #submit-tickets in "🎫 Help & Support", and posts the live Ticket Panel.',
       async getCurrent(guild) {
         const res = await query(`SELECT category_id FROM ticket_configs WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.category_id ? `Category <#${res.rows[0].category_id}>` : null;
@@ -1668,9 +1689,9 @@ const ONBOARDING_STEPS = Object.freeze({
         await tickets.updateConfig(guild.id, { categoryId });
       },
       async autoCreate(guild) {
-        const category = await autoCreateChannel(guild, { name: 'Tickets', type: ChannelType.GuildCategory, isPrivate: true });
-        const panelChannel = await autoCreateChannel(guild, { name: 'submit-tickets', categoryName: STANDARD_CATEGORIES.SUPPORT.name, isPrivate: false, topic: 'Open a support ticket with staff' });
         const staffRole = await autoCreateRole(guild, { name: 'Support Staff' });
+        const category = await ensureCategory(guild, { name: '📁 Open Tickets', keywords: ['open tickets', 'active tickets', 'ticket channels', 'tickets'], isPrivate: true, staffRoles: [staffRole], reason: 'SlickBot Open Tickets Category' });
+        const panelChannel = await autoCreateChannel(guild, { name: 'submit-tickets', categoryName: STANDARD_CATEGORIES.SUPPORT.name, isPrivate: false, topic: 'Open a support ticket with staff' });
         const { TicketService } = require('../support/supportService');
         const { buildPublicTicketPanel } = require('../support/supportUi');
         const tickets = new TicketService();
