@@ -273,7 +273,6 @@ class AutoModService {
     if (!role) {
       role = await guild.roles.create({
         name: 'Timeout',
-        colors: { primaryColor: '#546e7a' },
         permissions: [],
         reason: 'SlickBot AutoMod/Moderation Timeout Role'
       });

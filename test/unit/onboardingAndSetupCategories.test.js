@@ -41,7 +41,7 @@ test('OnboardingService creates server onboarding session and builds payload', (
   assert.equal(session.userId, 'user-456');
   assert.equal(session.type, 'SERVER_ONBOARDING');
   assert.equal(session.stepIndex, 0);
-  assert.equal(session.steps.length, 23, 'Server onboarding covers 23 modules');
+  assert.equal(session.steps.length, 24, 'Server onboarding covers 24 steps');
 
   const payload = onboarding.buildOnboardingPayload(session, '#bot-logs');
   assert.ok(payload.embeds?.length > 0, 'Has embed');
@@ -82,7 +82,7 @@ test('OnboardingService builds greeting payload for new guilds', () => {
   assert.ok(payload.components?.length > 0);
 });
 
-test('autoCreateRole creates a role if it does not already exist', async () => {
+test('autoCreateRole creates a role without color by default and with color when specified', async () => {
   let createdRoleData = null;
   const mockGuild = {
     roles: {
@@ -91,14 +91,19 @@ test('autoCreateRole creates a role if it does not already exist', async () => {
       },
       create: async (data) => {
         createdRoleData = data;
-        return { id: 'role-999', name: data.name };
+        return { id: 'role-999', name: data.name, color: data.color };
       }
     }
   };
 
-  const role = await autoCreateRole(mockGuild, { name: 'Admin', color: '#e74c3c' });
-  assert.equal(role.id, 'role-999');
+  const uncoloredRole = await autoCreateRole(mockGuild, { name: 'Admin' });
+  assert.equal(uncoloredRole.id, 'role-999');
   assert.equal(createdRoleData.name, 'Admin');
+  assert.equal(createdRoleData.color, undefined, 'Functional roles are colorless by default');
+
+  const coloredRole = await autoCreateRole(mockGuild, { name: 'Red', color: '#e74c3c' });
+  assert.equal(createdRoleData.name, 'Red');
+  assert.equal(createdRoleData.color, 0xe74c3c, 'Cosmetic roles retain hex colors');
 });
 
 test('autoCreateChannel creates a channel with expected parameters', async () => {
@@ -216,9 +221,9 @@ test('LoggingService defines setupLogGroup, getLogGroupChannels, and autoCreateA
   assert.equal(typeof logging.autoCreateAllLogChannels, 'function');
 });
 
-test('SERVER_ONBOARDING provides rich metadata across all 23 module steps', () => {
+test('SERVER_ONBOARDING provides rich metadata across all 24 module steps', () => {
   const steps = ONBOARDING_STEPS.SERVER_ONBOARDING;
-  assert.equal(steps.length, 23);
+  assert.equal(steps.length, 24);
 
   for (const step of steps) {
     assert.ok(step.id, 'Step has an id');
@@ -253,15 +258,19 @@ test('OnboardingService advanceSession with SKIP disables unconfigured module an
     channels: { cache: [] }
   };
 
-  // Advance step 0 (Permissions - unconfigured) with SKIP -> should disable
+  // Advance step 0 (Admin Role - unconfigured) with SKIP -> should disable
   await onboarding.advanceSession(session, mockGuild, 'SKIP', {}, mockPermissions);
   assert.equal(disabledModule, ModuleKeys.PERMISSIONS);
   assert.match(session.completedSteps[0].result, /Disabled/i);
 
-  // Advance step 1 (Logging) with AUTO_CREATE -> should enable
+  // Advance step 1 (Mod Role - unconfigured) with SKIP -> should disable
+  await onboarding.advanceSession(session, mockGuild, 'SKIP', {}, mockPermissions);
+  assert.equal(disabledModule, ModuleKeys.PERMISSIONS);
+
+  // Advance step 2 (Logging) with AUTO_CREATE -> should enable
   await onboarding.advanceSession(session, mockGuild, 'AUTO_CREATE', { created: 'bot-logs' }, mockPermissions);
   assert.equal(enabledModule, ModuleKeys.LOGGING);
-  assert.match(session.completedSteps[1].result, /Enabled/i);
+  assert.match(session.completedSteps[2].result, /Enabled/i);
 });
 
 test('SERVER_ONBOARDING tickets autoCreate creates channels, roles, and sends public panel', async () => {
@@ -559,6 +568,114 @@ test('SERVER_ONBOARDING social feeds autoCreate creates channel and pins live cr
   assert.match(res.created, /Live Creator Hub pinned/i);
   assert.ok(sentPayload, 'Live directory payload was sent');
   assert.equal(pinned, true, 'Live directory message was pinned');
+});
+
+test('ApplicationService defines ensureDefaultType and provisions default questions', async () => {
+  const { ApplicationService } = require('../../src/modules/support/supportService');
+  const applications = new ApplicationService();
+
+  assert.equal(typeof applications.ensureDefaultType, 'function');
+
+  mockDb.addHandler('application_types', {
+    rows: [{
+      id: 1,
+      guild_id: 'guild-app-test',
+      name: 'Staff Application',
+      review_channel_id: 'chan-app-review',
+      enabled: true
+    }],
+    rowCount: 1
+  });
+  mockDb.addHandler('application_questions', {
+    rows: [
+      { id: 10, application_type_id: 1, question_text: 'Why do you want to join?', required: true, display_order: 1 }
+    ],
+    rowCount: 1
+  });
+
+  const type = await applications.ensureDefaultType('guild-app-test', 'chan-app-review');
+  assert.ok(type);
+  assert.equal(type.name, 'Staff Application');
+});
+
+test('SERVER_ONBOARDING server_admin_role and server_mod_role create distinct colorless roles', async () => {
+  const adminStep = ONBOARDING_STEPS.SERVER_ONBOARDING.find((s) => s.id === 'server_admin_role');
+  const modStep = ONBOARDING_STEPS.SERVER_ONBOARDING.find((s) => s.id === 'server_mod_role');
+
+  assert.ok(adminStep, 'Admin step exists in SERVER_ONBOARDING');
+  assert.ok(modStep, 'Mod step exists in SERVER_ONBOARDING');
+
+  const createdRoles = [];
+  const mockGuild = {
+    id: 'guild-roles-distinct',
+    roles: {
+      cache: [],
+      create: async (opts) => {
+        const r = { id: `role-${opts.name.toLowerCase()}`, name: opts.name, color: opts.color };
+        createdRoles.push(r);
+        return r;
+      }
+    }
+  };
+
+  const adminRes = await adminStep.autoCreate(mockGuild);
+  assert.ok(adminRes.created);
+  assert.match(adminRes.created, /@Admin/i);
+
+  const modRes = await modStep.autoCreate(mockGuild);
+  assert.ok(modRes.created);
+  assert.match(modRes.created, /@Moderator/i);
+
+  assert.equal(createdRoles.length, 2);
+  assert.equal(createdRoles[0].name, 'Admin');
+  assert.equal(createdRoles[0].color, undefined, 'Admin role is colorless');
+  assert.equal(createdRoles[1].name, 'Moderator');
+  assert.equal(createdRoles[1].color, undefined, 'Moderator role is colorless');
+});
+
+test('SERVER_ONBOARDING applications autoCreate provisions review channel, apply channel, and sends panel', async () => {
+  const appStep = ONBOARDING_STEPS.SERVER_ONBOARDING.find((s) => s.id === 'server_applications');
+  assert.ok(appStep, 'Applications step exists');
+
+  let sentPayload = null;
+  const mockGuild = {
+    id: 'guild-app-autocreate-test',
+    channels: {
+      cache: [],
+      create: async (opts) => ({
+        id: `chan-${opts.name}`,
+        name: opts.name,
+        send: async (payload) => {
+          sentPayload = payload;
+          return { id: 'msg-app-panel' };
+        }
+      })
+    }
+  };
+
+  mockDb.addHandler('application_types', {
+    rows: [{
+      id: 1,
+      guild_id: 'guild-app-autocreate-test',
+      name: 'Staff Application',
+      review_channel_id: 'chan-app-review',
+      enabled: true
+    }],
+    rowCount: 1
+  });
+  mockDb.addHandler('application_questions', {
+    rows: [
+      { id: 1, application_type_id: 1, question_text: 'Why do you want to join?', required: true, display_order: 1 }
+    ],
+    rowCount: 1
+  });
+
+  const res = await appStep.autoCreate(mockGuild);
+  assert.ok(res.created);
+  assert.match(res.created, /app-review/i);
+  assert.match(res.created, /apply-here/i);
+  assert.ok(sentPayload, 'Application panel was published');
+  assert.ok(sentPayload.embeds?.length > 0);
 });
 
 

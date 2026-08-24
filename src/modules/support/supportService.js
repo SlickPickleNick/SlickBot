@@ -1407,6 +1407,31 @@ class ApplicationService {
     return result.rows[0];
   }
 
+  async ensureDefaultType(guildId, reviewChannelId = null) {
+    let type = await this.getTypeByName(guildId, 'Staff Application');
+    if (!type) {
+      type = await this.setupType(guildId, {
+        name: 'Staff Application',
+        description: 'Apply to join our server staff and moderation team.',
+        reviewChannelId: reviewChannelId || null,
+        panelTitle: 'Staff Applications',
+        panelDescription: 'Interested in joining our staff team? Click below to apply via private DM.',
+        panelColor: '#5865f2'
+      });
+    } else if (reviewChannelId && !type.review_channel_id) {
+      await query(`UPDATE application_types SET review_channel_id = $1, updated_at = NOW() WHERE id = $2`, [reviewChannelId, type.id]);
+      type.review_channel_id = reviewChannelId;
+    }
+
+    const existingQuestions = await this.getQuestions(type.id);
+    if (!existingQuestions || existingQuestions.length === 0) {
+      await this.addQuestion(guildId, 'Staff Application', 'Why are you interested in joining the staff team?', true, 1);
+      await this.addQuestion(guildId, 'Staff Application', 'What relevant moderation or community experience do you have?', true, 2);
+      await this.addQuestion(guildId, 'Staff Application', 'How many hours per week can you actively dedicate to moderating?', true, 3);
+    }
+    return type;
+  }
+
   async getTypeByName(guildId, name) {
     const result = await query(`SELECT * FROM application_types WHERE guild_id = $1 AND LOWER(name) = LOWER($2) LIMIT 1`, [guildId, name]);
     return result.rows[0] || null;

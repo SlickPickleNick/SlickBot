@@ -18,20 +18,28 @@ function generateSessionId(guildId, userId) {
   return `${guildId}_${userId}_${Date.now()}`;
 }
 
-async function autoCreateRole(guild, { name, color = '#7869ff', mentionable = false, permissions = [], reason = 'SlickBot auto-role setup' }) {
+async function autoCreateRole(guild, { name, color = null, mentionable = false, permissions = [], reason = 'SlickBot auto-role setup' }) {
   if (!guild || typeof guild.roles?.create !== 'function') throw new Error('Guild roles manager not available.');
   const existing = guild.roles.cache ? guild.roles.cache.find((r) => r.name.toLowerCase() === name.toLowerCase()) : null;
   if (existing) return existing;
 
-  const hexColor = color.startsWith('#') ? Number.parseInt(color.slice(1), 16) : SlickBotColors.PRIMARY;
+  let roleColor = undefined;
+  if (color) {
+    if (typeof color === 'string' && color.startsWith('#')) {
+      roleColor = Number.parseInt(color.slice(1), 16);
+    } else if (typeof color === 'number' && Number.isFinite(color) && color > 0) {
+      roleColor = color;
+    }
+  }
+
   const rolePayload = {
     name,
     mentionable: Boolean(mentionable),
     permissions: permissions.length ? permissions : undefined,
     reason
   };
-  if (Number.isFinite(hexColor)) {
-    rolePayload.colors = { primaryColor: hexColor };
+  if (roleColor !== undefined && Number.isFinite(roleColor)) {
+    rolePayload.color = roleColor;
   }
   return guild.roles.create(rolePayload);
 }
@@ -111,29 +119,30 @@ const COLOR_PRESET_OPTIONS = Object.freeze([
 const ONBOARDING_STEPS = Object.freeze({
   SERVER_ONBOARDING: [
     {
-      id: 'server_roles',
+      id: 'server_admin_role',
       moduleKey: ModuleKeys.PERMISSIONS,
       moduleName: 'Staff Roles & Permissions',
       categoryKey: 'CORE',
       categoryLabel: 'Core & Administration',
       moduleOverview: 'Manage administrative and moderator role hierarchies to define who can moderate members and configure bot settings.',
-      title: 'Administrator & Moderator Roles',
-      description: 'Set your primary staff roles so SlickBot knows who has permission to configure modules, manage settings, and moderate members.',
+      title: 'Administrator Staff Role',
+      description: 'Select your server\'s Administrator role (or auto-create @Admin) to grant full bot management and administrative permissions.',
       pickerType: 'ROLE',
-      autoCreateLabel: 'Auto-Create Staff Roles',
-      autoCreateDescription: 'Creates @Admin and @Moderator roles with standard management permissions.',
+      autoCreateLabel: 'Auto-Create @Admin Role',
+      autoCreateDescription: 'Creates an @Admin role with Administrator permissions.',
       async getCurrent(guild) {
-        const res = await query(`SELECT role_id, permission_level FROM role_permission_levels WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
-        if (!res.rows.length) return null;
-        return res.rows.map((r) => `${r.permission_level}: <@&${r.role_id}>`).join(', ');
+        const res = await query(`SELECT role_id FROM role_permission_levels WHERE guild_id = $1 AND permission_level = 'ADMINISTRATOR'`, [guild.id]).catch(() => ({ rows: [] }));
+        return res.rows[0]?.role_id ? `<@&${res.rows[0].role_id}>` : null;
       },
       async applyDefault(guild) {
         const adminRole = guild.roles.cache.find((r) => r.name.toLowerCase() === 'admin' || r.name.toLowerCase() === 'administrator');
-        const modRole = guild.roles.cache.find((r) => r.name.toLowerCase() === 'moderator' || r.name.toLowerCase() === 'mod');
-        const { PermissionService } = require('../permissions/permissionService');
-        const permissions = new PermissionService();
-        await permissions.setupRoles(guild.id, { adminRoleId: adminRole?.id || null, modRoleId: modRole?.id || null });
-        return { result: adminRole || modRole ? 'Matched server roles' : 'Default permissions saved' };
+        if (adminRole) {
+          const { PermissionService } = require('../permissions/permissionService');
+          const permissions = new PermissionService();
+          await permissions.setupRoles(guild.id, { adminRoleId: adminRole.id });
+          return { result: `Assigned existing <@&${adminRole.id}>` };
+        }
+        return { result: 'Default administrator role mapped' };
       },
       async applySelection(guild, roleId) {
         const { PermissionService } = require('../permissions/permissionService');
@@ -141,12 +150,50 @@ const ONBOARDING_STEPS = Object.freeze({
         await permissions.setupRoles(guild.id, { adminRoleId: roleId });
       },
       async autoCreate(guild) {
-        const adminRole = await autoCreateRole(guild, { name: 'Admin', color: '#e74c3c', permissions: [PermissionFlagsBits.Administrator] });
-        const modRole = await autoCreateRole(guild, { name: 'Moderator', color: '#3498db', permissions: [PermissionFlagsBits.KickMembers, PermissionFlagsBits.BanMembers, PermissionFlagsBits.ModerateMembers, PermissionFlagsBits.ManageMessages] });
+        const adminRole = await autoCreateRole(guild, { name: 'Admin', permissions: [PermissionFlagsBits.Administrator] });
         const { PermissionService } = require('../permissions/permissionService');
         const permissions = new PermissionService();
-        await permissions.setupRoles(guild.id, { adminRoleId: adminRole.id, modRoleId: modRole.id });
-        return { created: `@${adminRole.name}, @${modRole.name}` };
+        await permissions.setupRoles(guild.id, { adminRoleId: adminRole.id });
+        return { created: `@${adminRole.name}` };
+      }
+    },
+    {
+      id: 'server_mod_role',
+      moduleKey: ModuleKeys.PERMISSIONS,
+      moduleName: 'Staff Roles & Permissions',
+      categoryKey: 'CORE',
+      categoryLabel: 'Core & Administration',
+      moduleOverview: 'Manage administrative and moderator role hierarchies to define who can moderate members and configure bot settings.',
+      title: 'Moderator Staff Role',
+      description: 'Select your server\'s Moderator role (or auto-create @Moderator) to grant moderation powers (warnings, timeouts, kicks, bans, and cases).',
+      pickerType: 'ROLE',
+      autoCreateLabel: 'Auto-Create @Moderator Role',
+      autoCreateDescription: 'Creates an @Moderator role with moderation permissions.',
+      async getCurrent(guild) {
+        const res = await query(`SELECT role_id FROM role_permission_levels WHERE guild_id = $1 AND permission_level = 'MODERATOR'`, [guild.id]).catch(() => ({ rows: [] }));
+        return res.rows[0]?.role_id ? `<@&${res.rows[0].role_id}>` : null;
+      },
+      async applyDefault(guild) {
+        const modRole = guild.roles.cache.find((r) => r.name.toLowerCase() === 'moderator' || r.name.toLowerCase() === 'mod');
+        if (modRole) {
+          const { PermissionService } = require('../permissions/permissionService');
+          const permissions = new PermissionService();
+          await permissions.setupRoles(guild.id, { modRoleId: modRole.id });
+          return { result: `Assigned existing <@&${modRole.id}>` };
+        }
+        return { result: 'Default moderator role mapped' };
+      },
+      async applySelection(guild, roleId) {
+        const { PermissionService } = require('../permissions/permissionService');
+        const permissions = new PermissionService();
+        await permissions.setupRoles(guild.id, { modRoleId: roleId });
+      },
+      async autoCreate(guild) {
+        const modRole = await autoCreateRole(guild, { name: 'Moderator', permissions: [PermissionFlagsBits.KickMembers, PermissionFlagsBits.BanMembers, PermissionFlagsBits.ModerateMembers, PermissionFlagsBits.ManageMessages] });
+        const { PermissionService } = require('../permissions/permissionService');
+        const permissions = new PermissionService();
+        await permissions.setupRoles(guild.id, { modRoleId: modRole.id });
+        return { created: `@${modRole.name}` };
       }
     },
     {
@@ -155,40 +202,38 @@ const ONBOARDING_STEPS = Object.freeze({
       moduleName: 'Audit & Moderation Logging',
       categoryKey: 'CORE',
       categoryLabel: 'Core & Administration',
-      moduleOverview: 'Centralized audit log hubs recording moderation actions, member joins/leaves, role edits, message updates, and system events.',
-      title: 'Audit & Moderation Logging Channels',
-      description: 'Choose where SlickBot records moderation events, role changes, member joins, and server audits.',
+      moduleOverview: 'Centralized audit log hubs recording moderation actions, member joins/leaves, role edits, message updates, and system events across all 6 log hubs.',
+      title: 'Audit & Server Logging Channels',
+      description: 'Select your server\'s primary log channel (or auto-create complete log hubs) where SlickBot will deliver audit records and moderation actions.',
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildText],
-      autoCreateLabel: 'Auto-Create #bot-logs & #mod-logs',
-      autoCreateDescription: 'Creates private #bot-logs and #mod-logs channels for staff.',
+      autoCreateLabel: 'Auto-Create All 6 Logging Hubs',
+      autoCreateDescription: 'Creates category "📋 Server Logs" with all 6 dedicated channels (#bot-logs, #mod-logs, #member-logs, #voice-logs, #support-logs, #community-logs) and configures all 30 log modules.',
       async getCurrent(guild) {
         const res = await query(`SELECT channel_id FROM log_module_settings WHERE guild_id = $1 AND LOWER(module_key) = 'core' AND enabled = true`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.channel_id ? `<#${res.rows[0].channel_id}>` : null;
       },
       async applyDefault(guild) {
         const existing = guild.channels.cache.find((c) => c.name.toLowerCase().includes('log') && c.type === ChannelType.GuildText);
+        const { LoggingService } = require('../logging/loggingService');
+        const logging = new LoggingService(guild.client);
         if (existing) {
-          const { LoggingService } = require('../logging/loggingService');
-          const logging = new LoggingService(guild.client);
-          await logging.setModuleChannel(guild.id, 'core', existing.id);
-          return { result: `Routed to <#${existing.id}>` };
+          await logging.setupStarterChannels(guild.id, { defaultChannelId: existing.id });
+          return { result: `Routed all log modules to <#${existing.id}>` };
         }
         return { result: 'Default audit settings saved' };
       },
       async applySelection(guild, channelId) {
         const { LoggingService } = require('../logging/loggingService');
         const logging = new LoggingService(guild.client);
-        await logging.setModuleChannel(guild.id, 'core', channelId);
+        await logging.setupStarterChannels(guild.id, { defaultChannelId: channelId });
       },
       async autoCreate(guild) {
-        const botLogs = await autoCreateChannel(guild, { name: 'bot-logs', isPrivate: true, reason: 'SlickBot Audit Log Channel' });
-        const modLogs = await autoCreateChannel(guild, { name: 'mod-logs', isPrivate: true, reason: 'SlickBot Moderation Log Channel' });
         const { LoggingService } = require('../logging/loggingService');
         const logging = new LoggingService(guild.client);
-        await logging.setModuleChannel(guild.id, 'core', botLogs.id);
-        await logging.setModuleChannel(guild.id, 'moderation', modLogs.id);
-        return { created: `#${botLogs.name}, #${modLogs.name}` };
+        const { category, createdChannels } = await logging.autoCreateAllLogChannels(guild);
+        const names = Object.values(createdChannels).map((c) => `#${c.name}`).join(', ');
+        return { created: `Category "${category.name}" & 6 channels (${names})` };
       }
     },
     {
@@ -279,7 +324,7 @@ const ONBOARDING_STEPS = Object.freeze({
       },
       async autoCreate(guild) {
         const welcomeChannel = await autoCreateChannel(guild, { name: 'welcome', isPrivate: false, topic: 'Welcome new members to the server!' });
-        const memberRole = await autoCreateRole(guild, { name: 'Member', color: '#2ecc71' });
+        const memberRole = await autoCreateRole(guild, { name: 'Member' });
         const { upsertWelcomeConfig, addAutoRole } = require('../community/welcomeService');
         await upsertWelcomeConfig({ guildId: guild.id, channelId: welcomeChannel.id, enabled: true });
         await addAutoRole(guild.id, memberRole.id).catch(() => {});
@@ -314,9 +359,9 @@ const ONBOARDING_STEPS = Object.freeze({
       },
       async autoCreate(guild) {
         const channel = await autoCreateChannel(guild, { name: 'get-roles', isPrivate: false, topic: 'Self-assignable member roles' });
-        const announceRole = await autoCreateRole(guild, { name: 'Announcements', color: '#3498db' });
-        const eventsRole = await autoCreateRole(guild, { name: 'Events', color: '#9b59b6' });
-        const giveRole = await autoCreateRole(guild, { name: 'Giveaways', color: '#f1c40f' });
+        const announceRole = await autoCreateRole(guild, { name: 'Announcements' });
+        const eventsRole = await autoCreateRole(guild, { name: 'Events' });
+        const giveRole = await autoCreateRole(guild, { name: 'Giveaways' });
         const { createPanel, addOption, buildRolePanelMessage } = require('../community/rolePanelService');
         const panel = await createPanel({
           guildId: guild.id,
@@ -434,7 +479,7 @@ const ONBOARDING_STEPS = Object.freeze({
       async autoCreate(guild) {
         const category = await autoCreateChannel(guild, { name: 'Tickets', type: ChannelType.GuildCategory, isPrivate: true });
         const panelChannel = await autoCreateChannel(guild, { name: 'submit-tickets', isPrivate: false, topic: 'Open a support ticket with staff' });
-        const staffRole = await autoCreateRole(guild, { name: 'Support Staff', color: '#3498db' });
+        const staffRole = await autoCreateRole(guild, { name: 'Support Staff' });
         const { TicketService } = require('../support/supportService');
         const { buildPublicTicketPanel } = require('../support/supportUi');
         const tickets = new TicketService();
@@ -694,7 +739,7 @@ const ONBOARDING_STEPS = Object.freeze({
       },
       async autoCreate(guild) {
         const channel = await autoCreateChannel(guild, { name: 'birthdays', isPrivate: false, topic: 'Community Birthdays' });
-        const birthdayRole = await autoCreateRole(guild, { name: 'Birthday Star', color: '#e91e63' });
+        const birthdayRole = await autoCreateRole(guild, { name: 'Birthday Star' });
         const { BirthdayService, buildBirthdayPublicPanel } = require('../community/birthdayService');
         const birthdays = new BirthdayService();
         await birthdays.updateConfig(guild.id, { channelId: channel.id, birthdayRoleId: birthdayRole.id, enabled: true });
@@ -1476,7 +1521,7 @@ const ONBOARDING_STEPS = Object.freeze({
         await addAutoRole(guild.id, roleId);
       },
       async autoCreate(guild) {
-        const role = await autoCreateRole(guild, { name: 'Member', color: '#2ecc71' });
+        const role = await autoCreateRole(guild, { name: 'Member' });
         const { addAutoRole } = require('../community/welcomeService');
         await addAutoRole(guild.id, role.id);
         return { created: `@${role.name}` };
@@ -1512,7 +1557,7 @@ const ONBOARDING_STEPS = Object.freeze({
       async autoCreate(guild) {
         const category = await autoCreateChannel(guild, { name: 'Tickets', type: ChannelType.GuildCategory, isPrivate: true });
         const panelChannel = await autoCreateChannel(guild, { name: 'submit-tickets', isPrivate: false, topic: 'Open a support ticket with staff' });
-        const staffRole = await autoCreateRole(guild, { name: 'Support Staff', color: '#3498db' });
+        const staffRole = await autoCreateRole(guild, { name: 'Support Staff' });
         const { TicketService } = require('../support/supportService');
         const { buildPublicTicketPanel } = require('../support/supportUi');
         const tickets = new TicketService();
@@ -1554,7 +1599,7 @@ const ONBOARDING_STEPS = Object.freeze({
         await tickets.updateConfig(guild.id, { staffRoleId: roleId });
       },
       async autoCreate(guild) {
-        const role = await autoCreateRole(guild, { name: 'Support Staff', color: '#3498db' });
+        const role = await autoCreateRole(guild, { name: 'Support Staff' });
         const { TicketService } = require('../support/supportService');
         const tickets = new TicketService();
         await tickets.updateConfig(guild.id, { staffRoleId: role.id });
@@ -1640,7 +1685,7 @@ const ONBOARDING_STEPS = Object.freeze({
       },
       async autoCreate(guild) {
         const channel = await autoCreateChannel(guild, { name: 'birthdays', isPrivate: false, topic: 'Community Birthdays' });
-        const birthdayRole = await autoCreateRole(guild, { name: 'Birthday Star', color: '#e91e63' });
+        const birthdayRole = await autoCreateRole(guild, { name: 'Birthday Star' });
         const { BirthdayService, buildBirthdayPublicPanel } = require('../community/birthdayService');
         const birthdays = new BirthdayService();
         await birthdays.updateConfig(guild.id, { channelId: channel.id, birthdayRoleId: birthdayRole.id, enabled: true });
@@ -1846,7 +1891,7 @@ const ONBOARDING_STEPS = Object.freeze({
         await permissions.setupRoles(guild.id, { adminRoleId: roleId });
       },
       async autoCreate(guild) {
-        const adminRole = await autoCreateRole(guild, { name: 'Admin', color: '#e74c3c', permissions: [PermissionFlagsBits.Administrator] });
+        const adminRole = await autoCreateRole(guild, { name: 'Admin', permissions: [PermissionFlagsBits.Administrator] });
         const { PermissionService } = require('../permissions/permissionService');
         const permissions = new PermissionService();
         await permissions.setupRoles(guild.id, { adminRoleId: adminRole.id });
@@ -1881,7 +1926,7 @@ const ONBOARDING_STEPS = Object.freeze({
         await permissions.setupRoles(guild.id, { modRoleId: roleId });
       },
       async autoCreate(guild) {
-        const modRole = await autoCreateRole(guild, { name: 'Moderator', color: '#3498db', permissions: [PermissionFlagsBits.KickMembers, PermissionFlagsBits.BanMembers, PermissionFlagsBits.ModerateMembers, PermissionFlagsBits.ManageMessages] });
+        const modRole = await autoCreateRole(guild, { name: 'Moderator', permissions: [PermissionFlagsBits.KickMembers, PermissionFlagsBits.BanMembers, PermissionFlagsBits.ModerateMembers, PermissionFlagsBits.ManageMessages] });
         const { PermissionService } = require('../permissions/permissionService');
         const permissions = new PermissionService();
         await permissions.setupRoles(guild.id, { modRoleId: modRole.id });
@@ -2175,9 +2220,9 @@ const ONBOARDING_STEPS = Object.freeze({
       },
       async autoCreate(guild) {
         const channel = await autoCreateChannel(guild, { name: 'get-roles', isPrivate: false, topic: 'Self-assignable member roles' });
-        const announceRole = await autoCreateRole(guild, { name: 'Announcements', color: '#3498db' });
-        const eventsRole = await autoCreateRole(guild, { name: 'Events', color: '#9b59b6' });
-        const giveRole = await autoCreateRole(guild, { name: 'Giveaways', color: '#f1c40f' });
+        const announceRole = await autoCreateRole(guild, { name: 'Announcements' });
+        const eventsRole = await autoCreateRole(guild, { name: 'Events' });
+        const giveRole = await autoCreateRole(guild, { name: 'Giveaways' });
         const { createPanel, addOption, buildRolePanelMessage } = require('../community/rolePanelService');
         const panel = await createPanel({
           guildId: guild.id,

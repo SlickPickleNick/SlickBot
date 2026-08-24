@@ -1316,6 +1316,8 @@ async function handleButton(interaction, ctx) {
       try {
         createdResult = await currentStep.autoCreate(interaction.guild, session);
       } catch (err) {
+        ctx?.logger?.error?.('Onboarding auto-creation failed:', err);
+        console.error('[Onboarding] Auto-creation failed:', err);
         return replyPrivate(interaction, { embeds: [createWarningEmbed('Auto-Creation Failed', err instanceof Error ? err.message : String(err))] });
       }
     }
@@ -2669,6 +2671,8 @@ async function handleSelect(interaction, ctx) {
       try {
         await currentStep.applySelection(interaction.guild, selectedValue, session);
       } catch (err) {
+        ctx?.logger?.error?.('Onboarding selection failed:', err);
+        console.error('[Onboarding] Selection failed:', err);
         return replyPrivate(interaction, { embeds: [createWarningEmbed('Selection Failed', err instanceof Error ? err.message : String(err))] });
       }
     }

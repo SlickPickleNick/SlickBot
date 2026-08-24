@@ -140,7 +140,18 @@ class LoggingService {
       }
     }
 
-    const channelId = eventSetting?.channel_id || moduleSetting?.channel_id || null;
+    let channelId = eventSetting?.channel_id || moduleSetting?.channel_id || null;
+    if (!channelId) {
+      const fallbackResult = await query(
+        `SELECT g.default_log_channel_id, m.channel_id as core_channel_id
+         FROM guild_configs g
+         LEFT JOIN log_module_settings m ON m.guild_id = g.guild_id AND LOWER(m.module_key) = 'core' AND m.enabled = true
+         WHERE g.guild_id = $1 LIMIT 1`,
+        [guildId]
+      ).catch(() => ({ rows: [] }));
+      const fallbackRow = fallbackResult.rows[0];
+      channelId = fallbackRow?.core_channel_id || fallbackRow?.default_log_channel_id || null;
+    }
     if (!channelId) {
       this.routingCache.set(cacheKey, null);
       return null;
@@ -366,11 +377,10 @@ class LoggingService {
       );
     }
 
-    const { StarterLogModuleKeys } = require('./logEventCatalog');
-    const modLogKeys = new Set(['moderation', 'lockdown', 'temp-roles']);
-    for (const moduleKey of StarterLogModuleKeys) {
-      const logModule = getLogModule(moduleKey);
-      const cleanKey = String(moduleKey).trim().toLowerCase();
+    const { LogModuleCatalog } = require('./logEventCatalog');
+    const modLogKeys = new Set(['moderation', 'lockdown', 'temp-roles', 'reports', 'appeals']);
+    for (const logModule of LogModuleCatalog) {
+      const cleanKey = String(logModule.key).trim().toLowerCase();
       const targetChannelId = (moderationChannelId && modLogKeys.has(cleanKey)) ? moderationChannelId : defaultChannelId;
       if (targetChannelId) {
         await this.setModuleChannel(guildId, cleanKey, targetChannelId, logModule?.defaultDelivery || LogDeliveryMode.IMMEDIATE, { sendGuide: false });
