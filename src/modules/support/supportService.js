@@ -1870,11 +1870,11 @@ class AppealService {
     const has = (key) => Object.prototype.hasOwnProperty.call(input, key);
     const result = await query(
       `INSERT INTO appeal_configs (guild_id, review_channel_id, dm_decision_enabled, dm_include_submission, panel_title, panel_description, panel_color, panel_header_image_url, panel_display_mode)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE($9, 'BUTTONS'))
+       VALUES ($1, $2, COALESCE($3, true), COALESCE($4, false), $5, $6, $7, $8, COALESCE($9, 'BUTTONS'))
        ON CONFLICT (guild_id) DO UPDATE SET
          review_channel_id = COALESCE(EXCLUDED.review_channel_id, appeal_configs.review_channel_id),
-         dm_decision_enabled = COALESCE(EXCLUDED.dm_decision_enabled, appeal_configs.dm_decision_enabled),
-         dm_include_submission = COALESCE(EXCLUDED.dm_include_submission, appeal_configs.dm_include_submission),
+         dm_decision_enabled = COALESCE(EXCLUDED.dm_decision_enabled, appeal_configs.dm_decision_enabled, true),
+         dm_include_submission = COALESCE(EXCLUDED.dm_include_submission, appeal_configs.dm_include_submission, false),
          panel_title = COALESCE(EXCLUDED.panel_title, appeal_configs.panel_title),
          panel_description = COALESCE(EXCLUDED.panel_description, appeal_configs.panel_description),
          panel_color = COALESCE(EXCLUDED.panel_color, appeal_configs.panel_color),

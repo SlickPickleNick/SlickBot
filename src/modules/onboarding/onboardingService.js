@@ -18,6 +18,17 @@ function generateSessionId(guildId, userId) {
   return `${guildId}_${userId}_${Date.now()}`;
 }
 
+const STANDARD_CATEGORIES = Object.freeze({
+  START_HERE: Object.freeze({ name: '📌 Start Here', keywords: ['start', 'welcome', 'info', 'information', 'rules', 'getting-started', 'read-first', 'guide'], isPrivate: false }),
+  COMMUNITY: Object.freeze({ name: '🎉 Community Hub', keywords: ['community', 'general', 'lounge', 'chat', 'social', 'hangout'], isPrivate: false }),
+  GAMES: Object.freeze({ name: '🎮 Games & Activities', keywords: ['game', 'games', 'arcade', 'fun', 'activities', 'entertainment', 'play'], isPrivate: false }),
+  SUPPORT: Object.freeze({ name: '🎫 Help & Support', keywords: ['support', 'help', 'tickets', 'desk', 'assistance', 'inquiries'], isPrivate: false }),
+  STAFF: Object.freeze({ name: '🛡️ Staff Area', keywords: ['staff', 'admin', 'mod', 'management', 'officers', 'moderation', 'team'], isPrivate: true }),
+  LOGS: Object.freeze({ name: '📋 Server Logs', keywords: ['log', 'logs', 'audit', 'records'], isPrivate: true }),
+  VOICE: Object.freeze({ name: '🔊 Dynamic Voice', keywords: ['voice', 'call', 'talk', 'channels'], isPrivate: false }),
+  STATS: Object.freeze({ name: '📊 Server Stats', keywords: ['stat', 'stats', 'counter', 'metric'], isPrivate: false })
+});
+
 async function autoCreateRole(guild, { name, color = null, mentionable = false, permissions = [], reason = 'SlickBot auto-role setup' }) {
   if (!guild || typeof guild.roles?.create !== 'function') throw new Error('Guild roles manager not available.');
   const existing = guild.roles.cache ? guild.roles.cache.find((r) => r.name.toLowerCase() === name.toLowerCase()) : null;
@@ -39,23 +50,27 @@ async function autoCreateRole(guild, { name, color = null, mentionable = false, 
     reason
   };
   if (roleColor !== undefined && Number.isFinite(roleColor)) {
-    rolePayload.color = roleColor;
+    rolePayload.colors = { primaryColor: roleColor };
   }
   return guild.roles.create(rolePayload);
 }
 
-async function autoCreateChannel(guild, {
-  name,
-  type = ChannelType.GuildText,
-  parentId = null,
-  topic = null,
-  isPrivate = false,
-  staffRoles = [],
-  reason = 'SlickBot auto-channel setup'
-}) {
-  if (!guild || typeof guild.channels?.create !== 'function') throw new Error('Guild channels manager not available.');
+async function ensureCategory(guild, { name, keywords = [], isPrivate = false, staffRoles = [], reason = 'SlickBot auto-provisioned category' }) {
+  if (!guild || typeof guild.channels?.create !== 'function') return null;
   const cacheList = Array.from(guild.channels.cache?.values?.() || guild.channels.cache || []);
-  const existing = cacheList.find((c) => c?.name?.toLowerCase() === name.toLowerCase() && (type === undefined || c.type === type));
+
+  const searchWords = [
+    name.toLowerCase(),
+    ...keywords.map((k) => k.toLowerCase()),
+    name.toLowerCase().replace(/^[^\w\s]+/, '').trim()
+  ].filter(Boolean);
+
+  const existing = cacheList.find((c) => {
+    if (c?.type !== ChannelType.GuildCategory) return false;
+    const catName = c.name.toLowerCase();
+    return searchWords.some((word) => catName === word || catName.includes(word));
+  });
+
   if (existing) return existing;
 
   const overwrites = [];
@@ -97,8 +112,95 @@ async function autoCreateChannel(guild, {
 
   return guild.channels.create({
     name,
+    type: ChannelType.GuildCategory,
+    permissionOverwrites: overwrites.length ? overwrites : undefined,
+    reason
+  });
+}
+
+async function autoCreateChannel(guild, {
+  name,
+  type = ChannelType.GuildText,
+  categoryName = null,
+  parentId = null,
+  topic = null,
+  isPrivate = false,
+  staffRoles = [],
+  allowedRoles = [],
+  reason = 'SlickBot auto-channel setup'
+}) {
+  if (!guild || typeof guild.channels?.create !== 'function') throw new Error('Guild channels manager not available.');
+  const cacheList = Array.from(guild.channels.cache?.values?.() || guild.channels.cache || []);
+  const existing = cacheList.find((c) => c?.name?.toLowerCase() === name.toLowerCase() && (type === undefined || c.type === type));
+  if (existing) return existing;
+
+  let finalParentId = parentId;
+  if (!finalParentId && categoryName) {
+    const catMeta = Object.values(STANDARD_CATEGORIES).find((c) => c.name === categoryName) || { name: categoryName, isPrivate, keywords: [] };
+    const category = await ensureCategory(guild, {
+      name: catMeta.name,
+      keywords: catMeta.keywords || [],
+      isPrivate: catMeta.isPrivate ?? isPrivate,
+      staffRoles
+    });
+    if (category?.id) {
+      finalParentId = category.id;
+    }
+  }
+
+  const overwrites = [];
+  const everyoneId = guild.roles?.everyone?.id || guild.id;
+  const botMember = guild.members?.me || (guild.client?.user ? guild.members?.cache?.get(guild.client.user.id) : null);
+
+  if (isPrivate && everyoneId) {
+    overwrites.push({
+      id: everyoneId,
+      deny: [PermissionFlagsBits.ViewChannel]
+    });
+    if (botMember) {
+      overwrites.push({
+        id: botMember.id,
+        allow: [
+          PermissionFlagsBits.ViewChannel,
+          PermissionFlagsBits.SendMessages,
+          PermissionFlagsBits.EmbedLinks,
+          PermissionFlagsBits.AttachFiles,
+          PermissionFlagsBits.ReadMessageHistory,
+          PermissionFlagsBits.ManageChannels
+        ]
+      });
+    }
+    for (const role of staffRoles) {
+      if (role?.id) {
+        overwrites.push({
+          id: role.id,
+          allow: [
+            PermissionFlagsBits.ViewChannel,
+            PermissionFlagsBits.SendMessages,
+            PermissionFlagsBits.ReadMessageHistory,
+            PermissionFlagsBits.AttachFiles
+          ]
+        });
+      }
+    }
+    for (const role of allowedRoles) {
+      if (role?.id) {
+        overwrites.push({
+          id: role.id,
+          allow: [
+            PermissionFlagsBits.ViewChannel,
+            PermissionFlagsBits.ReadMessageHistory
+          ],
+          deny: [PermissionFlagsBits.SendMessages]
+        });
+      }
+    }
+  }
+
+  return guild.channels.create({
+    name,
     type,
-    parent: parentId || undefined,
+    parent: finalParentId || undefined,
     topic: topic || undefined,
     permissionOverwrites: overwrites.length ? overwrites : undefined,
     reason
@@ -278,7 +380,7 @@ const ONBOARDING_STEPS = Object.freeze({
         );
       },
       async autoCreate(guild) {
-        const channel = await autoCreateChannel(guild, { name: 'staff-alerts', isPrivate: true, topic: 'Emergency server alerts and anti-raid notifications' });
+        const channel = await autoCreateChannel(guild, { name: 'staff-alerts', categoryName: STANDARD_CATEGORIES.STAFF.name, isPrivate: true, topic: 'Emergency server alerts and anti-raid notifications' });
         const { AutoModService } = require('../moderation/autoModService');
         const autoMod = new AutoModService();
         const roleRes = await autoMod.createTimeoutRole(guild).catch(() => null);
@@ -303,7 +405,7 @@ const ONBOARDING_STEPS = Object.freeze({
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildText],
       autoCreateLabel: 'Auto-Create #welcome & @Member',
-      autoCreateDescription: 'Creates public #welcome channel and @Member role assigned on join.',
+      autoCreateDescription: 'Creates public #welcome channel in "📌 Start Here" and @Member role assigned on join.',
       async getCurrent(guild) {
         const res = await query(`SELECT channel_id, enabled FROM welcome_configs WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.channel_id ? `<#${res.rows[0].channel_id}>` : null;
@@ -323,7 +425,7 @@ const ONBOARDING_STEPS = Object.freeze({
         await upsertWelcomeConfig({ guildId: guild.id, channelId, enabled: true });
       },
       async autoCreate(guild) {
-        const welcomeChannel = await autoCreateChannel(guild, { name: 'welcome', isPrivate: false, topic: 'Welcome new members to the server!' });
+        const welcomeChannel = await autoCreateChannel(guild, { name: 'welcome', categoryName: STANDARD_CATEGORIES.START_HERE.name, isPrivate: false, topic: 'Welcome new members to the server!' });
         const memberRole = await autoCreateRole(guild, { name: 'Member' });
         const { upsertWelcomeConfig, addAutoRole } = require('../community/welcomeService');
         await upsertWelcomeConfig({ guildId: guild.id, channelId: welcomeChannel.id, enabled: true });
@@ -339,11 +441,11 @@ const ONBOARDING_STEPS = Object.freeze({
       categoryLabel: 'Community & Engagement',
       moduleOverview: 'Allow members to toggle notification, interest, and community roles through interactive button panels.',
       title: 'Notification & Community Roles (Buttons Preset)',
-      description: 'Create self-assignable notification roles (Announcements, Events, Giveaways) with interactive toggle buttons.',
+      description: 'Create self-assignable notification roles (Announcements, Events, Giveaways, Bot Updates) with interactive toggle buttons.',
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildText],
       autoCreateLabel: 'Auto-Create #get-roles & Notification Panel',
-      autoCreateDescription: 'Creates public #get-roles channel, 3 starter roles (@Announcements, @Events, @Giveaways), and publishes the button toggle panel.',
+      autoCreateDescription: 'Creates public #get-roles channel in "📌 Start Here", 4 starter roles (@Announcements, @Events, @Giveaways, @Bot Updates), and publishes the button toggle panel.',
       async getCurrent(guild) {
         const res = await query(`SELECT COUNT(*)::int AS count FROM role_panels WHERE guild_id = $1 AND name = 'notification-roles' AND active = true`, [guild.id]).catch(() => ({ rows: [{ count: 0 }] }));
         return (res.rows[0]?.count || 0) > 0 ? 'Notification Roles panel active' : null;
@@ -358,10 +460,11 @@ const ONBOARDING_STEPS = Object.freeze({
         await createPanel({ guildId: guild.id, name: 'notification-roles', title: '🔔 Notification Roles', description: 'Select your notification roles below.' }).catch(() => {});
       },
       async autoCreate(guild) {
-        const channel = await autoCreateChannel(guild, { name: 'get-roles', isPrivate: false, topic: 'Self-assignable member roles' });
+        const channel = await autoCreateChannel(guild, { name: 'get-roles', categoryName: STANDARD_CATEGORIES.START_HERE.name, isPrivate: false, topic: 'Self-assignable member roles' });
         const announceRole = await autoCreateRole(guild, { name: 'Announcements' });
         const eventsRole = await autoCreateRole(guild, { name: 'Events' });
         const giveRole = await autoCreateRole(guild, { name: 'Giveaways' });
+        const botUpdatesRole = await autoCreateRole(guild, { name: 'Bot Updates' });
         const { createPanel, addOption, buildRolePanelMessage } = require('../community/rolePanelService');
         const panel = await createPanel({
           guildId: guild.id,
@@ -375,11 +478,12 @@ const ONBOARDING_STEPS = Object.freeze({
         await addOption({ guildId: guild.id, panelName: 'notification-roles', roleId: announceRole.id, label: 'Announcements', emoji: '📢', buttonColor: '#3498db' });
         await addOption({ guildId: guild.id, panelName: 'notification-roles', roleId: eventsRole.id, label: 'Events', emoji: '🎉', buttonColor: '#9b59b6' });
         await addOption({ guildId: guild.id, panelName: 'notification-roles', roleId: giveRole.id, label: 'Giveaways', emoji: '🎁', buttonColor: '#f1c40f' });
+        await addOption({ guildId: guild.id, panelName: 'notification-roles', roleId: botUpdatesRole.id, label: 'Bot Updates', emoji: '🤖', buttonColor: '#5865f2' });
         const panelPayload = await buildRolePanelMessage(panel);
         if (channel && typeof channel.send === 'function') {
           await channel.send(panelPayload).catch(() => {});
         }
-        return { created: `#${channel.name} (Notification Role Panel published), 3 roles` };
+        return { created: `#${channel.name} (Notification Role Panel published), 4 roles` };
       }
     },
     {
@@ -409,7 +513,7 @@ const ONBOARDING_STEPS = Object.freeze({
         await createPanel({ guildId: guild.id, name: 'color-roles', title: '🎨 Name Colors', mode: 'SINGLE', displayMode: 'DROPDOWN' }).catch(() => {});
       },
       async autoCreate(guild) {
-        const channel = await autoCreateChannel(guild, { name: 'get-roles', isPrivate: false, topic: 'Self-assignable member roles' });
+        const channel = await autoCreateChannel(guild, { name: 'get-roles', categoryName: STANDARD_CATEGORIES.START_HERE.name, isPrivate: false, topic: 'Self-assignable member roles' });
         const createdRoles = [];
         for (const c of COLOR_PRESET_OPTIONS) {
           const r = await autoCreateRole(guild, { name: c.name, color: c.hex });
@@ -455,7 +559,7 @@ const ONBOARDING_STEPS = Object.freeze({
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildCategory],
       autoCreateLabel: 'Auto-Create Tickets & Publish Panel',
-      autoCreateDescription: 'Creates "Tickets" category, #submit-tickets channel, @Support Staff role, and posts the live interactive Ticket Panel.',
+      autoCreateDescription: 'Creates "Tickets" category, #submit-tickets channel in "🎫 Help & Support", @Support Staff role, and posts the live interactive Ticket Panel.',
       async getCurrent(guild) {
         const res = await query(`SELECT category_id FROM ticket_configs WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.category_id ? `Category <#${res.rows[0].category_id}>` : null;
@@ -478,7 +582,7 @@ const ONBOARDING_STEPS = Object.freeze({
       },
       async autoCreate(guild) {
         const category = await autoCreateChannel(guild, { name: 'Tickets', type: ChannelType.GuildCategory, isPrivate: true });
-        const panelChannel = await autoCreateChannel(guild, { name: 'submit-tickets', isPrivate: false, topic: 'Open a support ticket with staff' });
+        const panelChannel = await autoCreateChannel(guild, { name: 'submit-tickets', categoryName: STANDARD_CATEGORIES.SUPPORT.name, isPrivate: false, topic: 'Open a support ticket with staff' });
         const staffRole = await autoCreateRole(guild, { name: 'Support Staff' });
         const { TicketService } = require('../support/supportService');
         const { buildPublicTicketPanel } = require('../support/supportUi');
@@ -505,7 +609,7 @@ const ONBOARDING_STEPS = Object.freeze({
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildText],
       autoCreateLabel: 'Auto-Create Reports & Publish Panel',
-      autoCreateDescription: 'Creates private #mod-reports review channel, public #submit-reports channel, and posts the live Report Panel.',
+      autoCreateDescription: 'Creates private #mod-reports review channel in "🛡️ Staff Area", public #submit-reports in "🎫 Help & Support", and posts the live Report Panel.',
       async getCurrent(guild) {
         const res = await query(`SELECT review_channel_id FROM report_configs WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.review_channel_id ? `<#${res.rows[0].review_channel_id}>` : null;
@@ -522,8 +626,8 @@ const ONBOARDING_STEPS = Object.freeze({
         await query(`INSERT INTO report_configs (guild_id, review_channel_id) VALUES ($1, $2) ON CONFLICT (guild_id) DO UPDATE SET review_channel_id = EXCLUDED.review_channel_id, updated_at = NOW()`, [guild.id, channelId]);
       },
       async autoCreate(guild) {
-        const reviewChannel = await autoCreateChannel(guild, { name: 'mod-reports', isPrivate: true, reason: 'SlickBot Member Reports Review Channel' });
-        const panelChannel = await autoCreateChannel(guild, { name: 'submit-reports', isPrivate: false, topic: 'Privately report a concern to server staff' });
+        const reviewChannel = await autoCreateChannel(guild, { name: 'mod-reports', categoryName: STANDARD_CATEGORIES.STAFF.name, isPrivate: true, reason: 'SlickBot Member Reports Review Channel' });
+        const panelChannel = await autoCreateChannel(guild, { name: 'submit-reports', categoryName: STANDARD_CATEGORIES.SUPPORT.name, isPrivate: false, topic: 'Privately report a concern to server staff' });
         const { ReportService } = require('../support/supportService');
         const { buildPublicReportPanel } = require('../support/supportUi');
         const reports = new ReportService();
@@ -548,7 +652,7 @@ const ONBOARDING_STEPS = Object.freeze({
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildText],
       autoCreateLabel: 'Auto-Create Applications & Publish Panel',
-      autoCreateDescription: 'Creates private #app-review, public #apply-here, and posts the live Application Panel.',
+      autoCreateDescription: 'Creates private #app-review in "🛡️ Staff Area", public #apply-here in "🎫 Help & Support", and posts the live Application Panel.',
       async getCurrent(guild) {
         const res = await query(`SELECT review_channel_id FROM application_types WHERE guild_id = $1 AND enabled = true LIMIT 1`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.review_channel_id ? `<#${res.rows[0].review_channel_id}>` : null;
@@ -560,8 +664,8 @@ const ONBOARDING_STEPS = Object.freeze({
         await query(`INSERT INTO application_types (guild_id, name, review_channel_id, enabled) VALUES ($1, 'Staff Application', $2, true) ON CONFLICT DO NOTHING`, [guild.id, channelId]);
       },
       async autoCreate(guild) {
-        const reviewChannel = await autoCreateChannel(guild, { name: 'app-review', isPrivate: true, reason: 'SlickBot Applications Review Channel' });
-        const panelChannel = await autoCreateChannel(guild, { name: 'apply-here', isPrivate: false, topic: 'Apply for server staff or roles' });
+        const reviewChannel = await autoCreateChannel(guild, { name: 'app-review', categoryName: STANDARD_CATEGORIES.STAFF.name, isPrivate: true, reason: 'SlickBot Applications Review Channel' });
+        const panelChannel = await autoCreateChannel(guild, { name: 'apply-here', categoryName: STANDARD_CATEGORIES.SUPPORT.name, isPrivate: false, topic: 'Apply for server staff or roles' });
         const { ApplicationService } = require('../support/supportService');
         const { buildPublicApplicationPanel } = require('../support/supportUi');
         const applications = new ApplicationService();
@@ -586,7 +690,7 @@ const ONBOARDING_STEPS = Object.freeze({
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildText],
       autoCreateLabel: 'Auto-Create Appeals & Publish Panel',
-      autoCreateDescription: 'Creates private #appeal-review, public #ban-appeals, and posts the live Appeal Panel.',
+      autoCreateDescription: 'Creates private #appeal-review in "🛡️ Staff Area", public #ban-appeals in "🎫 Help & Support", and posts the live Appeal Panel.',
       async getCurrent(guild) {
         const res = await query(`SELECT review_channel_id FROM appeal_configs WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.review_channel_id ? `<#${res.rows[0].review_channel_id}>` : null;
@@ -603,8 +707,8 @@ const ONBOARDING_STEPS = Object.freeze({
         await query(`INSERT INTO appeal_configs (guild_id, review_channel_id, dm_decision_enabled) VALUES ($1, $2, true) ON CONFLICT (guild_id) DO UPDATE SET review_channel_id = EXCLUDED.review_channel_id, updated_at = NOW()`, [guild.id, channelId]);
       },
       async autoCreate(guild) {
-        const reviewChannel = await autoCreateChannel(guild, { name: 'appeal-review', isPrivate: true, reason: 'SlickBot Appeals Review Channel' });
-        const panelChannel = await autoCreateChannel(guild, { name: 'ban-appeals', isPrivate: false, topic: 'Submit an appeal for infractions or timeouts' });
+        const reviewChannel = await autoCreateChannel(guild, { name: 'appeal-review', categoryName: STANDARD_CATEGORIES.STAFF.name, isPrivate: true, reason: 'SlickBot Appeals Review Channel' });
+        const panelChannel = await autoCreateChannel(guild, { name: 'ban-appeals', categoryName: STANDARD_CATEGORIES.SUPPORT.name, isPrivate: false, topic: 'Submit an appeal for infractions or timeouts' });
         const { AppealService } = require('../support/supportService');
         const { buildPublicAppealPanel } = require('../support/supportUi');
         const appeals = new AppealService();
@@ -629,7 +733,7 @@ const ONBOARDING_STEPS = Object.freeze({
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildText],
       autoCreateLabel: 'Auto-Create #suggestions & Publish Panel',
-      autoCreateDescription: 'Creates public #suggestions channel and posts the interactive Suggestion Panel.',
+      autoCreateDescription: 'Creates public #suggestions channel in "🎉 Community Hub" and posts the interactive Suggestion Panel.',
       async getCurrent(guild) {
         const res = await query(`SELECT channel_id FROM suggestion_configs WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.channel_id ? `<#${res.rows[0].channel_id}>` : null;
@@ -646,7 +750,7 @@ const ONBOARDING_STEPS = Object.freeze({
         await suggestions.setup(guild.id, { channelId, panelActive: true });
       },
       async autoCreate(guild) {
-        const channel = await autoCreateChannel(guild, { name: 'suggestions', isPrivate: false, topic: 'Server suggestions & voting' });
+        const channel = await autoCreateChannel(guild, { name: 'suggestions', categoryName: STANDARD_CATEGORIES.COMMUNITY.name, isPrivate: false, topic: 'Server suggestions & voting' });
         const { SuggestionService } = require('../community/suggestionService');
         const suggestions = new SuggestionService();
         await suggestions.setup(guild.id, { channelId: channel.id, panelActive: true });
@@ -670,7 +774,7 @@ const ONBOARDING_STEPS = Object.freeze({
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildText],
       autoCreateLabel: 'Auto-Create #giveaways & Guide',
-      autoCreateDescription: 'Creates a public #giveaways channel and publishes the Giveaway Guide.',
+      autoCreateDescription: 'Creates a public #giveaways channel in "🎮 Games & Activities" and publishes the Giveaway Guide.',
       async getCurrent(guild) {
         const res = await query(`SELECT default_channel_id FROM giveaway_configs WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.default_channel_id ? `<#${res.rows[0].default_channel_id}>` : null;
@@ -687,7 +791,7 @@ const ONBOARDING_STEPS = Object.freeze({
         await giveaways.updateConfig(guild.id, { defaultChannelId: channelId });
       },
       async autoCreate(guild) {
-        const channel = await autoCreateChannel(guild, { name: 'giveaways', isPrivate: false, topic: 'Community Giveaways' });
+        const channel = await autoCreateChannel(guild, { name: 'giveaways', categoryName: STANDARD_CATEGORIES.GAMES.name, isPrivate: false, topic: 'Community Giveaways' });
         const { GiveawayService } = require('../community/giveawayService');
         const giveaways = new GiveawayService();
         await giveaways.updateConfig(guild.id, { defaultChannelId: channel.id });
@@ -721,7 +825,7 @@ const ONBOARDING_STEPS = Object.freeze({
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildText],
       autoCreateLabel: 'Auto-Create #birthdays & Birthday Panel',
-      autoCreateDescription: 'Creates public #birthdays channel, @Birthday Star role, and posts the interactive Set Birthday button panel.',
+      autoCreateDescription: 'Creates public #birthdays channel in "🎉 Community Hub", @Birthday Star role, and posts the interactive Set Birthday button panel.',
       async getCurrent(guild) {
         const res = await query(`SELECT channel_id FROM birthday_configs WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.channel_id ? `<#${res.rows[0].channel_id}>` : null;
@@ -738,7 +842,7 @@ const ONBOARDING_STEPS = Object.freeze({
         await birthdays.updateConfig(guild.id, { channelId, enabled: true });
       },
       async autoCreate(guild) {
-        const channel = await autoCreateChannel(guild, { name: 'birthdays', isPrivate: false, topic: 'Community Birthdays' });
+        const channel = await autoCreateChannel(guild, { name: 'birthdays', categoryName: STANDARD_CATEGORIES.COMMUNITY.name, isPrivate: false, topic: 'Community Birthdays' });
         const birthdayRole = await autoCreateRole(guild, { name: 'Birthday Star' });
         const { BirthdayService, buildBirthdayPublicPanel } = require('../community/birthdayService');
         const birthdays = new BirthdayService();
@@ -763,7 +867,7 @@ const ONBOARDING_STEPS = Object.freeze({
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildText],
       autoCreateLabel: 'Auto-Create #level-ups & Rewards Guide',
-      autoCreateDescription: 'Creates public #level-ups channel and publishes the Leveling XP Guide.',
+      autoCreateDescription: 'Creates public #level-ups channel in "🎉 Community Hub" and publishes the Leveling XP Guide.',
       async getCurrent(guild) {
         const res = await query(`SELECT level_up_channel_id, enabled FROM leveling_configs WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.level_up_channel_id ? `<#${res.rows[0].level_up_channel_id}>` : null;
@@ -780,7 +884,7 @@ const ONBOARDING_STEPS = Object.freeze({
         await leveling.upsertConfig(guild.id, { levelUpChannelId: channelId, enabled: true });
       },
       async autoCreate(guild) {
-        const channel = await autoCreateChannel(guild, { name: 'level-ups', isPrivate: false, topic: 'Member level up celebrations & XP announcements' });
+        const channel = await autoCreateChannel(guild, { name: 'level-ups', categoryName: STANDARD_CATEGORIES.COMMUNITY.name, isPrivate: false, topic: 'Member level up celebrations & XP announcements' });
         const { LevelingService } = require('../community/levelingService');
         const leveling = new LevelingService();
         await leveling.upsertConfig(guild.id, { levelUpChannelId: channel.id, enabled: true });
@@ -815,7 +919,7 @@ const ONBOARDING_STEPS = Object.freeze({
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildText, ChannelType.GuildAnnouncement],
       autoCreateLabel: 'Auto-Create #starboard & Guide',
-      autoCreateDescription: 'Creates a public #starboard showcase channel and publishes the Hall of Fame guide.',
+      autoCreateDescription: 'Creates a public #starboard showcase channel in "🎉 Community Hub" and publishes the Hall of Fame guide.',
       async getCurrent(guild) {
         const res = await query(`SELECT channel_id FROM starboard_configs WHERE guild_id = $1 LIMIT 1`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.channel_id ? `<#${res.rows[0].channel_id}>` : null;
@@ -843,7 +947,7 @@ const ONBOARDING_STEPS = Object.freeze({
         );
       },
       async autoCreate(guild) {
-        const channel = await autoCreateChannel(guild, { name: 'starboard', isPrivate: false, topic: 'Community Hall of Fame — Starred messages' });
+        const channel = await autoCreateChannel(guild, { name: 'starboard', categoryName: STANDARD_CATEGORIES.COMMUNITY.name, isPrivate: false, topic: 'Community Hall of Fame — Starred messages' });
         await query(
           `INSERT INTO starboard_configs (guild_id, channel_id, enabled, threshold, emoji)
            VALUES ($1, $2, true, 3, '⭐')
@@ -894,12 +998,12 @@ const ONBOARDING_STEPS = Object.freeze({
         await joinCreate.registerHub(guild.id, channelId, { enabled: true });
       },
       async autoCreate(guild) {
-        const category = await autoCreateChannel(guild, { name: '🔊 Dynamic Voice', type: ChannelType.GuildCategory });
-        const channel = await autoCreateChannel(guild, { name: '➕ Create Voice', type: ChannelType.GuildVoice, parentId: category.id });
+        const category = await ensureCategory(guild, { name: STANDARD_CATEGORIES.VOICE.name, keywords: STANDARD_CATEGORIES.VOICE.keywords, isPrivate: false });
+        const channel = await autoCreateChannel(guild, { name: '➕ Create Voice', type: ChannelType.GuildVoice, parentId: category?.id });
         const { JoinCreateService } = require('../voice/joinCreateService');
         const joinCreate = new JoinCreateService();
-        await joinCreate.registerHub(guild.id, channel.id, { enabled: true, categoryId: category.id });
-        return { created: `Category "${category.name}" & Voice Hub "${channel.name}"` };
+        await joinCreate.registerHub(guild.id, channel.id, { enabled: true, categoryId: category?.id });
+        return { created: `Category "${category?.name || 'Voice'}" & Voice Hub "${channel.name}"` };
       }
     },
     {
@@ -914,7 +1018,7 @@ const ONBOARDING_STEPS = Object.freeze({
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildText],
       autoCreateLabel: 'Auto-Create #game-lounge & Games Panel',
-      autoCreateDescription: 'Creates #game-lounge and #counting channels, enables games, and publishes the Game Lounge challenge panel.',
+      autoCreateDescription: 'Creates #game-lounge and #counting in "🎮 Games & Activities", enables games, and publishes the Game Lounge challenge panel.',
       async getCurrent(guild) {
         const res = await query(`SELECT channel_id FROM counting_game_configs WHERE guild_id = $1 LIMIT 1`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.channel_id ? `<#${res.rows[0].channel_id}>` : null;
@@ -935,8 +1039,8 @@ const ONBOARDING_STEPS = Object.freeze({
         await games.setGameEnabled(guild.id, GAME_KEYS.CONNECT_FOUR, true);
       },
       async autoCreate(guild) {
-        const loungeChannel = await autoCreateChannel(guild, { name: 'game-lounge', isPrivate: false, topic: 'Challenge friends to Tic-Tac-Toe and Connect Four!' });
-        const countChannel = await autoCreateChannel(guild, { name: 'counting', isPrivate: false, topic: 'Community counting challenge — Count up one number at a time!' });
+        const loungeChannel = await autoCreateChannel(guild, { name: 'game-lounge', categoryName: STANDARD_CATEGORIES.GAMES.name, isPrivate: false, topic: 'Challenge friends to Tic-Tac-Toe and Connect Four!' });
+        const countChannel = await autoCreateChannel(guild, { name: 'counting', categoryName: STANDARD_CATEGORIES.GAMES.name, isPrivate: false, topic: 'Community counting challenge — Count up one number at a time!' });
         const { CommunityGameService, GAME_KEYS } = require('../community/gameService');
         const games = new CommunityGameService();
         await games.setGameEnabled(guild.id, GAME_KEYS.TIC_TAC_TOE, true);
@@ -968,7 +1072,7 @@ const ONBOARDING_STEPS = Object.freeze({
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildText],
       autoCreateLabel: 'Auto-Create #faq-help & Publish Panel',
-      autoCreateDescription: 'Creates public #faq-help channel and publishes the interactive FAQ Search Panel.',
+      autoCreateDescription: 'Creates public #faq-help in "📌 Start Here" and publishes the interactive FAQ Search Panel.',
       async getCurrent(guild) {
         const res = await query(`SELECT forum_channel_id FROM faq_configs WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.forum_channel_id ? `<#${res.rows[0].forum_channel_id}>` : null;
@@ -980,7 +1084,7 @@ const ONBOARDING_STEPS = Object.freeze({
         await query(`INSERT INTO faq_configs (guild_id, forum_channel_id) VALUES ($1, $2) ON CONFLICT (guild_id) DO UPDATE SET forum_channel_id = EXCLUDED.forum_channel_id, updated_at = NOW()`, [guild.id, channelId]);
       },
       async autoCreate(guild) {
-        const channel = await autoCreateChannel(guild, { name: 'faq-help', isPrivate: false, topic: 'Frequently asked questions & knowledge base' });
+        const channel = await autoCreateChannel(guild, { name: 'faq-help', categoryName: STANDARD_CATEGORIES.START_HERE.name, isPrivate: false, topic: 'Frequently asked questions & knowledge base' });
         await query(`INSERT INTO faq_configs (guild_id, forum_channel_id) VALUES ($1, $2) ON CONFLICT (guild_id) DO UPDATE SET forum_channel_id = EXCLUDED.forum_channel_id, updated_at = NOW()`, [guild.id, channel.id]);
         const { createBaseEmbed, createButtonRow, createPanelButton, ButtonStyle, SlickBotColors } = require('../ui/uiService');
         const { CustomIds } = require('../ui/customIds');
@@ -1012,7 +1116,7 @@ const ONBOARDING_STEPS = Object.freeze({
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildText],
       autoCreateLabel: 'Auto-Create #achievements & Showcase',
-      autoCreateDescription: 'Creates public #achievements channel, initializes starter milestone tiers, and publishes the Achievements Showcase.',
+      autoCreateDescription: 'Creates public #achievements channel in "🎉 Community Hub", initializes starter milestone tiers, and publishes the Achievements Showcase.',
       async getCurrent(guild) {
         const res = await query(`SELECT announcement_channel_id FROM achievement_configs WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.announcement_channel_id ? `<#${res.rows[0].announcement_channel_id}>` : null;
@@ -1031,7 +1135,7 @@ const ONBOARDING_STEPS = Object.freeze({
         await achievements.upsertConfig(guild.id, { announcementChannelId: channelId, enabled: true, dmEnabled: true });
       },
       async autoCreate(guild) {
-        const channel = await autoCreateChannel(guild, { name: 'achievements', isPrivate: false, topic: 'Member activity achievement milestones' });
+        const channel = await autoCreateChannel(guild, { name: 'achievements', categoryName: STANDARD_CATEGORIES.COMMUNITY.name, isPrivate: false, topic: 'Member activity achievement milestones' });
         const { AchievementService } = require('../community/achievementService');
         const achievements = new AchievementService();
         await achievements.ensureDefaultTiers(guild.id);
@@ -1083,10 +1187,10 @@ const ONBOARDING_STEPS = Object.freeze({
         await stats.upsertConfig(guild.id, { enabled: true });
       },
       async autoCreate(guild) {
-        const category = await autoCreateChannel(guild, { name: '📊 Server Stats', type: ChannelType.GuildCategory });
+        const category = await ensureCategory(guild, { name: STANDARD_CATEGORIES.STATS.name, keywords: STANDARD_CATEGORIES.STATS.keywords, isPrivate: false });
         const memberCount = guild.memberCount || 1;
-        const memberChannel = await autoCreateChannel(guild, { name: `👥 Members: ${memberCount}`, type: ChannelType.GuildVoice, parentId: category.id });
-        const voiceChannel = await autoCreateChannel(guild, { name: `🎙️ In Voice: 0`, type: ChannelType.GuildVoice, parentId: category.id });
+        const memberChannel = await autoCreateChannel(guild, { name: `👥 Members: ${memberCount}`, type: ChannelType.GuildVoice, parentId: category?.id });
+        const voiceChannel = await autoCreateChannel(guild, { name: `🎙️ In Voice: 0`, type: ChannelType.GuildVoice, parentId: category?.id });
         const { ServerStatsService } = require('../community/serverStatsService');
         const stats = new ServerStatsService();
         await stats.upsertConfig(guild.id, {
@@ -1094,7 +1198,7 @@ const ONBOARDING_STEPS = Object.freeze({
           memberChannelId: memberChannel.id,
           voiceChannelId: voiceChannel.id
         });
-        return { created: `Category "${category.name}" & live counter channels` };
+        return { created: `Category "${category?.name || 'Server Stats'}" & live counter channels` };
       }
     },
     {
@@ -1109,7 +1213,7 @@ const ONBOARDING_STEPS = Object.freeze({
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildText],
       autoCreateLabel: 'Auto-Create #referrals & Referral Guide',
-      autoCreateDescription: 'Creates public #referrals channel and enables 500 XP bonus per invite.',
+      autoCreateDescription: 'Creates public #referrals in "🎉 Community Hub" and enables 500 XP bonus per invite.',
       async getCurrent(guild) {
         const res = await query(`SELECT referral_xp, enabled FROM referral_configs WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.enabled !== false ? `${res.rows[0]?.referral_xp || 500} XP Bonus (Enabled)` : null;
@@ -1126,7 +1230,7 @@ const ONBOARDING_STEPS = Object.freeze({
         await referrals.upsertConfig(guild.id, { enabled: true, referralXp: 500 });
       },
       async autoCreate(guild) {
-        const channel = await autoCreateChannel(guild, { name: 'referrals', isPrivate: false, topic: 'Invite friends and earn referral bonus XP' });
+        const channel = await autoCreateChannel(guild, { name: 'referrals', categoryName: STANDARD_CATEGORIES.COMMUNITY.name, isPrivate: false, topic: 'Invite friends and earn referral bonus XP' });
         const { ReferralService } = require('../community/referralService');
         const referrals = new ReferralService();
         await referrals.upsertConfig(guild.id, { enabled: true, referralXp: 500 });
@@ -1162,8 +1266,8 @@ const ONBOARDING_STEPS = Object.freeze({
       description: 'Select where SlickBot announces new releases, features, and patch notes.',
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildText],
-      autoCreateLabel: 'Auto-Create #bot-news & Release Hub',
-      autoCreateDescription: 'Creates a public #bot-news channel and publishes the Release Hub announcement.',
+      autoCreateLabel: 'Auto-Create #bot-news & Opt-In Role',
+      autoCreateDescription: 'Creates #bot-news in "📌 Start Here" (opt-in only), @Bot Updates role, and publishes the Release Hub announcement.',
       async getCurrent(guild) {
         const res = await query(`SELECT channel_id FROM bot_updates_configs WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.channel_id ? `<#${res.rows[0].channel_id}>` : null;
@@ -1180,7 +1284,14 @@ const ONBOARDING_STEPS = Object.freeze({
         await botUpdates.setChannel(guild.id, channelId);
       },
       async autoCreate(guild) {
-        const channel = await autoCreateChannel(guild, { name: 'bot-news', isPrivate: false, topic: 'SlickBot updates and release notes' });
+        const botUpdatesRole = await autoCreateRole(guild, { name: 'Bot Updates' });
+        const channel = await autoCreateChannel(guild, {
+          name: 'bot-news',
+          categoryName: STANDARD_CATEGORIES.START_HERE.name,
+          isPrivate: true,
+          allowedRoles: [botUpdatesRole],
+          topic: 'SlickBot updates and release notes (Opt-in via #get-roles)'
+        });
         const { BotUpdatesService } = require('../status/botUpdatesService');
         const botUpdates = new BotUpdatesService();
         await botUpdates.setChannel(guild.id, channel.id);
@@ -1188,6 +1299,8 @@ const ONBOARDING_STEPS = Object.freeze({
           title: '🚀 SlickBot Updates & Release Hub',
           description: [
             'This channel receives official release announcements, new module highlights, and patch notes for **SlickBot**.',
+            '',
+            'Members can toggle this channel on or off in **#get-roles** using the **🤖 Bot Updates** button.',
             '',
             'Stay tuned here for new feature rollouts and system improvements!'
           ].join('\n'),
@@ -1197,7 +1310,7 @@ const ONBOARDING_STEPS = Object.freeze({
         if (channel && typeof channel.send === 'function') {
           await channel.send({ embeds: [releaseEmbed] }).catch(() => {});
         }
-        return { created: `#${channel.name} (Release Hub published)` };
+        return { created: `#${channel.name} (Gated to @${botUpdatesRole.name} • Release Hub published)` };
       }
     },
     {
@@ -1212,7 +1325,7 @@ const ONBOARDING_STEPS = Object.freeze({
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildText],
       autoCreateLabel: 'Auto-Create #stream-alerts & Pin Live Hub',
-      autoCreateDescription: 'Creates public #stream-alerts channel, configures feeds, and pins the live Creator Hub Directory.',
+      autoCreateDescription: 'Creates public #stream-alerts in "🎉 Community Hub", configures feeds, and pins the live Creator Hub Directory.',
       async getCurrent(guild) {
         const res = await query(`SELECT default_channel_id FROM social_feed_configs WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.default_channel_id ? `<#${res.rows[0].default_channel_id}>` : null;
@@ -1229,7 +1342,7 @@ const ONBOARDING_STEPS = Object.freeze({
         await feeds.updateConfig(guild.id, { defaultChannelId: channelId, enabled: true });
       },
       async autoCreate(guild) {
-        const channel = await autoCreateChannel(guild, { name: 'stream-alerts', isPrivate: false, topic: 'Live stream & video notifications' });
+        const channel = await autoCreateChannel(guild, { name: 'stream-alerts', categoryName: STANDARD_CATEGORIES.COMMUNITY.name, isPrivate: false, topic: 'Live stream & video notifications' });
         const { SocialFeedService } = require('../automation/socialFeedService');
         const feeds = new SocialFeedService();
         await feeds.updateConfig(guild.id, { defaultChannelId: channel.id, liveDirectoryChannelId: channel.id, enabled: true });
@@ -1255,7 +1368,7 @@ const ONBOARDING_STEPS = Object.freeze({
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildText],
       autoCreateLabel: 'Auto-Create #bot-logs',
-      autoCreateDescription: 'Creates private #bot-logs for staff.',
+      autoCreateDescription: 'Creates private #bot-logs in "📋 Server Logs" for staff.',
       async getCurrent(guild) {
         const res = await query(`SELECT channel_id FROM log_module_settings WHERE guild_id = $1 AND LOWER(module_key) = 'core' AND enabled = true`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.channel_id ? `<#${res.rows[0].channel_id}>` : null;
@@ -1276,7 +1389,7 @@ const ONBOARDING_STEPS = Object.freeze({
         await logging.setupLogGroup(guild.id, 'CORE_SYSTEM', channelId);
       },
       async autoCreate(guild) {
-        const channel = await autoCreateChannel(guild, { name: 'bot-logs', isPrivate: true, reason: 'SlickBot Core Audit Logs' });
+        const channel = await autoCreateChannel(guild, { name: 'bot-logs', categoryName: STANDARD_CATEGORIES.LOGS.name, isPrivate: true, reason: 'SlickBot Core Audit Logs' });
         const { LoggingService } = require('../logging/loggingService');
         const logging = new LoggingService();
         await logging.setupLogGroup(guild.id, 'CORE_SYSTEM', channel.id);
@@ -1291,7 +1404,7 @@ const ONBOARDING_STEPS = Object.freeze({
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildText],
       autoCreateLabel: 'Auto-Create #mod-logs',
-      autoCreateDescription: 'Creates private #mod-logs for staff.',
+      autoCreateDescription: 'Creates private #mod-logs in "📋 Server Logs" for staff.',
       async getCurrent(guild) {
         const res = await query(`SELECT channel_id FROM log_module_settings WHERE guild_id = $1 AND LOWER(module_key) = 'moderation' AND enabled = true`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.channel_id ? `<#${res.rows[0].channel_id}>` : null;
@@ -1312,7 +1425,7 @@ const ONBOARDING_STEPS = Object.freeze({
         await logging.setupLogGroup(guild.id, 'MODERATION_SAFETY', channelId);
       },
       async autoCreate(guild) {
-        const channel = await autoCreateChannel(guild, { name: 'mod-logs', isPrivate: true, reason: 'SlickBot Moderation Logs' });
+        const channel = await autoCreateChannel(guild, { name: 'mod-logs', categoryName: STANDARD_CATEGORIES.LOGS.name, isPrivate: true, reason: 'SlickBot Moderation Logs' });
         const { LoggingService } = require('../logging/loggingService');
         const logging = new LoggingService();
         await logging.setupLogGroup(guild.id, 'MODERATION_SAFETY', channel.id);
@@ -1327,7 +1440,7 @@ const ONBOARDING_STEPS = Object.freeze({
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildText],
       autoCreateLabel: 'Auto-Create #member-logs',
-      autoCreateDescription: 'Creates private #member-logs channel.',
+      autoCreateDescription: 'Creates private #member-logs in "📋 Server Logs" channel.',
       async getCurrent(guild) {
         const res = await query(`SELECT channel_id FROM log_module_settings WHERE guild_id = $1 AND LOWER(module_key) = 'member' AND enabled = true`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.channel_id ? `<#${res.rows[0].channel_id}>` : null;
@@ -1348,7 +1461,7 @@ const ONBOARDING_STEPS = Object.freeze({
         await logging.setupLogGroup(guild.id, 'MEMBER_MESSAGE', channelId);
       },
       async autoCreate(guild) {
-        const channel = await autoCreateChannel(guild, { name: 'member-logs', isPrivate: true, reason: 'SlickBot Member Activity Logs' });
+        const channel = await autoCreateChannel(guild, { name: 'member-logs', categoryName: STANDARD_CATEGORIES.LOGS.name, isPrivate: true, reason: 'SlickBot Member Activity Logs' });
         const { LoggingService } = require('../logging/loggingService');
         const logging = new LoggingService();
         await logging.setupLogGroup(guild.id, 'MEMBER_MESSAGE', channel.id);
@@ -1363,7 +1476,7 @@ const ONBOARDING_STEPS = Object.freeze({
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildText],
       autoCreateLabel: 'Auto-Create #voice-logs',
-      autoCreateDescription: 'Creates private #voice-logs channel.',
+      autoCreateDescription: 'Creates private #voice-logs in "📋 Server Logs" channel.',
       async getCurrent(guild) {
         const res = await query(`SELECT channel_id FROM log_module_settings WHERE guild_id = $1 AND LOWER(module_key) = 'voice' AND enabled = true`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.channel_id ? `<#${res.rows[0].channel_id}>` : null;
@@ -1384,7 +1497,7 @@ const ONBOARDING_STEPS = Object.freeze({
         await logging.setupLogGroup(guild.id, 'VOICE_ACTIVITY', channelId);
       },
       async autoCreate(guild) {
-        const channel = await autoCreateChannel(guild, { name: 'voice-logs', isPrivate: true, reason: 'SlickBot Voice Logs' });
+        const channel = await autoCreateChannel(guild, { name: 'voice-logs', categoryName: STANDARD_CATEGORIES.LOGS.name, isPrivate: true, reason: 'SlickBot Voice Logs' });
         const { LoggingService } = require('../logging/loggingService');
         const logging = new LoggingService();
         await logging.setupLogGroup(guild.id, 'VOICE_ACTIVITY', channel.id);
@@ -1399,7 +1512,7 @@ const ONBOARDING_STEPS = Object.freeze({
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildText],
       autoCreateLabel: 'Auto-Create #support-logs',
-      autoCreateDescription: 'Creates private #support-logs channel for staff.',
+      autoCreateDescription: 'Creates private #support-logs in "📋 Server Logs" channel for staff.',
       async getCurrent(guild) {
         const res = await query(`SELECT channel_id FROM log_module_settings WHERE guild_id = $1 AND LOWER(module_key) = 'tickets' AND enabled = true`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.channel_id ? `<#${res.rows[0].channel_id}>` : null;
@@ -1420,7 +1533,7 @@ const ONBOARDING_STEPS = Object.freeze({
         await logging.setupLogGroup(guild.id, 'SUPPORT_TICKETS', channelId);
       },
       async autoCreate(guild) {
-        const channel = await autoCreateChannel(guild, { name: 'support-logs', isPrivate: true, reason: 'SlickBot Support & Ticket Logs' });
+        const channel = await autoCreateChannel(guild, { name: 'support-logs', categoryName: STANDARD_CATEGORIES.LOGS.name, isPrivate: true, reason: 'SlickBot Support & Ticket Logs' });
         const { LoggingService } = require('../logging/loggingService');
         const logging = new LoggingService();
         await logging.setupLogGroup(guild.id, 'SUPPORT_TICKETS', channel.id);
@@ -1435,7 +1548,7 @@ const ONBOARDING_STEPS = Object.freeze({
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildText],
       autoCreateLabel: 'Auto-Create #community-logs',
-      autoCreateDescription: 'Creates private #community-logs channel.',
+      autoCreateDescription: 'Creates private #community-logs in "📋 Server Logs" channel.',
       async getCurrent(guild) {
         const res = await query(`SELECT channel_id FROM log_module_settings WHERE guild_id = $1 AND LOWER(module_key) = 'giveaways' AND enabled = true`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.channel_id ? `<#${res.rows[0].channel_id}>` : null;
@@ -1456,7 +1569,7 @@ const ONBOARDING_STEPS = Object.freeze({
         await logging.setupLogGroup(guild.id, 'COMMUNITY_FEEDS', channelId);
       },
       async autoCreate(guild) {
-        const channel = await autoCreateChannel(guild, { name: 'community-logs', isPrivate: true, reason: 'SlickBot Community & Feed Logs' });
+        const channel = await autoCreateChannel(guild, { name: 'community-logs', categoryName: STANDARD_CATEGORIES.LOGS.name, isPrivate: true, reason: 'SlickBot Community & Feed Logs' });
         const { LoggingService } = require('../logging/loggingService');
         const logging = new LoggingService();
         await logging.setupLogGroup(guild.id, 'COMMUNITY_FEEDS', channel.id);
@@ -1474,7 +1587,7 @@ const ONBOARDING_STEPS = Object.freeze({
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildText],
       autoCreateLabel: 'Auto-Create #welcome',
-      autoCreateDescription: 'Creates a public #welcome channel for new arrivals.',
+      autoCreateDescription: 'Creates a public #welcome in "📌 Start Here" channel for new arrivals.',
       async getCurrent(guild) {
         const res = await query(`SELECT channel_id FROM welcome_configs WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.channel_id ? `<#${res.rows[0].channel_id}>` : null;
@@ -1489,7 +1602,7 @@ const ONBOARDING_STEPS = Object.freeze({
         await upsertWelcomeConfig({ guildId: guild.id, channelId, enabled: true });
       },
       async autoCreate(guild) {
-        const channel = await autoCreateChannel(guild, { name: 'welcome', isPrivate: false, topic: 'Welcome new members!' });
+        const channel = await autoCreateChannel(guild, { name: 'welcome', categoryName: STANDARD_CATEGORIES.START_HERE.name, isPrivate: false, topic: 'Welcome new members!' });
         const { upsertWelcomeConfig } = require('../community/welcomeService');
         await upsertWelcomeConfig({ guildId: guild.id, channelId: channel.id, enabled: true });
         return { created: `#${channel.name}` };
@@ -1538,7 +1651,7 @@ const ONBOARDING_STEPS = Object.freeze({
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildCategory],
       autoCreateLabel: 'Auto-Create Tickets & Publish Panel',
-      autoCreateDescription: 'Creates private "Tickets" category, #submit-tickets channel, and posts the live Ticket Panel.',
+      autoCreateDescription: 'Creates private "Tickets" category, #submit-tickets in "🎫 Help & Support", and posts the live Ticket Panel.',
       async getCurrent(guild) {
         const res = await query(`SELECT category_id FROM ticket_configs WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.category_id ? `Category <#${res.rows[0].category_id}>` : null;
@@ -1556,7 +1669,7 @@ const ONBOARDING_STEPS = Object.freeze({
       },
       async autoCreate(guild) {
         const category = await autoCreateChannel(guild, { name: 'Tickets', type: ChannelType.GuildCategory, isPrivate: true });
-        const panelChannel = await autoCreateChannel(guild, { name: 'submit-tickets', isPrivate: false, topic: 'Open a support ticket with staff' });
+        const panelChannel = await autoCreateChannel(guild, { name: 'submit-tickets', categoryName: STANDARD_CATEGORIES.SUPPORT.name, isPrivate: false, topic: 'Open a support ticket with staff' });
         const staffRole = await autoCreateRole(guild, { name: 'Support Staff' });
         const { TicketService } = require('../support/supportService');
         const { buildPublicTicketPanel } = require('../support/supportUi');
@@ -1617,7 +1730,7 @@ const ONBOARDING_STEPS = Object.freeze({
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildText],
       autoCreateLabel: 'Auto-Create #giveaways & Guide',
-      autoCreateDescription: 'Creates a public #giveaways channel and publishes the Giveaway Guide.',
+      autoCreateDescription: 'Creates a public #giveaways in "🎮 Games & Activities" and publishes the Giveaway Guide.',
       async getCurrent(guild) {
         const res = await query(`SELECT default_channel_id FROM giveaway_configs WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.default_channel_id ? `<#${res.rows[0].default_channel_id}>` : null;
@@ -1634,7 +1747,7 @@ const ONBOARDING_STEPS = Object.freeze({
         await giveaways.updateConfig(guild.id, { defaultChannelId: channelId });
       },
       async autoCreate(guild) {
-        const channel = await autoCreateChannel(guild, { name: 'giveaways', isPrivate: false, topic: 'Community Giveaways' });
+        const channel = await autoCreateChannel(guild, { name: 'giveaways', categoryName: STANDARD_CATEGORIES.GAMES.name, isPrivate: false, topic: 'Community Giveaways' });
         const { GiveawayService } = require('../community/giveawayService');
         const giveaways = new GiveawayService();
         await giveaways.updateConfig(guild.id, { defaultChannelId: channel.id });
@@ -1667,7 +1780,7 @@ const ONBOARDING_STEPS = Object.freeze({
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildText],
       autoCreateLabel: 'Auto-Create #birthdays & Birthday Panel',
-      autoCreateDescription: 'Creates a public #birthdays channel, @Birthday Star role, and posts the interactive Set Birthday button panel.',
+      autoCreateDescription: 'Creates a public #birthdays in "🎉 Community Hub", @Birthday Star role, and posts the interactive Set Birthday button panel.',
       async getCurrent(guild) {
         const res = await query(`SELECT channel_id FROM birthday_configs WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.channel_id ? `<#${res.rows[0].channel_id}>` : null;
@@ -1684,7 +1797,7 @@ const ONBOARDING_STEPS = Object.freeze({
         await birthdays.updateConfig(guild.id, { channelId, enabled: true });
       },
       async autoCreate(guild) {
-        const channel = await autoCreateChannel(guild, { name: 'birthdays', isPrivate: false, topic: 'Community Birthdays' });
+        const channel = await autoCreateChannel(guild, { name: 'birthdays', categoryName: STANDARD_CATEGORIES.COMMUNITY.name, isPrivate: false, topic: 'Community Birthdays' });
         const birthdayRole = await autoCreateRole(guild, { name: 'Birthday Star' });
         const { BirthdayService, buildBirthdayPublicPanel } = require('../community/birthdayService');
         const birthdays = new BirthdayService();
@@ -1708,7 +1821,7 @@ const ONBOARDING_STEPS = Object.freeze({
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildText],
       autoCreateLabel: 'Auto-Create #suggestions & Publish Panel',
-      autoCreateDescription: 'Creates a public #suggestions channel and posts the interactive Suggestion Panel.',
+      autoCreateDescription: 'Creates a public #suggestions in "🎉 Community Hub" and posts the interactive Suggestion Panel.',
       async getCurrent(guild) {
         const res = await query(`SELECT channel_id FROM suggestion_configs WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.channel_id ? `<#${res.rows[0].channel_id}>` : null;
@@ -1725,7 +1838,7 @@ const ONBOARDING_STEPS = Object.freeze({
         await suggestions.setup(guild.id, { channelId, panelActive: true });
       },
       async autoCreate(guild) {
-        const channel = await autoCreateChannel(guild, { name: 'suggestions', isPrivate: false, topic: 'Server suggestions & voting' });
+        const channel = await autoCreateChannel(guild, { name: 'suggestions', categoryName: STANDARD_CATEGORIES.COMMUNITY.name, isPrivate: false, topic: 'Server suggestions & voting' });
         const { SuggestionService } = require('../community/suggestionService');
         const suggestions = new SuggestionService();
         await suggestions.setup(guild.id, { channelId: channel.id, panelActive: true });
@@ -1747,8 +1860,8 @@ const ONBOARDING_STEPS = Object.freeze({
       description: 'Select where SlickBot announces new releases, features, and patch notes.',
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildText],
-      autoCreateLabel: 'Auto-Create #bot-news & Release Hub',
-      autoCreateDescription: 'Creates a public #bot-news channel and publishes the Release Hub announcement.',
+      autoCreateLabel: 'Auto-Create #bot-news & Opt-In Role',
+      autoCreateDescription: 'Creates #bot-news in "📌 Start Here" (opt-in only), @Bot Updates role, and publishes the Release Hub announcement.',
       async getCurrent(guild) {
         const res = await query(`SELECT channel_id FROM bot_updates_configs WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.channel_id ? `<#${res.rows[0].channel_id}>` : null;
@@ -1765,7 +1878,14 @@ const ONBOARDING_STEPS = Object.freeze({
         await botUpdates.setChannel(guild.id, channelId);
       },
       async autoCreate(guild) {
-        const channel = await autoCreateChannel(guild, { name: 'bot-news', isPrivate: false, topic: 'SlickBot updates and release notes' });
+        const botUpdatesRole = await autoCreateRole(guild, { name: 'Bot Updates' });
+        const channel = await autoCreateChannel(guild, {
+          name: 'bot-news',
+          categoryName: STANDARD_CATEGORIES.START_HERE.name,
+          isPrivate: true,
+          allowedRoles: [botUpdatesRole],
+          topic: 'SlickBot updates and release notes (Opt-in via #get-roles)'
+        });
         const { BotUpdatesService } = require('../status/botUpdatesService');
         const botUpdates = new BotUpdatesService();
         await botUpdates.setChannel(guild.id, channel.id);
@@ -1773,6 +1893,8 @@ const ONBOARDING_STEPS = Object.freeze({
           title: '🚀 SlickBot Updates & Release Hub',
           description: [
             'This channel receives official release announcements, new module highlights, and patch notes for **SlickBot**.',
+            '',
+            'Members can toggle this channel on or off in **#get-roles** using the **🤖 Bot Updates** button.',
             '',
             'Stay tuned here for new feature rollouts and system improvements!'
           ].join('\n'),
@@ -1782,7 +1904,7 @@ const ONBOARDING_STEPS = Object.freeze({
         if (channel && typeof channel.send === 'function') {
           await channel.send({ embeds: [releaseEmbed] }).catch(() => {});
         }
-        return { created: `#${channel.name} (Release Hub published)` };
+        return { created: `#${channel.name} (Gated to @${botUpdatesRole.name} • Release Hub published)` };
       }
     }
   ],
@@ -1796,7 +1918,7 @@ const ONBOARDING_STEPS = Object.freeze({
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildText],
       autoCreateLabel: 'Auto-Create #stream-alerts & Pin Live Hub',
-      autoCreateDescription: 'Creates public #stream-alerts channel, configures feeds, and pins the live Creator Hub Directory.',
+      autoCreateDescription: 'Creates public #stream-alerts in "🎉 Community Hub", configures feeds, and pins the live Creator Hub Directory.',
       async getCurrent(guild) {
         const res = await query(`SELECT default_channel_id FROM social_feed_configs WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.default_channel_id ? `<#${res.rows[0].default_channel_id}>` : null;
@@ -1813,7 +1935,7 @@ const ONBOARDING_STEPS = Object.freeze({
         await feeds.updateConfig(guild.id, { defaultChannelId: channelId, enabled: true });
       },
       async autoCreate(guild) {
-        const channel = await autoCreateChannel(guild, { name: 'stream-alerts', isPrivate: false, topic: 'Live stream & video notifications' });
+        const channel = await autoCreateChannel(guild, { name: 'stream-alerts', categoryName: STANDARD_CATEGORIES.COMMUNITY.name, isPrivate: false, topic: 'Live stream & video notifications' });
         const { SocialFeedService } = require('../automation/socialFeedService');
         const feeds = new SocialFeedService();
         await feeds.updateConfig(guild.id, { defaultChannelId: channel.id, liveDirectoryChannelId: channel.id, enabled: true });
@@ -1839,7 +1961,7 @@ const ONBOARDING_STEPS = Object.freeze({
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildVoice],
       autoCreateLabel: 'Auto-Create "➕ Join to Create"',
-      autoCreateDescription: 'Creates a voice hub channel ready for instant use.',
+      autoCreateDescription: 'Creates a voice hub channel in "🔊 Dynamic Voice" ready for instant use.',
       async getCurrent(guild) {
         const res = await query(`SELECT source_channel_id as channel_id FROM join_create_hubs WHERE guild_id = $1 AND (enabled = true OR enabled IS NULL) LIMIT 1`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.channel_id ? `<#${res.rows[0].channel_id}>` : null;
@@ -1853,10 +1975,11 @@ const ONBOARDING_STEPS = Object.freeze({
         await joinCreate.registerHub(guild.id, channelId, { enabled: true });
       },
       async autoCreate(guild) {
-        const channel = await autoCreateChannel(guild, { name: '➕ Join to Create', type: ChannelType.GuildVoice });
+        const category = await ensureCategory(guild, { name: STANDARD_CATEGORIES.VOICE.name, keywords: STANDARD_CATEGORIES.VOICE.keywords, isPrivate: false });
+        const channel = await autoCreateChannel(guild, { name: '➕ Join to Create', type: ChannelType.GuildVoice, parentId: category?.id });
         const { JoinCreateService } = require('../voice/joinCreateService');
         const joinCreate = new JoinCreateService();
-        await joinCreate.registerHub(guild.id, channel.id, { enabled: true });
+        await joinCreate.registerHub(guild.id, channel.id, { enabled: true, categoryId: category?.id });
         return { created: `Voice Hub "${channel.name}"` };
       }
     }
@@ -1944,7 +2067,7 @@ const ONBOARDING_STEPS = Object.freeze({
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildText],
       autoCreateLabel: 'Auto-Create #mod-logs',
-      autoCreateDescription: 'Creates private #mod-logs for staff.',
+      autoCreateDescription: 'Creates private #mod-logs in "📋 Server Logs" for staff.',
       async getCurrent(guild) {
         const res = await query(`SELECT channel_id FROM log_module_settings WHERE guild_id = $1 AND LOWER(module_key) = 'moderation' AND enabled = true`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.channel_id ? `<#${res.rows[0].channel_id}>` : null;
@@ -1965,7 +2088,7 @@ const ONBOARDING_STEPS = Object.freeze({
         await logging.setupLogGroup(guild.id, 'MODERATION_SAFETY', channelId);
       },
       async autoCreate(guild) {
-        const channel = await autoCreateChannel(guild, { name: 'mod-logs', isPrivate: true, reason: 'SlickBot Moderation Logs' });
+        const channel = await autoCreateChannel(guild, { name: 'mod-logs', categoryName: STANDARD_CATEGORIES.LOGS.name, isPrivate: true, reason: 'SlickBot Moderation Logs' });
         const { LoggingService } = require('../logging/loggingService');
         const logging = new LoggingService();
         await logging.setupLogGroup(guild.id, 'MODERATION_SAFETY', channel.id);
@@ -2019,7 +2142,7 @@ const ONBOARDING_STEPS = Object.freeze({
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildText, ChannelType.GuildAnnouncement],
       autoCreateLabel: 'Auto-Create #server-announcements',
-      autoCreateDescription: 'Creates public #server-announcements and default lockdown preset.',
+      autoCreateDescription: 'Creates public #server-announcements in "📌 Start Here" and default lockdown preset.',
       async getCurrent(guild) {
         const res = await query(`SELECT updates_channel_id FROM lockdown_presets WHERE guild_id = $1 AND active = true LIMIT 1`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.updates_channel_id ? `<#${res.rows[0].updates_channel_id}>` : null;
@@ -2036,7 +2159,7 @@ const ONBOARDING_STEPS = Object.freeze({
         await lockdown.upsertPreset({ guildId: guild.id, name: 'Default Lockdown', updatesChannelId: channelId });
       },
       async autoCreate(guild) {
-        const channel = await autoCreateChannel(guild, { name: 'server-announcements', isPrivate: false, topic: 'Server announcements & emergency updates' });
+        const channel = await autoCreateChannel(guild, { name: 'server-announcements', categoryName: STANDARD_CATEGORIES.START_HERE.name, isPrivate: false, topic: 'Server announcements & emergency updates' });
         const { LockdownService } = require('../safety/lockdownService');
         const lockdown = new LockdownService();
         await lockdown.upsertPreset({ guildId: guild.id, name: 'Default Lockdown', updatesChannelId: channel.id });
@@ -2075,7 +2198,7 @@ const ONBOARDING_STEPS = Object.freeze({
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildText],
       autoCreateLabel: 'Auto-Create #community-polls',
-      autoCreateDescription: 'Creates public #community-polls channel.',
+      autoCreateDescription: 'Creates public #community-polls in "🎉 Community Hub" channel.',
       async getCurrent(guild) {
         const res = await query(`SELECT default_poll_channel_id FROM utility_configs WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.default_poll_channel_id ? `<#${res.rows[0].default_poll_channel_id}>` : null;
@@ -2092,7 +2215,7 @@ const ONBOARDING_STEPS = Object.freeze({
         await utility.upsertConfig(guild.id, { default_poll_channel_id: channelId, enabled: true });
       },
       async autoCreate(guild) {
-        const channel = await autoCreateChannel(guild, { name: 'community-polls', isPrivate: false, topic: 'Community votes & interactive polls' });
+        const channel = await autoCreateChannel(guild, { name: 'community-polls', categoryName: STANDARD_CATEGORIES.COMMUNITY.name, isPrivate: false, topic: 'Community votes & interactive polls' });
         const { UtilityService } = require('../utility/utilityService');
         const utility = new UtilityService();
         await utility.upsertConfig(guild.id, { default_poll_channel_id: channel.id, enabled: true });
@@ -2110,7 +2233,7 @@ const ONBOARDING_STEPS = Object.freeze({
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildText],
       autoCreateLabel: 'Auto-Create #report-reviews',
-      autoCreateDescription: 'Creates private #report-reviews channel for staff.',
+      autoCreateDescription: 'Creates private #report-reviews in "🛡️ Staff Area" channel for staff.',
       async getCurrent(guild) {
         const res = await query(`SELECT review_channel_id FROM report_configs WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.review_channel_id ? `<#${res.rows[0].review_channel_id}>` : null;
@@ -2127,7 +2250,7 @@ const ONBOARDING_STEPS = Object.freeze({
         await query(`INSERT INTO report_configs (guild_id, review_channel_id) VALUES ($1, $2) ON CONFLICT (guild_id) DO UPDATE SET review_channel_id = EXCLUDED.review_channel_id, updated_at = NOW()`, [guild.id, channelId]);
       },
       async autoCreate(guild) {
-        const channel = await autoCreateChannel(guild, { name: 'report-reviews', isPrivate: true, reason: 'SlickBot Member Reports Review Channel' });
+        const channel = await autoCreateChannel(guild, { name: 'report-reviews', categoryName: STANDARD_CATEGORIES.STAFF.name, isPrivate: true, reason: 'SlickBot Member Reports Review Channel' });
         await query(`INSERT INTO report_configs (guild_id, review_channel_id) VALUES ($1, $2) ON CONFLICT (guild_id) DO UPDATE SET review_channel_id = EXCLUDED.review_channel_id, updated_at = NOW()`, [guild.id, channel.id]);
         return { created: `#${channel.name}` };
       }
@@ -2143,19 +2266,19 @@ const ONBOARDING_STEPS = Object.freeze({
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildText],
       autoCreateLabel: 'Auto-Create #application-reviews',
-      autoCreateDescription: 'Creates private #application-reviews channel and default Staff Application.',
+      autoCreateDescription: 'Creates private #application-reviews in "🛡️ Staff Area" channel and default Staff Application.',
       async getCurrent(guild) {
         const res = await query(`SELECT review_channel_id FROM application_types WHERE guild_id = $1 AND enabled = true LIMIT 1`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.review_channel_id ? `<#${res.rows[0].review_channel_id}>` : null;
       },
-      async applyDefault(guild) {
+      async applyDefault() {
         return { result: 'Applications system ready' };
       },
       async applySelection(guild, channelId) {
         await query(`INSERT INTO application_types (guild_id, name, review_channel_id, enabled) VALUES ($1, 'Staff Application', $2, true) ON CONFLICT DO NOTHING`, [guild.id, channelId]);
       },
       async autoCreate(guild) {
-        const channel = await autoCreateChannel(guild, { name: 'application-reviews', isPrivate: true, reason: 'SlickBot Applications Review Channel' });
+        const channel = await autoCreateChannel(guild, { name: 'application-reviews', categoryName: STANDARD_CATEGORIES.STAFF.name, isPrivate: true, reason: 'SlickBot Applications Review Channel' });
         await query(`INSERT INTO application_types (guild_id, name, review_channel_id, enabled) VALUES ($1, 'Staff Application', $2, true) ON CONFLICT DO NOTHING`, [guild.id, channel.id]);
         return { created: `#${channel.name}` };
       }
@@ -2171,7 +2294,7 @@ const ONBOARDING_STEPS = Object.freeze({
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildText],
       autoCreateLabel: 'Auto-Create #appeal-reviews',
-      autoCreateDescription: 'Creates private #appeal-reviews channel.',
+      autoCreateDescription: 'Creates private #appeal-reviews in "🛡️ Staff Area" channel.',
       async getCurrent(guild) {
         const res = await query(`SELECT review_channel_id FROM appeal_configs WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.review_channel_id ? `<#${res.rows[0].review_channel_id}>` : null;
@@ -2188,7 +2311,7 @@ const ONBOARDING_STEPS = Object.freeze({
         await query(`INSERT INTO appeal_configs (guild_id, review_channel_id, dm_decision_enabled) VALUES ($1, $2, true) ON CONFLICT (guild_id) DO UPDATE SET review_channel_id = EXCLUDED.review_channel_id, updated_at = NOW()`, [guild.id, channelId]);
       },
       async autoCreate(guild) {
-        const channel = await autoCreateChannel(guild, { name: 'appeal-reviews', isPrivate: true, reason: 'SlickBot Appeals Review Channel' });
+        const channel = await autoCreateChannel(guild, { name: 'appeal-reviews', categoryName: STANDARD_CATEGORIES.STAFF.name, isPrivate: true, reason: 'SlickBot Appeals Review Channel' });
         await query(`INSERT INTO appeal_configs (guild_id, review_channel_id, dm_decision_enabled) VALUES ($1, $2, true) ON CONFLICT (guild_id) DO UPDATE SET review_channel_id = EXCLUDED.review_channel_id, updated_at = NOW()`, [guild.id, channel.id]);
         return { created: `#${channel.name}` };
       }
@@ -2204,7 +2327,7 @@ const ONBOARDING_STEPS = Object.freeze({
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildText],
       autoCreateLabel: 'Auto-Create #get-roles & Notification Panel',
-      autoCreateDescription: 'Creates public #get-roles channel, 3 starter roles (@Announcements, @Events, @Giveaways), and publishes the button toggle panel.',
+      autoCreateDescription: 'Creates public #get-roles in "📌 Start Here", 4 starter roles (@Announcements, @Events, @Giveaways, @Bot Updates), and publishes the button toggle panel.',
       async getCurrent(guild) {
         const res = await query(`SELECT COUNT(*)::int AS count FROM role_panels WHERE guild_id = $1 AND name = 'notification-roles' AND active = true`, [guild.id]).catch(() => ({ rows: [{ count: 0 }] }));
         return (res.rows[0]?.count || 0) > 0 ? 'Notification Roles panel active' : null;
@@ -2219,10 +2342,11 @@ const ONBOARDING_STEPS = Object.freeze({
         await createPanel({ guildId: guild.id, name: 'notification-roles', title: '🔔 Notification Roles', description: 'Select your notification roles below.' }).catch(() => {});
       },
       async autoCreate(guild) {
-        const channel = await autoCreateChannel(guild, { name: 'get-roles', isPrivate: false, topic: 'Self-assignable member roles' });
+        const channel = await autoCreateChannel(guild, { name: 'get-roles', categoryName: STANDARD_CATEGORIES.START_HERE.name, isPrivate: false, topic: 'Self-assignable member roles' });
         const announceRole = await autoCreateRole(guild, { name: 'Announcements' });
         const eventsRole = await autoCreateRole(guild, { name: 'Events' });
         const giveRole = await autoCreateRole(guild, { name: 'Giveaways' });
+        const botUpdatesRole = await autoCreateRole(guild, { name: 'Bot Updates' });
         const { createPanel, addOption, buildRolePanelMessage } = require('../community/rolePanelService');
         const panel = await createPanel({
           guildId: guild.id,
@@ -2236,11 +2360,12 @@ const ONBOARDING_STEPS = Object.freeze({
         await addOption({ guildId: guild.id, panelName: 'notification-roles', roleId: announceRole.id, label: 'Announcements', emoji: '📢', buttonColor: '#3498db' });
         await addOption({ guildId: guild.id, panelName: 'notification-roles', roleId: eventsRole.id, label: 'Events', emoji: '🎉', buttonColor: '#9b59b6' });
         await addOption({ guildId: guild.id, panelName: 'notification-roles', roleId: giveRole.id, label: 'Giveaways', emoji: '🎁', buttonColor: '#f1c40f' });
+        await addOption({ guildId: guild.id, panelName: 'notification-roles', roleId: botUpdatesRole.id, label: 'Bot Updates', emoji: '🤖', buttonColor: '#5865f2' });
         const panelPayload = await buildRolePanelMessage(panel);
         if (channel && typeof channel.send === 'function') {
           await channel.send(panelPayload).catch(() => {});
         }
-        return { created: `#${channel.name} (Notification Role Panel published), 3 roles` };
+        return { created: `#${channel.name} (Notification Role Panel published), 4 roles` };
       }
     },
     {
@@ -2251,7 +2376,7 @@ const ONBOARDING_STEPS = Object.freeze({
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildText],
       autoCreateLabel: 'Auto-Create 8 Color Roles & Dropdown Panel',
-      autoCreateDescription: 'Creates 8 color roles (Red, Orange, Yellow, Green, Blue, Purple, Pink, Cyan) and publishes a Dropdown Menu panel in #get-roles.',
+      autoCreateDescription: 'Creates 8 color roles (Red, Orange, Yellow, Green, Blue, Purple, Pink, Cyan) and publishes a Dropdown Menu panel in #get-roles in "📌 Start Here".',
       async getCurrent(guild) {
         const res = await query(`SELECT COUNT(*)::int AS count FROM role_panels WHERE guild_id = $1 AND name = 'color-roles' AND active = true`, [guild.id]).catch(() => ({ rows: [{ count: 0 }] }));
         return (res.rows[0]?.count || 0) > 0 ? 'Color Roles dropdown active' : null;
@@ -2266,7 +2391,7 @@ const ONBOARDING_STEPS = Object.freeze({
         await createPanel({ guildId: guild.id, name: 'color-roles', title: '🎨 Name Colors', mode: 'SINGLE', displayMode: 'DROPDOWN' }).catch(() => {});
       },
       async autoCreate(guild) {
-        const channel = await autoCreateChannel(guild, { name: 'get-roles', isPrivate: false, topic: 'Self-assignable member roles' });
+        const channel = await autoCreateChannel(guild, { name: 'get-roles', categoryName: STANDARD_CATEGORIES.START_HERE.name, isPrivate: false, topic: 'Self-assignable member roles' });
         const createdRoles = [];
         for (const c of COLOR_PRESET_OPTIONS) {
           const r = await autoCreateRole(guild, { name: c.name, color: c.hex });
@@ -2311,7 +2436,7 @@ const ONBOARDING_STEPS = Object.freeze({
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildText],
       autoCreateLabel: 'Auto-Create #level-ups & Rewards Guide',
-      autoCreateDescription: 'Creates public #level-ups channel and publishes the Leveling XP Guide.',
+      autoCreateDescription: 'Creates public #level-ups in "🎉 Community Hub" and publishes the Leveling XP Guide.',
       async getCurrent(guild) {
         const res = await query(`SELECT level_up_channel_id, enabled FROM leveling_configs WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.level_up_channel_id ? `<#${res.rows[0].level_up_channel_id}>` : null;
@@ -2328,7 +2453,7 @@ const ONBOARDING_STEPS = Object.freeze({
         await leveling.upsertConfig(guild.id, { levelUpChannelId: channelId, enabled: true });
       },
       async autoCreate(guild) {
-        const channel = await autoCreateChannel(guild, { name: 'level-ups', isPrivate: false, topic: 'Member level up celebrations & XP announcements' });
+        const channel = await autoCreateChannel(guild, { name: 'level-ups', categoryName: STANDARD_CATEGORIES.COMMUNITY.name, isPrivate: false, topic: 'Member level up celebrations & XP announcements' });
         const { LevelingService } = require('../community/levelingService');
         const leveling = new LevelingService();
         await leveling.upsertConfig(guild.id, { levelUpChannelId: channel.id, enabled: true });
@@ -2362,7 +2487,7 @@ const ONBOARDING_STEPS = Object.freeze({
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildText],
       autoCreateLabel: 'Auto-Create #game-lounge & Games Panel',
-      autoCreateDescription: 'Creates #game-lounge and #counting channels, enables games, and publishes the Game Lounge challenge panel.',
+      autoCreateDescription: 'Creates #game-lounge and #counting in "🎮 Games & Activities", enables games, and publishes the Game Lounge challenge panel.',
       async getCurrent(guild) {
         const res = await query(`SELECT channel_id FROM counting_game_configs WHERE guild_id = $1 LIMIT 1`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.channel_id ? `<#${res.rows[0].channel_id}>` : null;
@@ -2383,8 +2508,8 @@ const ONBOARDING_STEPS = Object.freeze({
         await games.upsertGameConfig(guild.id, 'CONNECT_FOUR', { enabled: true });
       },
       async autoCreate(guild) {
-        const loungeChannel = await autoCreateChannel(guild, { name: 'game-lounge', isPrivate: false, topic: 'Challenge friends to Tic-Tac-Toe and Connect Four!' });
-        const countChannel = await autoCreateChannel(guild, { name: 'counting', isPrivate: false, topic: 'Community counting challenge — Count up one number at a time!' });
+        const loungeChannel = await autoCreateChannel(guild, { name: 'game-lounge', categoryName: STANDARD_CATEGORIES.GAMES.name, isPrivate: false, topic: 'Challenge friends to Tic-Tac-Toe and Connect Four!' });
+        const countChannel = await autoCreateChannel(guild, { name: 'counting', categoryName: STANDARD_CATEGORIES.GAMES.name, isPrivate: false, topic: 'Community counting challenge — Count up one number at a time!' });
         const { CommunityGameService, GAME_KEYS } = require('../community/gameService');
         const games = new CommunityGameService();
         await games.updateBoardGameConfig(guild.id, GAME_KEYS.TIC_TAC_TOE, { enabled: true, channelId: loungeChannel.id, winXp: 50 });
@@ -2412,7 +2537,7 @@ const ONBOARDING_STEPS = Object.freeze({
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildForum, ChannelType.GuildText],
       autoCreateLabel: 'Auto-Create #faq-help & Publish Panel',
-      autoCreateDescription: 'Creates public #faq-help channel and publishes the interactive FAQ Search Panel.',
+      autoCreateDescription: 'Creates public #faq-help in "📌 Start Here" and publishes the interactive FAQ Search Panel.',
       async getCurrent(guild) {
         const res = await query(`SELECT forum_channel_id FROM faq_configs WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.forum_channel_id ? `<#${res.rows[0].forum_channel_id}>` : null;
@@ -2424,7 +2549,7 @@ const ONBOARDING_STEPS = Object.freeze({
         await query(`INSERT INTO faq_configs (guild_id, forum_channel_id) VALUES ($1, $2) ON CONFLICT (guild_id) DO UPDATE SET forum_channel_id = EXCLUDED.forum_channel_id, updated_at = NOW()`, [guild.id, channelId]);
       },
       async autoCreate(guild) {
-        const channel = await autoCreateChannel(guild, { name: 'faq-help', isPrivate: false, topic: 'Frequently asked questions & knowledge base' });
+        const channel = await autoCreateChannel(guild, { name: 'faq-help', categoryName: STANDARD_CATEGORIES.START_HERE.name, isPrivate: false, topic: 'Frequently asked questions & knowledge base' });
         await query(`INSERT INTO faq_configs (guild_id, forum_channel_id) VALUES ($1, $2) ON CONFLICT (guild_id) DO UPDATE SET forum_channel_id = EXCLUDED.forum_channel_id, updated_at = NOW()`, [guild.id, channel.id]);
         const { createBaseEmbed, createButtonRow, createPanelButton, ButtonStyle, SlickBotColors } = require('../ui/uiService');
         const { CustomIds } = require('../ui/customIds');
@@ -2455,7 +2580,7 @@ const ONBOARDING_STEPS = Object.freeze({
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildText],
       autoCreateLabel: 'Auto-Create #referrals & Referral Guide',
-      autoCreateDescription: 'Creates public #referrals channel and enables 500 XP bonus per invite.',
+      autoCreateDescription: 'Creates public #referrals in "🎉 Community Hub" and enables 500 XP bonus per invite.',
       async getCurrent(guild) {
         const res = await query(`SELECT referral_xp, enabled FROM referral_configs WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.enabled !== false ? `${res.rows[0]?.referral_xp || 500} XP Bonus (Enabled)` : null;
@@ -2472,7 +2597,7 @@ const ONBOARDING_STEPS = Object.freeze({
         await referrals.upsertConfig(guild.id, { enabled: true, referralXp: 500 });
       },
       async autoCreate(guild) {
-        const channel = await autoCreateChannel(guild, { name: 'referrals', isPrivate: false, topic: 'Invite friends and earn referral bonus XP' });
+        const channel = await autoCreateChannel(guild, { name: 'referrals', categoryName: STANDARD_CATEGORIES.COMMUNITY.name, isPrivate: false, topic: 'Invite friends and earn referral bonus XP' });
         const { ReferralService } = require('../community/referralService');
         const referrals = new ReferralService();
         await referrals.upsertConfig(guild.id, { enabled: true, referralXp: 500 });
@@ -2508,7 +2633,7 @@ const ONBOARDING_STEPS = Object.freeze({
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildText],
       autoCreateLabel: 'Auto-Create #achievements & Showcase',
-      autoCreateDescription: 'Creates public #achievements channel, initializes starter milestone tiers, and publishes the Achievements Showcase.',
+      autoCreateDescription: 'Creates public #achievements in "🎉 Community Hub", initializes starter milestone tiers, and publishes the Achievements Showcase.',
       async getCurrent(guild) {
         const res = await query(`SELECT announcement_channel_id FROM achievement_configs WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.announcement_channel_id ? `<#${res.rows[0].announcement_channel_id}>` : null;
@@ -2527,7 +2652,7 @@ const ONBOARDING_STEPS = Object.freeze({
         await achievements.upsertConfig(guild.id, { announcementChannelId: channelId, enabled: true, dmEnabled: true });
       },
       async autoCreate(guild) {
-        const channel = await autoCreateChannel(guild, { name: 'achievements', isPrivate: false, topic: 'Member activity achievement milestones' });
+        const channel = await autoCreateChannel(guild, { name: 'achievements', categoryName: STANDARD_CATEGORIES.COMMUNITY.name, isPrivate: false, topic: 'Member activity achievement milestones' });
         const { AchievementService } = require('../community/achievementService');
         const achievements = new AchievementService();
         await achievements.ensureDefaultTiers(guild.id);
@@ -2578,10 +2703,10 @@ const ONBOARDING_STEPS = Object.freeze({
         await stats.upsertConfig(guild.id, { enabled: true });
       },
       async autoCreate(guild) {
-        const category = await autoCreateChannel(guild, { name: '📊 Server Stats', type: ChannelType.GuildCategory });
+        const category = await ensureCategory(guild, { name: STANDARD_CATEGORIES.STATS.name, keywords: STANDARD_CATEGORIES.STATS.keywords, isPrivate: false });
         const memberCount = guild.memberCount || 1;
-        const memberChannel = await autoCreateChannel(guild, { name: `👥 Members: ${memberCount}`, type: ChannelType.GuildVoice, parentId: category.id });
-        const voiceChannel = await autoCreateChannel(guild, { name: `🎙️ In Voice: 0`, type: ChannelType.GuildVoice, parentId: category.id });
+        const memberChannel = await autoCreateChannel(guild, { name: `👥 Members: ${memberCount}`, type: ChannelType.GuildVoice, parentId: category?.id });
+        const voiceChannel = await autoCreateChannel(guild, { name: `🎙️ In Voice: 0`, type: ChannelType.GuildVoice, parentId: category?.id });
         const { ServerStatsService } = require('../community/serverStatsService');
         const stats = new ServerStatsService();
         await stats.upsertConfig(guild.id, {
@@ -2589,7 +2714,7 @@ const ONBOARDING_STEPS = Object.freeze({
           memberChannelId: memberChannel.id,
           voiceChannelId: voiceChannel.id
         });
-        return { created: `Category "${category.name}" & live counters` };
+        return { created: `Category "${category?.name || 'Server Stats'}" & live counters` };
       }
     }
   ],
@@ -2639,7 +2764,7 @@ const ONBOARDING_STEPS = Object.freeze({
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildText],
       autoCreateLabel: 'Auto-Create #announcements',
-      autoCreateDescription: 'Creates public #announcements channel.',
+      autoCreateDescription: 'Creates public #announcements in "📌 Start Here" channel.',
       async getCurrent(guild) {
         const res = await query(`SELECT default_channel_id FROM scheduled_message_configs WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.default_channel_id ? `<#${res.rows[0].default_channel_id}>` : null;
@@ -2656,7 +2781,7 @@ const ONBOARDING_STEPS = Object.freeze({
         await query(`INSERT INTO scheduled_message_configs (guild_id, default_channel_id, enabled) VALUES ($1, $2, true) ON CONFLICT (guild_id) DO UPDATE SET default_channel_id = EXCLUDED.default_channel_id, updated_at = NOW()`, [guild.id, channelId]);
       },
       async autoCreate(guild) {
-        const channel = await autoCreateChannel(guild, { name: 'announcements', isPrivate: false, topic: 'Scheduled server announcements' });
+        const channel = await autoCreateChannel(guild, { name: 'announcements', categoryName: STANDARD_CATEGORIES.START_HERE.name, isPrivate: false, topic: 'Scheduled server announcements' });
         await query(`INSERT INTO scheduled_message_configs (guild_id, default_channel_id, enabled) VALUES ($1, $2, true) ON CONFLICT (guild_id) DO UPDATE SET default_channel_id = EXCLUDED.default_channel_id, updated_at = NOW()`, [guild.id, channel.id]);
         return { created: `#${channel.name}` };
       }
@@ -2700,7 +2825,7 @@ const ONBOARDING_STEPS = Object.freeze({
         );
       },
       async autoCreate(guild) {
-        const channel = await autoCreateChannel(guild, { name: 'mod-log', isPrivate: true, topic: 'Moderation logs and emergency raid alerts' });
+        const channel = await autoCreateChannel(guild, { name: 'mod-log', categoryName: STANDARD_CATEGORIES.STAFF.name, isPrivate: true, topic: 'Moderation logs and emergency raid alerts' });
         await query(
           `INSERT INTO automod_configs (guild_id, raid_alert_channel_id, enabled, raid_shield_enabled)
            VALUES ($1, $2, true, true)
@@ -2757,7 +2882,7 @@ const ONBOARDING_STEPS = Object.freeze({
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildText, ChannelType.GuildAnnouncement],
       autoCreateLabel: 'Auto-Create #starboard & Guide',
-      autoCreateDescription: 'Creates a public #starboard showcase channel and publishes the Hall of Fame guide.',
+      autoCreateDescription: 'Creates a public #starboard in "🎉 Community Hub" showcase channel and publishes the Hall of Fame guide.',
       async getCurrent(guild) {
         const res = await query(`SELECT channel_id FROM starboard_configs WHERE guild_id = $1 LIMIT 1`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.channel_id ? `<#${res.rows[0].channel_id}>` : null;
@@ -2785,7 +2910,7 @@ const ONBOARDING_STEPS = Object.freeze({
         );
       },
       async autoCreate(guild) {
-        const channel = await autoCreateChannel(guild, { name: 'starboard', isPrivate: false, topic: 'Community Hall of Fame — Starred messages' });
+        const channel = await autoCreateChannel(guild, { name: 'starboard', categoryName: STANDARD_CATEGORIES.COMMUNITY.name, isPrivate: false, topic: 'Community Hall of Fame — Starred messages' });
         await query(
           `INSERT INTO starboard_configs (guild_id, channel_id, enabled, threshold, emoji)
            VALUES ($1, $2, true, 3, '⭐')
@@ -3145,6 +3270,8 @@ module.exports = {
   OnboardingService,
   autoCreateRole,
   autoCreateChannel,
+  ensureCategory,
+  STANDARD_CATEGORIES,
   ONBOARDING_STEPS,
   CATEGORY_ONBOARDING_MAP
 };

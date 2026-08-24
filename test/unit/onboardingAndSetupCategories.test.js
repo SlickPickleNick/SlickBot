@@ -4,7 +4,8 @@ const { ChannelType, PermissionFlagsBits } = require('discord.js');
 const { MockDatabase } = require('../helpers/mockDb');
 const { CustomIds } = require('../../src/modules/ui/customIds');
 const { MODULE_CATEGORIES, buildCategoryPanel, buildSetupPanel } = require('../../src/modules/ui/panels');
-const { OnboardingService, autoCreateChannel, autoCreateRole, ONBOARDING_STEPS } = require('../../src/modules/onboarding/onboardingService');
+const { OnboardingService, autoCreateChannel, autoCreateRole, ensureCategory, STANDARD_CATEGORIES, ONBOARDING_STEPS } = require('../../src/modules/onboarding/onboardingService');
+const { AppealService } = require('../../src/modules/support/supportService');
 const { ModuleKeys } = require('../../src/modules/moduleRegistry');
 
 const mockDb = new MockDatabase();
@@ -82,7 +83,7 @@ test('OnboardingService builds greeting payload for new guilds', () => {
   assert.ok(payload.components?.length > 0);
 });
 
-test('autoCreateRole creates a role without color by default and with color when specified', async () => {
+test('autoCreateRole creates a role without color by default and with colors when specified', async () => {
   let createdRoleData = null;
   const mockGuild = {
     roles: {
@@ -91,7 +92,7 @@ test('autoCreateRole creates a role without color by default and with color when
       },
       create: async (data) => {
         createdRoleData = data;
-        return { id: 'role-999', name: data.name, color: data.color };
+        return { id: 'role-999', name: data.name, colors: data.colors };
       }
     }
   };
@@ -99,11 +100,11 @@ test('autoCreateRole creates a role without color by default and with color when
   const uncoloredRole = await autoCreateRole(mockGuild, { name: 'Admin' });
   assert.equal(uncoloredRole.id, 'role-999');
   assert.equal(createdRoleData.name, 'Admin');
-  assert.equal(createdRoleData.color, undefined, 'Functional roles are colorless by default');
+  assert.equal(createdRoleData.colors, undefined, 'Functional roles are colorless by default');
 
   const coloredRole = await autoCreateRole(mockGuild, { name: 'Red', color: '#e74c3c' });
   assert.equal(createdRoleData.name, 'Red');
-  assert.equal(createdRoleData.color, 0xe74c3c, 'Cosmetic roles retain hex colors');
+  assert.deepEqual(createdRoleData.colors, { primaryColor: 0xe74c3c }, 'Cosmetic roles pass discord.js primaryColor');
 });
 
 test('autoCreateChannel creates a channel with expected parameters', async () => {
@@ -676,6 +677,268 @@ test('SERVER_ONBOARDING applications autoCreate provisions review channel, apply
   assert.match(res.created, /apply-here/i);
   assert.ok(sentPayload, 'Application panel was published');
   assert.ok(sentPayload.embeds?.length > 0);
+});
+
+test('AppealService.updateConfig correctly uses COALESCE for dm_decision_enabled and dm_include_submission', async () => {
+  const appeals = new AppealService();
+
+  let executedSql = null;
+  let executedParams = null;
+
+  mockDb.addHandler('appeal_configs', (sql, params) => {
+    executedSql = sql;
+    executedParams = params;
+    return {
+      rows: [{
+        guild_id: params[0],
+        review_channel_id: params[1],
+        dm_decision_enabled: params[2] !== null ? params[2] : true,
+        dm_include_submission: params[3] !== null ? params[3] : false,
+        panel_title: params[4],
+        panel_description: params[5],
+        panel_color: params[6],
+        panel_header_image_url: params[7],
+        panel_display_mode: params[8] || 'BUTTONS'
+      }],
+      rowCount: 1
+    };
+  });
+
+  // Call without optional boolean flags
+  const result = await appeals.updateConfig('guild-appeal-test', {
+    reviewChannelId: 'chan-appeal-reviews'
+  });
+
+  assert.ok(result);
+  assert.match(executedSql, /COALESCE\(\$3, true\)/i);
+  assert.match(executedSql, /COALESCE\(\$4, false\)/i);
+  assert.equal(executedParams[0], 'guild-appeal-test');
+  assert.equal(executedParams[1], 'chan-appeal-reviews');
+  assert.equal(executedParams[2], null, 'Unspecified dmDecisionEnabled passes null so COALESCE applies default true');
+  assert.equal(executedParams[3], null, 'Unspecified dmIncludeSubmission passes null so COALESCE applies default false');
+});
+
+test('STANDARD_CATEGORIES defines standard categories with names and keywords', () => {
+  assert.ok(STANDARD_CATEGORIES.START_HERE, 'Has START_HERE category');
+  assert.ok(STANDARD_CATEGORIES.COMMUNITY, 'Has COMMUNITY category');
+  assert.ok(STANDARD_CATEGORIES.GAMES, 'Has GAMES category');
+  assert.ok(STANDARD_CATEGORIES.SUPPORT, 'Has SUPPORT category');
+  assert.ok(STANDARD_CATEGORIES.STAFF, 'Has STAFF category');
+  assert.ok(STANDARD_CATEGORIES.LOGS, 'Has LOGS category');
+  assert.ok(STANDARD_CATEGORIES.VOICE, 'Has VOICE category');
+  assert.ok(STANDARD_CATEGORIES.STATS, 'Has STATS category');
+
+  assert.match(STANDARD_CATEGORIES.START_HERE.name, /Start Here/i);
+  assert.match(STANDARD_CATEGORIES.COMMUNITY.name, /Community Hub/i);
+  assert.match(STANDARD_CATEGORIES.GAMES.name, /Games/i);
+  assert.match(STANDARD_CATEGORIES.SUPPORT.name, /Support/i);
+  assert.match(STANDARD_CATEGORIES.STAFF.name, /Staff/i);
+  assert.match(STANDARD_CATEGORIES.LOGS.name, /Logs/i);
+});
+
+test('ensureCategory reuses existing category by name, emoji prefix, or keywords', async () => {
+  let createdCategoryData = null;
+  const mockGuild = {
+    roles: {
+      everyone: { id: 'role-everyone' }
+    },
+    channels: {
+      cache: [
+        { id: 'cat-existing-staff', name: '🛡️ Staff Area', type: ChannelType.GuildCategory },
+        { id: 'cat-community-plain', name: 'community', type: ChannelType.GuildCategory }
+      ],
+      create: async (data) => {
+        createdCategoryData = data;
+        return { id: 'cat-newly-created', name: data.name, type: data.type };
+      }
+    }
+  };
+
+  // 1. Reuses exact match
+  const staffCat = await ensureCategory(mockGuild, { name: '🛡️ Staff Area' });
+  assert.equal(staffCat.id, 'cat-existing-staff');
+  assert.equal(createdCategoryData, null);
+
+  // 2. Reuses keyword/stripped emoji match
+  const commCat = await ensureCategory(mockGuild, { name: '🎉 Community Hub', keywords: ['community', 'general', 'hub'] });
+  assert.equal(commCat.id, 'cat-community-plain');
+  assert.equal(createdCategoryData, null);
+
+  // 3. Creates new category when no match exists
+  const logsCat = await ensureCategory(mockGuild, { name: '📋 Server Logs', keywords: ['server logs', 'logging', 'audit logs'], isPrivate: true });
+  assert.equal(logsCat.id, 'cat-newly-created');
+  assert.equal(createdCategoryData.name, '📋 Server Logs');
+  assert.equal(createdCategoryData.type, ChannelType.GuildCategory);
+});
+
+test('autoCreateChannel automatically assigns parent category using categoryName', async () => {
+  let createdChannelData = null;
+  const mockGuild = {
+    roles: {
+      everyone: { id: 'role-everyone' }
+    },
+    channels: {
+      cache: [
+        { id: 'cat-start-here', name: '📌 Start Here', type: ChannelType.GuildCategory }
+      ],
+      create: async (data) => {
+        createdChannelData = data;
+        return { id: 'chan-created', name: data.name, parentId: data.parent };
+      }
+    }
+  };
+
+  const channel = await autoCreateChannel(mockGuild, {
+    name: 'rules',
+    categoryName: STANDARD_CATEGORIES.START_HERE.name,
+    isPrivate: false
+  });
+
+  assert.equal(channel.id, 'chan-created');
+  assert.equal(createdChannelData.parent, 'cat-start-here', 'Channel parentId is set to the resolved category ID');
+});
+
+test('SERVER_ONBOARDING notification reaction roles panel includes Bot Updates role with 🤖 emoji', async () => {
+  const notifStep = ONBOARDING_STEPS.SERVER_ONBOARDING.find((s) => s.id === 'server_reaction_roles');
+  assert.ok(notifStep, 'Reaction roles step found');
+
+  const createdRoles = [];
+  let sentPayload = null;
+
+  const mockGuild = {
+    id: 'guild-rr-botupdates',
+    roles: {
+      cache: [],
+      create: async (opts) => {
+        const r = { id: `10000000000000000${createdRoles.length + 1}`, name: opts.name };
+        createdRoles.push(r);
+        return r;
+      }
+    },
+    channels: {
+      cache: [],
+      create: async (opts) => ({
+        id: 'chan-get-roles',
+        name: opts.name,
+        send: async (payload) => {
+          sentPayload = payload;
+          return { id: 'msg-rr-notifs' };
+        }
+      })
+    }
+  };
+
+  const optionsAdded = [];
+  mockDb.addHandler('role_panels', {
+    rows: [{
+      id: 1,
+      guild_id: 'guild-rr-botupdates',
+      name: 'notification-roles',
+      title: '🔔 Notification & Community Roles',
+      mode: 'MULTI',
+      panel_display_mode: 'BUTTONS',
+      active: true
+    }],
+    rowCount: 1
+  });
+  mockDb.addHandler('role_panel_options', (sql, params) => {
+    if (sql && sql.includes('INSERT INTO role_panel_options')) {
+      optionsAdded.push({
+        panelId: params[0],
+        roleId: params[1],
+        label: params[4],
+        emoji: params[5]
+      });
+      return { rows: [{ id: optionsAdded.length }], rowCount: 1 };
+    }
+    return {
+      rows: optionsAdded.map((opt, i) => ({
+        id: i + 1,
+        panel_id: opt.panelId,
+        role_id: opt.roleId,
+        option_key: `role:${opt.roleId}`,
+        label: opt.label,
+        emoji: opt.emoji,
+        active: true
+      })),
+      rowCount: optionsAdded.length
+    };
+  });
+
+  const res = await notifStep.autoCreate(mockGuild);
+  assert.ok(res.created);
+  assert.match(res.created, /4 roles/i);
+
+  const roleNames = createdRoles.map((r) => r.name);
+  assert.ok(roleNames.includes('Announcements'));
+  assert.ok(roleNames.includes('Events'));
+  assert.ok(roleNames.includes('Giveaways'));
+  assert.ok(roleNames.includes('Bot Updates'));
+
+  const botUpdatesOption = optionsAdded.find((o) => o.label === 'Bot Updates');
+  assert.ok(botUpdatesOption, 'Bot Updates option added to panel');
+  assert.equal(botUpdatesOption.emoji, '🤖');
+});
+
+test('SERVER_ONBOARDING bot updates autoCreate creates private #bot-news gated to @Bot Updates role', async () => {
+  const botUpdatesStep = ONBOARDING_STEPS.SERVER_ONBOARDING.find((s) => s.id === 'server_bot_updates');
+  assert.ok(botUpdatesStep, 'Bot updates step exists in SERVER_ONBOARDING');
+
+  let createdChannelData = null;
+  const botUpdatesRole = { id: 'role-bot-updates', name: 'Bot Updates' };
+
+  const mockGuild = {
+    id: 'guild-botupdates-gating',
+    roles: {
+      everyone: { id: 'role-everyone-id' },
+      cache: [botUpdatesRole],
+      create: async (opts) => ({ id: 'role-new', name: opts.name })
+    },
+    channels: {
+      cache: [],
+      create: async (opts) => {
+        createdChannelData = opts;
+        return {
+          id: 'chan-bot-news',
+          name: opts.name,
+          parentId: opts.parent,
+          send: async () => ({ id: 'msg-feed' })
+        };
+      }
+    }
+  };
+
+  mockDb.addHandler('bot_update_subscriptions', {
+    rows: [{
+      guild_id: 'guild-botupdates-gating',
+      channel_id: 'chan-bot-news',
+      role_id: 'role-bot-updates',
+      subscribed_types: ['PATCH_NOTE', 'RELEASE', 'ANNOUNCEMENT', 'INCIDENT'],
+      active: true
+    }],
+    rowCount: 1
+  });
+
+  const res = await botUpdatesStep.autoCreate(mockGuild);
+  assert.ok(res.created);
+  assert.match(res.created, /bot-news/i);
+  assert.match(res.created, /Bot Updates/i);
+
+  assert.ok(createdChannelData, 'Channel was created');
+  assert.equal(createdChannelData.name, 'bot-news');
+
+  // Verify permission overwrites: @everyone is denied ViewChannel, @Bot Updates is allowed ViewChannel + ReadMessageHistory
+  const overwrites = createdChannelData.permissionOverwrites;
+  assert.ok(Array.isArray(overwrites), 'Has permission overwrites');
+
+  const everyoneOverwrite = overwrites.find((o) => o.id === 'role-everyone-id');
+  assert.ok(everyoneOverwrite, 'Has @everyone overwrite');
+  assert.ok(everyoneOverwrite.deny.includes(PermissionFlagsBits.ViewChannel), '@everyone ViewChannel is denied');
+
+  const botUpdatesOverwrite = overwrites.find((o) => o.id === 'role-bot-updates');
+  assert.ok(botUpdatesOverwrite, 'Has @Bot Updates overwrite');
+  assert.ok(botUpdatesOverwrite.allow.includes(PermissionFlagsBits.ViewChannel), '@Bot Updates ViewChannel is allowed');
+  assert.ok(botUpdatesOverwrite.allow.includes(PermissionFlagsBits.ReadMessageHistory), '@Bot Updates ReadMessageHistory is allowed');
 });
 
 
