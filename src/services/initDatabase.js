@@ -214,6 +214,7 @@ async function initDatabase() {
       panel_description TEXT,
       panel_color TEXT,
       panel_header_image_url TEXT,
+      panel_display_mode TEXT NOT NULL DEFAULT 'BUTTONS',
       close_delete_seconds INTEGER NOT NULL DEFAULT 10,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -254,6 +255,7 @@ async function initDatabase() {
       panel_description TEXT,
       panel_color TEXT,
       panel_header_image_url TEXT,
+      panel_display_mode TEXT NOT NULL DEFAULT 'BUTTONS',
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
@@ -292,6 +294,7 @@ async function initDatabase() {
       approved_role_id TEXT,
       auto_assign_approved_role BOOLEAN NOT NULL DEFAULT false,
       panel_header_image_url TEXT,
+      panel_display_mode TEXT NOT NULL DEFAULT 'BUTTONS',
       enabled BOOLEAN NOT NULL DEFAULT true,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -327,6 +330,7 @@ async function initDatabase() {
       id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
       guild_id TEXT UNIQUE NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
       review_channel_id TEXT,
+      panel_display_mode TEXT NOT NULL DEFAULT 'BUTTONS',
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
@@ -546,6 +550,12 @@ async function initDatabase() {
   await query(`ALTER TABLE appeal_configs ADD COLUMN IF NOT EXISTS panel_display_mode TEXT NOT NULL DEFAULT 'BUTTONS';`).catch(() => {});
   await query(`ALTER TABLE appeal_configs ADD COLUMN IF NOT EXISTS panel_header_image_url TEXT;`).catch(() => {});
   await query(`ALTER TABLE appeal_configs ADD COLUMN IF NOT EXISTS dm_include_submission BOOLEAN NOT NULL DEFAULT false;`).catch(() => {});
+
+  await query(`UPDATE ticket_configs SET panel_display_mode = 'BUTTONS' WHERE panel_display_mode IS NULL;`).catch(() => {});
+  await query(`UPDATE report_configs SET panel_display_mode = 'BUTTONS' WHERE panel_display_mode IS NULL;`).catch(() => {});
+  await query(`UPDATE application_types SET panel_display_mode = 'BUTTONS' WHERE panel_display_mode IS NULL;`).catch(() => {});
+  await query(`UPDATE appeal_configs SET panel_display_mode = 'BUTTONS' WHERE panel_display_mode IS NULL;`).catch(() => {});
+  await query(`UPDATE role_panels SET panel_display_mode = 'BUTTONS' WHERE panel_display_mode IS NULL;`).catch(() => {});
 
 
 

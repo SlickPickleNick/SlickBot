@@ -1110,7 +1110,7 @@ class ReportService {
     const pingTeamId = input.pingTeamName ? await resolveTeamId(guildId, input.pingTeamName) : null;
     const result = await query(
       `INSERT INTO report_configs (guild_id, review_channel_id, ping_role_id, ping_team_id, panel_title, panel_description, panel_color, panel_header_image_url, panel_display_mode)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE($9, 'BUTTONS'))
        ON CONFLICT (guild_id)
        DO UPDATE SET
          review_channel_id = COALESCE(EXCLUDED.review_channel_id, report_configs.review_channel_id),
@@ -1120,7 +1120,7 @@ class ReportService {
          panel_description = COALESCE(EXCLUDED.panel_description, report_configs.panel_description),
          panel_color = COALESCE(EXCLUDED.panel_color, report_configs.panel_color),
          panel_header_image_url = COALESCE(EXCLUDED.panel_header_image_url, report_configs.panel_header_image_url),
-         panel_display_mode = COALESCE(EXCLUDED.panel_display_mode, report_configs.panel_display_mode),
+         panel_display_mode = COALESCE(EXCLUDED.panel_display_mode, report_configs.panel_display_mode, 'BUTTONS'),
          updated_at = NOW()
        RETURNING *`,
       [guildId, input.reviewChannelId || null, input.pingRoleId || null, pingTeamId, input.panelTitle || null, input.panelDescription || null, input.panelColor || null, input.panelHeaderImageUrl || null, input.panelDisplayMode || null]
@@ -1386,7 +1386,7 @@ class ApplicationService {
   async setupType(guildId, input) {
     const result = await query(
       `INSERT INTO application_types (guild_id, name, description, review_channel_id, pending_role_id, approved_role_id, auto_assign_approved_role, submission_confirmation_message, panel_title, panel_description, panel_color, panel_header_image_url, panel_display_mode, question_timeout_seconds, enabled)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, COALESCE($14, 180), true)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, COALESCE($13, 'BUTTONS'), COALESCE($14, 180), true)
        ON CONFLICT (guild_id, name) DO UPDATE SET
          description = COALESCE(EXCLUDED.description, application_types.description),
          review_channel_id = COALESCE(EXCLUDED.review_channel_id, application_types.review_channel_id),
@@ -1398,7 +1398,7 @@ class ApplicationService {
          panel_description = COALESCE(EXCLUDED.panel_description, application_types.panel_description),
          panel_color = COALESCE(EXCLUDED.panel_color, application_types.panel_color),
          panel_header_image_url = COALESCE(EXCLUDED.panel_header_image_url, application_types.panel_header_image_url),
-         panel_display_mode = COALESCE(EXCLUDED.panel_display_mode, application_types.panel_display_mode),
+         panel_display_mode = COALESCE(EXCLUDED.panel_display_mode, application_types.panel_display_mode, 'BUTTONS'),
          question_timeout_seconds = CASE WHEN $14 IS NULL THEN application_types.question_timeout_seconds ELSE EXCLUDED.question_timeout_seconds END,
          enabled = application_types.enabled,
          updated_at = NOW() RETURNING *`,
@@ -1845,7 +1845,7 @@ class AppealService {
     const has = (key) => Object.prototype.hasOwnProperty.call(input, key);
     const result = await query(
       `INSERT INTO appeal_configs (guild_id, review_channel_id, dm_decision_enabled, dm_include_submission, panel_title, panel_description, panel_color, panel_header_image_url, panel_display_mode)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE($9, 'BUTTONS'))
        ON CONFLICT (guild_id) DO UPDATE SET
          review_channel_id = COALESCE(EXCLUDED.review_channel_id, appeal_configs.review_channel_id),
          dm_decision_enabled = COALESCE(EXCLUDED.dm_decision_enabled, appeal_configs.dm_decision_enabled),
@@ -1854,7 +1854,7 @@ class AppealService {
          panel_description = COALESCE(EXCLUDED.panel_description, appeal_configs.panel_description),
          panel_color = COALESCE(EXCLUDED.panel_color, appeal_configs.panel_color),
          panel_header_image_url = COALESCE(EXCLUDED.panel_header_image_url, appeal_configs.panel_header_image_url),
-         panel_display_mode = COALESCE(EXCLUDED.panel_display_mode, appeal_configs.panel_display_mode),
+         panel_display_mode = COALESCE(EXCLUDED.panel_display_mode, appeal_configs.panel_display_mode, 'BUTTONS'),
          updated_at = NOW() RETURNING *`,
       [
         guildId,

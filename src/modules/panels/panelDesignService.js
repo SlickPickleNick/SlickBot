@@ -28,13 +28,13 @@ async function updatePanelDesign({ guildId, target, name = null, title = null, d
   if (key === 'ticket' || key === 'tickets') {
     const result = await query(
       `INSERT INTO ticket_configs (guild_id, panel_title, panel_description, panel_color, panel_header_image_url, panel_display_mode)
-       VALUES ($1, $2, $3, $4, $5, $6)
+       VALUES ($1, $2, $3, $4, $5, COALESCE($6, 'BUTTONS'))
        ON CONFLICT (guild_id) DO UPDATE SET
          panel_title = COALESCE(EXCLUDED.panel_title, ticket_configs.panel_title),
          panel_description = COALESCE(EXCLUDED.panel_description, ticket_configs.panel_description),
          panel_color = COALESCE(EXCLUDED.panel_color, ticket_configs.panel_color),
          panel_header_image_url = COALESCE(EXCLUDED.panel_header_image_url, ticket_configs.panel_header_image_url),
-         panel_display_mode = COALESCE(EXCLUDED.panel_display_mode, ticket_configs.panel_display_mode),
+         panel_display_mode = COALESCE(EXCLUDED.panel_display_mode, ticket_configs.panel_display_mode, 'BUTTONS'),
          updated_at = NOW()
        RETURNING panel_title, panel_description, panel_color, panel_header_image_url, panel_display_mode`,
       [guildId, panelTitle, panelDescription, panelColor, normalizedHeaderImageUrl, panelDisplayMode]
@@ -45,13 +45,13 @@ async function updatePanelDesign({ guildId, target, name = null, title = null, d
   if (key === 'report' || key === 'reports') {
     const result = await query(
       `INSERT INTO report_configs (guild_id, panel_title, panel_description, panel_color, panel_header_image_url, panel_display_mode)
-       VALUES ($1, $2, $3, $4, $5, $6)
+       VALUES ($1, $2, $3, $4, $5, COALESCE($6, 'BUTTONS'))
        ON CONFLICT (guild_id) DO UPDATE SET
          panel_title = COALESCE(EXCLUDED.panel_title, report_configs.panel_title),
          panel_description = COALESCE(EXCLUDED.panel_description, report_configs.panel_description),
          panel_color = COALESCE(EXCLUDED.panel_color, report_configs.panel_color),
          panel_header_image_url = COALESCE(EXCLUDED.panel_header_image_url, report_configs.panel_header_image_url),
-         panel_display_mode = COALESCE(EXCLUDED.panel_display_mode, report_configs.panel_display_mode),
+         panel_display_mode = COALESCE(EXCLUDED.panel_display_mode, report_configs.panel_display_mode, 'BUTTONS'),
          updated_at = NOW()
        RETURNING panel_title, panel_description, panel_color, panel_header_image_url, panel_display_mode`,
       [guildId, panelTitle, panelDescription, panelColor, normalizedHeaderImageUrl, panelDisplayMode]
@@ -62,13 +62,13 @@ async function updatePanelDesign({ guildId, target, name = null, title = null, d
   if (key === 'appeal' || key === 'appeals') {
     const result = await query(
       `INSERT INTO appeal_configs (guild_id, panel_title, panel_description, panel_color, panel_header_image_url, panel_display_mode)
-       VALUES ($1, $2, $3, $4, $5, $6)
+       VALUES ($1, $2, $3, $4, $5, COALESCE($6, 'BUTTONS'))
        ON CONFLICT (guild_id) DO UPDATE SET
          panel_title = COALESCE(EXCLUDED.panel_title, appeal_configs.panel_title),
          panel_description = COALESCE(EXCLUDED.panel_description, appeal_configs.panel_description),
          panel_color = COALESCE(EXCLUDED.panel_color, appeal_configs.panel_color),
          panel_header_image_url = COALESCE(EXCLUDED.panel_header_image_url, appeal_configs.panel_header_image_url),
-         panel_display_mode = COALESCE(EXCLUDED.panel_display_mode, appeal_configs.panel_display_mode),
+         panel_display_mode = COALESCE(EXCLUDED.panel_display_mode, appeal_configs.panel_display_mode, 'BUTTONS'),
          updated_at = NOW()
        RETURNING panel_title, panel_description, panel_color, panel_header_image_url, panel_display_mode`,
       [guildId, panelTitle, panelDescription, panelColor, normalizedHeaderImageUrl, panelDisplayMode]
