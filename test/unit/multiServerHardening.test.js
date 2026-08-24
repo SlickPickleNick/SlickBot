@@ -122,4 +122,78 @@ test('Multi-Server Scalability & Cache Eviction Suite', async (t) => {
     assert.equal(botCommand.getActionKey({ options: { getSubcommand: () => 'test' } }), ActionKeys.BotTest);
     assert.equal(botCommand.getActionKey({ options: { getSubcommand: () => 'version' } }), ActionKeys.BotVersion);
   });
+
+  await t.test('PermissionService enforces BOT_OWNER restriction for StatusManage', async () => {
+    const { PermissionService } = require('../../src/modules/permissions/permissionService');
+    const { ActionKeys, PermissionLevels } = require('../../src/modules/permissions/actionKeys');
+    const { ModuleKeys } = require('../../src/modules/moduleRegistry');
+    const permissions = new PermissionService();
+    permissions.seededGuilds.add('guild-1');
+    permissions.requiredLevelCache.set('guild-1:status.manage:STATUS', PermissionLevels.BOT_OWNER);
+
+    const nonOwnerInteraction = {
+      guildId: 'guild-1',
+      user: { id: 'random-user-id' },
+      member: { roles: [] }
+    };
+
+    const check = await permissions.checkInteraction(nonOwnerInteraction, ActionKeys.StatusManage, ModuleKeys.STATUS);
+    assert.equal(check.allowed, false);
+    assert.ok(check.reason.includes('restricted to the global bot owner'));
+
+    const botOwnerInteraction = {
+      guildId: 'guild-1',
+      user: { id: 'bot-owner-id' },
+      member: { roles: [] }
+    };
+    // Mock isBotOwner to return true for this user
+    permissions.isBotOwner = (id) => id === 'bot-owner-id';
+    const ownerCheck = await permissions.checkInteraction(botOwnerInteraction, ActionKeys.StatusManage, ModuleKeys.STATUS);
+    assert.equal(ownerCheck.allowed, true);
+  });
+
+  await t.test('Help system hides BOT_OWNER commands from non-owners', () => {
+    const { getHelpAutocomplete, buildCategoryHelpPayload, buildCommandHelpPayload, buildModuleHelpPayload, handleHelpSearch } = require('../../src/modules/help/helpService');
+    const { ModuleKeys } = require('../../src/modules/moduleRegistry');
+
+    // Non-owner autocomplete
+    const publicChoices = getHelpAutocomplete('command', 'status', { isBotOwner: false });
+    assert.equal(publicChoices.some((c) => c.value === 'status'), false);
+
+    // Bot owner autocomplete
+    const ownerChoices = getHelpAutocomplete('command', 'status', { isBotOwner: true });
+    assert.equal(ownerChoices.some((c) => c.value === 'status'), true);
+
+    // Non-owner search
+    const publicSearch = handleHelpSearch('status', { isBotOwner: false });
+    assert.equal(publicSearch.embeds[0].data.description.includes('/status'), false);
+
+    // Bot owner search
+    const ownerSearch = handleHelpSearch('status', { isBotOwner: true });
+    assert.equal(ownerSearch.embeds[0].data.description.includes('/status'), true);
+
+    // Non-owner category view
+    const publicHelp = buildCategoryHelpPayload('CORE', 'staff', 2, { isBotOwner: false });
+    assert.equal(publicHelp.embeds[0].data.description.includes('/status'), false);
+
+    // Bot owner category view
+    const ownerHelp = buildCategoryHelpPayload('CORE', 'staff', 2, { isBotOwner: true });
+    assert.equal(ownerHelp.embeds[0].data.description.includes('/status'), true);
+
+    // Non-owner command inspect
+    const publicCmd = buildCommandHelpPayload('status', { isBotOwner: false });
+    assert.equal(publicCmd.embeds[0].data.title, 'Command Not Found');
+
+    // Bot owner command inspect
+    const ownerCmd = buildCommandHelpPayload('status', { isBotOwner: true });
+    assert.ok(ownerCmd.embeds[0].data.title.includes('status'));
+
+    // Non-owner module inspect
+    const publicModule = buildModuleHelpPayload(ModuleKeys.STATUS, { isBotOwner: false });
+    assert.equal(publicModule.embeds[0].data.title, 'Module Not Found');
+
+    // Bot owner module inspect
+    const ownerModule = buildModuleHelpPayload(ModuleKeys.STATUS, { isBotOwner: true });
+    assert.ok(ownerModule.embeds[0].data.title.includes('Module Guide'));
+  });
 });

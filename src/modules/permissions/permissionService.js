@@ -385,7 +385,8 @@ class PermissionService {
   }
 
   async getUserPermissionLevel(interaction, roleIds = []) {
-    if (this.isBotOwner(interaction.user.id) || this.isServerOwner(interaction)) return PermissionLevels.OWNER;
+    if (this.isBotOwner(interaction.user.id)) return PermissionLevels.BOT_OWNER;
+    if (this.isServerOwner(interaction)) return PermissionLevels.OWNER;
     if (interaction.memberPermissions && interaction.memberPermissions.has(PermissionFlagsBits.Administrator)) return PermissionLevels.OWNER;
 
     let highest = PermissionLevels.EVERYONE;
@@ -449,6 +450,12 @@ class PermissionService {
 
     if (this.isBotOwner(interaction.user.id)) return { allowed: true };
 
+    const roleIds = this.getInteractionRoleIds(interaction);
+    const levelCheck = await this.hasRequiredLevel(interaction, actionKey, moduleKey, roleIds);
+    if (levelCheck.required === PermissionLevels.BOT_OWNER) {
+      return { allowed: false, reason: 'This command or action is restricted to the global bot owner(s).' };
+    }
+
     const isConfigAction = actionKey === ActionKeys.Setup ||
       actionKey === ActionKeys.ModulesManage ||
       actionKey.endsWith('.view') ||
@@ -465,8 +472,6 @@ class PermissionService {
       return { allowed: false, reason: `The ${moduleKey} module is disabled.` };
     }
 
-    const roleIds = this.getInteractionRoleIds(interaction);
-
     const moduleAccess = await this.hasModuleTargetAccess(interaction, moduleKey, roleIds);
     if (moduleAccess.locked && !moduleAccess.allowed) {
       return { allowed: false, reason: `The ${moduleKey} module is restricted to configured teams/roles.` };
@@ -475,7 +480,6 @@ class PermissionService {
     const publicSetting = await this.getPublicActionSetting(interaction.guildId, actionKey);
     if (publicSetting === true) return { allowed: true };
 
-    const levelCheck = await this.hasRequiredLevel(interaction, actionKey, moduleKey, roleIds);
     if (levelCheck.allowed && !(publicSetting === false && levelCheck.userLevel === PermissionLevels.EVERYONE)) return { allowed: true };
 
     const teamResult = await query(

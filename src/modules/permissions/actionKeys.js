@@ -203,14 +203,16 @@ const PermissionLevels = Object.freeze({
   EVERYONE: 'EVERYONE',
   MODERATOR: 'MODERATOR',
   SENIOR_MODERATOR: 'SENIOR_MODERATOR',
-  OWNER: 'OWNER'
+  OWNER: 'OWNER',
+  BOT_OWNER: 'BOT_OWNER'
 });
 
 const permissionLevelRank = Object.freeze({
   EVERYONE: 0,
   MODERATOR: 1,
   SENIOR_MODERATOR: 2,
-  OWNER: 3
+  OWNER: 3,
+  BOT_OWNER: 4
 });
 
 const defaultActionLevels = Object.freeze({
@@ -230,8 +232,8 @@ const defaultActionLevels = Object.freeze({
 
   [ActionKeys.LoggingView]: PermissionLevels.MODERATOR,
   [ActionKeys.LoggingConfigure]: PermissionLevels.SENIOR_MODERATOR,
-  [ActionKeys.StatusView]: PermissionLevels.MODERATOR,
-  [ActionKeys.StatusManage]: PermissionLevels.SENIOR_MODERATOR,
+  [ActionKeys.StatusView]: PermissionLevels.BOT_OWNER,
+  [ActionKeys.StatusManage]: PermissionLevels.BOT_OWNER,
 
   [ActionKeys.ModerationPanel]: PermissionLevels.MODERATOR,
   [ActionKeys.ModerationWarn]: PermissionLevels.MODERATOR,
@@ -416,7 +418,7 @@ const defaultActionLevels = Object.freeze({
 const defaultModuleLevels = Object.freeze({
   [ModuleKeys.PERMISSIONS]: PermissionLevels.EVERYONE,
   [ModuleKeys.LOGGING]: PermissionLevels.MODERATOR,
-  [ModuleKeys.STATUS]: PermissionLevels.MODERATOR,
+  [ModuleKeys.STATUS]: PermissionLevels.BOT_OWNER,
   [ModuleKeys.MODERATION]: PermissionLevels.MODERATOR,
   [ModuleKeys.LOCKDOWN]: PermissionLevels.MODERATOR,
   [ModuleKeys.TICKETS]: PermissionLevels.EVERYONE,

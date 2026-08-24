@@ -98,6 +98,16 @@ module.exports = {
   actionKey: ActionKeys.StatusManage,
   moduleKey: ModuleKeys.STATUS,
   async execute(interaction, ctx) {
+    if (!ctx.permissions.isBotOwner(interaction.user.id)) {
+      return replyPrivate(interaction, {
+        embeds: [createBaseEmbed({
+          title: 'Bot Owner Required',
+          description: 'Modifying global bot status and presence is restricted to authorized bot owners.',
+          color: SlickBotColors.ERROR
+        })]
+      });
+    }
+
     const subcommand = interaction.options.getSubcommand();
     await ctx.permissions.ensureGuildConfig(interaction.guildId, interaction.guild ? interaction.guild.name : null);
 

@@ -181,23 +181,23 @@ const HELP_CATALOG = Object.freeze([
     name: 'status',
     command: '/status',
     syntax: '/status [view|manager|set|stream-url|clear]',
-    description: 'View or configure SlickBot presence status and custom activity text.',
+    description: 'Global bot presence and status control dashboard. Restricted to authorized bot owners.',
     category: 'CORE',
     moduleKey: ModuleKeys.STATUS,
     actionKey: ActionKeys.StatusManage,
-    level: PermissionLevels.ADMIN,
-    examples: ['/status view', '/status set status:Online activity:Watching text:SlickBot Server']
+    level: PermissionLevels.BOT_OWNER,
+    examples: ['/status view', '/status manager', '/status set status:Online activity:Watching text:"SlickBot Multi-Server"']
   },
   {
     name: 'bot',
     command: '/bot',
-    syntax: '/bot [version|test]',
-    description: 'Show SlickBot version info or run safe diagnostic checks.',
+    syntax: '/bot [version|info|invite|test]',
+    description: 'Show SlickBot version, global server count telemetry, invite generator, or module diagnostics.',
     category: 'CORE',
     moduleKey: ModuleKeys.STATUS,
     actionKey: ActionKeys.BotTest,
     level: PermissionLevels.ADMIN,
-    examples: ['/bot version', '/bot test']
+    examples: ['/bot version', '/bot info', '/bot invite', '/bot test']
   },
 
   // Moderation, Cases, Notes, Temp Roles, Lockdown
@@ -615,16 +615,19 @@ function moduleLabel(moduleKey) {
 function getPermissionBadge(level) {
   if (level === PermissionLevels.EVERYONE) return '`🟢 Everyone`';
   if (level === PermissionLevels.MODERATOR) return '`🛡️ Moderator`';
+  if (level === PermissionLevels.SENIOR_MODERATOR) return '`⚔️ Sr Mod`';
   if (level === PermissionLevels.ADMIN) return '`⚙️ Server Admin`';
   if (level === PermissionLevels.OWNER) return '`👑 Server Owner`';
+  if (level === PermissionLevels.BOT_OWNER) return '`🤖 Bot Owner`';
   return '`Staff`';
 }
 
-function getHelpAutocomplete(focusedOption, value) {
+function getHelpAutocomplete(focusedOption, value, { isBotOwner = false } = {}) {
   const queryText = String(value || '').trim().toLowerCase();
 
   if (focusedOption === 'command') {
     return HELP_CATALOG
+      .filter((cmd) => isBotOwner || cmd.level !== PermissionLevels.BOT_OWNER)
       .filter((cmd) => cmd.name.toLowerCase().includes(queryText) || cmd.command.toLowerCase().includes(queryText))
       .slice(0, 25)
       .map((cmd) => ({
@@ -635,6 +638,7 @@ function getHelpAutocomplete(focusedOption, value) {
 
   if (focusedOption === 'module') {
     return Object.entries(MODULE_LABELS)
+      .filter(([key]) => isBotOwner || key !== ModuleKeys.STATUS)
       .filter(([key, label]) => key.toLowerCase().includes(queryText) || label.toLowerCase().includes(queryText))
       .slice(0, 25)
       .map(([key, label]) => ({
@@ -646,9 +650,9 @@ function getHelpAutocomplete(focusedOption, value) {
   return [];
 }
 
-function buildCommandHelpPayload(commandName) {
+function buildCommandHelpPayload(commandName, { isBotOwner = false } = {}) {
   const name = String(commandName || '').replace(/^\/+/, '').trim().toLowerCase();
-  const cmd = HELP_CATALOG.find((entry) => entry.name.toLowerCase() === name || entry.command.toLowerCase().includes(name));
+  const cmd = HELP_CATALOG.find((entry) => (isBotOwner || entry.level !== PermissionLevels.BOT_OWNER) && (entry.name.toLowerCase() === name || entry.command.toLowerCase().includes(name)));
 
   if (!cmd) {
     return {
@@ -705,9 +709,30 @@ function buildCommandHelpPayload(commandName) {
   return { embeds: [embed], components: [createButtonRow(buttons)] };
 }
 
-function buildModuleHelpPayload(moduleKey) {
+function buildModuleHelpPayload(moduleKey, { isBotOwner = false } = {}) {
   const key = String(moduleKey || '').toUpperCase().trim();
-  const commands = HELP_CATALOG.filter((cmd) => cmd.moduleKey === key);
+  if (key === ModuleKeys.STATUS && !isBotOwner) {
+    return {
+      embeds: [
+        createBaseEmbed({
+          title: 'Module Not Found',
+          description: `No module documentation found for **\`${moduleKey}\`**.\nRun \`/help\` to browse all available modules.`,
+          color: SlickBotColors.WARNING,
+          footer: 'SlickBot Help'
+        })
+      ],
+      components: [
+        createButtonRow([
+          createPanelButton(CustomIds.HelpRefresh, 'All Commands', ButtonStyle.Primary, '📖'),
+          createPanelButton(CustomIds.SetupRefresh, 'Setup Center', ButtonStyle.Secondary, '⚙️')
+        ])
+      ]
+    };
+  }
+
+  const commands = HELP_CATALOG
+    .filter((cmd) => isBotOwner || cmd.level !== PermissionLevels.BOT_OWNER)
+    .filter((cmd) => cmd.moduleKey === key);
 
   if (!commands.length) {
     return {
@@ -756,8 +781,8 @@ function buildModuleHelpPayload(moduleKey) {
 
 const PAGE_SIZE = 6;
 
-function buildCategoryHelpPayload(categoryKey = 'MEMBER', mode = 'member', page = 1) {
-  let filtered = HELP_CATALOG;
+function buildCategoryHelpPayload(categoryKey = 'MEMBER', mode = 'member', page = 1, { isBotOwner = false } = {}) {
+  let filtered = HELP_CATALOG.filter((cmd) => isBotOwner || cmd.level !== PermissionLevels.BOT_OWNER);
 
   if (categoryKey && categoryKey !== 'ALL') {
     filtered = filtered.filter((cmd) => cmd.category === categoryKey);
@@ -839,19 +864,20 @@ function buildCategoryHelpPayload(categoryKey = 'MEMBER', mode = 'member', page 
 }
 
 async function buildHelpPayload(interaction, ctx, options = {}) {
+  const isBotOwner = options.isBotOwner ?? (ctx?.permissions ? ctx.permissions.isBotOwner(interaction.user.id) : false);
   const commandArg = interaction.options?.getString?.('command');
   const moduleArg = interaction.options?.getString?.('module');
 
   if (commandArg) {
-    return buildCommandHelpPayload(commandArg);
+    return buildCommandHelpPayload(commandArg, { isBotOwner });
   }
 
   if (moduleArg) {
-    return buildModuleHelpPayload(moduleArg);
+    return buildModuleHelpPayload(moduleArg, { isBotOwner });
   }
 
   // Default interactive view
-  return buildCategoryHelpPayload('MEMBER', 'member', 1);
+  return buildCategoryHelpPayload('MEMBER', 'member', 1, { isBotOwner });
 }
 
 function buildHelpSearchModal() {
@@ -872,14 +898,16 @@ function buildHelpSearchModal() {
     );
 }
 
-function handleHelpSearch(query) {
+function handleHelpSearch(query, { isBotOwner = false } = {}) {
   const text = String(query || '').trim().toLowerCase();
-  const matches = HELP_CATALOG.filter((cmd) =>
-    cmd.name.toLowerCase().includes(text) ||
-    cmd.command.toLowerCase().includes(text) ||
-    cmd.description.toLowerCase().includes(text) ||
-    moduleLabel(cmd.moduleKey).toLowerCase().includes(text)
-  ).slice(0, 15);
+  const matches = HELP_CATALOG
+    .filter((cmd) => isBotOwner || cmd.level !== PermissionLevels.BOT_OWNER)
+    .filter((cmd) =>
+      cmd.name.toLowerCase().includes(text) ||
+      cmd.command.toLowerCase().includes(text) ||
+      cmd.description.toLowerCase().includes(text) ||
+      moduleLabel(cmd.moduleKey).toLowerCase().includes(text)
+    ).slice(0, 15);
 
   if (!matches.length) {
     return {

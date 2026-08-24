@@ -135,19 +135,22 @@ async function handleButton(interaction, ctx) {
   const id = interaction.customId;
 
   if (id === CustomIds.HelpRefresh) {
-    await updatePanel(interaction, buildCategoryHelpPayload('MEMBER', 'member', 1));
+    const isBotOwner = ctx.permissions.isBotOwner(interaction.user.id);
+    await updatePanel(interaction, buildCategoryHelpPayload('MEMBER', 'member', 1, { isBotOwner }));
     return true;
   }
 
   if (id.startsWith(CustomIds.HelpPagePrefix)) {
+    const isBotOwner = ctx.permissions.isBotOwner(interaction.user.id);
     const rest = id.slice(CustomIds.HelpPagePrefix.length);
     const [categoryKey, mode, pageStr] = rest.split(':');
     const targetPage = Number.parseInt(pageStr, 10) || 1;
-    await updatePanel(interaction, buildCategoryHelpPayload(categoryKey, mode || 'all', targetPage));
+    await updatePanel(interaction, buildCategoryHelpPayload(categoryKey, mode || 'all', targetPage, { isBotOwner }));
     return true;
   }
 
   if (id.startsWith(CustomIds.HelpModePrefix)) {
+    const isBotOwner = ctx.permissions.isBotOwner(interaction.user.id);
     const rest = id.slice(CustomIds.HelpModePrefix.length);
     const parts = rest.split(':');
     let categoryKey = 'MEMBER';
@@ -158,7 +161,7 @@ async function handleButton(interaction, ctx) {
     } else {
       mode = parts[0];
     }
-    await updatePanel(interaction, buildCategoryHelpPayload(categoryKey, mode, 1));
+    await updatePanel(interaction, buildCategoryHelpPayload(categoryKey, mode, 1, { isBotOwner }));
     return true;
   }
 
@@ -2398,6 +2401,10 @@ async function routeModuleToManager(interaction, ctx, moduleKey) {
       await updatePanel(interaction, await buildLoggingPanel(interaction.guildId));
       break;
     case ModuleKeys.STATUS:
+      if (!ctx.permissions.isBotOwner(interaction.user.id)) {
+        await sendAccessDenied(interaction, 'The Status & Presence control module is restricted to global bot owners.');
+        return true;
+      }
       await updatePanel(interaction, await buildStatusPanel(interaction.guildId, ctx));
       break;
     case ModuleKeys.MODERATION:
@@ -2489,14 +2496,16 @@ async function handleSelect(interaction, ctx) {
   const id = interaction.customId;
 
   if (id === CustomIds.HelpCategorySelect) {
+    const isBotOwner = ctx.permissions.isBotOwner(interaction.user.id);
     const selectedCategory = interaction.values?.[0] || 'MEMBER';
-    await updatePanel(interaction, buildCategoryHelpPayload(selectedCategory, selectedCategory === 'MEMBER' ? 'member' : 'all', 1));
+    await updatePanel(interaction, buildCategoryHelpPayload(selectedCategory, selectedCategory === 'MEMBER' ? 'member' : 'all', 1, { isBotOwner }));
     return true;
   }
 
   if (id === CustomIds.HelpModuleSelect) {
+    const isBotOwner = ctx.permissions.isBotOwner(interaction.user.id);
     const selectedModule = interaction.values?.[0];
-    await updatePanel(interaction, buildModuleHelpPayload(selectedModule));
+    await updatePanel(interaction, buildModuleHelpPayload(selectedModule, { isBotOwner }));
     return true;
   }
 
@@ -3050,8 +3059,9 @@ async function handleModal(interaction, ctx) {
   const id = interaction.customId;
 
   if (id === CustomIds.HelpSearchModalSubmit) {
+    const isBotOwner = ctx.permissions.isBotOwner(interaction.user.id);
     const query = interaction.fields.getTextInputValue('query');
-    await replyPrivate(interaction, handleHelpSearch(query));
+    await replyPrivate(interaction, handleHelpSearch(query, { isBotOwner }));
     return true;
   }
 
