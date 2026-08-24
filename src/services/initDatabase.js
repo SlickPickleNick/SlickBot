@@ -1062,6 +1062,9 @@ async function initDatabase() {
   await query(`ALTER TABLE leveling_configs ADD COLUMN IF NOT EXISTS voice_xp_min_channel_members INTEGER NOT NULL DEFAULT 2;`).catch(() => {});
   await query(`ALTER TABLE leveling_configs ADD COLUMN IF NOT EXISTS voice_ignored_channel_ids JSONB NOT NULL DEFAULT '[]'::jsonb;`).catch(() => {});
   await query(`ALTER TABLE leveling_profiles ADD COLUMN IF NOT EXISTS voice_minutes INTEGER NOT NULL DEFAULT 0;`).catch(() => {});
+  await query(`ALTER TABLE leveling_profiles ADD COLUMN IF NOT EXISTS card_background_url TEXT;`).catch(() => {});
+  await query(`ALTER TABLE leveling_profiles ADD COLUMN IF NOT EXISTS card_color TEXT;`).catch(() => {});
+  await query(`ALTER TABLE leveling_profiles ADD COLUMN IF NOT EXISTS card_theme TEXT NOT NULL DEFAULT 'NEON';`).catch(() => {});
 
   await query(`
     CREATE TABLE IF NOT EXISTS leveling_multiplier_roles (

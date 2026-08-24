@@ -372,16 +372,14 @@ test('BirthdayService and SuggestionService edge cases and defaults', async () =
   const sCfg = await suggestion.setup('100000000000000001', { channelId: '100000000000000024' });
   assert.ok(sCfg, 'Suggestion setup succeeded');
 
-  // Test SuggestionService.postPanel pins the message
-  let pinned = false;
+  // Test SuggestionService.postPanel posts the panel
   const mockChannel = {
     id: '100000000000000024',
     send: async () => ({
-      id: 'msg-panel-123',
-      pin: async () => { pinned = true; }
+      id: 'msg-panel-123'
     })
   };
   const { guild: mockGuild } = createUniversalMockGuild();
-  await suggestion.postPanel({ guild: mockGuild, channel: mockChannel, pin: true });
-  assert.equal(pinned, true, 'Suggestion panel message was pinned');
+  const panelRes = await suggestion.postPanel({ guild: mockGuild, channel: mockChannel });
+  assert.ok(panelRes.message, 'Suggestion panel message was sent');
 });

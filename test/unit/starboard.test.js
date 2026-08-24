@@ -653,7 +653,7 @@ test('Starboard / Community Hall of Fame Engine Tests', async (t) => {
 
     let savedChannelId = null;
     mockDb.addHandler('INSERT INTO starboard_configs', (sql, params) => {
-      savedChannelId = params[1];
+      savedChannelId = params[2] ?? params[1];
       return { rowCount: 1 };
     });
 

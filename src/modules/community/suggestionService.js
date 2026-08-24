@@ -683,12 +683,9 @@ class SuggestionService {
     return buildPanelPayload(config);
   }
 
-  async postPanel({ guild, channel, title, description, headerImageUrl, pin = true }) {
+  async postPanel({ guild, channel, title, description, headerImageUrl }) {
     const config = await this.setPanelDesign({ guildId: guild.id, title, description, headerImageUrl });
     const message = await channel.send(buildPanelPayload(config));
-    if (pin && message && typeof message.pin === 'function') {
-      await message.pin().catch(() => {});
-    }
     const result = await query(
       `UPDATE suggestion_configs SET panel_channel_id = $2, panel_message_id = $3, panel_active = true, updated_at = NOW() WHERE guild_id = $1 RETURNING *`,
       [guild.id, channel.id, message.id]
@@ -710,7 +707,7 @@ class SuggestionService {
     return 1;
   }
 
-  async repostPanel(client, guildId, { pin = true } = {}) {
+  async repostPanel(client, guildId) {
     const config = await this.getConfig(guildId);
     if (!config?.panel_active || !config.panel_channel_id) return 0;
     const guild = await client.guilds.fetch(guildId).catch(() => null);
@@ -721,9 +718,6 @@ class SuggestionService {
       await oldMessage?.delete?.().catch(() => {});
     }
     const message = await channel.send(buildPanelPayload(config));
-    if (pin && message && typeof message.pin === 'function') {
-      await message.pin().catch(() => {});
-    }
     await query(`UPDATE suggestion_configs SET panel_message_id = $2, updated_at = NOW() WHERE guild_id = $1`, [guildId, message.id]);
     return 1;
   }

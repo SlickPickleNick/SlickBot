@@ -86,4 +86,46 @@ test('LevelingService Caching and Multiplier Roles', async (t) => {
     assert.equal(none.multiplier, 1.0);
     assert.equal(none.roleId, null);
   });
+
+  await t.test('updateCardCustomization and buildRankEmbed customization rendering', async () => {
+    let savedParams = null;
+    mockDb.addHandler('INSERT INTO leveling_profiles', (sql, params) => {
+      savedParams = params;
+      return { rows: [{ guild_id: guildId, user_id: 'user-1', card_background_url: params[2], card_color: params[3], card_theme: params[4] }], rowCount: 1 };
+    });
+
+    const updated = await service.updateCardCustomization(guildId, 'user-1', {
+      backgroundUrl: 'https://example.com/banner.png',
+      color: '#FF007F',
+      theme: 'CYBERPUNK'
+    });
+
+    assert.ok(updated);
+    assert.equal(savedParams[2], 'https://example.com/banner.png');
+    assert.equal(savedParams[3], '#FF007F');
+    assert.equal(savedParams[4], 'CYBERPUNK');
+
+    const mockUser = {
+      id: 'user-1',
+      tag: 'Gamer#1234',
+      displayAvatarURL: () => 'https://example.com/avatar.png'
+    };
+
+    const rankData = {
+      rank: 1,
+      progress: { level: 5, xp: 2500, currentXp: 500, neededXp: 1000 },
+      profile: {
+        message_count: 150,
+        voice_minutes: 120,
+        card_background_url: 'https://example.com/banner.png',
+        card_color: '#FF007F',
+        card_theme: 'CYBERPUNK'
+      }
+    };
+
+    const embed = service.buildRankEmbed(mockUser, rankData);
+    assert.equal(embed.data.color, 0xFF007F);
+    assert.equal(embed.data.image.url, 'https://example.com/banner.png');
+    assert.equal(embed.data.thumbnail.url, 'https://example.com/avatar.png');
+  });
 });

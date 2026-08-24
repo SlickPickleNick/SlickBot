@@ -834,15 +834,14 @@ const ONBOARDING_STEPS = Object.freeze({
         const { SuggestionService } = require('../community/suggestionService');
         const suggestions = new SuggestionService();
         await suggestions.setup(guild.id, { channelId: channel.id, autoCreateThreads: false, panelActive: true });
-        await suggestions.postPanel({ guild, channel, pin: true }).catch(async () => {
+        await suggestions.postPanel({ guild, channel }).catch(async () => {
           const cfg = await suggestions.getConfig(guild.id);
           const panelPayload = suggestions.buildPanelPayload(cfg);
           if (channel && typeof channel.send === 'function') {
-            const msg = await channel.send(panelPayload).catch(() => null);
-            if (msg && typeof msg.pin === 'function') await msg.pin().catch(() => {});
+            await channel.send(panelPayload).catch(() => null);
           }
         });
-        return { created: `#${channel.name} (Suggestion Panel published & pinned)` };
+        return { created: `#${channel.name} (Suggestion Panel published)` };
       }
     },
     {
@@ -1011,32 +1010,23 @@ const ONBOARDING_STEPS = Object.freeze({
         const cacheList = Array.from(guild.channels?.cache?.values?.() || guild.channels?.cache || []);
         const existing = cacheList.find((c) => ['starboard', 'hall-of-fame', 'stars', 'highlights'].includes(c?.name?.toLowerCase()));
         if (existing) {
-          await query(
-            `INSERT INTO starboard_configs (guild_id, channel_id, enabled, threshold, emoji)
-             VALUES ($1, $2, true, 3, '⭐')
-             ON CONFLICT (guild_id) DO UPDATE SET channel_id = EXCLUDED.channel_id, updated_at = NOW()`,
-            [guild.id, existing.id]
-          );
+          const { StarboardService } = require('../community/starboardService');
+          const starboard = new StarboardService();
+          await starboard.upsertConfig(guild.id, { channel_id: existing.id, enabled: true, star_threshold: 3, star_emoji: '⭐' });
           return { result: `Assigned existing <#${existing.id}>` };
         }
         return { result: 'Starboard enabled' };
       },
       async applySelection(guild, channelId) {
-        await query(
-          `INSERT INTO starboard_configs (guild_id, channel_id, enabled, threshold, emoji)
-           VALUES ($1, $2, true, 3, '⭐')
-           ON CONFLICT (guild_id) DO UPDATE SET channel_id = EXCLUDED.channel_id, updated_at = NOW()`,
-          [guild.id, channelId]
-        );
+        const { StarboardService } = require('../community/starboardService');
+        const starboard = new StarboardService();
+        await starboard.upsertConfig(guild.id, { channel_id: channelId, enabled: true, star_threshold: 3, star_emoji: '⭐' });
       },
       async autoCreate(guild) {
         const channel = await autoCreateChannel(guild, { name: 'starboard', categoryName: STANDARD_CATEGORIES.COMMUNITY.name, isPrivate: false, topic: 'Community Hall of Fame — Starred messages' });
-        await query(
-          `INSERT INTO starboard_configs (guild_id, channel_id, enabled, threshold, emoji)
-           VALUES ($1, $2, true, 3, '⭐')
-           ON CONFLICT (guild_id) DO UPDATE SET channel_id = EXCLUDED.channel_id, updated_at = NOW()`,
-          [guild.id, channel.id]
-        );
+        const { StarboardService } = require('../community/starboardService');
+        const starboard = new StarboardService();
+        await starboard.upsertConfig(guild.id, { channel_id: channel.id, enabled: true, star_threshold: 3, star_emoji: '⭐' });
         const starEmbed = createBaseEmbed({
           title: '⭐ Community Starboard / Hall of Fame',
           description: [
@@ -1925,15 +1915,14 @@ const ONBOARDING_STEPS = Object.freeze({
         const { SuggestionService } = require('../community/suggestionService');
         const suggestions = new SuggestionService();
         await suggestions.setup(guild.id, { channelId: channel.id, autoCreateThreads: false, panelActive: true });
-        await suggestions.postPanel({ guild, channel, pin: true }).catch(async () => {
+        await suggestions.postPanel({ guild, channel }).catch(async () => {
           const cfg = await suggestions.getConfig(guild.id);
           const panelPayload = suggestions.buildPanelPayload(cfg);
           if (channel && typeof channel.send === 'function') {
-            const msg = await channel.send(panelPayload).catch(() => null);
-            if (msg && typeof msg.pin === 'function') await msg.pin().catch(() => {});
+            await channel.send(panelPayload).catch(() => null);
           }
         });
-        return { created: `#${channel.name} (Suggestion Panel published & pinned)` };
+        return { created: `#${channel.name} (Suggestion Panel published)` };
       }
     }
   ],
@@ -2983,32 +2972,23 @@ const ONBOARDING_STEPS = Object.freeze({
         const cacheList = Array.from(guild.channels?.cache?.values?.() || guild.channels?.cache || []);
         const existing = cacheList.find((c) => ['starboard', 'hall-of-fame', 'stars', 'highlights'].includes(c?.name?.toLowerCase()));
         if (existing) {
-          await query(
-            `INSERT INTO starboard_configs (guild_id, channel_id, enabled, threshold, emoji)
-             VALUES ($1, $2, true, 3, '⭐')
-             ON CONFLICT (guild_id) DO UPDATE SET channel_id = EXCLUDED.channel_id, updated_at = NOW()`,
-            [guild.id, existing.id]
-          );
+          const { StarboardService } = require('../community/starboardService');
+          const starboard = new StarboardService();
+          await starboard.upsertConfig(guild.id, { channel_id: existing.id, enabled: true, star_threshold: 3, star_emoji: '⭐' });
           return { result: `Assigned existing <#${existing.id}>` };
         }
         return { result: 'Starboard enabled' };
       },
       async applySelection(guild, channelId) {
-        await query(
-          `INSERT INTO starboard_configs (guild_id, channel_id, enabled, threshold, emoji)
-           VALUES ($1, $2, true, 3, '⭐')
-           ON CONFLICT (guild_id) DO UPDATE SET channel_id = EXCLUDED.channel_id, updated_at = NOW()`,
-          [guild.id, channelId]
-        );
+        const { StarboardService } = require('../community/starboardService');
+        const starboard = new StarboardService();
+        await starboard.upsertConfig(guild.id, { channel_id: channelId, enabled: true, star_threshold: 3, star_emoji: '⭐' });
       },
       async autoCreate(guild) {
         const channel = await autoCreateChannel(guild, { name: 'starboard', categoryName: STANDARD_CATEGORIES.COMMUNITY.name, isPrivate: false, topic: 'Community Hall of Fame — Starred messages' });
-        await query(
-          `INSERT INTO starboard_configs (guild_id, channel_id, enabled, threshold, emoji)
-           VALUES ($1, $2, true, 3, '⭐')
-           ON CONFLICT (guild_id) DO UPDATE SET channel_id = EXCLUDED.channel_id, updated_at = NOW()`,
-          [guild.id, channel.id]
-        );
+        const { StarboardService } = require('../community/starboardService');
+        const starboard = new StarboardService();
+        await starboard.upsertConfig(guild.id, { channel_id: channel.id, enabled: true, star_threshold: 3, star_emoji: '⭐' });
         const starEmbed = createBaseEmbed({
           title: '⭐ Community Starboard / Hall of Fame',
           description: [

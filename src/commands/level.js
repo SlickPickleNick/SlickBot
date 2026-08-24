@@ -31,6 +31,19 @@ module.exports = {
       .addIntegerOption((o) => o.setName('voice_min_members').setDescription('Min non-bot members in VC to earn Voice XP (anti-farming).').setMinValue(1).setMaxValue(20).setRequired(false))
       .addBooleanOption((o) => o.setName('voice_require_unmuted').setDescription('Require members to be unmuted/undeafened for Voice XP.').setRequired(false)))
     .addSubcommand((sub) => sub.setName('rank').setDescription('View a user’s XP rank and voice activity.').addUserOption((o) => o.setName('user').setDescription('User to view. Defaults to you.').setRequired(false)))
+    .addSubcommand((sub) => sub.setName('card').setDescription('Customize your personal rank card background and theme.')
+      .addStringOption((o) => o.setName('theme').setDescription('Choose a card color theme.').addChoices(
+        { name: 'Slick Neon (Default)', value: 'NEON' },
+        { name: 'Dark Mode', value: 'DARK' },
+        { name: 'Cyberpunk Purple', value: 'CYBERPUNK' },
+        { name: 'Ocean Blue', value: 'OCEAN' },
+        { name: 'Sunset Orange', value: 'SUNSET' },
+        { name: 'Emerald Green', value: 'EMERALD' },
+        { name: 'Rose Gold', value: 'ROSE' }
+      ).setRequired(false))
+      .addStringOption((o) => o.setName('background_url').setDescription('Custom image/gif URL for your rank card background.').setMaxLength(500).setRequired(false))
+      .addStringOption((o) => o.setName('color').setDescription('Custom hex accent color (e.g. #FF5500).').setMaxLength(7).setRequired(false))
+      .addBooleanOption((o) => o.setName('reset').setDescription('Reset card customizations to server defaults.').setRequired(false)))
     .addSubcommand((sub) => sub.setName('leaderboard').setDescription('View the top XP users.'))
     .addSubcommand((sub) => sub.setName('role-add').setDescription('Assign a role automatically at a level.')
       .addIntegerOption((o) => o.setName('level').setDescription('Required level.').setMinValue(1).setMaxValue(10000).setRequired(true))
@@ -60,7 +73,7 @@ module.exports = {
   actionKey: ActionKeys.LevelingView,
   getActionKey(interaction) {
     const sub = interaction.options.getSubcommand();
-    if (['rank', 'leaderboard', 'info'].includes(sub)) return ActionKeys.LevelingUse;
+    if (['rank', 'card', 'leaderboard', 'info'].includes(sub)) return ActionKeys.LevelingUse;
     if (sub === 'manager' || sub === 'multiplier-list' || sub === 'analyze' || sub === 'voice-ignore-list') return ActionKeys.LevelingView;
     if (sub === 'set-xp' || sub === 'reset') return ActionKeys.LevelingAdjust;
     return ActionKeys.LevelingConfigure;
@@ -114,6 +127,61 @@ module.exports = {
     if (sub === 'rank') {
       const user = interaction.options.getUser('user') || interaction.user;
       return replyPrivate(interaction, { embeds: [leveling.buildRankEmbed(user, await leveling.getRank(interaction.guildId, user.id))], deleteAfterSeconds: 15 });
+    }
+
+    if (sub === 'card') {
+      const theme = interaction.options.getString('theme');
+      const backgroundUrl = interaction.options.getString('background_url');
+      const color = interaction.options.getString('color');
+      const reset = interaction.options.getBoolean('reset');
+
+      if (!theme && !backgroundUrl && !color && !reset) {
+        const rankData = await leveling.getRank(interaction.guildId, interaction.user.id);
+        return replyPrivate(interaction, {
+          embeds: [
+            createBaseEmbed({
+              title: '🎨 Rank Card Customization',
+              description: [
+                'Customize how your `/level rank` card looks to you and other members!',
+                '',
+                '**Available Options:**',
+                '• `/level card theme:<theme>` — Pick a preset color theme (Neon, Dark, Cyberpunk, Ocean, Sunset, Emerald, Rose)',
+                '• `/level card background_url:<url>` — Set a custom image/gif URL for your card background',
+                '• `/level card color:<hex>` — Set a custom hex accent color (e.g. `#FF007F`)',
+                '• `/level card reset:true` — Reset your card to server defaults',
+                '',
+                '**Your Current Card Preview:**'
+              ].join('\n'),
+              color: SlickBotColors.PRIMARY
+            }),
+            leveling.buildRankEmbed(interaction.user, rankData)
+          ]
+        });
+      }
+
+      if (backgroundUrl && !/^https?:\/\/.+/i.test(backgroundUrl)) {
+        return replyPrivate(interaction, {
+          embeds: [createWarningEmbed('Invalid Image URL', 'Please provide a valid direct image URL starting with `http://` or `https://`.')]
+        });
+      }
+
+      await leveling.updateCardCustomization(interaction.guildId, interaction.user.id, {
+        backgroundUrl: backgroundUrl || null,
+        color: color || null,
+        theme: theme || null,
+        reset: Boolean(reset)
+      });
+
+      const updatedRank = await leveling.getRank(interaction.guildId, interaction.user.id);
+      return replyPrivate(interaction, {
+        embeds: [
+          createSuccessEmbed(
+            reset ? 'Rank Card Reset' : 'Rank Card Updated',
+            reset ? 'Your rank card theme and background have been reset to defaults.' : 'Your personal rank card customization has been saved!'
+          ),
+          leveling.buildRankEmbed(interaction.user, updatedRank)
+        ]
+      });
     }
     if (sub === 'leaderboard') return replyPrivate(interaction, { embeds: [leveling.buildLeaderboardEmbed(await leveling.leaderboard(interaction.guildId, 10))], deleteAfterSeconds: 20 });
 

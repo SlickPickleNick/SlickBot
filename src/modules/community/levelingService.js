@@ -1,7 +1,17 @@
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 const { query } = require('../../services/db');
-const { createBaseEmbed, SlickBotColors } = require('../ui/uiService');
+const { createBaseEmbed, SlickBotColors, normalizeHexColor } = require('../ui/uiService');
 const { CustomIds } = require('../ui/customIds');
+
+const CARD_THEME_COLORS = Object.freeze({
+  NEON: '#7869ff',
+  DARK: '#2B2D31',
+  CYBERPUNK: '#FF007F',
+  OCEAN: '#00A8FF',
+  SUNSET: '#FF7F50',
+  EMERALD: '#2ECC71',
+  ROSE: '#E056FD'
+});
 
 function safeArray(value) {
   if (Array.isArray(value)) return value.map(String);
@@ -755,27 +765,74 @@ class LevelingService {
     return { embeds: [embed], components: [row1, row2] };
   }
 
+  async updateCardCustomization(guildId, userId, { backgroundUrl, color, theme, reset = false } = {}) {
+    if (reset) {
+      const res = await query(
+        `UPDATE leveling_profiles
+         SET card_background_url = NULL, card_color = NULL, card_theme = 'NEON', updated_at = NOW()
+         WHERE guild_id = $1 AND user_id = $2
+         RETURNING *`,
+        [guildId, userId]
+      );
+      return res.rows[0] || null;
+    }
+
+    const normalizedColor = color ? normalizeHexColor(color, null) : null;
+    const normalizedTheme = theme ? String(theme).toUpperCase() : null;
+    const res = await query(
+      `INSERT INTO leveling_profiles (guild_id, user_id, card_background_url, card_color, card_theme)
+       VALUES ($1, $2, $3, $4, COALESCE($5, 'NEON'))
+       ON CONFLICT (guild_id, user_id) DO UPDATE SET
+         card_background_url = CASE WHEN $3::text IS NOT NULL THEN $3::text ELSE leveling_profiles.card_background_url END,
+         card_color = CASE WHEN $4::text IS NOT NULL THEN $4::text ELSE leveling_profiles.card_color END,
+         card_theme = CASE WHEN $5::text IS NOT NULL THEN $5::text ELSE leveling_profiles.card_theme END,
+         updated_at = NOW()
+       RETURNING *`,
+      [guildId, userId, backgroundUrl || null, normalizedColor, normalizedTheme]
+    );
+    return res.rows[0];
+  }
+
   buildRankEmbed(user, rankData) {
-    if (!rankData) return createBaseEmbed({ title: `Rank • ${user.tag}`, description: 'This user has not earned XP yet.', color: SlickBotColors.WARNING });
-    const p = rankData.progress;
-    const voiceMinutes = Number(rankData.voiceMinutes || rankData.profile?.voice_minutes || 0);
+    const userTag = user?.tag || user?.username || 'User';
+    if (!rankData) return createBaseEmbed({ title: `Rank • ${userTag}`, description: 'This user has not earned XP yet.', color: SlickBotColors.WARNING });
+    const p = rankData.progress || { level: 0, xp: 0, currentXp: 0, neededXp: 100 };
+    const profile = rankData.profile || {};
+    const voiceMinutes = Number(rankData.voiceMinutes || profile.voice_minutes || 0);
     const voiceHours = Math.floor(voiceMinutes / 60);
     const remainingMins = voiceMinutes % 60;
     const voiceStr = voiceHours > 0 ? `${voiceHours}h ${remainingMins}m` : `${remainingMins}m`;
 
-    return createBaseEmbed({
-      title: `Rank • ${user.tag}`,
+    let embedColor = SlickBotColors.INFO;
+    if (profile.card_color) {
+      embedColor = normalizeHexColor(profile.card_color, SlickBotColors.INFO);
+    } else if (profile.card_theme && CARD_THEME_COLORS[profile.card_theme.toUpperCase()]) {
+      embedColor = CARD_THEME_COLORS[profile.card_theme.toUpperCase()];
+    }
+
+    const embed = createBaseEmbed({
+      title: `Rank • ${userTag}`,
       description: [
-        `Server Rank: **#${rankData.rank}**`,
+        `Server Rank: **#${rankData.rank || 1}**`,
         `Level: **${p.level}**`,
         `Total XP: **${p.xp.toLocaleString()}**`,
-        `Messages: **${Number(rankData.profile?.message_count || 0).toLocaleString()}**`,
+        `Messages: **${Number(profile.message_count || 0).toLocaleString()}**`,
         `Voice Activity: **${voiceStr}**`,
         `Progress: **${p.currentXp.toLocaleString()} / ${p.neededXp.toLocaleString()} XP**`,
         `\`${progressBar(p.currentXp, p.neededXp)}\``
       ].join('\n'),
-      color: SlickBotColors.INFO
+      color: embedColor
     });
+
+    if (user?.displayAvatarURL) {
+      embed.setThumbnail(user.displayAvatarURL({ dynamic: true, size: 256 }));
+    }
+
+    if (profile.card_background_url) {
+      embed.setImage(profile.card_background_url);
+    }
+
+    return embed;
   }
 
   buildLeaderboardEmbed(rows) {
