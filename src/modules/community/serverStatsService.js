@@ -25,6 +25,26 @@ class ServerStatsService {
     this.runningUpdates = new Map();
   }
 
+  invalidateGuild(guildId) {
+    if (!guildId) {
+      for (const timer of this.pendingUpdates.values()) clearTimeout(timer);
+      this.pendingUpdates.clear();
+      this.runningUpdates.clear();
+      return;
+    }
+    for (const [key, timer] of this.pendingUpdates.entries()) {
+      if (key.startsWith(`${guildId}:`)) {
+        clearTimeout(timer);
+        this.pendingUpdates.delete(key);
+      }
+    }
+    for (const key of this.runningUpdates.keys()) {
+      if (key.startsWith(`${guildId}:`)) {
+        this.runningUpdates.delete(key);
+      }
+    }
+  }
+
   async getConfig(guildId) {
     const result = await query(`SELECT * FROM server_stats_configs WHERE guild_id = $1 LIMIT 1`, [guildId]);
     if (result.rows[0]) return result.rows[0];

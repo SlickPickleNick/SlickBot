@@ -169,6 +169,10 @@ async function hasExistingNavigationMessage(thread, botUserId) {
 }
 
 class FaqService {
+  invalidateGuild(guildId) {
+    // Stateless query service with no persistent memory cache
+  }
+
   async getConfig(guildId) {
     const result = await query(`SELECT * FROM faq_configs WHERE guild_id = $1 LIMIT 1`, [guildId]);
     return result.rows[0] || null;

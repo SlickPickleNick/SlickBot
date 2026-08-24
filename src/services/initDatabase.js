@@ -10,6 +10,8 @@ async function initDatabase() {
       guild_name TEXT,
       timezone TEXT NOT NULL DEFAULT 'America/New_York',
       default_log_channel_id TEXT,
+      active BOOLEAN NOT NULL DEFAULT true,
+      left_at TIMESTAMPTZ,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
@@ -2141,6 +2143,10 @@ async function initDatabase() {
       UNIQUE(guild_id, original_message_id)
     );
   `);
+
+  await query(`ALTER TABLE guild_configs ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT true;`);
+  await query(`ALTER TABLE guild_configs ADD COLUMN IF NOT EXISTS left_at TIMESTAMPTZ;`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_guild_configs_active ON guild_configs(guild_id, active);`);
 
   await query(`CREATE INDEX IF NOT EXISTS idx_starboard_configs_guild ON starboard_configs(guild_id);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_starboard_entries_lookup ON starboard_entries(guild_id, original_message_id);`);

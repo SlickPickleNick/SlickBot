@@ -126,6 +126,14 @@ class SocialFeedService {
     this.tokenCache = new Map();
   }
 
+  invalidateGuild(guildId) {
+    if (!guildId) {
+      this.configCache.clear();
+      return;
+    }
+    this.configCache.delete(guildId);
+  }
+
   async getConfig(guildId) {
     if (this.configCache.has(guildId)) return this.configCache.get(guildId);
     const result = await query(`SELECT * FROM social_feed_configs WHERE guild_id = $1 LIMIT 1`, [guildId]);

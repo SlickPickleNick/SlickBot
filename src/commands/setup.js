@@ -163,7 +163,9 @@ module.exports = {
       const choices = [
         { name: '📋 Audit & Event Logging (LOGGING)', value: 'LOGGING' },
         { name: '🔐 Permissions & Staff Roles (PERMISSIONS)', value: 'PERMISSIONS' },
+        { name: '🤖 Bot Status & Diagnostics (STATUS)', value: 'STATUS' },
         { name: '👋 Welcome & Auto-Roles (WELCOME)', value: 'WELCOME' },
+        { name: '🔘 Reaction Roles & Panels (REACTION_ROLES)', value: 'REACTION_ROLES' },
         { name: '🎟️ Support Tickets (TICKETS)', value: 'TICKETS' },
         { name: '🚩 User & Message Reports (REPORTS)', value: 'REPORTS' },
         { name: '📝 Staff Applications (APPLICATIONS)', value: 'APPLICATIONS' },
@@ -183,8 +185,11 @@ module.exports = {
         { name: '🔔 Bot Updates & Releases (BOT_UPDATES)', value: 'BOT_UPDATES' },
         { name: '📺 Social Stream Alerts (SOCIAL_FEEDS)', value: 'SOCIAL_FEEDS' },
         { name: '🛡️ Moderation & Cases (MODERATION)', value: 'MODERATION' },
+        { name: '🤖 Auto-Mod & Anti-Raid (AUTOMOD)', value: 'AUTOMOD' },
         { name: '🔒 Emergency Lockdown (LOCKDOWN)', value: 'LOCKDOWN' },
-        { name: '⏳ Temporary Roles (TEMP_ROLES)', value: 'TEMP_ROLES' }
+        { name: '⏳ Temporary Roles (TEMP_ROLES)', value: 'TEMP_ROLES' },
+        { name: '🛠️ Utility & Tools (UTILITY)', value: 'UTILITY' },
+        { name: '⭐ Starboard / Hall of Fame (STARBOARD)', value: 'STARBOARD' }
       ];
 
       const queryText = String(focused.value || '').toLowerCase().trim();

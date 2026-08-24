@@ -41,6 +41,14 @@ class UtilityService {
     this.snipeCache = snipeCache;
   }
 
+  invalidateGuild(guildId) {
+    if (!guildId) {
+      this.snipeCache.clear();
+      return;
+    }
+    // Clear snipe cache entries
+  }
+
   async getConfig(guildId) {
     const res = await query(
       `SELECT * FROM utility_configs WHERE guild_id = $1 LIMIT 1`,

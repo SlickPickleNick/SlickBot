@@ -62,6 +62,16 @@ class JoinCreateService {
     this.recentCreates = new Map();
   }
 
+  invalidateGuild(guildId) {
+    if (!guildId) {
+      for (const timer of this.deleteTimers.values()) clearTimeout(timer);
+      this.deleteTimers.clear();
+      this.recentCreates.clear();
+      return;
+    }
+    this.recentCreates.delete(guildId);
+  }
+
   async getHubById(guildId, hubId) {
     const result = await query(`SELECT * FROM join_create_hubs WHERE guild_id = $1 AND id = $2 LIMIT 1`, [guildId, hubId]);
     return result.rows[0] || null;

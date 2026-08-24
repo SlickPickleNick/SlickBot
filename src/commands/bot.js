@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, MessageFlags } = require('discord.js');
+const { SlashCommandBuilder, MessageFlags, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const packageInfo = require('../../package.json');
 const { query } = require('../services/db');
 const { ModuleKeys, defaultModules, implementedModules, isImplementedModule } = require('../modules/moduleRegistry');
@@ -11,6 +11,7 @@ const {
 const { replyPrivate } = require('../utils/reply');
 const { createBaseEmbed, createSuccessEmbed, SlickBotColors } = require('../modules/ui/uiService');
 const { getModuleStatus } = require('../modules/ui/panels');
+const { formatDuration } = require('../utils/time');
 
 const MODULE_CHECKS = {
   [ModuleKeys.PERMISSIONS]: [
@@ -280,13 +281,17 @@ function compactDetail(value, maxLength = 190) {
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('bot')
-    .setDescription('SlickBot diagnostics and version tools.')
+    .setDescription('SlickBot diagnostics, telemetry, and version tools.')
     .addSubcommand((subcommand) => subcommand.setName('version').setDescription('Show the currently running SlickBot version.'))
+    .addSubcommand((subcommand) => subcommand.setName('info').setDescription('View global bot telemetry, server count, memory, and cluster health.'))
+    .addSubcommand((subcommand) => subcommand.setName('invite').setDescription('Get the official SlickBot server invite link with setup guide.'))
     .addSubcommand((subcommand) => subcommand.setName('test').setDescription('Run a safe diagnostic check for SlickBot modules.')),
   moduleKey: ModuleKeys.STATUS,
   getActionKey(interaction) {
     const subcommand = interaction.options.getSubcommand();
     if (subcommand === 'test') return ActionKeys.BotTest;
+    if (subcommand === 'info') return ActionKeys.BotInfo;
+    if (subcommand === 'invite') return ActionKeys.BotInvite;
     return ActionKeys.BotVersion;
   },
   async execute(interaction, ctx) {
@@ -296,6 +301,69 @@ module.exports = {
       return replyPrivate(interaction, {
         embeds: [createSuccessEmbed('SlickBot Version', `Running **SlickBot v${packageInfo.version}**.\nPermission defaults: **${PERMISSION_DEFAULTS_VERSION}**.`)]
       });
+    }
+
+    if (subcommand === 'invite') {
+      const { buildInvitePayload } = require('./invite');
+      const clientId = interaction.client.user?.id || interaction.applicationId;
+      return replyPrivate(interaction, buildInvitePayload(clientId));
+    }
+
+    if (subcommand === 'info') {
+      const startDb = Date.now();
+      let dbPing = 'OK';
+      try {
+        await query('SELECT 1');
+        dbPing = `${Date.now() - startDb}ms`;
+      } catch {
+        dbPing = 'Error';
+      }
+
+      const uptimeMs = process.uptime() * 1000;
+      const uptimeStr = formatDuration(uptimeMs, { short: false });
+      const serverCount = interaction.client.guilds?.cache?.size || 1;
+      const memberCount = Array.from(interaction.client.guilds?.cache?.values() || []).reduce((sum, g) => sum + (g.memberCount || 0), 0);
+      const mem = process.memoryUsage();
+      const heapUsedMb = (mem.heapUsed / 1024 / 1024).toFixed(1);
+      const rssMb = (mem.rss / 1024 / 1024).toFixed(1);
+
+      const embed = createBaseEmbed({
+        title: 'SlickBot Telemetry & System Status 📊',
+        description: [
+          `**SlickBot v${packageInfo.version}** · *Multi-Server Operations Engine*`,
+          '',
+          '**Global Network Reach**',
+          `• Active Discord Servers: **${serverCount.toLocaleString()}**`,
+          `• Cached Member Reach: **${memberCount.toLocaleString()}**`,
+          `• Gateway Shard ID: **#${interaction.guild?.shardId ?? 0}**`,
+          '',
+          '**Runtime & Diagnostics**',
+          `• Process Uptime: **${uptimeStr}**`,
+          `• Memory Usage: **${heapUsedMb} MB** heap / **${rssMb} MB** RSS`,
+          `• PostgreSQL Database Ping: **${dbPing}**`,
+          `• Node.js: **${process.version}** · Discord.js: **v${require('discord.js').version}**`,
+          '',
+          '**Configured Modules**',
+          `• Total Modules: **${implementedModules.length}** active modules`,
+          `• Permission Engine: **v${PERMISSION_DEFAULTS_VERSION}** defaults`
+        ].join('\n'),
+        color: SlickBotColors.PRIMARY,
+        footer: `SlickBot System Telemetry • Guild ID: ${interaction.guildId}`
+      });
+
+      const { buildInviteUrl } = require('./invite');
+      const clientId = interaction.client.user?.id || interaction.applicationId;
+      const inviteUrl = buildInviteUrl(clientId);
+
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setLabel('Invite to Another Server')
+          .setStyle(ButtonStyle.Link)
+          .setURL(inviteUrl)
+          .setEmoji('🔗')
+      );
+
+      return replyPrivate(interaction, { embeds: [embed], components: [row] });
     }
 
     if (!interaction.deferred && !interaction.replied) {

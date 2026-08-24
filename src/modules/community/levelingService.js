@@ -72,6 +72,18 @@ class LevelingService {
     else this.multiplierCache.clear();
   }
 
+  invalidateGuild(guildId) {
+    if (!guildId) {
+      this.clearAllCaches();
+      return;
+    }
+    this.configCache.delete(guildId);
+    this.multiplierCache.delete(guildId);
+    for (const key of this.cooldownCache.keys()) {
+      if (key.startsWith(`${guildId}:`)) this.cooldownCache.delete(key);
+    }
+  }
+
   clearAllCaches() {
     this.configCache.clear();
     this.multiplierCache.clear();

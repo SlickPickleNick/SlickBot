@@ -118,6 +118,20 @@ class AutoModService {
     activeRaidAlerts.clear();
   }
 
+  invalidateGuild(guildId) {
+    if (!guildId) {
+      this.clearAllCaches();
+      return;
+    }
+    configCache.delete(guildId);
+    blacklistCache.delete(guildId);
+    joinHistory.delete(guildId);
+    activeRaidAlerts.delete(guildId);
+    for (const key of messageHistory.keys()) {
+      if (key.startsWith(`${guildId}:`)) messageHistory.delete(key);
+    }
+  }
+
   invalidateConfigCache(guildId) {
     if (guildId) configCache.delete(guildId);
     else configCache.clear();

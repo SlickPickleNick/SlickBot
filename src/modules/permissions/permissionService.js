@@ -45,6 +45,20 @@ class PermissionService {
     else this.requiredLevelCache.clear();
   }
 
+  invalidateGuild(guildId) {
+    if (!guildId) {
+      this.clearAllCaches();
+      return;
+    }
+    this.seededGuilds.delete(guildId);
+    this.ignoredUsersCache.delete(guildId);
+    this.moduleEnabledCache.delete(guildId);
+    this.publicActionCache.delete(guildId);
+    for (const key of this.requiredLevelCache.keys()) {
+      if (key.startsWith(`${guildId}:`)) this.requiredLevelCache.delete(key);
+    }
+  }
+
   clearAllCaches() {
     this.seededGuilds.clear();
     this.ignoredUsersCache.clear();
@@ -58,10 +72,14 @@ class PermissionService {
     if (!force && this.seededGuilds.has(guildId)) return;
 
     await query(
-      `INSERT INTO guild_configs (guild_id, guild_name, timezone)
-       VALUES ($1, $2, $3)
+      `INSERT INTO guild_configs (guild_id, guild_name, timezone, active, left_at)
+       VALUES ($1, $2, $3, true, NULL)
        ON CONFLICT (guild_id)
-       DO UPDATE SET guild_name = EXCLUDED.guild_name, updated_at = NOW()`,
+       DO UPDATE SET
+         guild_name = EXCLUDED.guild_name,
+         active = true,
+         left_at = NULL,
+         updated_at = NOW()`,
       [guildId, guildName, env.DEFAULT_TIMEZONE]
     );
 

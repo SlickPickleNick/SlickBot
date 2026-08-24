@@ -3,7 +3,7 @@ const { env, shouldAutoDeployCommands } = require('./config/env');
 const { commandMap } = require('./commands');
 const { deployCommands } = require('./deployCommands');
 const { initDatabase } = require('./services/initDatabase');
-const { closeDatabase } = require('./services/db');
+const { query, closeDatabase } = require('./services/db');
 const { startHealthServer } = require('./services/healthServer');
 const { replyPrivate } = require('./utils/reply');
 const { PermissionService } = require('./modules/permissions/permissionService');
@@ -159,8 +159,13 @@ taskScheduler
     initialDelayMs: 30 * 1000,
     immediate: false,
     run: async (readyClient, log) => {
-      for (const guild of readyClient.guilds.cache.values()) {
+      const guilds = Array.from(readyClient.guilds.cache.values());
+      for (let i = 0; i < guilds.length; i++) {
+        const guild = guilds[i];
         await serverStats.updateStats(guild, log, '15-minute scheduled interval', { forceMemberFetch: false }).catch(() => {});
+        if (i < guilds.length - 1) {
+          await new Promise((resolve) => setTimeout(resolve, 1500));
+        }
       }
     }
   });
@@ -213,12 +218,52 @@ client.on(Events.GuildCreate, async (guild) => {
     const onboarding = new OnboardingService();
     const payload = onboarding.buildGuildJoinGreetingPayload(guild);
     const targetChannel = guild.systemChannel || guild.channels.cache.find((c) => c.isTextBased() && c.permissionsFor(guild.members.me)?.has('SendMessages'));
+    let sent = false;
     if (targetChannel && typeof targetChannel.send === 'function') {
-      await targetChannel.send(payload).catch(() => {});
+      const msg = await targetChannel.send(payload).catch(() => null);
+      if (msg) sent = true;
+    }
+
+    // Fallback: If channel greeting could not be posted, send setup greeting directly to the server owner
+    if (!sent) {
+      const owner = await guild.fetchOwner().catch(() => null);
+      if (owner && typeof owner.send === 'function') {
+        await owner.send(payload).catch(() => {});
+      }
     }
   } catch (err) {
     console.error(`Failed to send join greeting in ${guild.name}:`, err);
   }
+});
+
+client.on(Events.GuildDelete, async (guild) => {
+  console.log(`SlickBot removed from guild: ${guild.name} (${guild.id})`);
+
+  // Evict guild from in-memory service caches
+  permissions.invalidateGuild(guild.id);
+  autoMod.invalidateGuild(guild.id);
+  leveling.invalidateGuild(guild.id);
+  serverStats.invalidateGuild(guild.id);
+  utility.invalidateGuild(guild.id);
+  joinCreate.invalidateGuild(guild.id);
+  socialFeeds.invalidateGuild(guild.id);
+  birthdays.invalidateGuild(guild.id);
+
+  // Mark guild inactive in database
+  await query(
+    `UPDATE guild_configs
+     SET active = false, left_at = NOW(), updated_at = NOW()
+     WHERE guild_id = $1`,
+    [guild.id]
+  ).catch((err) => console.error(`Failed to mark guild ${guild.id} inactive on GuildDelete:`, err));
+
+  await logger.writeAudit({
+    guildId: guild.id,
+    actionKey: 'guild.left',
+    targetType: 'Guild',
+    targetId: guild.id,
+    summary: `SlickBot left or was removed from guild ${guild.name}.`
+  }).catch(() => {});
 });
 
 client.on(Events.ChannelCreate, async (channel) => {

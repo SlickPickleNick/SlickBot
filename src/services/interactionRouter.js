@@ -1119,6 +1119,18 @@ async function handleButton(interaction, ctx) {
     return true;
   }
 
+  if (id === CustomIds.SetupModules || id === CustomIds.ModulesRefresh) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.Setup, ModuleKeys.PERMISSIONS))) return true;
+    await updatePanel(interaction, await buildModulesPanel(interaction.guildId));
+    return true;
+  }
+
+  if (id.startsWith(CustomIds.SetupOpenManagerPrefix)) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.Setup, ModuleKeys.PERMISSIONS))) return true;
+    const moduleKey = id.slice(CustomIds.SetupOpenManagerPrefix.length);
+    return routeModuleToManager(interaction, ctx, moduleKey);
+  }
+
   if (id === CustomIds.SetupCategoryCore) {
     if (!(await requireAction(interaction, ctx, ActionKeys.Setup, ModuleKeys.PERMISSIONS))) return true;
     await updatePanel(interaction, await buildCategoryPanel(interaction.guildId, 'CORE'));
@@ -2491,6 +2503,35 @@ async function handleSelect(interaction, ctx) {
   if (id === CustomIds.SetupModuleSelect || id === CustomIds.ModulesDetailSelect) {
     const moduleKey = interaction.values?.[0];
     return routeModuleToManager(interaction, ctx, moduleKey);
+  }
+
+  if (id.startsWith(CustomIds.CategoryToggleSelectPrefix)) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.ModulesManage, ModuleKeys.PERMISSIONS))) return true;
+    const categoryKey = id.slice(CustomIds.CategoryToggleSelectPrefix.length);
+    const moduleKey = interaction.values?.[0];
+    if (moduleKey && !isCoreModule(moduleKey)) {
+      const current = await query(`SELECT enabled FROM module_configs WHERE guild_id = $1 AND module_key = $2 LIMIT 1`, [interaction.guildId, moduleKey]);
+      const nextEnabled = !(current.rows[0]?.enabled);
+      await ctx.permissions.setModuleEnabled(interaction.guildId, moduleKey, nextEnabled);
+      await ctx.logger.writeAudit({ guildId: interaction.guildId, actorUserId: interaction.user.id, actionKey: ActionKeys.ModulesManage, targetType: 'ModuleConfig', targetId: moduleKey, summary: `${moduleKey} module ${nextEnabled ? 'enabled' : 'disabled'} via category quick toggle.` });
+      await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'module-config', title: `Module ${nextEnabled ? 'Enabled' : 'Disabled'}`, body: [`Module: **${moduleKey}**`, `Updated By: <@${interaction.user.id}>`, `Status: **${nextEnabled ? '🟢 Enabled' : '⏸️ Disabled'}**`].join('\n'), metadata: { moduleKey, enabled: nextEnabled, actorUserId: interaction.user.id } });
+    }
+    await updatePanel(interaction, await buildCategoryPanel(interaction.guildId, categoryKey));
+    return true;
+  }
+
+  if (id === CustomIds.ModulesSelect) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.ModulesManage, ModuleKeys.PERMISSIONS))) return true;
+    const moduleKey = interaction.values?.[0];
+    if (moduleKey && !isCoreModule(moduleKey)) {
+      const current = await query(`SELECT enabled FROM module_configs WHERE guild_id = $1 AND module_key = $2 LIMIT 1`, [interaction.guildId, moduleKey]);
+      const nextEnabled = !(current.rows[0]?.enabled);
+      await ctx.permissions.setModuleEnabled(interaction.guildId, moduleKey, nextEnabled);
+      await ctx.logger.writeAudit({ guildId: interaction.guildId, actorUserId: interaction.user.id, actionKey: ActionKeys.ModulesManage, targetType: 'ModuleConfig', targetId: moduleKey, summary: `${moduleKey} module ${nextEnabled ? 'enabled' : 'disabled'} via module select.` });
+      await ctx.logger.log({ guildId: interaction.guildId, eventKey: 'module-config', title: `Module ${nextEnabled ? 'Enabled' : 'Disabled'}`, body: [`Module: **${moduleKey}**`, `Updated By: <@${interaction.user.id}>`, `Status: **${nextEnabled ? '🟢 Enabled' : '⏸️ Disabled'}**`].join('\n'), metadata: { moduleKey, enabled: nextEnabled, actorUserId: interaction.user.id } });
+    }
+    await updatePanel(interaction, await buildModulesPanel(interaction.guildId));
+    return true;
   }
 
   if (id === CustomIds.PermissionsSetAdminRole) {

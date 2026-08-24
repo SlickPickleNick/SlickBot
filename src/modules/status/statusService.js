@@ -78,10 +78,24 @@ class StatusService {
     return ActivityTypeNames.NONE;
   }
 
+  formatActivityText(text) {
+    if (!text) return '';
+    const serverCount = this.client?.guilds?.cache?.size || 1;
+    const guilds = Array.from(this.client?.guilds?.cache?.values() || []);
+    const userCount = guilds.reduce((acc, g) => acc + (g.memberCount || 0), 0) || 0;
+    return String(text)
+      .replaceAll('{serverCount}', String(serverCount))
+      .replaceAll('{servers}', String(serverCount))
+      .replaceAll('{userCount}', String(userCount))
+      .replaceAll('{users}', String(userCount))
+      .replaceAll('{help}', '/help')
+      .trim();
+  }
+
   buildPresenceOptions(input = {}) {
     const status = this.normalizeStatus(input.status);
     const activityType = this.normalizeActivityType(input.activityType);
-    const activityText = input.activityText ? String(input.activityText).trim() : '';
+    const activityText = input.activityText ? this.formatActivityText(input.activityText) : '';
     const activityUrl = input.activityUrl ? String(input.activityUrl).trim() : null;
 
     const presence = { status, activities: [] };

@@ -286,6 +286,16 @@ function buildBirthdayPublicPanel(config) {
 }
 
 class BirthdayService {
+  invalidateGuild(guildId) {
+    if (!guildId) {
+      BIRTHDAY_SESSIONS.clear();
+      return;
+    }
+    for (const [id, session] of BIRTHDAY_SESSIONS.entries()) {
+      if (session.guildId === guildId) BIRTHDAY_SESSIONS.delete(id);
+    }
+  }
+
   async getConfig(guildId) {
     const result = await query(`SELECT * FROM birthday_configs WHERE guild_id = $1 LIMIT 1`, [guildId]);
     if (result.rows[0]) return result.rows[0];
