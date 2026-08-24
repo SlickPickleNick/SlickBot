@@ -712,6 +712,7 @@ function buildBirthdayEditModal(config) {
 
 module.exports = {
   BirthdayService,
+  buildBirthdayPublicPanel,
   birthdaySavedEmbed,
   birthdayNotFoundEmbed,
   formatBirthday,

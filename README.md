@@ -25,7 +25,7 @@ Current package: **v0.9.8**
   - Added `[member:@User]` option in `/feed add` and `/feed edit` linking external channels to Discord members.
   - Added `{member}` placeholder token in custom announcement templates and community member attribution badges on announcements and directory embeds.
 - **Custom Twitch & YouTube Emoji Buttons:**
-  - Integrated custom guild emojis `<:Twitch:1518149495404232795>` and `<:YouTube:1518149530661425272>` onto all live stream / video action buttons and directory cards.
+  - Integrated custom application emojis `<:SlickBotTwitch:1541277492604698644>` and `<:SlickBotYT:1541277491816177694>` onto all live stream / video action buttons and directory cards across all servers.
 - **Server Emoji & Sticker Showcase Utility:**
   - Added `/emojis [page]` to browse all uploaded custom static and animated emojis with live slot usage (`X/100`), boost tier info, and interactive pagination.
   - Added `/stickers [page]` to inspect all custom server stickers with formats (PNG, APNG, Lottie, GIF), tags, descriptions, direct CDN asset links, and interactive pagination.

@@ -14,9 +14,9 @@ const PLATFORM_META = Object.freeze({
     key: PLATFORM_KEYS.TWITCH,
     label: 'Twitch',
     color: 0x9146FF,
-    icon: '<:Twitch:1518149495404232795>',
-    emoji: '<:Twitch:1518149495404232795>',
-    buttonEmoji: '1518149495404232795',
+    icon: '<:SlickBotTwitch:1541277492604698644>',
+    emoji: '<:SlickBotTwitch:1541277492604698644>',
+    buttonEmoji: '1541277492604698644',
     defaultUrl: (handle) => `https://twitch.tv/${handle}`,
     supportsLive: true
   },
@@ -24,9 +24,9 @@ const PLATFORM_META = Object.freeze({
     key: PLATFORM_KEYS.YOUTUBE,
     label: 'YouTube',
     color: 0xFF0000,
-    icon: '<:YouTube:1518149530661425272>',
-    emoji: '<:YouTube:1518149530661425272>',
-    buttonEmoji: '1518149530661425272',
+    icon: '<:SlickBotYT:1541277491816177694>',
+    emoji: '<:SlickBotYT:1541277491816177694>',
+    buttonEmoji: '1541277491816177694',
     defaultUrl: (handle) => handle.startsWith('UC') ? `https://youtube.com/channel/${handle}` : `https://youtube.com/@${handle.replace(/^@/, '')}`,
     supportsShorts: true
   }

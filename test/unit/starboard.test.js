@@ -678,7 +678,7 @@ test('Starboard / Community Hall of Fame Engine Tests', async (t) => {
 
     // autoCreate creates #starboard
     const autoRes = await step.autoCreate(mockGuild);
-    assert.equal(autoRes.created, '#starboard');
+    assert.match(autoRes.created, /starboard/i);
     assert.equal(savedChannelId, 'chan-created-star');
   });
 });

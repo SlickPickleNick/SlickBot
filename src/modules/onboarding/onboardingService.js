@@ -24,13 +24,16 @@ async function autoCreateRole(guild, { name, color = '#7869ff', mentionable = fa
   if (existing) return existing;
 
   const hexColor = color.startsWith('#') ? Number.parseInt(color.slice(1), 16) : SlickBotColors.PRIMARY;
-  return guild.roles.create({
+  const rolePayload = {
     name,
-    color: Number.isFinite(hexColor) ? hexColor : undefined,
     mentionable: Boolean(mentionable),
     permissions: permissions.length ? permissions : undefined,
     reason
-  });
+  };
+  if (Number.isFinite(hexColor)) {
+    rolePayload.colors = { primaryColor: hexColor };
+  }
+  return guild.roles.create(rolePayload);
 }
 
 async function autoCreateChannel(guild, {
@@ -94,13 +97,28 @@ async function autoCreateChannel(guild, {
   });
 }
 
+const COLOR_PRESET_OPTIONS = Object.freeze([
+  { name: 'Red', hex: '#e74c3c', emoji: '🔴' },
+  { name: 'Orange', hex: '#e67e22', emoji: '🟠' },
+  { name: 'Yellow', hex: '#f1c40f', emoji: '🟡' },
+  { name: 'Green', hex: '#2ecc71', emoji: '🟢' },
+  { name: 'Blue', hex: '#3498db', emoji: '🔵' },
+  { name: 'Purple', hex: '#9b59b6', emoji: '🟣' },
+  { name: 'Pink', hex: '#e91e63', emoji: '🌸' },
+  { name: 'Cyan', hex: '#1abc9c', emoji: '🩵' }
+]);
+
 const ONBOARDING_STEPS = Object.freeze({
   SERVER_ONBOARDING: [
     {
       id: 'server_roles',
       moduleKey: ModuleKeys.PERMISSIONS,
+      moduleName: 'Staff Roles & Permissions',
+      categoryKey: 'CORE',
+      categoryLabel: 'Core & Administration',
+      moduleOverview: 'Manage administrative and moderator role hierarchies to define who can moderate members and configure bot settings.',
       title: 'Administrator & Moderator Roles',
-      description: 'Set your staff roles so SlickBot knows who has permission to configure modules, manage settings, and moderate members.',
+      description: 'Set your primary staff roles so SlickBot knows who has permission to configure modules, manage settings, and moderate members.',
       pickerType: 'ROLE',
       autoCreateLabel: 'Auto-Create Staff Roles',
       autoCreateDescription: 'Creates @Admin and @Moderator roles with standard management permissions.',
@@ -134,11 +152,15 @@ const ONBOARDING_STEPS = Object.freeze({
     {
       id: 'server_logging',
       moduleKey: ModuleKeys.LOGGING,
-      title: 'Audit & Moderation Logging',
+      moduleName: 'Audit & Moderation Logging',
+      categoryKey: 'CORE',
+      categoryLabel: 'Core & Administration',
+      moduleOverview: 'Centralized audit log hubs recording moderation actions, member joins/leaves, role edits, message updates, and system events.',
+      title: 'Audit & Moderation Logging Channels',
       description: 'Choose where SlickBot records moderation events, role changes, member joins, and server audits.',
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildText],
-      autoCreateLabel: 'Auto-Create #bot-logs',
+      autoCreateLabel: 'Auto-Create #bot-logs & #mod-logs',
       autoCreateDescription: 'Creates private #bot-logs and #mod-logs channels for staff.',
       async getCurrent(guild) {
         const res = await query(`SELECT channel_id FROM log_module_settings WHERE guild_id = $1 AND LOWER(module_key) = 'core' AND enabled = true`, [guild.id]).catch(() => ({ rows: [] }));
@@ -170,10 +192,69 @@ const ONBOARDING_STEPS = Object.freeze({
       }
     },
     {
+      id: 'server_automod',
+      moduleKey: ModuleKeys.AUTOMOD,
+      moduleName: 'Automated Moderation & Anti-Raid',
+      categoryKey: 'CORE',
+      categoryLabel: 'Core & Administration',
+      moduleOverview: 'Real-time defense against spam, mass mentions, invite links, scam words, and raid surges with automatic timeouts and lockdowns.',
+      title: 'Anti-Raid Alert Channel & Timeout Role',
+      description: 'Select the staff channel where emergency raid alerts will be sent and configure the @Timeout quarantine role.',
+      pickerType: 'CHANNEL',
+      channelTypes: [ChannelType.GuildText, ChannelType.GuildAnnouncement],
+      autoCreateLabel: 'Auto-Create #staff-alerts & @Timeout',
+      autoCreateDescription: 'Creates private #staff-alerts channel and provisions @Timeout role.',
+      async getCurrent(guild) {
+        const res = await query(`SELECT raid_alert_channel_id, timeout_role_id FROM automod_configs WHERE guild_id = $1 LIMIT 1`, [guild.id]).catch(() => ({ rows: [] }));
+        const id = res.rows[0]?.raid_alert_channel_id;
+        const roleId = res.rows[0]?.timeout_role_id;
+        if (!id && !roleId) return null;
+        return [id ? `<#${id}>` : null, roleId ? `<@&${roleId}>` : null].filter(Boolean).join(', ');
+      },
+      async applyDefault(guild) {
+        const target = guild.channels?.cache?.find((c) => ['mod-log', 'mod-logs', 'staff', 'admin-logs', 'staff-alerts'].includes(c.name.toLowerCase()));
+        if (target) {
+          await query(
+            `INSERT INTO automod_configs (guild_id, raid_alert_channel_id, enabled, raid_shield_enabled)
+             VALUES ($1, $2, true, true)
+             ON CONFLICT (guild_id) DO UPDATE SET raid_alert_channel_id = EXCLUDED.raid_alert_channel_id, updated_at = NOW()`,
+            [guild.id, target.id]
+          );
+          return { result: `Assigned raid alerts to <#${target.id}>` };
+        }
+        return { result: 'Auto-Mod & Anti-Raid shield ready' };
+      },
+      async applySelection(guild, channelId) {
+        await query(
+          `INSERT INTO automod_configs (guild_id, raid_alert_channel_id, enabled, raid_shield_enabled)
+           VALUES ($1, $2, true, true)
+           ON CONFLICT (guild_id) DO UPDATE SET raid_alert_channel_id = EXCLUDED.raid_alert_channel_id, updated_at = NOW()`,
+          [guild.id, channelId]
+        );
+      },
+      async autoCreate(guild) {
+        const channel = await autoCreateChannel(guild, { name: 'staff-alerts', isPrivate: true, topic: 'Emergency server alerts and anti-raid notifications' });
+        const { AutoModService } = require('../moderation/autoModService');
+        const autoMod = new AutoModService();
+        const roleRes = await autoMod.createTimeoutRole(guild).catch(() => null);
+        await query(
+          `INSERT INTO automod_configs (guild_id, raid_alert_channel_id, enabled, raid_shield_enabled)
+           VALUES ($1, $2, true, true)
+           ON CONFLICT (guild_id) DO UPDATE SET raid_alert_channel_id = EXCLUDED.raid_alert_channel_id, updated_at = NOW()`,
+          [guild.id, channel.id]
+        );
+        return { created: `#${channel.name}${roleRes?.role ? `, @${roleRes.role.name}` : ''}` };
+      }
+    },
+    {
       id: 'server_welcome',
       moduleKey: ModuleKeys.WELCOME,
+      moduleName: 'Welcome Greetings & Auto-Roles',
+      categoryKey: 'COMMUNITY',
+      categoryLabel: 'Community & Engagement',
+      moduleOverview: 'Greet new members with personalized arrival embeds and assign starter roles automatically upon joining.',
       title: 'Welcome Channel & Member Role',
-      description: 'Set a channel to greet new members when they join, and optionally give them a starting role.',
+      description: 'Set a channel to greet new members when they join, and assign an automatic starting role.',
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildText],
       autoCreateLabel: 'Auto-Create #welcome & @Member',
@@ -206,14 +287,130 @@ const ONBOARDING_STEPS = Object.freeze({
       }
     },
     {
-      id: 'server_support',
+      id: 'server_reaction_roles',
+      moduleKey: ModuleKeys.REACTION_ROLES,
+      moduleName: 'Self-Assignable Role Panels',
+      categoryKey: 'COMMUNITY',
+      categoryLabel: 'Community & Engagement',
+      moduleOverview: 'Allow members to toggle notification, interest, and community roles through interactive button panels.',
+      title: 'Notification & Community Roles (Buttons Preset)',
+      description: 'Create self-assignable notification roles (Announcements, Events, Giveaways) with interactive toggle buttons.',
+      pickerType: 'CHANNEL',
+      channelTypes: [ChannelType.GuildText],
+      autoCreateLabel: 'Auto-Create #get-roles & Notification Panel',
+      autoCreateDescription: 'Creates public #get-roles channel, 3 starter roles (@Announcements, @Events, @Giveaways), and publishes the button toggle panel.',
+      async getCurrent(guild) {
+        const res = await query(`SELECT COUNT(*)::int AS count FROM role_panels WHERE guild_id = $1 AND name = 'notification-roles' AND active = true`, [guild.id]).catch(() => ({ rows: [{ count: 0 }] }));
+        return (res.rows[0]?.count || 0) > 0 ? 'Notification Roles panel active' : null;
+      },
+      async applyDefault(guild) {
+        const { createPanel } = require('../community/rolePanelService');
+        await createPanel({ guildId: guild.id, name: 'notification-roles', title: '🔔 Notification Roles', description: 'Select your notification roles below.' }).catch(() => {});
+        return { result: 'Starter notification role panel created' };
+      },
+      async applySelection(guild, channelId) {
+        const { createPanel } = require('../community/rolePanelService');
+        await createPanel({ guildId: guild.id, name: 'notification-roles', title: '🔔 Notification Roles', description: 'Select your notification roles below.' }).catch(() => {});
+      },
+      async autoCreate(guild) {
+        const channel = await autoCreateChannel(guild, { name: 'get-roles', isPrivate: false, topic: 'Self-assignable member roles' });
+        const announceRole = await autoCreateRole(guild, { name: 'Announcements', color: '#3498db' });
+        const eventsRole = await autoCreateRole(guild, { name: 'Events', color: '#9b59b6' });
+        const giveRole = await autoCreateRole(guild, { name: 'Giveaways', color: '#f1c40f' });
+        const { createPanel, addOption, buildRolePanelMessage } = require('../community/rolePanelService');
+        const panel = await createPanel({
+          guildId: guild.id,
+          name: 'notification-roles',
+          title: '🔔 Notification & Community Roles',
+          description: 'Click the buttons below to toggle roles and customize what notifications you receive!',
+          color: '#5865f2',
+          mode: 'MULTI',
+          displayMode: 'BUTTONS'
+        });
+        await addOption({ guildId: guild.id, panelName: 'notification-roles', roleId: announceRole.id, label: 'Announcements', emoji: '📢', buttonColor: '#3498db' });
+        await addOption({ guildId: guild.id, panelName: 'notification-roles', roleId: eventsRole.id, label: 'Events', emoji: '🎉', buttonColor: '#9b59b6' });
+        await addOption({ guildId: guild.id, panelName: 'notification-roles', roleId: giveRole.id, label: 'Giveaways', emoji: '🎁', buttonColor: '#f1c40f' });
+        const panelPayload = await buildRolePanelMessage(panel);
+        if (channel && typeof channel.send === 'function') {
+          await channel.send(panelPayload).catch(() => {});
+        }
+        return { created: `#${channel.name} (Notification Role Panel published), 3 roles` };
+      }
+    },
+    {
+      id: 'server_color_roles',
+      moduleKey: ModuleKeys.REACTION_ROLES,
+      moduleName: 'Name Color Roles (Dropdown Preset)',
+      categoryKey: 'COMMUNITY',
+      categoryLabel: 'Community & Engagement',
+      moduleOverview: 'Offer self-assignable chat username colors using a sleek dropdown select menu.',
+      title: 'Chat Username Colors (Dropdown Preset)',
+      description: 'Select a channel where members can choose their favorite chat username color from a dropdown menu (Single-choice).',
+      pickerType: 'CHANNEL',
+      channelTypes: [ChannelType.GuildText],
+      autoCreateLabel: 'Auto-Create 8 Color Roles & Dropdown Panel',
+      autoCreateDescription: 'Creates 8 color roles (Red, Orange, Yellow, Green, Blue, Purple, Pink, Cyan) and publishes a Dropdown Menu panel in #get-roles.',
+      async getCurrent(guild) {
+        const res = await query(`SELECT COUNT(*)::int AS count FROM role_panels WHERE guild_id = $1 AND name = 'color-roles' AND active = true`, [guild.id]).catch(() => ({ rows: [{ count: 0 }] }));
+        return (res.rows[0]?.count || 0) > 0 ? 'Color Roles dropdown active' : null;
+      },
+      async applyDefault(guild) {
+        const { createPanel } = require('../community/rolePanelService');
+        await createPanel({ guildId: guild.id, name: 'color-roles', title: '🎨 Name Colors', mode: 'SINGLE', displayMode: 'DROPDOWN' }).catch(() => {});
+        return { result: 'Color roles preset initialized' };
+      },
+      async applySelection(guild, channelId) {
+        const { createPanel } = require('../community/rolePanelService');
+        await createPanel({ guildId: guild.id, name: 'color-roles', title: '🎨 Name Colors', mode: 'SINGLE', displayMode: 'DROPDOWN' }).catch(() => {});
+      },
+      async autoCreate(guild) {
+        const channel = await autoCreateChannel(guild, { name: 'get-roles', isPrivate: false, topic: 'Self-assignable member roles' });
+        const createdRoles = [];
+        for (const c of COLOR_PRESET_OPTIONS) {
+          const r = await autoCreateRole(guild, { name: c.name, color: c.hex });
+          createdRoles.push({ ...c, roleId: r.id });
+        }
+        const { createPanel, addOption, buildRolePanelMessage } = require('../community/rolePanelService');
+        const panel = await createPanel({
+          guildId: guild.id,
+          name: 'color-roles',
+          title: '🎨 Pick Your Name Color',
+          description: 'Choose a color from the dropdown menu below to customize your username color in chat!',
+          color: '#5865f2',
+          mode: 'SINGLE',
+          displayMode: 'DROPDOWN'
+        });
+        for (const c of createdRoles) {
+          await addOption({
+            guildId: guild.id,
+            panelName: 'color-roles',
+            roleId: c.roleId,
+            label: c.name,
+            emoji: c.emoji,
+            description: `Set your username color to ${c.name}`,
+            buttonColor: c.hex
+          });
+        }
+        const panelPayload = await buildRolePanelMessage(panel);
+        if (channel && typeof channel.send === 'function') {
+          await channel.send(panelPayload).catch(() => {});
+        }
+        return { created: `#${channel.name} (8 Color Roles & Dropdown Panel published)` };
+      }
+    },
+    {
+      id: 'server_tickets',
       moduleKey: ModuleKeys.TICKETS,
-      title: 'Support Tickets System',
-      description: 'Provide private support ticket channels where members can open tickets with staff.',
+      moduleName: 'Support Tickets System',
+      categoryKey: 'SUPPORT',
+      categoryLabel: 'Support & Helpdesk',
+      moduleOverview: 'Private support channels where members can open tickets with staff, complete custom intake questions, and receive automated transcripts on close.',
+      title: 'Support Tickets Category & Submission Hub',
+      description: 'Select the category where private tickets will open and publish a public submit-tickets panel.',
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildCategory],
-      autoCreateLabel: 'Auto-Create "Tickets" Category',
-      autoCreateDescription: 'Creates a private "Tickets" category and #support-tickets channel.',
+      autoCreateLabel: 'Auto-Create Tickets & Publish Panel',
+      autoCreateDescription: 'Creates "Tickets" category, #submit-tickets channel, @Support Staff role, and posts the live interactive Ticket Panel.',
       async getCurrent(guild) {
         const res = await query(`SELECT category_id FROM ticket_configs WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.category_id ? `Category <#${res.rows[0].category_id}>` : null;
@@ -226,7 +423,7 @@ const ONBOARDING_STEPS = Object.freeze({
           await tickets.updateConfig(guild.id, { categoryId: existingCat.id });
           return { result: `Assigned existing category <#${existingCat.id}>` };
         }
-        await tickets.updateConfig(guild.id, { deleteSeconds: 10, transcriptsEnabled: true });
+        await tickets.updateConfig(guild.id, { closeDeleteSeconds: 10, transcriptEnabled: true });
         return { result: 'Default ticket settings saved' };
       },
       async applySelection(guild, categoryId) {
@@ -236,17 +433,590 @@ const ONBOARDING_STEPS = Object.freeze({
       },
       async autoCreate(guild) {
         const category = await autoCreateChannel(guild, { name: 'Tickets', type: ChannelType.GuildCategory, isPrivate: true });
-        const panelChannel = await autoCreateChannel(guild, { name: 'support-tickets', isPrivate: false, topic: 'Open a support ticket with staff' });
+        const panelChannel = await autoCreateChannel(guild, { name: 'submit-tickets', isPrivate: false, topic: 'Open a support ticket with staff' });
+        const staffRole = await autoCreateRole(guild, { name: 'Support Staff', color: '#3498db' });
         const { TicketService } = require('../support/supportService');
+        const { buildPublicTicketPanel } = require('../support/supportUi');
         const tickets = new TicketService();
-        await tickets.updateConfig(guild.id, { categoryId: category.id });
-        return { created: `Category "${category.name}", #${panelChannel.name}` };
+        await tickets.updateConfig(guild.id, { categoryId: category.id, staffRoleId: staffRole.id });
+        const types = await tickets.listTypes(guild.id);
+        const cfg = await tickets.getConfig(guild.id);
+        const panelPayload = await buildPublicTicketPanel(types, cfg);
+        if (panelChannel && typeof panelChannel.send === 'function') {
+          await panelChannel.send(panelPayload).catch(() => {});
+        }
+        return { created: `Category "${category.name}", #${panelChannel.name} (Ticket Panel published), @${staffRole.name}` };
       }
     },
     {
-      id: 'server_community',
+      id: 'server_reports',
+      moduleKey: ModuleKeys.REPORTS,
+      moduleName: 'User & Content Reports',
+      categoryKey: 'SUPPORT',
+      categoryLabel: 'Support & Helpdesk',
+      moduleOverview: 'Discreet reporting system allowing members to privately report disruptive behavior or rule violations directly to staff review channels.',
+      title: 'Report Review Hub & Public Submission Panel',
+      description: 'Select the staff channel where user reports will be delivered for review.',
+      pickerType: 'CHANNEL',
+      channelTypes: [ChannelType.GuildText],
+      autoCreateLabel: 'Auto-Create Reports & Publish Panel',
+      autoCreateDescription: 'Creates private #mod-reports review channel, public #submit-reports channel, and posts the live Report Panel.',
+      async getCurrent(guild) {
+        const res = await query(`SELECT review_channel_id FROM report_configs WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
+        return res.rows[0]?.review_channel_id ? `<#${res.rows[0].review_channel_id}>` : null;
+      },
+      async applyDefault(guild) {
+        const existing = guild.channels?.cache?.find((c) => c.name.toLowerCase() === 'report-reviews' || c.name.toLowerCase() === 'reports');
+        if (existing) {
+          await query(`INSERT INTO report_configs (guild_id, review_channel_id) VALUES ($1, $2) ON CONFLICT (guild_id) DO UPDATE SET review_channel_id = EXCLUDED.review_channel_id, updated_at = NOW()`, [guild.id, existing.id]);
+          return { result: `Assigned existing <#${existing.id}>` };
+        }
+        return { result: 'Reports system initialized' };
+      },
+      async applySelection(guild, channelId) {
+        await query(`INSERT INTO report_configs (guild_id, review_channel_id) VALUES ($1, $2) ON CONFLICT (guild_id) DO UPDATE SET review_channel_id = EXCLUDED.review_channel_id, updated_at = NOW()`, [guild.id, channelId]);
+      },
+      async autoCreate(guild) {
+        const reviewChannel = await autoCreateChannel(guild, { name: 'mod-reports', isPrivate: true, reason: 'SlickBot Member Reports Review Channel' });
+        const panelChannel = await autoCreateChannel(guild, { name: 'submit-reports', isPrivate: false, topic: 'Privately report a concern to server staff' });
+        const { ReportService } = require('../support/supportService');
+        const { buildPublicReportPanel } = require('../support/supportUi');
+        const reports = new ReportService();
+        await reports.updateConfig(guild.id, { reviewChannelId: reviewChannel.id });
+        const cfg = await reports.getConfig(guild.id);
+        const panelPayload = buildPublicReportPanel(cfg);
+        if (panelChannel && typeof panelChannel.send === 'function') {
+          await panelChannel.send(panelPayload).catch(() => {});
+        }
+        return { created: `#${reviewChannel.name} (Review Hub), #${panelChannel.name} (Report Panel published)` };
+      }
+    },
+    {
+      id: 'server_applications',
+      moduleKey: ModuleKeys.APPLICATIONS,
+      moduleName: 'Staff & Member Applications',
+      categoryKey: 'SUPPORT',
+      categoryLabel: 'Support & Helpdesk',
+      moduleOverview: 'Interactive application forms with custom intake questions handled via private DMs and reviewed in staff channels.',
+      title: 'Application Review Hub & Apply Panel',
+      description: 'Select the staff channel where completed application submissions will be sent for review.',
+      pickerType: 'CHANNEL',
+      channelTypes: [ChannelType.GuildText],
+      autoCreateLabel: 'Auto-Create Applications & Publish Panel',
+      autoCreateDescription: 'Creates private #app-review, public #apply-here, and posts the live Application Panel.',
+      async getCurrent(guild) {
+        const res = await query(`SELECT review_channel_id FROM application_types WHERE guild_id = $1 AND enabled = true LIMIT 1`, [guild.id]).catch(() => ({ rows: [] }));
+        return res.rows[0]?.review_channel_id ? `<#${res.rows[0].review_channel_id}>` : null;
+      },
+      async applyDefault() {
+        return { result: 'Applications system ready' };
+      },
+      async applySelection(guild, channelId) {
+        await query(`INSERT INTO application_types (guild_id, name, review_channel_id, enabled) VALUES ($1, 'Staff Application', $2, true) ON CONFLICT DO NOTHING`, [guild.id, channelId]);
+      },
+      async autoCreate(guild) {
+        const reviewChannel = await autoCreateChannel(guild, { name: 'app-review', isPrivate: true, reason: 'SlickBot Applications Review Channel' });
+        const panelChannel = await autoCreateChannel(guild, { name: 'apply-here', isPrivate: false, topic: 'Apply for server staff or roles' });
+        const { ApplicationService } = require('../support/supportService');
+        const { buildPublicApplicationPanel } = require('../support/supportUi');
+        const applications = new ApplicationService();
+        await applications.ensureDefaultType(guild.id, reviewChannel.id);
+        const types = await applications.listTypes(guild.id);
+        const panelPayload = buildPublicApplicationPanel(types);
+        if (panelChannel && typeof panelChannel.send === 'function') {
+          await panelChannel.send(panelPayload).catch(() => {});
+        }
+        return { created: `#${reviewChannel.name} (Review Hub), #${panelChannel.name} (Application Panel published)` };
+      }
+    },
+    {
+      id: 'server_appeals',
+      moduleKey: ModuleKeys.APPEALS,
+      moduleName: 'Infraction & Ban Appeals',
+      categoryKey: 'SUPPORT',
+      categoryLabel: 'Support & Helpdesk',
+      moduleOverview: 'Structured appeal system allowing timed-out or punished members to submit appeals for staff review with automated DM decision notices.',
+      title: 'Appeal Review Hub & Public Appeal Panel',
+      description: 'Select the private staff channel where member punishment appeals will be delivered.',
+      pickerType: 'CHANNEL',
+      channelTypes: [ChannelType.GuildText],
+      autoCreateLabel: 'Auto-Create Appeals & Publish Panel',
+      autoCreateDescription: 'Creates private #appeal-review, public #ban-appeals, and posts the live Appeal Panel.',
+      async getCurrent(guild) {
+        const res = await query(`SELECT review_channel_id FROM appeal_configs WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
+        return res.rows[0]?.review_channel_id ? `<#${res.rows[0].review_channel_id}>` : null;
+      },
+      async applyDefault(guild) {
+        const existing = guild.channels?.cache?.find((c) => c.name.toLowerCase() === 'appeal-reviews' || c.name.toLowerCase() === 'appeals');
+        if (existing) {
+          await query(`INSERT INTO appeal_configs (guild_id, review_channel_id, dm_decision_enabled) VALUES ($1, $2, true) ON CONFLICT (guild_id) DO UPDATE SET review_channel_id = EXCLUDED.review_channel_id, updated_at = NOW()`, [guild.id, existing.id]);
+          return { result: `Assigned existing <#${existing.id}>` };
+        }
+        return { result: 'Appeals system initialized' };
+      },
+      async applySelection(guild, channelId) {
+        await query(`INSERT INTO appeal_configs (guild_id, review_channel_id, dm_decision_enabled) VALUES ($1, $2, true) ON CONFLICT (guild_id) DO UPDATE SET review_channel_id = EXCLUDED.review_channel_id, updated_at = NOW()`, [guild.id, channelId]);
+      },
+      async autoCreate(guild) {
+        const reviewChannel = await autoCreateChannel(guild, { name: 'appeal-review', isPrivate: true, reason: 'SlickBot Appeals Review Channel' });
+        const panelChannel = await autoCreateChannel(guild, { name: 'ban-appeals', isPrivate: false, topic: 'Submit an appeal for infractions or timeouts' });
+        const { AppealService } = require('../support/supportService');
+        const { buildPublicAppealPanel } = require('../support/supportUi');
+        const appeals = new AppealService();
+        await appeals.updateConfig(guild.id, { reviewChannelId: reviewChannel.id, dmDecisionEnabled: true });
+        const cfg = await appeals.getConfig(guild.id);
+        const panelPayload = buildPublicAppealPanel(cfg);
+        if (panelChannel && typeof panelChannel.send === 'function') {
+          await panelChannel.send(panelPayload).catch(() => {});
+        }
+        return { created: `#${reviewChannel.name} (Review Hub), #${panelChannel.name} (Appeal Panel published)` };
+      }
+    },
+    {
+      id: 'server_suggestions',
+      moduleKey: ModuleKeys.SUGGESTIONS,
+      moduleName: 'Server Suggestions & Community Voting',
+      categoryKey: 'COMMUNITY',
+      categoryLabel: 'Community & Engagement',
+      moduleOverview: 'Interactive suggestion hub where members submit ideas, receive community upvotes/downvotes, and staff can review or accept proposals.',
+      title: 'Suggestions Channel & Submission Hub',
+      description: 'Select the channel where member suggestions will be posted for voting and discussion.',
+      pickerType: 'CHANNEL',
+      channelTypes: [ChannelType.GuildText],
+      autoCreateLabel: 'Auto-Create #suggestions & Publish Panel',
+      autoCreateDescription: 'Creates public #suggestions channel and posts the interactive Suggestion Panel.',
+      async getCurrent(guild) {
+        const res = await query(`SELECT channel_id FROM suggestion_configs WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
+        return res.rows[0]?.channel_id ? `<#${res.rows[0].channel_id}>` : null;
+      },
+      async applyDefault(guild) {
+        const { SuggestionService } = require('../community/suggestionService');
+        const suggestions = new SuggestionService();
+        await suggestions.setup(guild.id, { panelActive: true });
+        return { result: 'Suggestions enabled' };
+      },
+      async applySelection(guild, channelId) {
+        const { SuggestionService } = require('../community/suggestionService');
+        const suggestions = new SuggestionService();
+        await suggestions.setup(guild.id, { channelId, panelActive: true });
+      },
+      async autoCreate(guild) {
+        const channel = await autoCreateChannel(guild, { name: 'suggestions', isPrivate: false, topic: 'Server suggestions & voting' });
+        const { SuggestionService } = require('../community/suggestionService');
+        const suggestions = new SuggestionService();
+        await suggestions.setup(guild.id, { channelId: channel.id, panelActive: true });
+        const cfg = await suggestions.getConfig(guild.id);
+        const panelPayload = suggestions.buildPanelPayload(cfg);
+        if (channel && typeof channel.send === 'function') {
+          await channel.send(panelPayload).catch(() => {});
+        }
+        return { created: `#${channel.name} (Suggestion Panel published)` };
+      }
+    },
+    {
+      id: 'server_giveaways',
+      moduleKey: ModuleKeys.GIVEAWAYS,
+      moduleName: 'Community Giveaways',
+      categoryKey: 'COMMUNITY',
+      categoryLabel: 'Community & Engagement',
+      moduleOverview: 'Host automated prize giveaways with timer countdowns, customizable winner counts, role requirements, and automated rerolls.',
+      title: 'Default Giveaway Channel',
+      description: 'Select the text channel where giveaways will be hosted by default.',
+      pickerType: 'CHANNEL',
+      channelTypes: [ChannelType.GuildText],
+      autoCreateLabel: 'Auto-Create #giveaways & Guide',
+      autoCreateDescription: 'Creates a public #giveaways channel and publishes the Giveaway Guide.',
+      async getCurrent(guild) {
+        const res = await query(`SELECT default_channel_id FROM giveaway_configs WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
+        return res.rows[0]?.default_channel_id ? `<#${res.rows[0].default_channel_id}>` : null;
+      },
+      async applyDefault(guild) {
+        const { GiveawayService } = require('../community/giveawayService');
+        const giveaways = new GiveawayService();
+        await giveaways.updateConfig(guild.id, { panelColor: '#7869ff' });
+        return { result: 'Default giveaway settings saved' };
+      },
+      async applySelection(guild, channelId) {
+        const { GiveawayService } = require('../community/giveawayService');
+        const giveaways = new GiveawayService();
+        await giveaways.updateConfig(guild.id, { defaultChannelId: channelId });
+      },
+      async autoCreate(guild) {
+        const channel = await autoCreateChannel(guild, { name: 'giveaways', isPrivate: false, topic: 'Community Giveaways' });
+        const { GiveawayService } = require('../community/giveawayService');
+        const giveaways = new GiveawayService();
+        await giveaways.updateConfig(guild.id, { defaultChannelId: channel.id });
+        const guideEmbed = createBaseEmbed({
+          title: '🎁 Community Giveaways',
+          description: [
+            'Welcome to the server giveaways channel!',
+            '',
+            'Active prize draws will appear here. Click the **🎉 Enter Giveaway** button on any giveaway post to participate.',
+            '',
+            'Staff can launch new giveaways anytime using `/giveaway start` or `/giveaway create`.'
+          ].join('\n'),
+          color: SlickBotColors.PRIMARY,
+          footer: 'SlickBot Giveaways'
+        });
+        if (channel && typeof channel.send === 'function') {
+          await channel.send({ embeds: [guideEmbed] }).catch(() => {});
+        }
+        return { created: `#${channel.name} (Giveaway Guide published)` };
+      }
+    },
+    {
+      id: 'server_birthdays',
+      moduleKey: ModuleKeys.BIRTHDAYS,
+      moduleName: 'Member Birthday Celebrations',
+      categoryKey: 'COMMUNITY',
+      categoryLabel: 'Community & Engagement',
+      moduleOverview: 'Track member birthdays and automatically post celebratory shoutouts with custom timezone handling.',
+      title: 'Birthday Announcement Channel & Registration Panel',
+      description: 'Select the text channel where birthday wishes will be posted and publish the member birthday registration panel.',
+      pickerType: 'CHANNEL',
+      channelTypes: [ChannelType.GuildText],
+      autoCreateLabel: 'Auto-Create #birthdays & Birthday Panel',
+      autoCreateDescription: 'Creates public #birthdays channel, @Birthday Star role, and posts the interactive Set Birthday button panel.',
+      async getCurrent(guild) {
+        const res = await query(`SELECT channel_id FROM birthday_configs WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
+        return res.rows[0]?.channel_id ? `<#${res.rows[0].channel_id}>` : null;
+      },
+      async applyDefault(guild) {
+        const { BirthdayService } = require('../community/birthdayService');
+        const birthdays = new BirthdayService();
+        await birthdays.updateConfig(guild.id, { enabled: true });
+        return { result: 'Birthday announcements enabled' };
+      },
+      async applySelection(guild, channelId) {
+        const { BirthdayService } = require('../community/birthdayService');
+        const birthdays = new BirthdayService();
+        await birthdays.updateConfig(guild.id, { channelId, enabled: true });
+      },
+      async autoCreate(guild) {
+        const channel = await autoCreateChannel(guild, { name: 'birthdays', isPrivate: false, topic: 'Community Birthdays' });
+        const birthdayRole = await autoCreateRole(guild, { name: 'Birthday Star', color: '#e91e63' });
+        const { BirthdayService, buildBirthdayPublicPanel } = require('../community/birthdayService');
+        const birthdays = new BirthdayService();
+        await birthdays.updateConfig(guild.id, { channelId: channel.id, birthdayRoleId: birthdayRole.id, enabled: true });
+        const cfg = await birthdays.getConfig(guild.id);
+        const panelPayload = buildBirthdayPublicPanel(cfg);
+        if (channel && typeof channel.send === 'function') {
+          await channel.send(panelPayload).catch(() => {});
+        }
+        return { created: `#${channel.name} (Birthday Registration Panel published), @${birthdayRole.name}` };
+      }
+    },
+    {
+      id: 'server_leveling',
+      moduleKey: ModuleKeys.LEVELING,
+      moduleName: 'Text & Voice Leveling XP',
+      categoryKey: 'COMMUNITY',
+      categoryLabel: 'Community & Engagement',
+      moduleOverview: 'Reward active chatters and voice participants with XP, customizable rank cards, level-up milestones, and role rewards.',
+      title: 'Level Up Milestone Channel',
+      description: 'Select the channel where member rank and level-up announcements will be posted.',
+      pickerType: 'CHANNEL',
+      channelTypes: [ChannelType.GuildText],
+      autoCreateLabel: 'Auto-Create #level-ups & Rewards Guide',
+      autoCreateDescription: 'Creates public #level-ups channel and publishes the Leveling XP Guide.',
+      async getCurrent(guild) {
+        const res = await query(`SELECT level_up_channel_id, enabled FROM leveling_configs WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
+        return res.rows[0]?.level_up_channel_id ? `<#${res.rows[0].level_up_channel_id}>` : null;
+      },
+      async applyDefault(guild) {
+        const { LevelingService } = require('../community/levelingService');
+        const leveling = new LevelingService();
+        await leveling.upsertConfig(guild.id, { enabled: true });
+        return { result: 'Leveling XP active' };
+      },
+      async applySelection(guild, channelId) {
+        const { LevelingService } = require('../community/levelingService');
+        const leveling = new LevelingService();
+        await leveling.upsertConfig(guild.id, { levelUpChannelId: channelId, enabled: true });
+      },
+      async autoCreate(guild) {
+        const channel = await autoCreateChannel(guild, { name: 'level-ups', isPrivate: false, topic: 'Member level up celebrations & XP announcements' });
+        const { LevelingService } = require('../community/levelingService');
+        const leveling = new LevelingService();
+        await leveling.upsertConfig(guild.id, { levelUpChannelId: channel.id, enabled: true });
+        const levelEmbed = createBaseEmbed({
+          title: '🏆 Leveling & XP Rewards System',
+          description: [
+            'Earn XP automatically by chatting in text channels, participating in voice channels, and playing community games!',
+            '',
+            '**Useful Commands:**',
+            '• `/level rank` — View your current level, rank, and XP progress',
+            '• `/level leaderboard` — View the top ranked server members',
+            '• `/level card` — Customize your rank card background and theme'
+          ].join('\n'),
+          color: SlickBotColors.PRIMARY,
+          footer: 'SlickBot Leveling'
+        });
+        if (channel && typeof channel.send === 'function') {
+          await channel.send({ embeds: [levelEmbed] }).catch(() => {});
+        }
+        return { created: `#${channel.name} (Leveling Rewards Guide published)` };
+      }
+    },
+    {
+      id: 'server_starboard',
+      moduleKey: ModuleKeys.STARBOARD,
+      moduleName: 'Starboard / Community Hall of Fame',
+      categoryKey: 'COMMUNITY',
+      categoryLabel: 'Community & Engagement',
+      moduleOverview: 'Pin top-voted community messages automatically to a showcase channel when members react with stars.',
+      title: 'Starboard Showcase Channel',
+      description: 'Select the showcase channel where top-starred community messages will be pinned automatically.',
+      pickerType: 'CHANNEL',
+      channelTypes: [ChannelType.GuildText, ChannelType.GuildAnnouncement],
+      autoCreateLabel: 'Auto-Create #starboard & Guide',
+      autoCreateDescription: 'Creates a public #starboard showcase channel and publishes the Hall of Fame guide.',
+      async getCurrent(guild) {
+        const res = await query(`SELECT channel_id FROM starboard_configs WHERE guild_id = $1 LIMIT 1`, [guild.id]).catch(() => ({ rows: [] }));
+        return res.rows[0]?.channel_id ? `<#${res.rows[0].channel_id}>` : null;
+      },
+      async applyDefault(guild) {
+        const cacheList = Array.from(guild.channels?.cache?.values?.() || guild.channels?.cache || []);
+        const existing = cacheList.find((c) => ['starboard', 'hall-of-fame', 'stars', 'highlights'].includes(c?.name?.toLowerCase()));
+        if (existing) {
+          await query(
+            `INSERT INTO starboard_configs (guild_id, channel_id, enabled, threshold, emoji)
+             VALUES ($1, $2, true, 3, '⭐')
+             ON CONFLICT (guild_id) DO UPDATE SET channel_id = EXCLUDED.channel_id, updated_at = NOW()`,
+            [guild.id, existing.id]
+          );
+          return { result: `Assigned existing <#${existing.id}>` };
+        }
+        return { result: 'Starboard enabled' };
+      },
+      async applySelection(guild, channelId) {
+        await query(
+          `INSERT INTO starboard_configs (guild_id, channel_id, enabled, threshold, emoji)
+           VALUES ($1, $2, true, 3, '⭐')
+           ON CONFLICT (guild_id) DO UPDATE SET channel_id = EXCLUDED.channel_id, updated_at = NOW()`,
+          [guild.id, channelId]
+        );
+      },
+      async autoCreate(guild) {
+        const channel = await autoCreateChannel(guild, { name: 'starboard', isPrivate: false, topic: 'Community Hall of Fame — Starred messages' });
+        await query(
+          `INSERT INTO starboard_configs (guild_id, channel_id, enabled, threshold, emoji)
+           VALUES ($1, $2, true, 3, '⭐')
+           ON CONFLICT (guild_id) DO UPDATE SET channel_id = EXCLUDED.channel_id, updated_at = NOW()`,
+          [guild.id, channel.id]
+        );
+        const starEmbed = createBaseEmbed({
+          title: '⭐ Community Starboard / Hall of Fame',
+          description: [
+            'Welcome to the server Hall of Fame!',
+            '',
+            'When great messages, funny quotes, or impressive achievements receive **3 or more ⭐ reactions**, they are automatically featured here.',
+            '',
+            'React to your favorite messages with ⭐ to vote them onto the board!'
+          ].join('\n'),
+          color: 0xf1c40f,
+          footer: 'SlickBot Starboard • Threshold: 3 ⭐'
+        });
+        if (channel && typeof channel.send === 'function') {
+          await channel.send({ embeds: [starEmbed] }).catch(() => {});
+        }
+        return { created: `#${channel.name} (Hall of Fame Guide published)` };
+      }
+    },
+    {
+      id: 'server_join_to_create',
+      moduleKey: ModuleKeys.JOIN_TO_CREATE,
+      moduleName: 'Dynamic Join-to-Create Voice Hubs',
+      categoryKey: 'VOICE',
+      categoryLabel: 'Voice & Audio Systems',
+      moduleOverview: 'Temporary private voice channels automatically created when members join a generator hub, with full owner control panels.',
+      title: 'Dynamic Voice Hub Channel',
+      description: 'Select or create the voice hub channel that spawns temporary private voice channels when joined.',
+      pickerType: 'CHANNEL',
+      channelTypes: [ChannelType.GuildVoice],
+      autoCreateLabel: 'Auto-Create Voice Hub',
+      autoCreateDescription: 'Creates "🔊 Dynamic Voice" category and "➕ Create Voice" hub channel.',
+      async getCurrent(guild) {
+        const res = await query(`SELECT source_channel_id as channel_id FROM join_create_hubs WHERE guild_id = $1 AND (enabled = true OR enabled IS NULL) LIMIT 1`, [guild.id]).catch(() => ({ rows: [] }));
+        return res.rows[0]?.channel_id ? `<#${res.rows[0].channel_id}>` : null;
+      },
+      async applyDefault() {
+        return { result: 'Join-to-Create voice system initialized' };
+      },
+      async applySelection(guild, channelId) {
+        const { JoinCreateService } = require('../voice/joinCreateService');
+        const joinCreate = new JoinCreateService();
+        await joinCreate.registerHub(guild.id, channelId, { enabled: true });
+      },
+      async autoCreate(guild) {
+        const category = await autoCreateChannel(guild, { name: '🔊 Dynamic Voice', type: ChannelType.GuildCategory });
+        const channel = await autoCreateChannel(guild, { name: '➕ Create Voice', type: ChannelType.GuildVoice, parentId: category.id });
+        const { JoinCreateService } = require('../voice/joinCreateService');
+        const joinCreate = new JoinCreateService();
+        await joinCreate.registerHub(guild.id, channel.id, { enabled: true, categoryId: category.id });
+        return { created: `Category "${category.name}" & Voice Hub "${channel.name}"` };
+      }
+    },
+    {
+      id: 'server_community_games',
+      moduleKey: ModuleKeys.COMMUNITY_GAMES,
+      moduleName: 'Community Games & Activities',
+      categoryKey: 'COMMUNITY',
+      categoryLabel: 'Community & Engagement',
+      moduleOverview: 'Engage server members with interactive board games (Tic-Tac-Toe, Connect Four) and a cooperative counting challenge.',
+      title: 'Community Games Lounge & Counting Channels',
+      description: 'Select channels for community board games and the server counting challenge.',
+      pickerType: 'CHANNEL',
+      channelTypes: [ChannelType.GuildText],
+      autoCreateLabel: 'Auto-Create #game-lounge & Games Panel',
+      autoCreateDescription: 'Creates #game-lounge and #counting channels, enables games, and publishes the Game Lounge challenge panel.',
+      async getCurrent(guild) {
+        const res = await query(`SELECT channel_id FROM counting_game_configs WHERE guild_id = $1 LIMIT 1`, [guild.id]).catch(() => ({ rows: [] }));
+        return res.rows[0]?.channel_id ? `<#${res.rows[0].channel_id}>` : null;
+      },
+      async applyDefault(guild) {
+        const { CommunityGameService, GAME_KEYS } = require('../community/gameService');
+        const games = new CommunityGameService();
+        await games.setGameEnabled(guild.id, GAME_KEYS.TIC_TAC_TOE, true);
+        await games.setGameEnabled(guild.id, GAME_KEYS.CONNECT_FOUR, true);
+        return { result: 'Tic-Tac-Toe & Connect Four enabled' };
+      },
+      async applySelection(guild, channelId) {
+        const { CommunityGameService, GAME_KEYS } = require('../community/gameService');
+        const games = new CommunityGameService();
+        await games.updateCountingConfig(guild.id, { channelId });
+        await games.setGameEnabled(guild.id, GAME_KEYS.COUNTING, true);
+        await games.setGameEnabled(guild.id, GAME_KEYS.TIC_TAC_TOE, true);
+        await games.setGameEnabled(guild.id, GAME_KEYS.CONNECT_FOUR, true);
+      },
+      async autoCreate(guild) {
+        const loungeChannel = await autoCreateChannel(guild, { name: 'game-lounge', isPrivate: false, topic: 'Challenge friends to Tic-Tac-Toe and Connect Four!' });
+        const countChannel = await autoCreateChannel(guild, { name: 'counting', isPrivate: false, topic: 'Community counting challenge — Count up one number at a time!' });
+        const { CommunityGameService, GAME_KEYS } = require('../community/gameService');
+        const games = new CommunityGameService();
+        await games.setGameEnabled(guild.id, GAME_KEYS.TIC_TAC_TOE, true);
+        await games.setGameEnabled(guild.id, GAME_KEYS.CONNECT_FOUR, true);
+        await games.updateBoardGameConfig(guild.id, GAME_KEYS.TIC_TAC_TOE, { enabled: true, channelId: loungeChannel.id, winXp: 50 });
+        await games.updateBoardGameConfig(guild.id, GAME_KEYS.CONNECT_FOUR, { enabled: true, channelId: loungeChannel.id, winXp: 50 });
+        await games.updateCountingConfig(guild.id, { channelId: countChannel.id, startingNumber: 1, resetOnIncorrect: true });
+        await games.setGameEnabled(guild.id, GAME_KEYS.COUNTING, true);
+        if (loungeChannel && typeof loungeChannel.send === 'function') {
+          await games.createGamePanel({
+            guildId: guild.id,
+            channel: loungeChannel,
+            title: '🎮 SlickBot Game Lounge',
+            description: 'Challenge your friends to **Tic-Tac-Toe** or **Connect Four** and earn XP! Select a game below to begin.'
+          }).catch(() => {});
+        }
+        return { created: `#${loungeChannel.name} (Games Panel published), #${countChannel.name}` };
+      }
+    },
+    {
+      id: 'server_faq',
+      moduleKey: ModuleKeys.FAQ,
+      moduleName: 'FAQ & Knowledge Base',
+      categoryKey: 'COMMUNITY',
+      categoryLabel: 'Community & Engagement',
+      moduleOverview: 'Organized server knowledge base and frequently asked questions searchable by keywords or browseable via interactive menus.',
+      title: 'FAQ & Knowledge Hub Channel',
+      description: 'Select the channel for your server knowledge base and FAQ guides.',
+      pickerType: 'CHANNEL',
+      channelTypes: [ChannelType.GuildText],
+      autoCreateLabel: 'Auto-Create #faq-help & Publish Panel',
+      autoCreateDescription: 'Creates public #faq-help channel and publishes the interactive FAQ Search Panel.',
+      async getCurrent(guild) {
+        const res = await query(`SELECT forum_channel_id FROM faq_configs WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
+        return res.rows[0]?.forum_channel_id ? `<#${res.rows[0].forum_channel_id}>` : null;
+      },
+      async applyDefault() {
+        return { result: 'FAQ system ready' };
+      },
+      async applySelection(guild, channelId) {
+        await query(`INSERT INTO faq_configs (guild_id, forum_channel_id) VALUES ($1, $2) ON CONFLICT (guild_id) DO UPDATE SET forum_channel_id = EXCLUDED.forum_channel_id, updated_at = NOW()`, [guild.id, channelId]);
+      },
+      async autoCreate(guild) {
+        const channel = await autoCreateChannel(guild, { name: 'faq-help', isPrivate: false, topic: 'Frequently asked questions & knowledge base' });
+        await query(`INSERT INTO faq_configs (guild_id, forum_channel_id) VALUES ($1, $2) ON CONFLICT (guild_id) DO UPDATE SET forum_channel_id = EXCLUDED.forum_channel_id, updated_at = NOW()`, [guild.id, channel.id]);
+        const { createBaseEmbed, createButtonRow, createPanelButton, ButtonStyle, SlickBotColors } = require('../ui/uiService');
+        const { CustomIds } = require('../ui/customIds');
+        const faqEmbed = createBaseEmbed({
+          title: '📖 Server FAQ & Knowledge Base',
+          description: 'Welcome to the FAQ hub! Click **Search FAQ** below to search for answers, view common guidelines, or open support if you need further help.',
+          color: SlickBotColors.INFO,
+          footer: 'SlickBot Knowledge Base'
+        });
+        const row = createButtonRow([
+          createPanelButton(CustomIds.FaqSearchModal, 'Search FAQ', ButtonStyle.Primary, '🔍'),
+          createPanelButton(CustomIds.TicketsRefresh, 'Open Support', ButtonStyle.Secondary, '🎟️')
+        ]);
+        if (channel && typeof channel.send === 'function') {
+          await channel.send({ embeds: [faqEmbed], components: [row] }).catch(() => {});
+        }
+        return { created: `#${channel.name} (FAQ Guide Panel published)` };
+      }
+    },
+    {
+      id: 'server_achievements',
+      moduleKey: ModuleKeys.ACHIEVEMENTS,
+      moduleName: 'Community Achievements & Milestones',
+      categoryKey: 'COMMUNITY',
+      categoryLabel: 'Community & Engagement',
+      moduleOverview: 'Unlockable achievements for chat activity, voice time, ticket resolutions, and server participation.',
+      title: 'Achievement Unlocks Channel',
+      description: 'Select the channel where member achievement tier milestones will be celebrated.',
+      pickerType: 'CHANNEL',
+      channelTypes: [ChannelType.GuildText],
+      autoCreateLabel: 'Auto-Create #achievements & Showcase',
+      autoCreateDescription: 'Creates public #achievements channel, initializes starter milestone tiers, and publishes the Achievements Showcase.',
+      async getCurrent(guild) {
+        const res = await query(`SELECT announcement_channel_id FROM achievement_configs WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
+        return res.rows[0]?.announcement_channel_id ? `<#${res.rows[0].announcement_channel_id}>` : null;
+      },
+      async applyDefault(guild) {
+        const { AchievementService } = require('../community/achievementService');
+        const achievements = new AchievementService();
+        await achievements.ensureDefaultTiers(guild.id);
+        await achievements.upsertConfig(guild.id, { enabled: true, dmEnabled: true });
+        return { result: 'Achievement tiers and tracking enabled' };
+      },
+      async applySelection(guild, channelId) {
+        const { AchievementService } = require('../community/achievementService');
+        const achievements = new AchievementService();
+        await achievements.ensureDefaultTiers(guild.id);
+        await achievements.upsertConfig(guild.id, { announcementChannelId: channelId, enabled: true, dmEnabled: true });
+      },
+      async autoCreate(guild) {
+        const channel = await autoCreateChannel(guild, { name: 'achievements', isPrivate: false, topic: 'Member activity achievement milestones' });
+        const { AchievementService } = require('../community/achievementService');
+        const achievements = new AchievementService();
+        await achievements.ensureDefaultTiers(guild.id);
+        await achievements.upsertConfig(guild.id, { announcementChannelId: channel.id, enabled: true, dmEnabled: true });
+        const achieveEmbed = createBaseEmbed({
+          title: '🏅 Community Achievements & Milestones',
+          description: [
+            'Unlock achievements and showcase badges as you participate in the server!',
+            '',
+            'Milestones are tracked for message counts, voice time, ticket resolutions, and community game victories.',
+            '',
+            '**Check Your Progress:** Use `/achievement list` to see available milestones and unlock status.'
+          ].join('\n'),
+          color: SlickBotColors.PRIMARY,
+          footer: 'SlickBot Achievements'
+        });
+        if (channel && typeof channel.send === 'function') {
+          await channel.send({ embeds: [achieveEmbed] }).catch(() => {});
+        }
+        return { created: `#${channel.name} (Achievements Showcase published)` };
+      }
+    },
+    {
+      id: 'server_stats',
       moduleKey: ModuleKeys.SERVER_STATS,
-      title: 'Live Server Stats Counters',
+      moduleName: 'Live Server Stats Counters',
+      categoryKey: 'COMMUNITY',
+      categoryLabel: 'Community & Engagement',
+      moduleOverview: 'Real-time server counters displayed as locked voice channels at the top of your sidebar (Members, Bots, Voice Activity).',
+      title: 'Server Stats Category & Live Counters',
       description: 'Display real-time member count and voice activity counters at the top of your channel sidebar.',
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildCategory],
@@ -262,7 +1032,7 @@ const ONBOARDING_STEPS = Object.freeze({
         await stats.upsertConfig(guild.id, { enabled: true });
         return { result: 'Server stats counters enabled' };
       },
-      async applySelection(guild, categoryId) {
+      async applySelection(guild) {
         const { ServerStatsService } = require('../community/serverStatsService');
         const stats = new ServerStatsService();
         await stats.upsertConfig(guild.id, { enabled: true });
@@ -280,6 +1050,153 @@ const ONBOARDING_STEPS = Object.freeze({
           voiceChannelId: voiceChannel.id
         });
         return { created: `Category "${category.name}" & live counter channels` };
+      }
+    },
+    {
+      id: 'server_referrals',
+      moduleKey: ModuleKeys.REFERRALS,
+      moduleName: 'Member Referral Rewards',
+      categoryKey: 'COMMUNITY',
+      categoryLabel: 'Community & Engagement',
+      moduleOverview: 'Reward members with bonus XP when their friends join using their personal invite links.',
+      title: 'Member Referral Program Channel',
+      description: 'Select the channel where the referral program guide will be posted.',
+      pickerType: 'CHANNEL',
+      channelTypes: [ChannelType.GuildText],
+      autoCreateLabel: 'Auto-Create #referrals & Referral Guide',
+      autoCreateDescription: 'Creates public #referrals channel and enables 500 XP bonus per invite.',
+      async getCurrent(guild) {
+        const res = await query(`SELECT referral_xp, enabled FROM referral_configs WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
+        return res.rows[0]?.enabled !== false ? `${res.rows[0]?.referral_xp || 500} XP Bonus (Enabled)` : null;
+      },
+      async applyDefault(guild) {
+        const { ReferralService } = require('../community/referralService');
+        const referrals = new ReferralService();
+        await referrals.upsertConfig(guild.id, { enabled: true, referralXp: 500 });
+        return { result: 'Referrals tracking enabled (500 bonus XP)' };
+      },
+      async applySelection(guild) {
+        const { ReferralService } = require('../community/referralService');
+        const referrals = new ReferralService();
+        await referrals.upsertConfig(guild.id, { enabled: true, referralXp: 500 });
+      },
+      async autoCreate(guild) {
+        const channel = await autoCreateChannel(guild, { name: 'referrals', isPrivate: false, topic: 'Invite friends and earn referral bonus XP' });
+        const { ReferralService } = require('../community/referralService');
+        const referrals = new ReferralService();
+        await referrals.upsertConfig(guild.id, { enabled: true, referralXp: 500 });
+        const refEmbed = createBaseEmbed({
+          title: '🤝 Member Referral Program',
+          description: [
+            'Invite your friends to the server and earn **500 Bonus XP** for every verified member who joins through your link!',
+            '',
+            '**How It Works:**',
+            '1. Run `/referral link` to generate your unique server invite link.',
+            '2. Share your link with friends.',
+            '3. When they join, your referral count increases and bonus XP is awarded automatically!',
+            '',
+            'Use `/referral stats` to track your total invites and bonus XP earned.'
+          ].join('\n'),
+          color: SlickBotColors.PRIMARY,
+          footer: 'SlickBot Referrals • 500 XP per invite'
+        });
+        if (channel && typeof channel.send === 'function') {
+          await channel.send({ embeds: [refEmbed] }).catch(() => {});
+        }
+        return { created: `#${channel.name} (Referral Guide published)` };
+      }
+    },
+    {
+      id: 'server_bot_updates',
+      moduleKey: ModuleKeys.BOT_UPDATES,
+      moduleName: 'Bot News & Patch Notes',
+      categoryKey: 'AUTOMATION',
+      categoryLabel: 'Automation & Feeds',
+      moduleOverview: 'Stay informed with automated announcements when SlickBot releases new features, updates, and performance patches.',
+      title: 'Bot Updates Announcement Channel',
+      description: 'Select where SlickBot announces new releases, features, and patch notes.',
+      pickerType: 'CHANNEL',
+      channelTypes: [ChannelType.GuildText],
+      autoCreateLabel: 'Auto-Create #bot-news & Release Hub',
+      autoCreateDescription: 'Creates a public #bot-news channel and publishes the Release Hub announcement.',
+      async getCurrent(guild) {
+        const res = await query(`SELECT channel_id FROM bot_updates_configs WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
+        return res.rows[0]?.channel_id ? `<#${res.rows[0].channel_id}>` : null;
+      },
+      async applyDefault(guild) {
+        const { BotUpdatesService } = require('../status/botUpdatesService');
+        const botUpdates = new BotUpdatesService();
+        await botUpdates.updateConfig(guild.id, { enabled: true });
+        return { result: 'Bot updates enabled' };
+      },
+      async applySelection(guild, channelId) {
+        const { BotUpdatesService } = require('../status/botUpdatesService');
+        const botUpdates = new BotUpdatesService();
+        await botUpdates.setChannel(guild.id, channelId);
+      },
+      async autoCreate(guild) {
+        const channel = await autoCreateChannel(guild, { name: 'bot-news', isPrivate: false, topic: 'SlickBot updates and release notes' });
+        const { BotUpdatesService } = require('../status/botUpdatesService');
+        const botUpdates = new BotUpdatesService();
+        await botUpdates.setChannel(guild.id, channel.id);
+        const releaseEmbed = createBaseEmbed({
+          title: '🚀 SlickBot Updates & Release Hub',
+          description: [
+            'This channel receives official release announcements, new module highlights, and patch notes for **SlickBot**.',
+            '',
+            'Stay tuned here for new feature rollouts and system improvements!'
+          ].join('\n'),
+          color: SlickBotColors.PRIMARY,
+          footer: 'SlickBot System Updates'
+        });
+        if (channel && typeof channel.send === 'function') {
+          await channel.send({ embeds: [releaseEmbed] }).catch(() => {});
+        }
+        return { created: `#${channel.name} (Release Hub published)` };
+      }
+    },
+    {
+      id: 'server_social_feeds',
+      moduleKey: ModuleKeys.SOCIAL_FEEDS,
+      moduleName: 'Social Streams & Video Feeds',
+      categoryKey: 'AUTOMATION',
+      categoryLabel: 'Automation & Feeds',
+      moduleOverview: 'Automatic notifications when creators go live on Twitch, publish YouTube videos, or post TikToks.',
+      title: 'Social Streams & Live Directory Hub Channel',
+      description: 'Select the channel for Twitch, YouTube, and TikTok notifications and pin the Live Stream Directory.',
+      pickerType: 'CHANNEL',
+      channelTypes: [ChannelType.GuildText],
+      autoCreateLabel: 'Auto-Create #stream-alerts & Pin Live Hub',
+      autoCreateDescription: 'Creates public #stream-alerts channel, configures feeds, and pins the live Creator Hub Directory.',
+      async getCurrent(guild) {
+        const res = await query(`SELECT default_channel_id FROM social_feed_configs WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
+        return res.rows[0]?.default_channel_id ? `<#${res.rows[0].default_channel_id}>` : null;
+      },
+      async applyDefault(guild) {
+        const { SocialFeedService } = require('../automation/socialFeedService');
+        const feeds = new SocialFeedService();
+        await feeds.updateConfig(guild.id, { enabled: true });
+        return { result: 'Social feeds initialized' };
+      },
+      async applySelection(guild, channelId) {
+        const { SocialFeedService } = require('../automation/socialFeedService');
+        const feeds = new SocialFeedService();
+        await feeds.updateConfig(guild.id, { defaultChannelId: channelId, enabled: true });
+      },
+      async autoCreate(guild) {
+        const channel = await autoCreateChannel(guild, { name: 'stream-alerts', isPrivate: false, topic: 'Live stream & video notifications' });
+        const { SocialFeedService } = require('../automation/socialFeedService');
+        const feeds = new SocialFeedService();
+        await feeds.updateConfig(guild.id, { defaultChannelId: channel.id, liveDirectoryChannelId: channel.id, enabled: true });
+        const dirPayload = await feeds.buildLiveDirectoryPayload(guild.id, guild.client);
+        if (channel && typeof channel.send === 'function') {
+          const sentMsg = await channel.send(dirPayload).catch(() => null);
+          if (sentMsg?.id) {
+            await sentMsg.pin().catch(() => {});
+            await query(`UPDATE social_feed_configs SET live_directory_message_id = $2 WHERE guild_id = $1`, [guild.id, sentMsg.id]).catch(() => {});
+          }
+        }
+        return { created: `#${channel.name} (Live Creator Hub pinned)` };
       }
     }
   ],
@@ -571,12 +1488,12 @@ const ONBOARDING_STEPS = Object.freeze({
     {
       id: 'ticket_category',
       moduleKey: ModuleKeys.TICKETS,
-      title: 'Ticket Category',
-      description: 'Select the category channel where new tickets will be created.',
+      title: 'Ticket Category & Submission Hub',
+      description: 'Select the category channel where new tickets will be created and publish the public ticket panel.',
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildCategory],
-      autoCreateLabel: 'Auto-Create "Tickets" Category',
-      autoCreateDescription: 'Creates a private "Tickets" category.',
+      autoCreateLabel: 'Auto-Create Tickets & Publish Panel',
+      autoCreateDescription: 'Creates private "Tickets" category, #submit-tickets channel, and posts the live Ticket Panel.',
       async getCurrent(guild) {
         const res = await query(`SELECT category_id FROM ticket_configs WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.category_id ? `Category <#${res.rows[0].category_id}>` : null;
@@ -594,10 +1511,19 @@ const ONBOARDING_STEPS = Object.freeze({
       },
       async autoCreate(guild) {
         const category = await autoCreateChannel(guild, { name: 'Tickets', type: ChannelType.GuildCategory, isPrivate: true });
+        const panelChannel = await autoCreateChannel(guild, { name: 'submit-tickets', isPrivate: false, topic: 'Open a support ticket with staff' });
+        const staffRole = await autoCreateRole(guild, { name: 'Support Staff', color: '#3498db' });
         const { TicketService } = require('../support/supportService');
+        const { buildPublicTicketPanel } = require('../support/supportUi');
         const tickets = new TicketService();
-        await tickets.updateConfig(guild.id, { categoryId: category.id });
-        return { created: `Category "${category.name}"` };
+        await tickets.updateConfig(guild.id, { categoryId: category.id, staffRoleId: staffRole.id });
+        const types = await tickets.listTypes(guild.id);
+        const cfg = await tickets.getConfig(guild.id);
+        const panelPayload = await buildPublicTicketPanel(types, cfg);
+        if (panelChannel && typeof panelChannel.send === 'function') {
+          await panelChannel.send(panelPayload).catch(() => {});
+        }
+        return { created: `Category "${category.name}", #${panelChannel.name} (Ticket Panel published), @${staffRole.name}` };
       }
     },
     {
@@ -645,8 +1571,8 @@ const ONBOARDING_STEPS = Object.freeze({
       description: 'Select the text channel where giveaways will be hosted by default.',
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildText],
-      autoCreateLabel: 'Auto-Create #giveaways',
-      autoCreateDescription: 'Creates a public #giveaways channel.',
+      autoCreateLabel: 'Auto-Create #giveaways & Guide',
+      autoCreateDescription: 'Creates a public #giveaways channel and publishes the Giveaway Guide.',
       async getCurrent(guild) {
         const res = await query(`SELECT default_channel_id FROM giveaway_configs WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.default_channel_id ? `<#${res.rows[0].default_channel_id}>` : null;
@@ -667,7 +1593,22 @@ const ONBOARDING_STEPS = Object.freeze({
         const { GiveawayService } = require('../community/giveawayService');
         const giveaways = new GiveawayService();
         await giveaways.updateConfig(guild.id, { defaultChannelId: channel.id });
-        return { created: `#${channel.name}` };
+        const guideEmbed = createBaseEmbed({
+          title: '🎁 Community Giveaways',
+          description: [
+            'Welcome to the server giveaways channel!',
+            '',
+            'Active prize draws will appear here. Click the **🎉 Enter Giveaway** button on any giveaway post to participate.',
+            '',
+            'Staff can launch new giveaways anytime using `/giveaway start` or `/giveaway create`.'
+          ].join('\n'),
+          color: SlickBotColors.PRIMARY,
+          footer: 'SlickBot Giveaways'
+        });
+        if (channel && typeof channel.send === 'function') {
+          await channel.send({ embeds: [guideEmbed] }).catch(() => {});
+        }
+        return { created: `#${channel.name} (Giveaway Guide published)` };
       }
     }
   ],
@@ -676,12 +1617,12 @@ const ONBOARDING_STEPS = Object.freeze({
     {
       id: 'birthday_channel',
       moduleKey: ModuleKeys.BIRTHDAYS,
-      title: 'Birthday Announcement Channel',
-      description: 'Select the text channel where birthday wishes will be posted.',
+      title: 'Birthday Announcement Channel & Registration Panel',
+      description: 'Select the text channel where birthday wishes will be posted and publish the birthday registration panel.',
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildText],
-      autoCreateLabel: 'Auto-Create #birthdays',
-      autoCreateDescription: 'Creates a public #birthdays channel.',
+      autoCreateLabel: 'Auto-Create #birthdays & Birthday Panel',
+      autoCreateDescription: 'Creates a public #birthdays channel, @Birthday Star role, and posts the interactive Set Birthday button panel.',
       async getCurrent(guild) {
         const res = await query(`SELECT channel_id FROM birthday_configs WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.channel_id ? `<#${res.rows[0].channel_id}>` : null;
@@ -689,20 +1630,26 @@ const ONBOARDING_STEPS = Object.freeze({
       async applyDefault(guild) {
         const { BirthdayService } = require('../community/birthdayService');
         const birthdays = new BirthdayService();
-        await birthdays.setup(guild.id, { enabled: true });
+        await birthdays.updateConfig(guild.id, { enabled: true });
         return { result: 'Birthday announcements enabled' };
       },
       async applySelection(guild, channelId) {
         const { BirthdayService } = require('../community/birthdayService');
         const birthdays = new BirthdayService();
-        await birthdays.setup(guild.id, { channelId, enabled: true });
+        await birthdays.updateConfig(guild.id, { channelId, enabled: true });
       },
       async autoCreate(guild) {
         const channel = await autoCreateChannel(guild, { name: 'birthdays', isPrivate: false, topic: 'Community Birthdays' });
-        const { BirthdayService } = require('../community/birthdayService');
+        const birthdayRole = await autoCreateRole(guild, { name: 'Birthday Star', color: '#e91e63' });
+        const { BirthdayService, buildBirthdayPublicPanel } = require('../community/birthdayService');
         const birthdays = new BirthdayService();
-        await birthdays.setup(guild.id, { channelId: channel.id, enabled: true });
-        return { created: `#${channel.name}` };
+        await birthdays.updateConfig(guild.id, { channelId: channel.id, birthdayRoleId: birthdayRole.id, enabled: true });
+        const cfg = await birthdays.getConfig(guild.id);
+        const panelPayload = buildBirthdayPublicPanel(cfg);
+        if (channel && typeof channel.send === 'function') {
+          await channel.send(panelPayload).catch(() => {});
+        }
+        return { created: `#${channel.name} (Birthday Registration Panel published), @${birthdayRole.name}` };
       }
     }
   ],
@@ -711,12 +1658,12 @@ const ONBOARDING_STEPS = Object.freeze({
     {
       id: 'suggestions_channel',
       moduleKey: ModuleKeys.SUGGESTIONS,
-      title: 'Suggestions Voting Channel',
+      title: 'Suggestions Channel & Submission Hub',
       description: 'Select the text channel where member suggestions will be posted for voting.',
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildText],
-      autoCreateLabel: 'Auto-Create #suggestions',
-      autoCreateDescription: 'Creates a public #suggestions channel.',
+      autoCreateLabel: 'Auto-Create #suggestions & Publish Panel',
+      autoCreateDescription: 'Creates a public #suggestions channel and posts the interactive Suggestion Panel.',
       async getCurrent(guild) {
         const res = await query(`SELECT channel_id FROM suggestion_configs WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.channel_id ? `<#${res.rows[0].channel_id}>` : null;
@@ -737,7 +1684,12 @@ const ONBOARDING_STEPS = Object.freeze({
         const { SuggestionService } = require('../community/suggestionService');
         const suggestions = new SuggestionService();
         await suggestions.setup(guild.id, { channelId: channel.id, panelActive: true });
-        return { created: `#${channel.name}` };
+        const cfg = await suggestions.getConfig(guild.id);
+        const panelPayload = suggestions.buildPanelPayload(cfg);
+        if (channel && typeof channel.send === 'function') {
+          await channel.send(panelPayload).catch(() => {});
+        }
+        return { created: `#${channel.name} (Suggestion Panel published)` };
       }
     }
   ],
@@ -750,8 +1702,8 @@ const ONBOARDING_STEPS = Object.freeze({
       description: 'Select where SlickBot announces new releases, features, and patch notes.',
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildText],
-      autoCreateLabel: 'Auto-Create #bot-news',
-      autoCreateDescription: 'Creates a public #bot-news channel.',
+      autoCreateLabel: 'Auto-Create #bot-news & Release Hub',
+      autoCreateDescription: 'Creates a public #bot-news channel and publishes the Release Hub announcement.',
       async getCurrent(guild) {
         const res = await query(`SELECT channel_id FROM bot_updates_configs WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.channel_id ? `<#${res.rows[0].channel_id}>` : null;
@@ -772,7 +1724,20 @@ const ONBOARDING_STEPS = Object.freeze({
         const { BotUpdatesService } = require('../status/botUpdatesService');
         const botUpdates = new BotUpdatesService();
         await botUpdates.setChannel(guild.id, channel.id);
-        return { created: `#${channel.name}` };
+        const releaseEmbed = createBaseEmbed({
+          title: '🚀 SlickBot Updates & Release Hub',
+          description: [
+            'This channel receives official release announcements, new module highlights, and patch notes for **SlickBot**.',
+            '',
+            'Stay tuned here for new feature rollouts and system improvements!'
+          ].join('\n'),
+          color: SlickBotColors.PRIMARY,
+          footer: 'SlickBot System Updates'
+        });
+        if (channel && typeof channel.send === 'function') {
+          await channel.send({ embeds: [releaseEmbed] }).catch(() => {});
+        }
+        return { created: `#${channel.name} (Release Hub published)` };
       }
     }
   ],
@@ -781,33 +1746,41 @@ const ONBOARDING_STEPS = Object.freeze({
     {
       id: 'feeds_channel',
       moduleKey: ModuleKeys.SOCIAL_FEEDS,
-      title: 'Social Streams & Video Alerts Channel',
-      description: 'Select the default channel for Twitch, YouTube, and TikTok notifications.',
+      title: 'Social Streams & Live Directory Hub Channel',
+      description: 'Select the channel for Twitch, YouTube, and TikTok notifications and pin the Live Stream Directory.',
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildText],
-      autoCreateLabel: 'Auto-Create #stream-alerts',
-      autoCreateDescription: 'Creates a public #stream-alerts channel.',
+      autoCreateLabel: 'Auto-Create #stream-alerts & Pin Live Hub',
+      autoCreateDescription: 'Creates public #stream-alerts channel, configures feeds, and pins the live Creator Hub Directory.',
       async getCurrent(guild) {
-        const res = await query(`SELECT default_channel_id FROM feed_configs WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
+        const res = await query(`SELECT default_channel_id FROM social_feed_configs WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.default_channel_id ? `<#${res.rows[0].default_channel_id}>` : null;
       },
       async applyDefault(guild) {
         const { SocialFeedService } = require('../automation/socialFeedService');
         const feeds = new SocialFeedService();
-        await feeds.setup(guild.id, { enabled: true });
+        await feeds.updateConfig(guild.id, { enabled: true });
         return { result: 'Social feeds initialized' };
       },
       async applySelection(guild, channelId) {
         const { SocialFeedService } = require('../automation/socialFeedService');
         const feeds = new SocialFeedService();
-        await feeds.setup(guild.id, { defaultChannelId: channelId });
+        await feeds.updateConfig(guild.id, { defaultChannelId: channelId, enabled: true });
       },
       async autoCreate(guild) {
         const channel = await autoCreateChannel(guild, { name: 'stream-alerts', isPrivate: false, topic: 'Live stream & video notifications' });
         const { SocialFeedService } = require('../automation/socialFeedService');
         const feeds = new SocialFeedService();
-        await feeds.setup(guild.id, { defaultChannelId: channel.id });
-        return { created: `#${channel.name}` };
+        await feeds.updateConfig(guild.id, { defaultChannelId: channel.id, liveDirectoryChannelId: channel.id, enabled: true });
+        const dirPayload = await feeds.buildLiveDirectoryPayload(guild.id, guild.client);
+        if (channel && typeof channel.send === 'function') {
+          const sentMsg = await channel.send(dirPayload).catch(() => null);
+          if (sentMsg?.id) {
+            await sentMsg.pin().catch(() => {});
+            await query(`UPDATE social_feed_configs SET live_directory_message_id = $2 WHERE guild_id = $1`, [guild.id, sentMsg.id]).catch(() => {});
+          }
+        }
+        return { created: `#${channel.name} (Live Creator Hub pinned)` };
       }
     }
   ],
@@ -1181,30 +2154,105 @@ const ONBOARDING_STEPS = Object.freeze({
     {
       id: 'reaction_roles_channel',
       moduleKey: ModuleKeys.REACTION_ROLES,
-      title: 'Role Panels Channel',
-      description: 'Select the channel where self-assignable role panels and button menus will be posted.',
+      title: 'Notification & Community Roles (Buttons Preset)',
+      description: 'Select the channel where self-assignable notification role panels and button menus will be posted.',
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildText],
-      autoCreateLabel: 'Auto-Create #get-roles',
-      autoCreateDescription: 'Creates public #get-roles channel and starter role panel.',
+      autoCreateLabel: 'Auto-Create #get-roles & Notification Panel',
+      autoCreateDescription: 'Creates public #get-roles channel, 3 starter roles (@Announcements, @Events, @Giveaways), and publishes the button toggle panel.',
       async getCurrent(guild) {
-        const res = await query(`SELECT COUNT(*)::int AS count FROM role_panels WHERE guild_id = $1 AND active = true`, [guild.id]).catch(() => ({ rows: [{ count: 0 }] }));
-        return (res.rows[0]?.count || 0) > 0 ? `${res.rows[0].count} active panel(s)` : null;
+        const res = await query(`SELECT COUNT(*)::int AS count FROM role_panels WHERE guild_id = $1 AND name = 'notification-roles' AND active = true`, [guild.id]).catch(() => ({ rows: [{ count: 0 }] }));
+        return (res.rows[0]?.count || 0) > 0 ? 'Notification Roles panel active' : null;
       },
       async applyDefault(guild) {
         const { createPanel } = require('../community/rolePanelService');
-        await createPanel({ guildId: guild.id, name: 'Main Roles', description: 'Select your notification and interest roles below.' }).catch(() => {});
-        return { result: 'Starter role panel created' };
+        await createPanel({ guildId: guild.id, name: 'notification-roles', title: '🔔 Notification Roles', description: 'Select your notification roles below.' }).catch(() => {});
+        return { result: 'Starter notification role panel created' };
       },
       async applySelection(guild, channelId) {
         const { createPanel } = require('../community/rolePanelService');
-        await createPanel({ guildId: guild.id, name: 'Main Roles', description: 'Select your notification and interest roles below.' }).catch(() => {});
+        await createPanel({ guildId: guild.id, name: 'notification-roles', title: '🔔 Notification Roles', description: 'Select your notification roles below.' }).catch(() => {});
       },
       async autoCreate(guild) {
         const channel = await autoCreateChannel(guild, { name: 'get-roles', isPrivate: false, topic: 'Self-assignable member roles' });
+        const announceRole = await autoCreateRole(guild, { name: 'Announcements', color: '#3498db' });
+        const eventsRole = await autoCreateRole(guild, { name: 'Events', color: '#9b59b6' });
+        const giveRole = await autoCreateRole(guild, { name: 'Giveaways', color: '#f1c40f' });
+        const { createPanel, addOption, buildRolePanelMessage } = require('../community/rolePanelService');
+        const panel = await createPanel({
+          guildId: guild.id,
+          name: 'notification-roles',
+          title: '🔔 Notification & Community Roles',
+          description: 'Click the buttons below to toggle roles and customize what notifications you receive!',
+          color: '#5865f2',
+          mode: 'MULTI',
+          displayMode: 'BUTTONS'
+        });
+        await addOption({ guildId: guild.id, panelName: 'notification-roles', roleId: announceRole.id, label: 'Announcements', emoji: '📢', buttonColor: '#3498db' });
+        await addOption({ guildId: guild.id, panelName: 'notification-roles', roleId: eventsRole.id, label: 'Events', emoji: '🎉', buttonColor: '#9b59b6' });
+        await addOption({ guildId: guild.id, panelName: 'notification-roles', roleId: giveRole.id, label: 'Giveaways', emoji: '🎁', buttonColor: '#f1c40f' });
+        const panelPayload = await buildRolePanelMessage(panel);
+        if (channel && typeof channel.send === 'function') {
+          await channel.send(panelPayload).catch(() => {});
+        }
+        return { created: `#${channel.name} (Notification Role Panel published), 3 roles` };
+      }
+    },
+    {
+      id: 'color_roles_channel',
+      moduleKey: ModuleKeys.REACTION_ROLES,
+      title: 'Chat Username Colors (Dropdown Preset)',
+      description: 'Select a channel where members can choose their favorite chat username color from a dropdown menu (Single-choice).',
+      pickerType: 'CHANNEL',
+      channelTypes: [ChannelType.GuildText],
+      autoCreateLabel: 'Auto-Create 8 Color Roles & Dropdown Panel',
+      autoCreateDescription: 'Creates 8 color roles (Red, Orange, Yellow, Green, Blue, Purple, Pink, Cyan) and publishes a Dropdown Menu panel in #get-roles.',
+      async getCurrent(guild) {
+        const res = await query(`SELECT COUNT(*)::int AS count FROM role_panels WHERE guild_id = $1 AND name = 'color-roles' AND active = true`, [guild.id]).catch(() => ({ rows: [{ count: 0 }] }));
+        return (res.rows[0]?.count || 0) > 0 ? 'Color Roles dropdown active' : null;
+      },
+      async applyDefault(guild) {
         const { createPanel } = require('../community/rolePanelService');
-        await createPanel({ guildId: guild.id, name: 'Main Roles', description: 'Select your notification and interest roles below.' }).catch(() => {});
-        return { created: `#${channel.name} & "Main Roles" panel` };
+        await createPanel({ guildId: guild.id, name: 'color-roles', title: '🎨 Name Colors', mode: 'SINGLE', displayMode: 'DROPDOWN' }).catch(() => {});
+        return { result: 'Color roles preset initialized' };
+      },
+      async applySelection(guild, channelId) {
+        const { createPanel } = require('../community/rolePanelService');
+        await createPanel({ guildId: guild.id, name: 'color-roles', title: '🎨 Name Colors', mode: 'SINGLE', displayMode: 'DROPDOWN' }).catch(() => {});
+      },
+      async autoCreate(guild) {
+        const channel = await autoCreateChannel(guild, { name: 'get-roles', isPrivate: false, topic: 'Self-assignable member roles' });
+        const createdRoles = [];
+        for (const c of COLOR_PRESET_OPTIONS) {
+          const r = await autoCreateRole(guild, { name: c.name, color: c.hex });
+          createdRoles.push({ ...c, roleId: r.id });
+        }
+        const { createPanel, addOption, buildRolePanelMessage } = require('../community/rolePanelService');
+        const panel = await createPanel({
+          guildId: guild.id,
+          name: 'color-roles',
+          title: '🎨 Pick Your Name Color',
+          description: 'Choose a color from the dropdown menu below to customize your username color in chat!',
+          color: '#5865f2',
+          mode: 'SINGLE',
+          displayMode: 'DROPDOWN'
+        });
+        for (const c of createdRoles) {
+          await addOption({
+            guildId: guild.id,
+            panelName: 'color-roles',
+            roleId: c.roleId,
+            label: c.name,
+            emoji: c.emoji,
+            description: `Set your username color to ${c.name}`,
+            buttonColor: c.hex
+          });
+        }
+        const panelPayload = await buildRolePanelMessage(panel);
+        if (channel && typeof channel.send === 'function') {
+          await channel.send(panelPayload).catch(() => {});
+        }
+        return { created: `#${channel.name} (8 Color Roles & Dropdown Panel published)` };
       }
     }
   ],
@@ -1217,8 +2265,8 @@ const ONBOARDING_STEPS = Object.freeze({
       description: 'Select the channel where member rank and level-up announcements will be posted.',
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildText],
-      autoCreateLabel: 'Auto-Create #level-ups',
-      autoCreateDescription: 'Creates public #level-ups channel and enables XP awards.',
+      autoCreateLabel: 'Auto-Create #level-ups & Rewards Guide',
+      autoCreateDescription: 'Creates public #level-ups channel and publishes the Leveling XP Guide.',
       async getCurrent(guild) {
         const res = await query(`SELECT level_up_channel_id, enabled FROM leveling_configs WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.level_up_channel_id ? `<#${res.rows[0].level_up_channel_id}>` : null;
@@ -1239,21 +2287,37 @@ const ONBOARDING_STEPS = Object.freeze({
         const { LevelingService } = require('../community/levelingService');
         const leveling = new LevelingService();
         await leveling.upsertConfig(guild.id, { levelUpChannelId: channel.id, enabled: true });
-        return { created: `#${channel.name}` };
+        const levelEmbed = createBaseEmbed({
+          title: '🏆 Leveling & XP Rewards System',
+          description: [
+            'Earn XP automatically by chatting in text channels, participating in voice channels, and playing community games!',
+            '',
+            '**Useful Commands:**',
+            '• `/level rank` — View your current level, rank, and XP progress',
+            '• `/level leaderboard` — View the top ranked server members',
+            '• `/level card` — Customize your rank card background and theme'
+          ].join('\n'),
+          color: SlickBotColors.PRIMARY,
+          footer: 'SlickBot Leveling'
+        });
+        if (channel && typeof channel.send === 'function') {
+          await channel.send({ embeds: [levelEmbed] }).catch(() => {});
+        }
+        return { created: `#${channel.name} (Leveling Rewards Guide published)` };
       }
     }
   ],
 
   [ModuleKeys.COMMUNITY_GAMES]: [
     {
-      id: 'counting_channel',
+      id: 'games_lounge_channel',
       moduleKey: ModuleKeys.COMMUNITY_GAMES,
-      title: 'Community Counting Channel',
-      description: 'Select the channel where members work together in the persistent counting game.',
+      title: 'Community Games Lounge & Counting Channels',
+      description: 'Select channels for community board games and the server counting challenge.',
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildText],
-      autoCreateLabel: 'Auto-Create #counting',
-      autoCreateDescription: 'Creates public #counting channel and enables Tic-Tac-Toe & Connect 4.',
+      autoCreateLabel: 'Auto-Create #game-lounge & Games Panel',
+      autoCreateDescription: 'Creates #game-lounge and #counting channels, enables games, and publishes the Game Lounge challenge panel.',
       async getCurrent(guild) {
         const res = await query(`SELECT channel_id FROM counting_game_configs WHERE guild_id = $1 LIMIT 1`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.channel_id ? `<#${res.rows[0].channel_id}>` : null;
@@ -1274,14 +2338,22 @@ const ONBOARDING_STEPS = Object.freeze({
         await games.upsertGameConfig(guild.id, 'CONNECT_FOUR', { enabled: true });
       },
       async autoCreate(guild) {
-        const channel = await autoCreateChannel(guild, { name: 'counting', isPrivate: false, topic: 'Community counting challenge' });
-        const { CommunityGameService } = require('../community/gameService');
+        const loungeChannel = await autoCreateChannel(guild, { name: 'game-lounge', isPrivate: false, topic: 'Challenge friends to Tic-Tac-Toe and Connect Four!' });
+        const countChannel = await autoCreateChannel(guild, { name: 'counting', isPrivate: false, topic: 'Community counting challenge — Count up one number at a time!' });
+        const { CommunityGameService, GAME_KEYS } = require('../community/gameService');
         const games = new CommunityGameService();
-        await games.upsertGameConfig(guild.id, 'COUNTING', { enabled: true, channelId: channel.id });
-        await games.upsertCountingConfig(guild.id, { channelId: channel.id });
-        await games.upsertGameConfig(guild.id, 'TIC_TAC_TOE', { enabled: true });
-        await games.upsertGameConfig(guild.id, 'CONNECT_FOUR', { enabled: true });
-        return { created: `#${channel.name} & enabled games` };
+        await games.updateBoardGameConfig(guild.id, GAME_KEYS.TIC_TAC_TOE, { enabled: true, channelId: loungeChannel.id, winXp: 50 });
+        await games.updateBoardGameConfig(guild.id, GAME_KEYS.CONNECT_FOUR, { enabled: true, channelId: loungeChannel.id, winXp: 50 });
+        await games.updateCountingConfig(guild.id, { channelId: countChannel.id, startingNumber: 1, resetOnIncorrect: true });
+        if (loungeChannel && typeof loungeChannel.send === 'function') {
+          await games.createGamePanel({
+            guildId: guild.id,
+            channel: loungeChannel,
+            title: '🎮 SlickBot Game Lounge',
+            description: 'Challenge your friends to **Tic-Tac-Toe** or **Connect Four** and earn XP! Select a game below to begin.'
+          }).catch(() => {});
+        }
+        return { created: `#${loungeChannel.name} (Games Panel published), #${countChannel.name}` };
       }
     }
   ],
@@ -1294,13 +2366,13 @@ const ONBOARDING_STEPS = Object.freeze({
       description: 'Select the forum channel where FAQ questions and answers are organized.',
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildForum, ChannelType.GuildText],
-      autoCreateLabel: 'Auto-Create #faq-help',
-      autoCreateDescription: 'Creates public #faq-help channel for knowledge base.',
+      autoCreateLabel: 'Auto-Create #faq-help & Publish Panel',
+      autoCreateDescription: 'Creates public #faq-help channel and publishes the interactive FAQ Search Panel.',
       async getCurrent(guild) {
         const res = await query(`SELECT forum_channel_id FROM faq_configs WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.forum_channel_id ? `<#${res.rows[0].forum_channel_id}>` : null;
       },
-      async applyDefault(guild) {
+      async applyDefault() {
         return { result: 'FAQ system ready' };
       },
       async applySelection(guild, channelId) {
@@ -1309,7 +2381,22 @@ const ONBOARDING_STEPS = Object.freeze({
       async autoCreate(guild) {
         const channel = await autoCreateChannel(guild, { name: 'faq-help', isPrivate: false, topic: 'Frequently asked questions & knowledge base' });
         await query(`INSERT INTO faq_configs (guild_id, forum_channel_id) VALUES ($1, $2) ON CONFLICT (guild_id) DO UPDATE SET forum_channel_id = EXCLUDED.forum_channel_id, updated_at = NOW()`, [guild.id, channel.id]);
-        return { created: `#${channel.name}` };
+        const { createBaseEmbed, createButtonRow, createPanelButton, ButtonStyle, SlickBotColors } = require('../ui/uiService');
+        const { CustomIds } = require('../ui/customIds');
+        const faqEmbed = createBaseEmbed({
+          title: '📖 Server FAQ & Knowledge Base',
+          description: 'Welcome to the FAQ hub! Click **Search FAQ** below to search for answers, view common guidelines, or open support if you need further help.',
+          color: SlickBotColors.INFO,
+          footer: 'SlickBot Knowledge Base'
+        });
+        const row = createButtonRow([
+          createPanelButton(CustomIds.FaqSearchModal, 'Search FAQ', ButtonStyle.Primary, '🔍'),
+          createPanelButton(CustomIds.TicketsRefresh, 'Open Support', ButtonStyle.Secondary, '🎟️')
+        ]);
+        if (channel && typeof channel.send === 'function') {
+          await channel.send({ embeds: [faqEmbed], components: [row] }).catch(() => {});
+        }
+        return { created: `#${channel.name} (FAQ Guide Panel published)` };
       }
     }
   ],
@@ -1320,6 +2407,10 @@ const ONBOARDING_STEPS = Object.freeze({
       moduleKey: ModuleKeys.REFERRALS,
       title: 'Member Referral Tracking & Bonus XP',
       description: 'Enable member referral rewards and tracking.',
+      pickerType: 'CHANNEL',
+      channelTypes: [ChannelType.GuildText],
+      autoCreateLabel: 'Auto-Create #referrals & Referral Guide',
+      autoCreateDescription: 'Creates public #referrals channel and enables 500 XP bonus per invite.',
       async getCurrent(guild) {
         const res = await query(`SELECT referral_xp, enabled FROM referral_configs WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.enabled !== false ? `${res.rows[0]?.referral_xp || 500} XP Bonus (Enabled)` : null;
@@ -1336,10 +2427,29 @@ const ONBOARDING_STEPS = Object.freeze({
         await referrals.upsertConfig(guild.id, { enabled: true, referralXp: 500 });
       },
       async autoCreate(guild) {
+        const channel = await autoCreateChannel(guild, { name: 'referrals', isPrivate: false, topic: 'Invite friends and earn referral bonus XP' });
         const { ReferralService } = require('../community/referralService');
         const referrals = new ReferralService();
         await referrals.upsertConfig(guild.id, { enabled: true, referralXp: 500 });
-        return { created: 'Referral tracking with 500 XP bonus' };
+        const refEmbed = createBaseEmbed({
+          title: '🤝 Member Referral Program',
+          description: [
+            'Invite your friends to the server and earn **500 Bonus XP** for every verified member who joins through your link!',
+            '',
+            '**How It Works:**',
+            '1. Run `/referral link` to generate your unique server invite link.',
+            '2. Share your link with friends.',
+            '3. When they join, your referral count increases and bonus XP is awarded automatically!',
+            '',
+            'Use `/referral stats` to track your total invites and bonus XP earned.'
+          ].join('\n'),
+          color: SlickBotColors.PRIMARY,
+          footer: 'SlickBot Referrals • 500 XP per invite'
+        });
+        if (channel && typeof channel.send === 'function') {
+          await channel.send({ embeds: [refEmbed] }).catch(() => {});
+        }
+        return { created: `#${channel.name} (Referral Guide published)` };
       }
     }
   ],
@@ -1352,8 +2462,8 @@ const ONBOARDING_STEPS = Object.freeze({
       description: 'Select the channel where member achievement tier milestones will be celebrated.',
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildText],
-      autoCreateLabel: 'Auto-Create #achievements',
-      autoCreateDescription: 'Creates public #achievements channel and enables DM notifications.',
+      autoCreateLabel: 'Auto-Create #achievements & Showcase',
+      autoCreateDescription: 'Creates public #achievements channel, initializes starter milestone tiers, and publishes the Achievements Showcase.',
       async getCurrent(guild) {
         const res = await query(`SELECT announcement_channel_id FROM achievement_configs WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.announcement_channel_id ? `<#${res.rows[0].announcement_channel_id}>` : null;
@@ -1377,7 +2487,22 @@ const ONBOARDING_STEPS = Object.freeze({
         const achievements = new AchievementService();
         await achievements.ensureDefaultTiers(guild.id);
         await achievements.upsertConfig(guild.id, { announcementChannelId: channel.id, enabled: true, dmEnabled: true });
-        return { created: `#${channel.name}` };
+        const achieveEmbed = createBaseEmbed({
+          title: '🏅 Community Achievements & Milestones',
+          description: [
+            'Unlock achievements and showcase badges as you participate in the server!',
+            '',
+            'Milestones are tracked for message counts, voice time, ticket resolutions, and community game victories.',
+            '',
+            '**Check Your Progress:** Use `/achievement list` to see available milestones and unlock status.'
+          ].join('\n'),
+          color: SlickBotColors.PRIMARY,
+          footer: 'SlickBot Achievements'
+        });
+        if (channel && typeof channel.send === 'function') {
+          await channel.send({ embeds: [achieveEmbed] }).catch(() => {});
+        }
+        return { created: `#${channel.name} (Achievements Showcase published)` };
       }
     }
   ],
@@ -1586,8 +2711,8 @@ const ONBOARDING_STEPS = Object.freeze({
       description: 'Select the showcase channel where top-starred community messages will be pinned automatically.',
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildText, ChannelType.GuildAnnouncement],
-      autoCreateLabel: 'Auto-Create #starboard',
-      autoCreateDescription: 'Creates a public #starboard channel.',
+      autoCreateLabel: 'Auto-Create #starboard & Guide',
+      autoCreateDescription: 'Creates a public #starboard showcase channel and publishes the Hall of Fame guide.',
       async getCurrent(guild) {
         const res = await query(`SELECT channel_id FROM starboard_configs WHERE guild_id = $1 LIMIT 1`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.channel_id ? `<#${res.rows[0].channel_id}>` : null;
@@ -1597,8 +2722,8 @@ const ONBOARDING_STEPS = Object.freeze({
         const existing = cacheList.find((c) => ['starboard', 'hall-of-fame', 'stars', 'highlights'].includes(c?.name?.toLowerCase()));
         if (existing) {
           await query(
-            `INSERT INTO starboard_configs (guild_id, channel_id, enabled)
-             VALUES ($1, $2, true)
+            `INSERT INTO starboard_configs (guild_id, channel_id, enabled, threshold, emoji)
+             VALUES ($1, $2, true, 3, '⭐')
              ON CONFLICT (guild_id) DO UPDATE SET channel_id = EXCLUDED.channel_id, updated_at = NOW()`,
             [guild.id, existing.id]
           );
@@ -1608,8 +2733,8 @@ const ONBOARDING_STEPS = Object.freeze({
       },
       async applySelection(guild, channelId) {
         await query(
-          `INSERT INTO starboard_configs (guild_id, channel_id, enabled)
-           VALUES ($1, $2, true)
+          `INSERT INTO starboard_configs (guild_id, channel_id, enabled, threshold, emoji)
+           VALUES ($1, $2, true, 3, '⭐')
            ON CONFLICT (guild_id) DO UPDATE SET channel_id = EXCLUDED.channel_id, updated_at = NOW()`,
           [guild.id, channelId]
         );
@@ -1617,12 +2742,27 @@ const ONBOARDING_STEPS = Object.freeze({
       async autoCreate(guild) {
         const channel = await autoCreateChannel(guild, { name: 'starboard', isPrivate: false, topic: 'Community Hall of Fame — Starred messages' });
         await query(
-          `INSERT INTO starboard_configs (guild_id, channel_id, enabled)
-           VALUES ($1, $2, true)
+          `INSERT INTO starboard_configs (guild_id, channel_id, enabled, threshold, emoji)
+           VALUES ($1, $2, true, 3, '⭐')
            ON CONFLICT (guild_id) DO UPDATE SET channel_id = EXCLUDED.channel_id, updated_at = NOW()`,
           [guild.id, channel.id]
         );
-        return { created: `#${channel.name}` };
+        const starEmbed = createBaseEmbed({
+          title: '⭐ Community Starboard / Hall of Fame',
+          description: [
+            'Welcome to the server Hall of Fame!',
+            '',
+            'When great messages, funny quotes, or impressive achievements receive **3 or more ⭐ reactions**, they are automatically featured here.',
+            '',
+            'React to your favorite messages with ⭐ to vote them onto the board!'
+          ].join('\n'),
+          color: 0xf1c40f,
+          footer: 'SlickBot Starboard • Threshold: 3 ⭐'
+        });
+        if (channel && typeof channel.send === 'function') {
+          await channel.send({ embeds: [starEmbed] }).catch(() => {});
+        }
+        return { created: `#${channel.name} (Hall of Fame Guide published)` };
       }
     }
   ]
@@ -1644,11 +2784,17 @@ const CATEGORY_ONBOARDING_MAP = Object.freeze({
   ],
   COMMUNITY: [
     ...ONBOARDING_STEPS[ModuleKeys.WELCOME],
+    ...ONBOARDING_STEPS[ModuleKeys.REACTION_ROLES],
     ...ONBOARDING_STEPS[ModuleKeys.SERVER_STATS],
     ...ONBOARDING_STEPS[ModuleKeys.GIVEAWAYS],
     ...ONBOARDING_STEPS[ModuleKeys.BIRTHDAYS],
+    ...ONBOARDING_STEPS[ModuleKeys.COMMUNITY_GAMES],
     ...ONBOARDING_STEPS[ModuleKeys.SUGGESTIONS],
-    ...ONBOARDING_STEPS[ModuleKeys.STARBOARD]
+    ...ONBOARDING_STEPS[ModuleKeys.STARBOARD],
+    ...ONBOARDING_STEPS[ModuleKeys.LEVELING],
+    ...ONBOARDING_STEPS[ModuleKeys.ACHIEVEMENTS],
+    ...ONBOARDING_STEPS[ModuleKeys.REFERRALS],
+    ...ONBOARDING_STEPS[ModuleKeys.FAQ]
   ],
   AUTOMATION: [
     ...ONBOARDING_STEPS[ModuleKeys.BOT_UPDATES],
@@ -1656,6 +2802,13 @@ const CATEGORY_ONBOARDING_MAP = Object.freeze({
     ...ONBOARDING_STEPS[ModuleKeys.SCHEDULED_MESSAGES]
   ]
 });
+
+function renderProgressBar(current, total, length = 10) {
+  if (!total || total <= 0) return '░'.repeat(length);
+  const percent = Math.max(0, Math.min(1, current / total));
+  const filled = Math.round(percent * length);
+  return '█'.repeat(filled) + '░'.repeat(Math.max(0, length - filled));
+}
 
 class OnboardingService {
   getSession(sessionId, userId = null) {
@@ -1704,24 +2857,47 @@ class OnboardingService {
     return session;
   }
 
-  async advanceSession(session, guild, action = 'NEXT', payload = {}) {
+  async advanceSession(session, guild, action = 'NEXT', payload = {}, permissions = null) {
     const currentStep = session.steps[session.stepIndex];
+    const moduleKey = currentStep?.moduleKey;
 
     if (action === 'SKIP') {
-      session.completedSteps.push({ step: currentStep, result: 'Skipped' });
+      let isConfigured = false;
+      if (currentStep && typeof currentStep.getCurrent === 'function' && guild) {
+        const currentVal = await currentStep.getCurrent(guild).catch(() => null);
+        if (currentVal) isConfigured = true;
+      }
+
+      if (permissions && moduleKey && guild) {
+        const currentlyEnabled = await permissions.isModuleEnabled(guild.id, moduleKey).catch(() => false);
+        if (!isConfigured && !currentlyEnabled) {
+          await permissions.setModuleEnabled(guild.id, moduleKey, false).catch(() => {});
+          session.completedSteps.push({ step: currentStep, result: 'Skipped (Disabled)' });
+        } else {
+          session.completedSteps.push({ step: currentStep, result: 'Skipped (Kept Active)' });
+        }
+      } else {
+        session.completedSteps.push({ step: currentStep, result: 'Skipped' });
+      }
     } else if (action === 'KEEP_DEFAULT') {
       let applied = 'Applied default';
       if (currentStep && typeof currentStep.applyDefault === 'function') {
         const def = await currentStep.applyDefault(guild, session).catch((err) => ({ error: err.message }));
         applied = def?.result || 'Default applied';
       }
+      if (permissions && moduleKey && guild) {
+        await permissions.setModuleEnabled(guild.id, moduleKey, true).catch(() => {});
+      }
       session.completedSteps.push({ step: currentStep, result: applied });
     } else if (action === 'KEEP_CURRENT') {
       let currentVal = null;
-      if (currentStep && typeof currentStep.getCurrent === 'function') {
+      if (currentStep && typeof currentStep.getCurrent === 'function' && guild) {
         currentVal = await currentStep.getCurrent(guild).catch(() => null);
       }
       if (currentVal) {
+        if (permissions && moduleKey && guild) {
+          await permissions.setModuleEnabled(guild.id, moduleKey, true).catch(() => {});
+        }
         session.completedSteps.push({ step: currentStep, result: `Kept current: ${currentVal}` });
       } else {
         // Fallback to default if no current setup stored
@@ -1730,12 +2906,21 @@ class OnboardingService {
           const def = await currentStep.applyDefault(guild, session).catch((err) => ({ error: err.message }));
           applied = def?.result ? `${def.result} (no current setup stored)` : applied;
         }
+        if (permissions && moduleKey && guild) {
+          await permissions.setModuleEnabled(guild.id, moduleKey, true).catch(() => {});
+        }
         session.completedSteps.push({ step: currentStep, result: applied });
       }
     } else if (action === 'AUTO_CREATE') {
-      session.completedSteps.push({ step: currentStep, result: payload.created || 'Auto-created' });
+      if (permissions && moduleKey && guild) {
+        await permissions.setModuleEnabled(guild.id, moduleKey, true).catch(() => {});
+      }
+      session.completedSteps.push({ step: currentStep, result: payload.created ? `${payload.created} (Enabled)` : 'Auto-created & Enabled' });
     } else if (action === 'SELECT') {
-      session.completedSteps.push({ step: currentStep, result: payload.selected || 'Configured' });
+      if (permissions && moduleKey && guild) {
+        await permissions.setModuleEnabled(guild.id, moduleKey, true).catch(() => {});
+      }
+      session.completedSteps.push({ step: currentStep, result: payload.selected ? `${payload.selected} (Enabled)` : 'Configured & Enabled' });
     }
 
     session.stepIndex += 1;
@@ -1749,13 +2934,13 @@ class OnboardingService {
   buildOnboardingPayload(session, currentVal = null) {
     if (!session || session.stepIndex >= session.steps.length) {
       const completedList = (session?.completedSteps || [])
-        .map((item, idx) => `**Step ${idx + 1}: ${item.step?.title || 'Configuration'}**\n└ ${item.result || 'Completed'}`)
+        .map((item, idx) => `**Step ${idx + 1}: ${item.step?.title || 'Configuration'}** (\`${item.step?.moduleKey || 'MODULE'}\`)\n└ ${item.result || 'Completed'}`)
         .join('\n\n');
 
       return {
         embeds: [createSuccessEmbed(
-          '🎉 Onboarding Complete!',
-          `All setup steps have been completed! Your server is now fully configured and ready to go.\n\n${completedList || ''}`
+          '🎉 Server Onboarding Complete!',
+          `All setup steps have been completed! Your server modules, channels, roles, and interactive panels have been provisioned and configured.\n\n${completedList || ''}`
         )],
         components: [
           new ActionRowBuilder().addComponents(
@@ -1771,24 +2956,55 @@ class OnboardingService {
 
     const currentStep = session.steps[session.stepIndex];
     const totalSteps = session.steps.length;
-    const progressPercent = Math.round(((session.stepIndex) / totalSteps) * 100);
-    const progressBlocks = '█'.repeat(Math.floor(progressPercent / 10)) + '░'.repeat(10 - Math.floor(progressPercent / 10));
+    const currentStepNum = session.stepIndex + 1;
+
+    // Track unique modules across the session
+    const uniqueModules = [];
+    for (const s of session.steps) {
+      if (s?.moduleKey && !uniqueModules.includes(s.moduleKey)) {
+        uniqueModules.push(s.moduleKey);
+      }
+    }
+    const currentModuleKey = currentStep.moduleKey || 'CUSTOM';
+    const currentModuleIndex = Math.max(0, uniqueModules.indexOf(currentModuleKey));
+    const totalUniqueModules = Math.max(1, uniqueModules.length);
+
+    // Module-level sub-step calculations
+    const moduleSteps = session.steps.filter((s) => s?.moduleKey === currentModuleKey);
+    const moduleStepIndex = Math.max(0, moduleSteps.findIndex((s) => s.id === currentStep.id));
+    const totalModuleSteps = Math.max(1, moduleSteps.length);
+
+    // Progress bar calculations
+    const overallPercent = Math.round((session.stepIndex / totalSteps) * 100);
+    const overallBar = renderProgressBar(session.stepIndex, totalSteps, 10);
+
+    const modulePercent = Math.round(((moduleStepIndex + 1) / totalModuleSteps) * 100);
+    const moduleBar = renderProgressBar(moduleStepIndex + 1, totalModuleSteps, 8);
+
+    const moduleHeader = `📦 **Module ${currentModuleIndex + 1} of ${totalUniqueModules}:** **${currentStep.moduleName || currentModuleKey}** (\`${currentModuleKey}\`) • **Category:** *${currentStep.categoryLabel || 'Server System'}*`;
+    const moduleOverviewText = currentStep.moduleOverview ? `📖 *${currentStep.moduleOverview}*` : '';
 
     const lines = [
-      `Progress: \`[${progressBlocks}]\` **${progressPercent}%** (Step ${session.stepIndex + 1} of ${totalSteps})`,
+      `🌐 **Overall Progress:** \`[${overallBar}]\` **${overallPercent}%** (Module ${currentModuleIndex + 1}/${totalUniqueModules} • Step ${currentStepNum}/${totalSteps})`,
+      totalModuleSteps > 1 ? `🔹 **Module Setup:** \`[${moduleBar}]\` **Step ${moduleStepIndex + 1} of ${totalModuleSteps}** (${modulePercent}%)` : '',
       '',
-      `**${currentStep.title}**`,
+      moduleHeader,
+      moduleOverviewText,
+      '',
+      `🎯 **Step ${currentStepNum}: ${currentStep.title}**`,
       currentStep.description,
       '',
       `**Current Setting:** ${currentVal ? `\`${currentVal}\`` : '*None (Not configured yet)*'}`,
-      currentStep.autoCreateDescription ? `💡 *Tip: Click **${currentStep.autoCreateLabel || 'Auto-Create for Me'}** to let SlickBot provision and link everything automatically.*` : ''
+      currentStep.autoCreateDescription ? `💡 *Tip: Click **${currentStep.autoCreateLabel || 'Auto-Create for Me'}** to let SlickBot provision channels, roles, and live interactive panels automatically.*` : ''
     ].filter(Boolean);
 
     const embed = createBaseEmbed({
-      title: session.type === 'SERVER_ONBOARDING' ? '🚀 SlickBot Guided Server Onboarding' : `🚀 Guided Setup: ${currentStep.title}`,
+      title: session.type === 'SERVER_ONBOARDING'
+        ? `🚀 SlickBot Guided Server Onboarding (${currentStepNum}/${totalSteps})`
+        : `🚀 Guided Setup: ${currentStep.moduleName || currentStep.title}`,
       description: lines.join('\n'),
       color: SlickBotColors.PRIMARY,
-      footer: `SlickBot Setup • Step ${session.stepIndex + 1}/${totalSteps}`
+      footer: `SlickBot Setup • Step ${currentStepNum}/${totalSteps} • ${currentStep.categoryLabel || 'Onboarding'}`
     });
 
     const components = [];

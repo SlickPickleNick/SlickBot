@@ -276,7 +276,7 @@ async function buildRolePanelComponents(panel, options) {
       const roleCount = optionRoleIds(option).length;
       const item = {
         label: (option.label && option.label.trim()) || `Role ${index + 1}`,
-        value: option.id,
+        value: String(option.id),
         description: option.description || `Toggle ${roleCount} role${roleCount === 1 ? '' : 's'}`
       };
       if (option.emoji) item.emoji = option.emoji;

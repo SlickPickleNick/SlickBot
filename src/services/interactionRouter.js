@@ -1319,7 +1319,7 @@ async function handleButton(interaction, ctx) {
         return replyPrivate(interaction, { embeds: [createWarningEmbed('Auto-Creation Failed', err instanceof Error ? err.message : String(err))] });
       }
     }
-    await onboarding.advanceSession(session, interaction.guild, 'AUTO_CREATE', createdResult || {});
+    await onboarding.advanceSession(session, interaction.guild, 'AUTO_CREATE', createdResult || {}, ctx.permissions);
     const nextStep = session.steps[session.stepIndex];
     const currentVal = nextStep && typeof nextStep.getCurrent === 'function' ? await nextStep.getCurrent(interaction.guild).catch(() => null) : null;
     await updatePanel(interaction, onboarding.buildOnboardingPayload(session, currentVal));
@@ -1331,7 +1331,7 @@ async function handleButton(interaction, ctx) {
     const sessionId = id.slice(CustomIds.OnboardingKeepCurrentPrefix.length);
     const session = onboarding.getSession(sessionId, interaction.user.id);
     if (!session) return replyPrivate(interaction, { embeds: [createWarningEmbed('Onboarding Expired', 'This onboarding session has expired or belongs to another user. Please launch onboarding again.')], deleteAfterSeconds: 10 });
-    await onboarding.advanceSession(session, interaction.guild, 'KEEP_CURRENT');
+    await onboarding.advanceSession(session, interaction.guild, 'KEEP_CURRENT', {}, ctx.permissions);
     const nextStep = session.steps[session.stepIndex];
     const currentVal = nextStep && typeof nextStep.getCurrent === 'function' ? await nextStep.getCurrent(interaction.guild).catch(() => null) : null;
     await updatePanel(interaction, onboarding.buildOnboardingPayload(session, currentVal));
@@ -1343,7 +1343,7 @@ async function handleButton(interaction, ctx) {
     const sessionId = id.slice(CustomIds.OnboardingKeepDefaultPrefix.length);
     const session = onboarding.getSession(sessionId, interaction.user.id);
     if (!session) return replyPrivate(interaction, { embeds: [createWarningEmbed('Onboarding Expired', 'This onboarding session has expired or belongs to another user. Please launch onboarding again.')], deleteAfterSeconds: 10 });
-    await onboarding.advanceSession(session, interaction.guild, 'KEEP_DEFAULT');
+    await onboarding.advanceSession(session, interaction.guild, 'KEEP_DEFAULT', {}, ctx.permissions);
     const nextStep = session.steps[session.stepIndex];
     const currentVal = nextStep && typeof nextStep.getCurrent === 'function' ? await nextStep.getCurrent(interaction.guild).catch(() => null) : null;
     await updatePanel(interaction, onboarding.buildOnboardingPayload(session, currentVal));
@@ -1355,7 +1355,7 @@ async function handleButton(interaction, ctx) {
     const sessionId = id.slice(CustomIds.OnboardingSkipPrefix.length);
     const session = onboarding.getSession(sessionId, interaction.user.id);
     if (!session) return replyPrivate(interaction, { embeds: [createWarningEmbed('Onboarding Expired', 'This onboarding session has expired or belongs to another user. Please launch onboarding again.')], deleteAfterSeconds: 10 });
-    await onboarding.advanceSession(session, interaction.guild, 'SKIP');
+    await onboarding.advanceSession(session, interaction.guild, 'SKIP', {}, ctx.permissions);
     const nextStep = session.steps[session.stepIndex];
     const currentVal = nextStep && typeof nextStep.getCurrent === 'function' ? await nextStep.getCurrent(interaction.guild).catch(() => null) : null;
     await updatePanel(interaction, onboarding.buildOnboardingPayload(session, currentVal));
@@ -2672,7 +2672,7 @@ async function handleSelect(interaction, ctx) {
         return replyPrivate(interaction, { embeds: [createWarningEmbed('Selection Failed', err instanceof Error ? err.message : String(err))] });
       }
     }
-    await onboarding.advanceSession(session, interaction.guild, 'SELECT', { selected: selectedValue });
+    await onboarding.advanceSession(session, interaction.guild, 'SELECT', { selected: selectedValue }, ctx.permissions);
     const nextStep = session.steps[session.stepIndex];
     const currentVal = nextStep && typeof nextStep.getCurrent === 'function' ? await nextStep.getCurrent(interaction.guild).catch(() => null) : null;
     await updatePanel(interaction, onboarding.buildOnboardingPayload(session, currentVal));

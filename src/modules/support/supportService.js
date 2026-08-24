@@ -509,27 +509,40 @@ class TicketService {
 
   async updateConfig(guildId, input) {
     const result = await query(
-      `INSERT INTO ticket_configs (guild_id, category_id, log_channel_id, staff_role_id, staff_team_id, escalated_role_id, escalated_team_id, ticket_limit, transcript_enabled, naming_format, panel_title, panel_description, panel_color, panel_header_image_url, close_delete_seconds, panel_display_mode)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
-       ON CONFLICT (guild_id)
-       DO UPDATE SET
-         category_id = COALESCE(EXCLUDED.category_id, ticket_configs.category_id),
-         log_channel_id = COALESCE(EXCLUDED.log_channel_id, ticket_configs.log_channel_id),
-         staff_role_id = COALESCE(EXCLUDED.staff_role_id, ticket_configs.staff_role_id),
-         staff_team_id = COALESCE(EXCLUDED.staff_team_id, ticket_configs.staff_team_id),
-         escalated_role_id = COALESCE(EXCLUDED.escalated_role_id, ticket_configs.escalated_role_id),
-         escalated_team_id = COALESCE(EXCLUDED.escalated_team_id, ticket_configs.escalated_team_id),
-         ticket_limit = COALESCE(EXCLUDED.ticket_limit, ticket_configs.ticket_limit),
-         transcript_enabled = COALESCE(EXCLUDED.transcript_enabled, ticket_configs.transcript_enabled),
-         naming_format = COALESCE(EXCLUDED.naming_format, ticket_configs.naming_format),
-         panel_title = COALESCE(EXCLUDED.panel_title, ticket_configs.panel_title),
-         panel_description = COALESCE(EXCLUDED.panel_description, ticket_configs.panel_description),
-         panel_color = COALESCE(EXCLUDED.panel_color, ticket_configs.panel_color),
-         panel_header_image_url = COALESCE(EXCLUDED.panel_header_image_url, ticket_configs.panel_header_image_url),
-         close_delete_seconds = COALESCE(EXCLUDED.close_delete_seconds, ticket_configs.close_delete_seconds),
-         panel_display_mode = COALESCE(EXCLUDED.panel_display_mode, ticket_configs.panel_display_mode),
-         updated_at = NOW()
-       RETURNING *`,
+      `INSERT INTO ticket_configs (
+        guild_id, category_id, log_channel_id, staff_role_id, staff_team_id,
+        escalated_role_id, escalated_team_id, ticket_limit, transcript_enabled,
+        naming_format, panel_title, panel_description, panel_color,
+        panel_header_image_url, close_delete_seconds, panel_display_mode
+      )
+      VALUES (
+        $1, $2, $3, $4, $5, $6, $7,
+        COALESCE($8, 1),
+        COALESCE($9, true),
+        COALESCE($10, 'ticket-{username}-{number}'),
+        $11, $12, $13, $14,
+        COALESCE($15, 10),
+        COALESCE($16, 'BUTTONS')
+      )
+      ON CONFLICT (guild_id)
+      DO UPDATE SET
+        category_id = COALESCE($2, ticket_configs.category_id),
+        log_channel_id = COALESCE($3, ticket_configs.log_channel_id),
+        staff_role_id = COALESCE($4, ticket_configs.staff_role_id),
+        staff_team_id = COALESCE($5, ticket_configs.staff_team_id),
+        escalated_role_id = COALESCE($6, ticket_configs.escalated_role_id),
+        escalated_team_id = COALESCE($7, ticket_configs.escalated_team_id),
+        ticket_limit = COALESCE($8, ticket_configs.ticket_limit),
+        transcript_enabled = COALESCE($9, ticket_configs.transcript_enabled),
+        naming_format = COALESCE($10, ticket_configs.naming_format),
+        panel_title = COALESCE($11, ticket_configs.panel_title),
+        panel_description = COALESCE($12, ticket_configs.panel_description),
+        panel_color = COALESCE($13, ticket_configs.panel_color),
+        panel_header_image_url = COALESCE($14, ticket_configs.panel_header_image_url),
+        close_delete_seconds = COALESCE($15, ticket_configs.close_delete_seconds),
+        panel_display_mode = COALESCE($16, ticket_configs.panel_display_mode),
+        updated_at = NOW()
+      RETURNING *`,
       [
         guildId,
         input.categoryId || null,
@@ -538,14 +551,14 @@ class TicketService {
         input.staffTeamName ? await resolveTeamId(guildId, input.staffTeamName) : null,
         input.escalatedRoleId || null,
         input.escalatedTeamName ? await resolveTeamId(guildId, input.escalatedTeamName) : null,
-        input.ticketLimit || null,
+        input.ticketLimit ?? null,
         typeof input.transcriptEnabled === 'boolean' ? input.transcriptEnabled : null,
         input.namingFormat || null,
         input.panelTitle || null,
         input.panelDescription || null,
         input.panelColor || null,
         input.panelHeaderImageUrl || null,
-        input.closeDeleteSeconds || null,
+        input.closeDeleteSeconds ?? null,
         input.panelDisplayMode || null
       ]
     );

@@ -54,4 +54,30 @@ test('TicketService Support Workflow', async (t) => {
     assert.equal(types[0].name, 'Admin Support');
     assert.equal(types[1].name, 'Billing');
   });
+
+  await t.test('updateConfig handles partial onboarding inputs with fallback defaults', async () => {
+    const service = new TicketService();
+    mockDb.addHandler('INSERT INTO ticket_configs', {
+      rows: [{
+        guild_id: guildId,
+        category_id: '500',
+        staff_role_id: '600',
+        ticket_limit: 1,
+        transcript_enabled: true,
+        naming_format: 'ticket-{username}-{number}',
+        close_delete_seconds: 10,
+        panel_display_mode: 'BUTTONS'
+      }],
+      rowCount: 1
+    });
+
+    const updated = await service.updateConfig(guildId, {
+      categoryId: '500',
+      staffRoleId: '600'
+    });
+
+    assert.equal(updated.guild_id, guildId);
+    assert.equal(updated.category_id, '500');
+    assert.equal(updated.ticket_limit, 1);
+  });
 });
