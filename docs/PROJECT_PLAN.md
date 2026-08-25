@@ -610,6 +610,6 @@ Deferred larger work:
 
 ## Design Direction
 
-SlickBot should continue to use polished embeds, buttons, setup panels, guided message flows, and compact status indicators instead of plain text-only command output.
+For multi-server scaling, public growth milestones, and web dashboard architecture, refer to the [Multi-Server Expansion Roadmap](./EXPANSION_ROADMAP.md).
 
-For multi-server scaling, public growth milestones, and web dashboard architecture, refer to the [Multi-Server Expansion Roadmap](file:///c:/Users/nicks/Documents/SlickNick/GitHub/slickbot/SlickBot/docs/EXPANSION_ROADMAP.md).
+For the comprehensive competitive analysis, future modules, and feature implementation plans, refer to the [Development Roadmap](./DEVELOPMENT_ROADMAP.md).

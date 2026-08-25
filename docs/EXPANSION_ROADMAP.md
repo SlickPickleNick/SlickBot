@@ -30,8 +30,8 @@ SlickBot already features strong multi-tenancy foundations:
 When expanding to public servers, Discord enforces specific developer and verification standards:
 
 ```mermaid
-flowchart LR
-    A["Private Development (<75 Guilds)"] --> B["Discord Verification (75+ Guilds)"]
+graph LR
+    A["Private Development (Under 75 Guilds)"] --> B["Discord Verification (75+ Guilds)"]
     B --> C["Privileged Intents Approval"]
     C --> D["Global Public Scale (2,500+ Guilds)"]
 ```
@@ -106,3 +106,7 @@ To maintain system stability, fair compute allocation, and protect hosting infra
 | **Phase 3** | **Discord Verification** | Public ToS & Privacy Policy, submit Discord Bot Verification and Privileged Intent reviews (at 75+ guilds). |
 | **Phase 4** | **Web Dashboard** | Next.js/React web portal with Discord OAuth2 for desktop configuration and server analytics. |
 | **Phase 5** | **Public Launch & Sharding** | Implement `ShardingManager`, list on bot discovery platforms, and scale container compute as adoption expands. |
+
+---
+
+*For the comprehensive feature roadmap, competitive analysis, and module implementation plans, refer to the [SlickBot Development Roadmap](./DEVELOPMENT_ROADMAP.md).*
