@@ -8,12 +8,12 @@ const mockDb = new MockDatabase();
 mockDb.install();
 
 function createUniversalMockGuild() {
-  let snowflakeCounter = 100000000000000000n;
+  let snowflakeCounter = 100000000000000100n;
   const nextId = () => (snowflakeCounter++).toString();
 
   const channelsMap = new Map();
   const rolesMap = new Map();
-  const everyoneRole = { id: '100000000000000001', name: '@everyone' };
+  const everyoneRole = { id: '100000000000000000', name: '@everyone' };
   rolesMap.set(everyoneRole.id, everyoneRole);
 
   const guild = {
@@ -383,3 +383,77 @@ test('BirthdayService and SuggestionService edge cases and defaults', async () =
   const panelRes = await suggestion.postPanel({ guild: mockGuild, channel: mockChannel });
   assert.ok(panelRes.message, 'Suggestion panel message was sent');
 });
+
+test('autoCreateChannel applies correct permissions for ban-appeals and read-only channels', async () => {
+  const { guild } = createUniversalMockGuild();
+
+  // Create staff and timeout roles
+  const modRole = await guild.roles.create({ name: 'Moderator' });
+  const timeoutRole = await guild.roles.create({ name: 'Timeout' });
+  const everyoneRole = guild.roles.everyone;
+
+  // 1. Test #ban-appeals permissions
+  const banAppealsChannel = await autoCreateChannel(guild, {
+    name: 'ban-appeals',
+    topic: 'Ban and infraction appeals'
+  });
+  assert.ok(banAppealsChannel, 'ban-appeals channel created');
+
+  const appealsOverwrites = banAppealsChannel.permissionOverwrites;
+  const appealsEveryone = appealsOverwrites.find((o) => o.id === everyoneRole.id);
+  assert.ok(appealsEveryone, 'Everyone overwrite exists for ban-appeals');
+  assert.ok(appealsEveryone.deny.includes(PermissionFlagsBits.ViewChannel), 'Everyone denied ViewChannel for ban-appeals');
+  assert.ok(appealsEveryone.deny.includes(PermissionFlagsBits.SendMessages), 'Everyone denied SendMessages for ban-appeals');
+
+  const appealsTimeout = appealsOverwrites.find((o) => o.id === timeoutRole.id);
+  assert.ok(appealsTimeout, 'Timeout role overwrite exists for ban-appeals');
+  assert.ok(appealsTimeout.allow.includes(PermissionFlagsBits.ViewChannel), 'Timeout role allowed ViewChannel for ban-appeals');
+  assert.ok(appealsTimeout.allow.includes(PermissionFlagsBits.ReadMessageHistory), 'Timeout role allowed ReadMessageHistory for ban-appeals');
+  assert.ok(appealsTimeout.deny.includes(PermissionFlagsBits.SendMessages), 'Timeout role denied SendMessages for ban-appeals');
+  assert.ok(appealsTimeout.deny.includes(PermissionFlagsBits.AddReactions), 'Timeout role denied AddReactions for ban-appeals');
+
+  const appealsMod = appealsOverwrites.find((o) => o.id === modRole.id);
+  assert.ok(appealsMod, 'Mod role overwrite exists for ban-appeals');
+  assert.ok(appealsMod.allow.includes(PermissionFlagsBits.ViewChannel), 'Mod role allowed ViewChannel for ban-appeals');
+  assert.ok(appealsMod.allow.includes(PermissionFlagsBits.SendMessages), 'Mod role allowed SendMessages for ban-appeals');
+
+  // 2. Test Read-Only channels
+  const readOnlyChannels = [
+    'welcome',
+    'get-roles',
+    'faq-help',
+    'submit-tickets',
+    'submit-reports',
+    'apply-here',
+    'suggestions',
+    'birthdays',
+    'level-ups',
+    'starboard',
+    'achievements',
+    'stream-alerts',
+    'giveaways'
+  ];
+
+  for (const name of readOnlyChannels) {
+    const chan = await autoCreateChannel(guild, { name, topic: `Read-only ${name}` });
+    assert.ok(chan, `Channel #${name} created`);
+
+    const chanEveryone = chan.permissionOverwrites.find((o) => o.id === everyoneRole.id);
+    assert.ok(chanEveryone, `Everyone overwrite exists for #${name}`);
+    assert.ok(chanEveryone.allow.includes(PermissionFlagsBits.ViewChannel), `Everyone allowed ViewChannel for #${name}`);
+    assert.ok(chanEveryone.allow.includes(PermissionFlagsBits.ReadMessageHistory), `Everyone allowed ReadMessageHistory for #${name}`);
+    assert.ok(chanEveryone.deny.includes(PermissionFlagsBits.SendMessages), `Everyone denied SendMessages for #${name}`);
+    assert.ok(chanEveryone.deny.includes(PermissionFlagsBits.CreatePublicThreads), `Everyone denied CreatePublicThreads for #${name}`);
+    assert.ok(chanEveryone.deny.includes(PermissionFlagsBits.AddReactions), `Everyone denied AddReactions for #${name}`);
+
+    const chanTimeout = chan.permissionOverwrites.find((o) => o.id === timeoutRole.id);
+    assert.ok(chanTimeout, `Timeout overwrite exists for #${name}`);
+    assert.ok(chanTimeout.deny.includes(PermissionFlagsBits.ViewChannel), `Timeout role denied ViewChannel for #${name}`);
+
+    const chanMod = chan.permissionOverwrites.find((o) => o.id === modRole.id);
+    assert.ok(chanMod, `Mod overwrite exists for #${name}`);
+    assert.ok(chanMod.allow.includes(PermissionFlagsBits.ViewChannel), `Mod allowed ViewChannel for #${name}`);
+    assert.ok(chanMod.allow.includes(PermissionFlagsBits.SendMessages), `Mod allowed SendMessages for #${name}`);
+  }
+});
+

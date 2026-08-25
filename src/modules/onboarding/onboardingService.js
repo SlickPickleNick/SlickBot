@@ -194,6 +194,30 @@ async function ensureCategory(guild, { name, keywords = [], isPrivate = false, s
   return created;
 }
 
+const READ_ONLY_CHANNEL_NAMES = Object.freeze(new Set([
+  'welcome',
+  'get-roles',
+  'faq-help',
+  'faq',
+  'submit-tickets',
+  'submit-reports',
+  'apply-here',
+  'ban-appeals',
+  'submit-appeal',
+  'appeals',
+  'appeal',
+  'suggestions',
+  'birthdays',
+  'level-ups',
+  'starboard',
+  'achievements',
+  'stream-alerts',
+  'giveaways',
+  'server-announcements',
+  'announcements',
+  'community-polls'
+]));
+
 async function autoCreateChannel(guild, {
   name,
   type = ChannelType.GuildText,
@@ -209,7 +233,8 @@ async function autoCreateChannel(guild, {
 }) {
   if (!guild || typeof guild.channels?.create !== 'function') throw new Error('Guild channels manager not available.');
   const cacheList = Array.from(guild.channels.cache?.values?.() || guild.channels.cache || []);
-  const existing = cacheList.find((c) => c?.name?.toLowerCase() === name.toLowerCase() && (type === undefined || c.type === type));
+  const cleanName = name.toLowerCase().trim();
+  const existing = cacheList.find((c) => c?.name?.toLowerCase() === cleanName && (type === undefined || c.type === type));
   if (existing) return existing;
 
   let finalParentId = parentId;
@@ -234,13 +259,49 @@ async function autoCreateChannel(guild, {
   // Find Timeout / Muted role if present in guild
   const roleCacheList = Array.from(guild.roles?.cache?.values?.() || guild.roles?.cache || []);
   const timeoutRole = roleCacheList.find((r) => r?.name && ['timeout', 'muted', 'mute'].includes(r.name.toLowerCase()));
-  const isAppealsChannel = ['submit-appeal', 'appeals', 'ban-appeals', 'appeal'].includes(name.toLowerCase());
+  
+  // Identify Staff roles in guild if not explicitly provided
+  let effectiveStaffRoles = [...staffRoles];
+  if (!effectiveStaffRoles.length) {
+    effectiveStaffRoles = roleCacheList.filter((r) =>
+      r?.name && ['admin', 'administrator', 'mod', 'moderator', 'staff', 'team'].includes(r.name.toLowerCase())
+    );
+  }
 
-  if (isPrivate && everyoneId) {
-    overwrites.push({
-      id: everyoneId,
-      deny: [PermissionFlagsBits.ViewChannel]
-    });
+  const isAppealsChannel = ['submit-appeal', 'appeals', 'ban-appeals', 'appeal'].includes(cleanName);
+  const effectiveReadOnly = isReadOnly || READ_ONLY_CHANNEL_NAMES.has(cleanName);
+  const effectivePrivate = isPrivate || isAppealsChannel;
+
+  if (isAppealsChannel) {
+    // Ban Appeals: HIDDEN from everyone, visible ONLY to Timeout role & Staff/Bot. NOBODY can send messages.
+    if (everyoneId) {
+      overwrites.push({
+        id: everyoneId,
+        deny: [
+          PermissionFlagsBits.ViewChannel,
+          PermissionFlagsBits.SendMessages,
+          PermissionFlagsBits.ReadMessageHistory
+        ]
+      });
+    }
+
+    if (timeoutRole?.id) {
+      overwrites.push({
+        id: timeoutRole.id,
+        allow: [
+          PermissionFlagsBits.ViewChannel,
+          PermissionFlagsBits.ReadMessageHistory
+        ],
+        deny: [
+          PermissionFlagsBits.SendMessages,
+          PermissionFlagsBits.SendMessagesInThreads,
+          PermissionFlagsBits.CreatePublicThreads,
+          PermissionFlagsBits.CreatePrivateThreads,
+          PermissionFlagsBits.AddReactions
+        ]
+      });
+    }
+
     if (botMember) {
       overwrites.push({
         id: botMember.id,
@@ -250,25 +311,73 @@ async function autoCreateChannel(guild, {
           PermissionFlagsBits.EmbedLinks,
           PermissionFlagsBits.AttachFiles,
           PermissionFlagsBits.ReadMessageHistory,
-          PermissionFlagsBits.ManageChannels
+          PermissionFlagsBits.ManageChannels,
+          PermissionFlagsBits.ManageMessages
         ]
       });
     }
-    for (const role of staffRoles) {
-      if (role?.id) {
+
+    for (const role of effectiveStaffRoles) {
+      if (role?.id && role.id !== timeoutRole?.id && role.id !== everyoneId) {
         overwrites.push({
           id: role.id,
           allow: [
             PermissionFlagsBits.ViewChannel,
             PermissionFlagsBits.SendMessages,
             PermissionFlagsBits.ReadMessageHistory,
+            PermissionFlagsBits.ManageMessages,
+            PermissionFlagsBits.EmbedLinks,
             PermissionFlagsBits.AttachFiles
           ]
         });
       }
     }
+  } else if (effectivePrivate) {
+    // Private Channel (e.g. Logs, Staff Alerts, Reviews)
+    if (everyoneId) {
+      overwrites.push({
+        id: everyoneId,
+        deny: [
+          PermissionFlagsBits.ViewChannel,
+          PermissionFlagsBits.SendMessages,
+          PermissionFlagsBits.ReadMessageHistory
+        ]
+      });
+    }
+
+    if (botMember) {
+      overwrites.push({
+        id: botMember.id,
+        allow: [
+          PermissionFlagsBits.ViewChannel,
+          PermissionFlagsBits.SendMessages,
+          PermissionFlagsBits.EmbedLinks,
+          PermissionFlagsBits.AttachFiles,
+          PermissionFlagsBits.ReadMessageHistory,
+          PermissionFlagsBits.ManageChannels,
+          PermissionFlagsBits.ManageMessages
+        ]
+      });
+    }
+
+    for (const role of effectiveStaffRoles) {
+      if (role?.id && role.id !== timeoutRole?.id && role.id !== everyoneId) {
+        overwrites.push({
+          id: role.id,
+          allow: [
+            PermissionFlagsBits.ViewChannel,
+            PermissionFlagsBits.SendMessages,
+            PermissionFlagsBits.ReadMessageHistory,
+            PermissionFlagsBits.ManageMessages,
+            PermissionFlagsBits.EmbedLinks,
+            PermissionFlagsBits.AttachFiles
+          ]
+        });
+      }
+    }
+
     for (const role of allowedRoles) {
-      if (role?.id) {
+      if (role?.id && role.id !== timeoutRole?.id && role.id !== everyoneId) {
         overwrites.push({
           id: role.id,
           allow: [
@@ -281,29 +390,43 @@ async function autoCreateChannel(guild, {
         });
       }
     }
-  } else if (!isPrivate && everyoneId) {
-    if (isReadOnly) {
+
+    if (timeoutRole?.id) {
       overwrites.push({
-        id: everyoneId,
-        allow: [
-          PermissionFlagsBits.ViewChannel,
-          PermissionFlagsBits.ReadMessageHistory
-        ],
+        id: timeoutRole.id,
         deny: [
-          PermissionFlagsBits.SendMessages,
-          PermissionFlagsBits.CreatePublicThreads,
-          PermissionFlagsBits.CreatePrivateThreads,
-          PermissionFlagsBits.SendMessagesInThreads
+          PermissionFlagsBits.ViewChannel
         ]
       });
-    } else {
-      overwrites.push({
-        id: everyoneId,
-        allow: [
-          PermissionFlagsBits.ViewChannel,
-          PermissionFlagsBits.ReadMessageHistory
-        ]
-      });
+    }
+  } else {
+    // Public Channels: can be Read-Only or Chat-Enabled
+    if (everyoneId) {
+      if (effectiveReadOnly) {
+        overwrites.push({
+          id: everyoneId,
+          allow: [
+            PermissionFlagsBits.ViewChannel,
+            PermissionFlagsBits.ReadMessageHistory
+          ],
+          deny: [
+            PermissionFlagsBits.SendMessages,
+            PermissionFlagsBits.CreatePublicThreads,
+            PermissionFlagsBits.CreatePrivateThreads,
+            PermissionFlagsBits.SendMessagesInThreads,
+            PermissionFlagsBits.AddReactions
+          ]
+        });
+      } else {
+        overwrites.push({
+          id: everyoneId,
+          allow: [
+            PermissionFlagsBits.ViewChannel,
+            PermissionFlagsBits.SendMessages,
+            PermissionFlagsBits.ReadMessageHistory
+          ]
+        });
+      }
     }
 
     if (botMember) {
@@ -315,30 +438,32 @@ async function autoCreateChannel(guild, {
           PermissionFlagsBits.EmbedLinks,
           PermissionFlagsBits.AttachFiles,
           PermissionFlagsBits.ReadMessageHistory,
-          PermissionFlagsBits.ManageChannels
+          PermissionFlagsBits.ManageChannels,
+          PermissionFlagsBits.ManageMessages
         ]
       });
     }
-  }
 
-  // Enforce Timeout Role visibility: only allow in appeals channel, deny everywhere else
-  if (timeoutRole?.id) {
-    if (isAppealsChannel) {
-      overwrites.push({
-        id: timeoutRole.id,
-        allow: [
-          PermissionFlagsBits.ViewChannel,
-          PermissionFlagsBits.ReadMessageHistory
-        ],
-        deny: [
-          PermissionFlagsBits.SendMessages,
-          PermissionFlagsBits.CreatePublicThreads,
-          PermissionFlagsBits.CreatePrivateThreads,
-          PermissionFlagsBits.SendMessagesInThreads,
-          PermissionFlagsBits.AddReactions
-        ]
-      });
-    } else {
+    if (effectiveReadOnly) {
+      for (const role of effectiveStaffRoles) {
+        if (role?.id && role.id !== timeoutRole?.id && role.id !== everyoneId) {
+          overwrites.push({
+            id: role.id,
+            allow: [
+              PermissionFlagsBits.ViewChannel,
+              PermissionFlagsBits.SendMessages,
+              PermissionFlagsBits.ReadMessageHistory,
+              PermissionFlagsBits.ManageMessages,
+              PermissionFlagsBits.EmbedLinks,
+              PermissionFlagsBits.AttachFiles
+            ]
+          });
+        }
+      }
+    }
+
+    // Timeout role denied viewing on all public channels
+    if (timeoutRole?.id) {
       overwrites.push({
         id: timeoutRole.id,
         deny: [
@@ -937,7 +1062,7 @@ const ONBOARDING_STEPS = Object.freeze({
       pickerType: 'CHANNEL',
       channelTypes: [ChannelType.GuildText],
       autoCreateLabel: 'Auto-Create Appeals & Publish Panel',
-      autoCreateDescription: 'Creates private #appeal-review in "🛡️ Staff Area", public #ban-appeals in "🎫 Help & Support", and posts the live Appeal Panel.',
+      autoCreateDescription: 'Creates private #appeal-review in "🛡️ Staff Area", restricted #ban-appeals in "🎫 Help & Support" (visible only to timed-out members and staff), and posts the live Appeal Panel.',
       async getCurrent(guild) {
         const res = await query(`SELECT review_channel_id FROM appeal_configs WHERE guild_id = $1`, [guild.id]).catch(() => ({ rows: [] }));
         return res.rows[0]?.review_channel_id ? `<#${res.rows[0].review_channel_id}>` : null;
@@ -955,7 +1080,7 @@ const ONBOARDING_STEPS = Object.freeze({
       },
       async autoCreate(guild) {
         const reviewChannel = await autoCreateChannel(guild, { name: 'appeal-review', categoryName: STANDARD_CATEGORIES.STAFF.name, isPrivate: true, reason: 'SlickBot Appeals Review Channel' });
-        const panelChannel = await autoCreateChannel(guild, { name: 'ban-appeals', categoryName: STANDARD_CATEGORIES.SUPPORT.name, isPrivate: false, topic: 'Submit an appeal for infractions or timeouts' });
+        const panelChannel = await autoCreateChannel(guild, { name: 'ban-appeals', categoryName: STANDARD_CATEGORIES.SUPPORT.name, isPrivate: true, topic: 'Submit an appeal for infractions or timeouts' });
         const { AppealService } = require('../support/supportService');
         const { buildPublicAppealPanel } = require('../support/supportUi');
         const appeals = new AppealService();

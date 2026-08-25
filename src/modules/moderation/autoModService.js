@@ -414,14 +414,23 @@ class AutoModService {
     if (!config.timeout_role_id || config.timeout_role_lock_new_channels === false) return;
 
     // Check if appeals channel
-    const appealRes = await query(`SELECT review_channel_id FROM appeal_configs WHERE guild_id = $1 LIMIT 1`, [channel.guild.id]).catch(() => ({ rows: [] }));
-    const appealsChannelId = appealRes.rows[0]?.review_channel_id || null;
-    if (channel.id === appealsChannelId || (config.timeout_role_exempt_channel_ids || []).includes(channel.id)) {
+    const appealRes = await query(`SELECT panel_channel_id, review_channel_id FROM appeal_configs WHERE guild_id = $1 LIMIT 1`, [channel.guild.id]).catch(() => ({ rows: [] }));
+    const appealPanelChannelId = appealRes.rows[0]?.panel_channel_id || null;
+    const appealReviewChannelId = appealRes.rows[0]?.review_channel_id || null;
+    const isAppeals = channel.id === appealPanelChannelId ||
+      ['submit-appeal', 'appeals', 'ban-appeals', 'appeal'].includes(channel.name?.toLowerCase());
+    const isExempt = channel.id === appealReviewChannelId ||
+      (config.timeout_role_exempt_channel_ids || []).includes(channel.id) ||
+      isAppeals;
+
+    if (isExempt) {
       await channel.permissionOverwrites?.edit(config.timeout_role_id, {
         ViewChannel: true,
         ReadMessageHistory: true,
         SendMessages: false,
         SendMessagesInThreads: false,
+        CreatePublicThreads: false,
+        CreatePrivateThreads: false,
         AddReactions: false
       }, { reason: 'SlickBot Timeout Role Auto-Lock Exempt Channel' }).catch(() => {});
       return;
