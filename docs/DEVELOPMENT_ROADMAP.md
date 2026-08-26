@@ -7,7 +7,7 @@
 As SlickBot transitions from a private server powerhouse into a scalable multi-server platform, this **Development Roadmap** defines the strategic trajectory:
 1. **Competitive Superiority:** Outperforming legacy competitors (MEE6, Carl-bot, Dyno, Ticket Tool, Arcane) by offering modern Discord UI ergonomics, deep cross-module synergy, and high-value management features.
 2. **Financial Sustainability & Fair Premium Tiers:** Establishing a transparent, sustainable freemium model (SlickBot Pro) that funds database hosting, server compute, web infrastructure, and AI token costs while generating long-term revenue.
-3. **Next-Generation Modules:** Introducing high-demand capabilities including Persistent Sticky Messages, Gatekeeper Verification & Anti-Raid Shield, Canvas-Rendered Rank Cards, Dynamic Voice Hubs 2.0, Server Economy & Shop, and Event/RSVP Hubs.
+3. **Next-Generation Modules:** Introducing high-demand capabilities including Persistent Sticky Messages, Gatekeeper Verification & Anti-Raid Shield, Canvas-Rendered Rank Cards, Dynamic Voice Hubs 2.0, Streamer.bot Integration Hub, Server Economy & Shop, and Event/RSVP Hubs.
 4. **Platform & Service Expansions:** Broadening social tracking (Kick, TikTok, Reddit, Bluesky, RSS), AI-assisted moderation/triage, and exportable HTML transcripts.
 5. **Multi-Tenant Public Scale:** Sharding architecture, Redis caching, Discord Bot Verification compliance, and a companion Web Management Dashboard.
 
@@ -71,6 +71,7 @@ graph LR
 | **Support & Tickets** | Unlimited tickets, reports, appeals, applications | Interactive branded HTML transcripts, post-close CSAT surveys |
 | **Social Feeds** | Up to 3 feeds (Twitch/YouTube) + Live Sticky Directory | Unlimited feeds (Kick, TikTok, Reddit, YouTube, Twitch, RSS) |
 | **Leveling & XP** | Message & Voice XP, multiplier roles, standard card | Custom Canvas rank card background/theme uploads, double-XP events |
+| **Streamer.bot Integration** | Up to 1 connected channel, standard drop codes | Multi-channel sync, automated Channel Point role triggers, VIP drops |
 | **Custom Commands** | Up to 15 custom commands | Unlimited custom commands with advanced regex variables |
 | **Knowledge Base & FAQ** | Standard FAQ command matching | AI-Powered Rule Q&A (`/ask`) with RAG embeddings |
 | **Server Analytics** | 7-day activity metrics | 90-day retention funnels, heatmaps, CSV/PDF export |
@@ -90,6 +91,7 @@ gantt
     Canvas Rank Cards & Leveling 2.0    :h1_3, 2026-10-01, 30d
     Dynamic Voice Hubs 2.0              :h1_4, 2026-10-15, 30d
     Event & RSVP Scheduling Hub         :h1_5, 2026-11-01, 30d
+    Streamer.bot Integration Hub        :h1_6, 2026-11-01, 30d
     section Horizon 2 - Ecosystem & Retention
     Economy & Server Shop Engine        :h2_1, 2026-11-15, 45d
     Expanded Feeds Kick TikTok RSS      :h2_2, 2026-12-01, 30d
@@ -239,6 +241,32 @@ Bridges the gap between Discord Scheduled Events and active community participat
    - Register event reminder checks in `src/services/taskScheduler.js` running every 60 seconds.
 3. **Commands:**
    - `/event create`, `/event list`, `/event rsvp`, `/event attendees [event_id]`, `/event manager`.
+
+---
+
+### 1.6 Streamer.bot Integration Hub (`STREAMERBOT`)
+Bridges live stream engagement on Twitch and YouTube directly with Discord server progression on a per-server basis.
+
+#### Feature Capabilities:
+* **Stream Attendance XP & Coin Ticks:**
+  - Streamer.bot sends periodic viewer batches via secure inbound HTTPS API (`/v1/streamerbot/events`), automatically awarding Leveling XP and Economy coins to linked Discord members.
+* **Stream Drop Codes (`/redeem`):**
+  - Streamers trigger drop codes during streams; viewers redeem them in Discord with single-claim enforcement and expiration limits.
+* **Twitch Channel Point to Discord Perks:**
+  - Automated temporary role grants (e.g. 24h VIP Role) when viewers redeem Twitch channel points.
+* **Milestone Hype Alerts:**
+  - Instant Discord announcement triggers on raids, sub bombs, and hype trains.
+
+#### Step-by-Step Implementation:
+1. **Database Schema:**
+   - Create `streamerbot_configs`, `streamerbot_member_links`, `streamerbot_redeem_codes`, `streamerbot_code_claims`, and `streamerbot_events_log`.
+2. **Inbound Webhook API Gateway:**
+   - Implement Express endpoint in `src/services/healthServer.js` with SHA-256 token hashing, per-guild routing, and rate limiters.
+3. **Commands Suite:**
+   - Member: `/streamerbot link`, `/redeem`, `/streamerbot profile`.
+   - Admin: `/streamerbot setup`, `/streamerbot manager`, `/streamerbot key <generate|rotate|revoke>`, `/streamerbot code create`.
+4. **Integration Guide:**
+   - For full technical architecture, C# code samples, and Streamer.bot Fetch URL setup steps, see the dedicated [Streamer.bot Integration Guide](./STREAMERBOT_DEVELOPMENT.md).
 
 ---
 
@@ -438,6 +466,7 @@ To maintain SlickBot's gold standard of code quality, performance, and maintaina
 | **v1.0.0-RC3** | `LEVELING_PRO` | Community | Canvas/SVG rendered rank cards, customizable card themes, double XP events. | 🔥 High |
 | **v1.0.0-Final** | `JOIN_TO_CREATE_PRO` | Voice | In-channel voice control panel embed with lock/hide/limit/bitrate buttons. | 🔥 High |
 | **v1.0.0-Final** | `EVENTS` | Community | Discord Scheduled Event sync, RSVP cards (Going/Maybe), automated reminder pings. | Medium |
+| **v1.0.0-Final** | `STREAMERBOT` | Creator / Community | Inbound HTTPS webhook API, stream attendance XP, drop codes (`/redeem`), Channel Point roles. | 🔥 High |
 | **v1.1.0** | `ECONOMY` | Community | Server coins, daily/weekly streaks, virtual shop, role purchases, gambling mini-games. | Medium |
 | **v1.2.0** | `SOCIAL_EXPANSION` | Automation | Kick.com streams, TikTok videos, Reddit subreddits, custom RSS/Atom blog feeds. | Medium |
 | **v1.3.0** | `TICKETS_PRO` | Support | Self-contained dark-mode HTML transcripts, post-close CSAT 5-star rating surveys. | Medium |
@@ -448,4 +477,6 @@ To maintain SlickBot's gold standard of code quality, performance, and maintaina
 
 ---
 
-*For multi-server deployment requirements, Discord Developer Verification milestones, and infrastructure scaling, refer to the companion [Multi-Server Expansion Roadmap](./EXPANSION_ROADMAP.md).*
+*Related Documentation:*
+* [Multi-Server Expansion Roadmap](./EXPANSION_ROADMAP.md) — Multi-tenancy, Discord Bot Verification, and infrastructure scaling.
+* [Streamer.bot Integration Architecture](./STREAMERBOT_DEVELOPMENT.md) — Technical API gateway, C# scripts, and Streamer.bot setup guide.
