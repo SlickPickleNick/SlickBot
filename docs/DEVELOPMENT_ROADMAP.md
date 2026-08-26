@@ -221,26 +221,29 @@ Expands SlickBot's temporary voice channel system into a full in-channel control
 
 ---
 
-### 1.5 Event Management & Community RSVP Hub (`EVENTS`)
-Bridges the gap between Discord Scheduled Events and active community participation.
+### 1.5 Event Management & Google Calendar Sync Hub (`EVENTS`)
+Bridges the gap between external calendars (Google Calendar, Outlook, Apple iCal), Discord Scheduled Events, and active community participation.
 
 #### Feature Capabilities:
+* **Google Calendar Auto-Subscription (iCal Engine):**
+  - Connects to Google Calendar via standard secret `.ics` feed URL. Automatically mirrors newly scheduled, updated, or cancelled calendar events into Discord Scheduled Events.
 * **Interactive RSVP Cards:**
-  - Rich event embeds with dynamic RSVP buttons: `✅ Going (14)`, `🤔 Maybe (6)`, `❌ Can't Go (3)`.
-  - Automatic synchronization with Discord native GuildScheduledEvents.
+  - Rich event embeds with dynamic RSVP buttons: `✅ Going (14)`, `🤔 Maybe (6)`, `❌ Can't Go (3)`, `👥 View Attendees`.
+  - Real-time button counter updates and attendee roster inspector modal.
 * **Automated Event Countdown & Reminders:**
-  - Automated reminder pings in the event channel (24 hours before, 1 hour before, 10 minutes before) mentioning only members marked as **Going**.
-* **Attendee Export & Voice Attendance Tracker:**
-  - Automatically checks attendees who showed up in the event voice channel during the event window and awards custom XP/Achievements.
+  - Automated reminder pings in the event channel (24 hours before, 1 hour before, 10 minutes before) mentioning only members marked as **Going** with optional private DM alerts.
+* **Live Voice Attendance Tracker & XP Rewards:**
+  - Automatically checks attendees who show up in the event voice channel during the event window and awards custom Leveling XP, Server Coins, and Achievements.
 
 #### Step-by-Step Implementation:
 1. **Database Schema:**
-   - Create `community_events` (`id`, `guild_id`, `scheduled_event_id`, `title`, `description`, `start_time`, `end_time`, `channel_id`, `voice_channel_id`, `host_user_id`, `xp_reward`).
-   - Create `community_event_rsvps` (`event_id`, `user_id`, `rsvp_status`, `attended`, `created_at`).
-2. **Scheduler Task:**
-   - Register event reminder checks in `src/services/taskScheduler.js` running every 60 seconds.
+   - Create `event_configs`, `calendar_subscriptions`, `community_events`, `community_event_rsvps`, and `event_attendance_logs`.
+2. **Scheduler Tasks:**
+   - Calendar Sync Runner (15 min polling cycle) and Reminder Runner (60-sec due check).
 3. **Commands:**
-   - `/event create`, `/event list`, `/event rsvp`, `/event attendees [event_id]`, `/event manager`.
+   - `/event create`, `/event list`, `/event rsvp`, `/event attendees`, `/event calendar link`, `/event calendar sync`, `/event manager`.
+4. **Integration Guide:**
+   - Detailed implementation steps, iCal parser architecture, and setup instructions documented in [Events & Google Calendar Module Plan](./EVENTS_MODULE_PLAN.md).
 
 ---
 
@@ -418,6 +421,7 @@ A modern Next.js / React web portal complementing the in-Discord `/setup` center
 * **Custom Command IDE:** Syntax-highlighted code editor for custom triggers, variable tags (`{user}`, `{channel}`, `{args}`), and regex matching.
 * **Live Ticket & Case Audit Portal:** Filterable moderation case history, live ticket monitoring, and transcript viewer.
 * **Public Server Leaderboards:** Shareable web leaderboard URLs (`slickbot.app/leaderboard/[guild_id]`).
+* **Technical Implementation Plan:** Detailed schema, TierService quota enforcement, and Stripe webhook lifecycle documented in [Web Dashboard & Billing Plan](./WEB_DASHBOARD_AND_BILLING_PLAN.md).
 
 ---
 
@@ -480,3 +484,5 @@ To maintain SlickBot's gold standard of code quality, performance, and maintaina
 *Related Documentation:*
 * [Multi-Server Expansion Roadmap](./EXPANSION_ROADMAP.md) — Multi-tenancy, Discord Bot Verification, and infrastructure scaling.
 * [Streamer.bot Integration Architecture](./STREAMERBOT_DEVELOPMENT.md) — Technical API gateway, C# scripts, and Streamer.bot setup guide.
+* [Events & Google Calendar Module Plan](./EVENTS_MODULE_PLAN.md) — Google Calendar sync, interactive RSVP cards, and attendance XP.
+* [Web Dashboard & Billing Plan](./WEB_DASHBOARD_AND_BILLING_PLAN.md) — Next.js dashboard, Stripe subscription lifecycle, and quota enforcement.
