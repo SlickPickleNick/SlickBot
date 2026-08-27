@@ -239,6 +239,49 @@ body {
   color: #f87171;
 }
 
+/* Alert Banner */
+.alert-banner {
+  background-color: #1c1917;
+  border: 1px solid #78350f;
+  border-left: 4px solid var(--accent-amber);
+  border-radius: var(--radius-md);
+  padding: 16px 20px;
+  margin-bottom: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.alert-banner-title {
+  font-weight: 700;
+  color: #fbbf24;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.alert-banner-body {
+  font-size: 13px;
+  color: #d6d3d1;
+  line-height: 1.5;
+}
+
+.alert-code-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  background-color: #0c0a09;
+  border: 1px solid #44403c;
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: #fef08a;
+  word-break: break-all;
+}
+
 /* Hero Section */
 .hero-section {
   text-align: center;

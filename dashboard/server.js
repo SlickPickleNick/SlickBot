@@ -16,7 +16,6 @@ const PUBLIC_DIR = path.resolve(__dirname, 'public');
 
 const DISCORD_CLIENT_ID = process.env.DISCORD_CLIENT_ID || process.env.CLIENT_ID || env?.DISCORD_CLIENT_ID || '';
 const DISCORD_CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET || process.env.CLIENT_SECRET || '';
-const DASHBOARD_URL = process.env.DASHBOARD_URL || process.env.PUBLIC_URL || `http://localhost:${PORT}`;
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 
 // In-memory sessions store (sessionId -> sessionData) with TTL cleanup
@@ -118,6 +117,19 @@ const MODULES_DATA = [
 
 const VALID_MODULE_KEYS = new Set(MODULES_DATA.map(m => m.key));
 
+// Dynamically determine base URL from environment or request headers
+function getBaseUrl(req) {
+  if (process.env.DASHBOARD_URL) return process.env.DASHBOARD_URL.replace(/\/+$/, '');
+  if (process.env.PUBLIC_URL) return process.env.PUBLIC_URL.replace(/\/+$/, '');
+  
+  const forwardedProto = req.headers['x-forwarded-proto'];
+  const proto = forwardedProto ? forwardedProto.split(',')[0].trim() : (req.socket?.encrypted ? 'https' : 'http');
+  const forwardedHost = req.headers['x-forwarded-host'];
+  const host = forwardedHost ? forwardedHost.split(',')[0].trim() : (req.headers.host || `localhost:${PORT}`);
+  
+  return `${proto}://${host}`;
+}
+
 // Generate cryptographically secure session IDs
 function generateSecureSessionId() {
   return `sess_${crypto.randomBytes(32).toString('hex')}`;
@@ -199,6 +211,7 @@ async function handleDashboardRequest(req, res, client = null) {
   const pathname = reqUrl.pathname;
   const cookies = parseCookies(req);
   const sessionId = cookies.slickbot_session || req.headers['x-session-id'];
+  const baseUrl = getBaseUrl(req);
 
   // Security Headers
   res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -239,6 +252,7 @@ async function handleDashboardRequest(req, res, client = null) {
         engine: 'PostgreSQL'
       },
       authConfigured: Boolean(DISCORD_CLIENT_ID && DISCORD_CLIENT_SECRET),
+      redirectUri: `${baseUrl}/api/auth/callback`,
       timestamp: new Date().toISOString()
     }, null, 2));
     return;
@@ -252,9 +266,9 @@ async function handleDashboardRequest(req, res, client = null) {
 
   // --- API: Discord OAuth2 Login ---
   if (pathname === '/api/auth/login') {
-    const redirectUri = `${DASHBOARD_URL}/api/auth/callback`;
+    const redirectUri = `${baseUrl}/api/auth/callback`;
     if (!DISCORD_CLIENT_ID || !DISCORD_CLIENT_SECRET) {
-      res.writeHead(302, { Location: '/?error=oauth_not_configured' });
+      res.writeHead(302, { Location: `/?error=oauth_not_configured&redirect_uri=${encodeURIComponent(redirectUri)}` });
       res.end();
       return;
     }
@@ -267,6 +281,8 @@ async function handleDashboardRequest(req, res, client = null) {
   // --- API: Discord OAuth2 Callback ---
   if (pathname === '/api/auth/callback') {
     const code = reqUrl.searchParams.get('code');
+    const redirectUri = `${baseUrl}/api/auth/callback`;
+
     if (!code) {
       res.writeHead(302, { Location: '/?error=missing_code' });
       res.end();
@@ -274,7 +290,6 @@ async function handleDashboardRequest(req, res, client = null) {
     }
 
     try {
-      const redirectUri = `${DASHBOARD_URL}/api/auth/callback`;
       const tokenPayload = querystring.stringify({
         client_id: DISCORD_CLIENT_ID,
         client_secret: DISCORD_CLIENT_SECRET,
@@ -294,7 +309,8 @@ async function handleDashboardRequest(req, res, client = null) {
       }, tokenPayload);
 
       if (tokenRes.status !== 200 || !tokenRes.data.access_token) {
-        res.writeHead(302, { Location: '/?error=token_exchange_failed' });
+        console.error('Discord token exchange failed:', tokenRes.data);
+        res.writeHead(302, { Location: `/?error=token_exchange_failed&redirect_uri=${encodeURIComponent(redirectUri)}` });
         res.end();
         return;
       }
@@ -415,7 +431,7 @@ async function handleDashboardRequest(req, res, client = null) {
       .filter(g => g.owner || hasManagePermission(g.permissions))
       .map(g => {
         const isInstalled = botInstalledSet.has(g.id);
-        const inviteUrl = `https://discord.com/oauth2/authorize?client_id=${encodeURIComponent(DISCORD_CLIENT_ID || '123456789012345678')}&permissions=8&scope=bot%20applications.commands&guild_id=${encodeURIComponent(g.id)}&response_type=code&redirect_uri=${encodeURIComponent(`${DASHBOARD_URL}/api/auth/callback`)}`;
+        const inviteUrl = `https://discord.com/oauth2/authorize?client_id=${encodeURIComponent(DISCORD_CLIENT_ID || '123456789012345678')}&permissions=8&scope=bot%20applications.commands&guild_id=${encodeURIComponent(g.id)}&response_type=code&redirect_uri=${encodeURIComponent(`${baseUrl}/api/auth/callback`)}`;
         
         return {
           id: g.id,
