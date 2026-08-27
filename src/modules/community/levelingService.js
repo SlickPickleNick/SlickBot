@@ -720,6 +720,105 @@ class LevelingService {
     };
   }
 
+  buildXpAnalysisCsv(analysis) {
+    const lines = ['Level,XP Needed (This Level),Total XP Required,Est. Messages (This Level),Est. Messages (Total)'];
+    if (analysis?.levels && Array.isArray(analysis.levels)) {
+      for (const row of analysis.levels) {
+        lines.push(`${row.level},${row.incrementalXp},${row.totalXp},${row.estimatedMessagesForLevel},${row.estimatedMessagesTotal}`);
+      }
+    }
+    return lines.join('\n');
+  }
+
+  buildXpAnalysisEmbed(analysis) {
+    const maxLevel = analysis?.maxLevel || 100;
+    const multiplier = analysis?.multiplier || 1;
+    const averageAward = analysis?.averageAward || 20;
+    const milestones = [5, 10, 25, 50, 100].filter((lvl) => lvl <= maxLevel);
+    const milestoneLines = milestones.map((lvl) => {
+      const row = (analysis?.levels || []).find((r) => r.level === lvl);
+      if (!row) return null;
+      return `• Level **${lvl}**: **${row.totalXp.toLocaleString()} XP** (~${row.estimatedMessagesTotal.toLocaleString()} msgs)`;
+    }).filter(Boolean);
+
+    return createBaseEmbed({
+      title: '📊 XP Progression Curve & Level Analysis',
+      description: [
+        `Analysis Scope: **Levels 1 to ${maxLevel}**`,
+        `Effective Multiplier: **${formatMultiplier(multiplier)}**`,
+        `Average XP Award: **~${averageAward.toFixed(1)} XP/msg**`,
+        '',
+        '**Key Level Milestones:**',
+        milestoneLines.length ? milestoneLines.join('\n') : '• *No standard milestone levels in selected range.*',
+        '',
+        '📄 *A full level-by-level CSV breakdown has been generated and attached.*'
+      ].join('\n'),
+      color: SlickBotColors.INFO
+    });
+  }
+
+  async buildInfoEmbed(guild) {
+    if (!guild) return createBaseEmbed({ title: 'Leveling Information', description: 'Server information is not available.', color: SlickBotColors.WARNING });
+    const config = (await this.getConfig(guild.id)) || (await this.saveConfig(guild.id, {})) || {};
+    const rewards = (await this.listRoleRewards(guild.id)) || [];
+    const multiplierRoles = (await this.listMultiplierRoles(guild.id)) || [];
+    const enabled = config.enabled ?? true;
+    const voiceEnabled = config.voice_xp_enabled ?? true;
+    const cooldown = config.cooldown_seconds || 60;
+    const minLength = config.minimum_message_length || 3;
+    const textMin = config.xp_min || 15;
+    const textMax = config.xp_max || 25;
+    const voiceMin = config.voice_xp_min || 10;
+    const voiceMax = config.voice_xp_max || 20;
+    const voiceMinMembers = config.voice_xp_min_channel_members || 2;
+    const voiceUnmuted = config.voice_xp_require_unmuted !== false;
+
+    const rewardLines = rewards.length
+      ? rewards.map((r) => `• Level **${r.level}** → <@&${r.role_id}>`).join('\n')
+      : '• *No level role rewards configured yet.*';
+
+    const multiplierLines = multiplierRoles.length
+      ? multiplierRoles.map((m) => `• <@&${m.role_id}> → **${formatMultiplier(m.multiplier)} XP**`).join('\n')
+      : '• *No XP multiplier roles configured.*';
+
+    const embed = createBaseEmbed({
+      title: `🏆 ${guild.name} • Leveling & XP Guide`,
+      description: [
+        `Leveling Engine: **${enabled ? '🟢 Active' : '⏸️ Disabled'}**`,
+        '',
+        '**💬 Text Chat XP Rates**',
+        `• XP Gain: **${textMin}–${textMax} XP** per eligible message`,
+        `• Cooldown: **${cooldown}s** between awards`,
+        `• Minimum Length: **${minLength} characters**`,
+        '',
+        '**🎙️ Voice Activity XP Rates**',
+        `• Voice XP: **${voiceEnabled ? '🟢 Enabled' : '⏸️ Disabled'}**`,
+        `• XP Gain: **${voiceMin}–${voiceMax} XP** per minute`,
+        `• Anti-Farming: Minimum **${voiceMinMembers} active members** in voice channel`,
+        `• Requirement: Must be **unmuted/undeafened** (${voiceUnmuted ? 'Enforced' : 'Optional'})`,
+        '',
+        '**🎖️ Level Role Rewards**',
+        rewardLines,
+        '',
+        '**⚡ XP Multipliers**',
+        multiplierLines,
+        '',
+        '**📌 Helpful Commands**',
+        '• `/level rank [user]` — View your rank card, level, and XP progression',
+        '• `/level leaderboard` — View the server top 10 rankings',
+        '• `/level card` — Customize your rank card theme and background image'
+      ].join('\n'),
+      color: enabled ? SlickBotColors.PRIMARY : SlickBotColors.WARNING
+    });
+
+    if (typeof guild.iconURL === 'function') {
+      const icon = guild.iconURL({ dynamic: true, size: 256 });
+      if (icon) embed.setThumbnail(icon);
+    }
+
+    return embed;
+  }
+
   async buildManagerPanel(guildId) {
     const config = (await this.saveConfig(guildId, {})) || {};
     const rewards = (await this.listRoleRewards(guildId)) || [];

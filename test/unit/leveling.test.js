@@ -128,4 +128,73 @@ test('LevelingService Caching and Multiplier Roles', async (t) => {
     assert.equal(embed.data.image.url, 'https://example.com/banner.png');
     assert.equal(embed.data.thumbnail.url, 'https://example.com/avatar.png');
   });
+
+  await t.test('buildInfoEmbed renders server leveling guide with rewards and multipliers', async () => {
+    mockDb.addHandler('leveling_configs', {
+      rows: [{
+        guild_id: guildId,
+        enabled: true,
+        xp_min: 20,
+        xp_max: 30,
+        cooldown_seconds: 45,
+        minimum_message_length: 5,
+        voice_xp_enabled: true,
+        voice_xp_min: 15,
+        voice_xp_max: 25,
+        voice_xp_min_channel_members: 2,
+        voice_xp_require_unmuted: true
+      }],
+      rowCount: 1
+    });
+
+    mockDb.addHandler('leveling_role_rewards', {
+      rows: [
+        { level: 5, role_id: '200000000000000001', active: true },
+        { level: 10, role_id: '200000000000000002', active: true }
+      ],
+      rowCount: 2
+    });
+
+    mockDb.addHandler('leveling_multiplier_roles', {
+      rows: [
+        { role_id: '200000000000000003', multiplier: 2.0, active: true }
+      ],
+      rowCount: 1
+    });
+
+    const mockGuild = {
+      id: guildId,
+      name: 'Epic Gamer Guild',
+      iconURL: () => 'https://example.com/guild-icon.png'
+    };
+
+    const infoEmbed = await service.buildInfoEmbed(mockGuild);
+    assert.ok(infoEmbed);
+    assert.match(infoEmbed.data.title, /Epic Gamer Guild/);
+    assert.match(infoEmbed.data.description, /20–30 XP/);
+    assert.match(infoEmbed.data.description, /45s/);
+    assert.match(infoEmbed.data.description, /Level \*\*5\*\* → <@&200000000000000001>/);
+    assert.match(infoEmbed.data.description, /Level \*\*10\*\* → <@&200000000000000002>/);
+    assert.match(infoEmbed.data.description, /<@&200000000000000003> → \*\*2× XP\*\*/);
+    assert.equal(infoEmbed.data.thumbnail.url, 'https://example.com/guild-icon.png');
+  });
+
+  await t.test('buildXpAnalysis, CSV, and embed generate accurate curve projections', async () => {
+    const config = { xp_min: 10, xp_max: 30 };
+    const analysis = service.buildXpAnalysis(config, 20, 2);
+    assert.equal(analysis.maxLevel, 20);
+    assert.equal(analysis.multiplier, 2);
+    assert.equal(analysis.averageAward, 40);
+    assert.equal(analysis.levels.length, 20);
+
+    const csv = service.buildXpAnalysisCsv(analysis);
+    assert.ok(csv.includes('Level,XP Needed (This Level),Total XP Required'));
+    assert.ok(csv.includes('1,125,125,4,4'));
+
+    const embed = service.buildXpAnalysisEmbed(analysis);
+    assert.ok(embed);
+    assert.match(embed.data.title, /XP Progression Curve/);
+    assert.match(embed.data.description, /Levels 1 to 20/);
+    assert.match(embed.data.description, /2×/);
+  });
 });

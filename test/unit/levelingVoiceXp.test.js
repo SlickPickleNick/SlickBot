@@ -308,4 +308,61 @@ test('Voice XP for Leveling Engine Tests', async (t) => {
     const errors = validateCommandPayloads(payloads);
     assert.deepEqual(errors, []);
   });
+
+  await t.test('/level info and /level analyze command execution', async () => {
+    mockDb.addHandler('leveling_configs', {
+      rows: [{
+        guild_id: guildId,
+        enabled: true,
+        xp_min: 15,
+        xp_max: 25,
+        cooldown_seconds: 60,
+        voice_xp_enabled: true,
+        voice_xp_min: 10,
+        voice_xp_max: 20
+      }],
+      rowCount: 1
+    });
+
+    let repliedPayload = null;
+    const mockInfoInteraction = {
+      guildId,
+      guild: { id: guildId, name: 'Test Server', iconURL: () => null },
+      user: { id: 'user-1', tag: 'Tester#0001' },
+      options: {
+        getSubcommand: () => 'info'
+      },
+      reply: async (payload) => {
+        repliedPayload = payload;
+        return payload;
+      }
+    };
+
+    await levelCmd.execute(mockInfoInteraction, {});
+    assert.ok(repliedPayload);
+    assert.ok(repliedPayload.embeds);
+    assert.match(repliedPayload.embeds[0].data.title, /Test Server • Leveling & XP Guide/);
+
+    let analyzePayload = null;
+    const mockAnalyzeInteraction = {
+      guildId,
+      guild: { id: guildId, name: 'Test Server' },
+      user: { id: 'user-1', tag: 'Tester#0001' },
+      options: {
+        getSubcommand: () => 'analyze',
+        getInteger: (name) => (name === 'max_level' ? 25 : null),
+        getNumber: (name) => (name === 'multiplier' ? 1.5 : null)
+      },
+      reply: async (payload) => {
+        analyzePayload = payload;
+        return payload;
+      }
+    };
+
+    await levelCmd.execute(mockAnalyzeInteraction, {});
+    assert.ok(analyzePayload);
+    assert.ok(analyzePayload.embeds);
+    assert.match(analyzePayload.embeds[0].data.title, /XP Progression Curve & Level Analysis/);
+    assert.ok(analyzePayload.files && analyzePayload.files.length > 0);
+  });
 });

@@ -65,17 +65,34 @@ async function replyPrivate(interaction, options) {
 
   let response = null;
   let isFollowUp = false;
-  if (interaction.deferred && !interaction.replied && typeof interaction.editReply === 'function') {
-    const editPayload = { ...payload };
-    delete editPayload.flags;
-    response = await interaction.editReply(editPayload);
-  } else if (interaction.replied) {
-    isFollowUp = true;
-    response = await interaction.followUp(payload);
-  } else {
-    await interaction.reply(payload);
-    if (deleteAfterSeconds > 0 && typeof interaction.fetchReply === 'function') {
-      response = await interaction.fetchReply().catch(() => null);
+  try {
+    if (interaction.deferred && !interaction.replied && typeof interaction.editReply === 'function') {
+      const editPayload = { ...payload };
+      delete editPayload.flags;
+      response = await interaction.editReply(editPayload);
+    } else if (interaction.replied) {
+      isFollowUp = true;
+      response = await interaction.followUp(payload);
+    } else {
+      response = await interaction.reply(payload);
+      if (deleteAfterSeconds > 0 && typeof interaction.fetchReply === 'function') {
+        response = await interaction.fetchReply().catch(() => null);
+      }
+    }
+  } catch (err) {
+    if (err?.code === 40060 || err?.message?.includes('already been acknowledged')) {
+      try {
+        isFollowUp = true;
+        response = await interaction.followUp(payload);
+      } catch (_fErr) {
+        try {
+          const editPayload = { ...payload };
+          delete editPayload.flags;
+          response = await interaction.editReply(editPayload);
+        } catch (_eErr) {}
+      }
+    } else {
+      throw err;
     }
   }
 
@@ -88,23 +105,40 @@ async function acknowledgeQuietly(interaction) {
   // It avoids creating a separate ephemeral confirmation popup.
   if (!interaction || interaction.deferred || interaction.replied) return;
   if (typeof interaction.deferUpdate === 'function') {
-    await interaction.deferUpdate();
+    await interaction.deferUpdate().catch(() => {});
     return;
   }
   if (typeof interaction.deferReply === 'function') {
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral }).catch(() => {});
   }
 }
 
 async function replyPublic(interaction, options) {
-  const payload = typeof options === 'string' ? { content: options } : options;
+  if (!canUseInteractionReply(interaction)) return null;
+  const payload = typeof options === 'string' ? { content: options } : { ...options };
 
-  if (interaction.deferred || interaction.replied) {
-    await interaction.followUp(payload);
-    return;
+  try {
+    if (interaction.deferred && !interaction.replied && typeof interaction.editReply === 'function') {
+      return await interaction.editReply(payload);
+    } else if (interaction.replied) {
+      return await interaction.followUp(payload);
+    } else {
+      return await interaction.reply(payload);
+    }
+  } catch (err) {
+    if (err?.code === 40060 || err?.message?.includes('already been acknowledged')) {
+      try {
+        return await interaction.followUp(payload);
+      } catch (_fErr) {
+        try {
+          return await interaction.editReply(payload);
+        } catch (_eErr) {}
+      }
+    } else {
+      throw err;
+    }
   }
-
-  await interaction.reply(payload);
 }
 
 module.exports = { replyPrivate, replyPublic, acknowledgeQuietly, deleteEphemeralResponse };
+
