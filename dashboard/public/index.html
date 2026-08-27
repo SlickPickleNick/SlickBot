@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SlickBot — All-in-One Discord Management Console</title>
+  <title>SlickBot — Management Console & Complete Server Control</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -25,7 +25,6 @@
       </nav>
 
       <div class="auth-container" id="auth-header-container">
-        <!-- Injected dynamically by app.js: Login button or User Profile -->
         <button class="btn btn-discord" id="btn-top-login" onclick="handleDiscordLogin()">
           <svg class="discord-icon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
             <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.929 1.793 8.18 1.793 12.061 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.894.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.028zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/>
@@ -45,11 +44,11 @@
       <div class="hero-section">
         <div class="hero-badge">
           <span class="pulse-dot"></span>
-          <span>Core Gateway Online &bull; v0.9.8</span>
+          <span>Core Gateway Online &bull; 29 Modules Built &bull; v0.9.8</span>
         </div>
-        <h1 class="hero-title">Modular Server Management for Discord Communities</h1>
+        <h1 class="hero-title">Complete Discord Server Management Infrastructure</h1>
         <p class="hero-description">
-          SlickBot provides an all-in-one suite of moderation tools, automated spam filtering, button-based support workflows, multi-platform stream alerts, dynamic join-to-create voice channels, and granular audit logging.
+          SlickBot replaces multi-bot clutter with a cohesive architecture covering 29 modular systems: Unified Moderation, AutoMod, Multi-Channel Tickets, Creator Live Alerts, Join-to-Create Voice, XP Progression, and Granular Audit Trails.
         </p>
 
         <div class="hero-actions">
@@ -73,9 +72,9 @@
           <div class="metric-meta">Heartbeat active</div>
         </div>
         <div class="metric-card">
-          <div class="metric-label">WebSocket Latency</div>
-          <div class="metric-value" id="home-metric-ping">24 ms</div>
-          <div class="metric-meta">Discord API round-trip</div>
+          <div class="metric-label">Registered Modules</div>
+          <div class="metric-value" id="home-metric-modules">29</div>
+          <div class="metric-meta">100% Configurable via Web or Slash Commands</div>
         </div>
         <div class="metric-card">
           <div class="metric-label">Database Layer</div>
@@ -89,65 +88,28 @@
         </div>
       </div>
 
-      <!-- Capabilities Breakdown -->
+      <!-- Complete 29 Module Catalog Grid -->
       <div class="section-block">
-        <h2 class="section-title">Core Systems & Capabilities</h2>
-        <p class="section-subtitle">SlickBot replaces single-purpose bots with a cohesive, permission-controlled architecture.</p>
-
-        <div class="features-grid">
-          <div class="feature-card">
-            <div class="feature-icon">🛡️</div>
-            <h3 class="feature-title">Moderation & Case Logging</h3>
-            <p class="feature-desc">Comprehensive moderation tools including warn, mute, kick, ban, user notes, and persistent case history with audit trail timestamps.</p>
-            <div class="feature-tags">
-              <span>/mod</span><span>/case</span><span>/note</span>
-            </div>
+        <div class="section-header-flex">
+          <div>
+            <h2 class="section-title">All 29 Integrated Systems</h2>
+            <p class="section-subtitle">Manage everything through interactive dashboard consoles or Discord commands.</p>
           </div>
-
-          <div class="feature-card">
-            <div class="feature-icon">⚡</div>
-            <h3 class="feature-title">AutoMod & Anti-Spam</h3>
-            <p class="feature-desc">Autonomous server protection filtering malicious links, invite spam, banned keywords, and rapid repeat messages with configurable actions.</p>
-            <div class="feature-tags">
-              <span>/automod</span><span>Whitelists</span><span>Action Escalation</span>
-            </div>
+          <div class="category-tags" id="home-cat-filter">
+            <button class="cat-btn active" onclick="filterHomeModules('ALL', this)">All (29)</button>
+            <button class="cat-btn" onclick="filterHomeModules('general', this)">General</button>
+            <button class="cat-btn" onclick="filterHomeModules('safety', this)">Safety</button>
+            <button class="cat-btn" onclick="filterHomeModules('support', this)">Support</button>
+            <button class="cat-btn" onclick="filterHomeModules('media', this)">Media</button>
+            <button class="cat-btn" onclick="filterHomeModules('onboarding', this)">Onboarding</button>
+            <button class="cat-btn" onclick="filterHomeModules('community', this)">Community</button>
+            <button class="cat-btn" onclick="filterHomeModules('logging', this)">Logging</button>
+            <button class="cat-btn" onclick="filterHomeModules('utilities', this)">Utilities</button>
           </div>
+        </div>
 
-          <div class="feature-card">
-            <div class="feature-icon">🎫</div>
-            <h3 class="feature-title">Support Tickets & FAQ</h3>
-            <p class="feature-desc">Button-driven ticket panels with multi-category queues, HTML/text transcripts, staff claiming, and forum-synced FAQ knowledgebases.</p>
-            <div class="feature-tags">
-              <span>/ticket</span><span>/faq</span><span>/appeal</span>
-            </div>
-          </div>
-
-          <div class="feature-card">
-            <div class="feature-icon">📡</div>
-            <h3 class="feature-title">Social Feeds & Stream Alerts</h3>
-            <p class="feature-desc">Instant Twitch live alerts, YouTube video & Shorts tracking, and live directory hubs with per-creator subscriber alert toggles.</p>
-            <div class="feature-tags">
-              <span>/feed</span><span>Twitch</span><span>YouTube</span>
-            </div>
-          </div>
-
-          <div class="feature-card">
-            <div class="feature-icon">👋</div>
-            <h3 class="feature-title">Onboarding & Role Panels</h3>
-            <p class="feature-desc">Interactive welcome messages, rule-acceptance verification gates, self-assignable role panels, and temporary role expirations.</p>
-            <div class="feature-tags">
-              <span>/welcome</span><span>/roles</span><span>/temprole</span>
-            </div>
-          </div>
-
-          <div class="feature-card">
-            <div class="feature-icon">🎙️</div>
-            <h3 class="feature-title">Dynamic Join-to-Create Voice</h3>
-            <p class="feature-desc">Automatic temporary voice channel generation with creator controls for renaming, user limits, channel locking, and permissions.</p>
-            <div class="feature-tags">
-              <span>/jointocreate</span><span>/vc</span><span>Auto-cleanup</span>
-            </div>
-          </div>
+        <div class="features-grid" id="home-modules-grid">
+          <!-- Rendered dynamically by app.js -->
         </div>
       </div>
     </div>
@@ -166,48 +128,313 @@
         </div>
       </div>
 
-      <!-- Server Cards Grid -->
       <div class="servers-grid" id="servers-container">
         <!-- Rendered dynamically by app.js -->
       </div>
     </div>
   </section>
 
-  <!-- VIEW 3: SERVER MANAGEMENT CONSOLE -->
+  <!-- VIEW 3: FULL SERVER MANAGEMENT CONSOLE WITH SIDEBAR -->
   <section id="view-manage" class="page-view">
-    <div class="container">
-      <div class="breadcrumb-bar">
-        <button class="btn btn-outline btn-sm" onclick="navigateTo('servers')">
-          &larr; Back to Server Selection
-        </button>
-      </div>
-
-      <!-- Guild Banner / Header -->
-      <div class="guild-banner" id="guild-banner">
-        <div class="guild-banner-avatar" id="guild-banner-avatar">S</div>
-        <div class="guild-banner-info">
-          <h1 class="guild-banner-title" id="guild-banner-name">Server Name</h1>
-          <div class="guild-banner-meta">
-            <span>Guild ID: <code id="guild-banner-id">--</code></span>
-            <span>&bull;</span>
-            <span class="badge badge-active">SlickBot Connected</span>
+    <div class="container-manage">
+      <!-- Breadcrumbs & Banner -->
+      <div class="manage-top-header">
+        <div class="manage-header-left">
+          <button class="btn btn-outline btn-sm" onclick="navigateTo('servers')">
+            &larr; Back to Servers
+          </button>
+          <div class="guild-badge-inline">
+            <div class="guild-avatar-small" id="guild-avatar-small">S</div>
+            <div>
+              <h2 class="guild-name-inline" id="guild-name-inline">Server Name</h2>
+              <span class="guild-id-sub">ID: <code id="guild-id-sub">--</code></span>
+            </div>
           </div>
         </div>
+        <div class="save-status" id="save-status-indicator"></div>
       </div>
 
-      <!-- Guild Module Management -->
-      <div class="section-block">
-        <div class="section-header-flex">
-          <div>
-            <h2 class="section-title">Installed Modules</h2>
-            <p class="section-subtitle">Enable or disable specific features for this server.</p>
-          </div>
-          <div id="save-status-indicator" class="save-status"></div>
-        </div>
+      <!-- Split Layout: Left Sidebar + Right Content Area -->
+      <div class="server-manage-layout">
+        <!-- Left Sidebar Navigation (8 Categories) -->
+        <aside class="sidebar-nav">
+          <div class="sidebar-group-label">Management Modules</div>
+          <button class="sidebar-item active" onclick="switchManageTab('general', this)">
+            <span class="sidebar-icon">📊</span>
+            <span>Overview & Switchboard</span>
+          </button>
+          <button class="sidebar-item" onclick="switchManageTab('safety', this)">
+            <span class="sidebar-icon">🛡️</span>
+            <span>Safety & AutoMod</span>
+          </button>
+          <button class="sidebar-item" onclick="switchManageTab('support', this)">
+            <span class="sidebar-icon">🎫</span>
+            <span>Support & Workflows</span>
+          </button>
+          <button class="sidebar-item" onclick="switchManageTab('media', this)">
+            <span class="sidebar-icon">📡</span>
+            <span>Social Feeds & Alerts</span>
+          </button>
+          <button class="sidebar-item" onclick="switchManageTab('onboarding', this)">
+            <span class="sidebar-icon">👋</span>
+            <span>Onboarding & Roles</span>
+          </button>
+          <button class="sidebar-item" onclick="switchManageTab('community', this)">
+            <span class="sidebar-icon">🏆</span>
+            <span>Community & Leveling</span>
+          </button>
+          <button class="sidebar-item" onclick="switchManageTab('logging', this)">
+            <span class="sidebar-icon">📜</span>
+            <span>Audit & Server Stats</span>
+          </button>
+          <button class="sidebar-item" onclick="switchManageTab('utilities', this)">
+            <span class="sidebar-icon">🎙️</span>
+            <span>Voice & Automation</span>
+          </button>
+        </aside>
 
-        <div class="guild-modules-list" id="guild-modules-container">
-          <!-- Rendered dynamically by app.js -->
-        </div>
+        <!-- Right Content Panels Area -->
+        <main class="manage-content-area">
+          <!-- PANEL 1: GENERAL OVERVIEW & ALL 29 MODULES SWITCHBOARD -->
+          <div id="tab-panel-general" class="manage-panel active">
+            <div class="panel-header">
+              <h2 class="panel-title">Master Module Switchboard</h2>
+              <p class="panel-subtitle">Enable or disable any of the 29 integrated server systems.</p>
+            </div>
+
+            <div class="switchboard-grid" id="switchboard-container">
+              <!-- Injected dynamically by app.js -->
+            </div>
+          </div>
+
+          <!-- PANEL 2: SAFETY, MODERATION & AUTOMOD -->
+          <div id="tab-panel-safety" class="manage-panel">
+            <div class="panel-header">
+              <h2 class="panel-title">AutoMod & Security Protection</h2>
+              <p class="panel-subtitle">Configure automated link filtering, anti-spam heuristics, and banned words.</p>
+            </div>
+
+            <div class="panel-card-section">
+              <h3 class="card-section-title">Automated Filters</h3>
+              <div class="filter-toggle-list">
+                <div class="setting-row">
+                  <div>
+                    <strong>Anti-Invite Link Filter</strong>
+                    <div class="setting-desc">Blocks unauthorized Discord server invitation links in chat.</div>
+                  </div>
+                  <label class="switch">
+                    <input type="checkbox" checked onchange="saveSimpleSetting('filter_invites', this.checked)">
+                    <span class="slider"></span>
+                  </label>
+                </div>
+                <div class="setting-row">
+                  <div>
+                    <strong>Rapid Message Spam Heuristics</strong>
+                    <div class="setting-desc">Automatically mutes members sending repeated rapid messages.</div>
+                  </div>
+                  <label class="switch">
+                    <input type="checkbox" checked onchange="saveSimpleSetting('anti_spam', this.checked)">
+                    <span class="slider"></span>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <div class="panel-card-section">
+              <div class="section-header-flex">
+                <div>
+                  <h3 class="card-section-title">Banned Keywords & Phrases</h3>
+                  <div class="setting-desc">Messages containing these terms will be automatically filtered.</div>
+                </div>
+              </div>
+
+              <!-- Add Banned Word Form -->
+              <form class="inline-add-form" onsubmit="handleAddBannedWord(event)">
+                <input type="text" id="input-banned-word" class="form-input" placeholder="Enter word or regex to ban..." required>
+                <button type="submit" class="btn btn-primary">+ Add Banned Word</button>
+              </form>
+
+              <div class="banned-words-tags" id="banned-words-container">
+                <span class="text-muted">Loading banned words...</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- PANEL 3: SUPPORT & WORKFLOWS -->
+          <div id="tab-panel-support" class="manage-panel">
+            <div class="panel-header">
+              <h2 class="panel-title">Support Tickets & Staff Queues</h2>
+              <p class="panel-subtitle">Configure interactive ticket panels, transcript logging, and forum FAQ sync.</p>
+            </div>
+
+            <div class="panel-card-section">
+              <h3 class="card-section-title">Ticket System Settings</h3>
+              <div class="form-grid-2">
+                <div class="form-group">
+                  <label class="form-label">Transcript Log Channel ID</label>
+                  <input type="text" id="ticket-log-channel" class="form-input" placeholder="e.g. 123456789012345678">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Support Staff Role ID</label>
+                  <input type="text" id="ticket-staff-role" class="form-input" placeholder="e.g. 987654321098765432">
+                </div>
+              </div>
+              <button class="btn btn-primary btn-sm" onclick="saveSupportSettings()" style="margin-top: 12px;">Save Support Settings</button>
+            </div>
+          </div>
+
+          <!-- PANEL 4: MEDIA & SOCIAL FEEDS (INTERACTIVE LIST & ADD) -->
+          <div id="tab-panel-media" class="manage-panel">
+            <div class="panel-header">
+              <div class="section-header-flex">
+                <div>
+                  <h2 class="panel-title">Social Stream Alerts & Creator Tracking</h2>
+                  <p class="panel-subtitle">Subscribe to live Twitch channels and YouTube creator updates.</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Add Feed Card / Form -->
+            <div class="panel-card-section add-feed-box">
+              <h3 class="card-section-title">Subscribe to a New Creator</h3>
+              <form class="feed-form-grid" onsubmit="handleAddFeed(event)">
+                <div class="form-group">
+                  <label class="form-label">Platform</label>
+                  <select id="feed-platform" class="form-select">
+                    <option value="TWITCH">Twitch Stream</option>
+                    <option value="YOUTUBE">YouTube Channel</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Channel Handle or URL</label>
+                  <input type="text" id="feed-account" class="form-input" placeholder="e.g. shroud or @MrBeast" required>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Announcement Channel ID</label>
+                  <input type="text" id="feed-channel" class="form-input" placeholder="Discord Channel ID" required>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Ping Role ID (Optional)</label>
+                  <input type="text" id="feed-role" class="form-input" placeholder="Role ID to mention">
+                </div>
+                <div class="form-group span-full">
+                  <button type="submit" class="btn btn-primary" id="btn-add-feed">+ Add Stream Alert</button>
+                </div>
+              </form>
+            </div>
+
+            <!-- Active Subscribed Feeds Table -->
+            <div class="panel-card-section">
+              <h3 class="card-section-title">Active Subscriptions</h3>
+              <div class="table-container">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Platform</th>
+                      <th>Creator / Account</th>
+                      <th>Alert Channel</th>
+                      <th>Status</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="feeds-table-body">
+                    <tr><td colspan="5" style="text-align: center; color: var(--text-muted);">Loading active feeds...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- PANEL 5: ONBOARDING & ROLES -->
+          <div id="tab-panel-onboarding" class="manage-panel">
+            <div class="panel-header">
+              <h2 class="panel-title">Onboarding, Welcome & Roles</h2>
+              <p class="panel-subtitle">Configure welcome cards, auto-roles, and reaction panels.</p>
+            </div>
+
+            <div class="panel-card-section">
+              <h3 class="card-section-title">Welcome Greetings</h3>
+              <div class="form-grid-2">
+                <div class="form-group">
+                  <label class="form-label">Welcome Channel ID</label>
+                  <input type="text" id="welcome-channel" class="form-input" placeholder="Discord Channel ID">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Auto-Assigned Member Role ID</label>
+                  <input type="text" id="welcome-role" class="form-input" placeholder="Role ID given on join">
+                </div>
+              </div>
+              <button class="btn btn-primary btn-sm" onclick="saveWelcomeSettings()" style="margin-top: 12px;">Save Onboarding Settings</button>
+            </div>
+          </div>
+
+          <!-- PANEL 6: COMMUNITY & LEVELING -->
+          <div id="tab-panel-community" class="manage-panel">
+            <div class="panel-header">
+              <h2 class="panel-title">Community, Leveling & Starboard</h2>
+              <p class="panel-subtitle">Manage XP progression rates, reward roles, and the community starboard.</p>
+            </div>
+
+            <div class="panel-card-section">
+              <h3 class="card-section-title">Starboard Hall of Fame</h3>
+              <div class="form-grid-3">
+                <div class="form-group">
+                  <label class="form-label">Starboard Channel ID</label>
+                  <input type="text" id="starboard-channel" class="form-input" placeholder="Channel ID">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Reaction Threshold</label>
+                  <input type="number" id="starboard-threshold" class="form-input" value="3" min="1" max="25">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Star Emoji</label>
+                  <input type="text" id="starboard-emoji" class="form-input" value="⭐">
+                </div>
+              </div>
+              <button class="btn btn-primary btn-sm" onclick="saveStarboardSettings()" style="margin-top: 12px;">Save Starboard Settings</button>
+            </div>
+          </div>
+
+          <!-- PANEL 7: AUDIT & SERVER STATS -->
+          <div id="tab-panel-logging" class="manage-panel">
+            <div class="panel-header">
+              <h2 class="panel-title">Audit Logging & Telemetry</h2>
+              <p class="panel-subtitle">Assign dedicated audit channels for deletions, edits, member joins, and voice activity.</p>
+            </div>
+
+            <div class="panel-card-section">
+              <h3 class="card-section-title">Default Log Channel</h3>
+              <div class="form-group" style="max-width: 400px;">
+                <label class="form-label">Default Audit Channel ID</label>
+                <input type="text" id="default-log-channel" class="form-input" placeholder="Discord Channel ID">
+              </div>
+              <button class="btn btn-primary btn-sm" onclick="saveDefaultLogChannel()" style="margin-top: 12px;">Save Log Channel</button>
+            </div>
+          </div>
+
+          <!-- PANEL 8: VOICE & AUTOMATION UTILITIES -->
+          <div id="tab-panel-utilities" class="manage-panel">
+            <div class="panel-header">
+              <h2 class="panel-title">Dynamic Voice & Automation</h2>
+              <p class="panel-subtitle">Configure Join-to-Create temporary voice hubs and scheduled cron messages.</p>
+            </div>
+
+            <div class="panel-card-section">
+              <h3 class="card-section-title">Join-to-Create Voice Hub</h3>
+              <div class="form-grid-2">
+                <div class="form-group">
+                  <label class="form-label">Hub Voice Channel ID</label>
+                  <input type="text" id="jtc-hub-channel" class="form-input" placeholder="Voice Channel ID">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Default Channel Name Template</label>
+                  <input type="text" id="jtc-name-template" class="form-input" value="{user}'s Lounge">
+                </div>
+              </div>
+              <button class="btn btn-primary btn-sm" onclick="saveVoiceSettings()" style="margin-top: 12px;">Save Voice Hub Settings</button>
+            </div>
+          </div>
+        </main>
       </div>
     </div>
   </section>

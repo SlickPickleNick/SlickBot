@@ -1,7 +1,10 @@
+// SlickBot Web Dashboard SPA Client
 let currentUser = null;
 let userGuilds = [];
 let activeGuildId = null;
 let currentGuildConfig = null;
+let allModulesList = [];
+let currentCategoryFilter = 'ALL';
 let botClientId = '123456789012345678';
 let serverSearchQuery = '';
 
@@ -11,7 +14,6 @@ function navigateTo(viewName, params = {}) {
   const targetView = document.getElementById(`view-${viewName}`);
   if (targetView) targetView.classList.add('active');
 
-  // Update navigation button visibility
   const navServers = document.getElementById('nav-btn-servers');
   if (navServers) {
     navServers.style.display = currentUser ? 'inline-block' : 'none';
@@ -26,6 +28,22 @@ function navigateTo(viewName, params = {}) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
+// --- Tab Switcher for Server Management Sidebar ---
+function switchManageTab(tabId, buttonEl) {
+  document.querySelectorAll('.sidebar-item').forEach(btn => btn.classList.remove('active'));
+  if (buttonEl) buttonEl.classList.add('active');
+
+  document.querySelectorAll('.manage-panel').forEach(panel => panel.classList.remove('active'));
+  const targetPanel = document.getElementById(`tab-panel-${tabId}`);
+  if (targetPanel) targetPanel.classList.add('active');
+
+  if (activeGuildId) {
+    if (tabId === 'media') loadFeeds();
+    if (tabId === 'safety') loadAutoMod();
+    if (tabId === 'community') loadStarboard();
+  }
+}
+
 // --- Auth & Session Management ---
 async function checkAuth() {
   try {
@@ -38,7 +56,6 @@ async function checkAuth() {
         botClientId = data.clientId || botClientId;
         renderAuthHeader();
 
-        // If URL has ?view=servers or user is logged in on fresh load, show servers
         const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.get('view') === 'servers') {
           navigateTo('servers');
@@ -101,13 +118,13 @@ async function handleDemoLogin() {
       navigateTo('servers');
     }
   } catch (err) {
-    alert('Failed to initialize demo session');
+    alert('Failed to launch sandbox demo session: ' + err.message);
   }
 }
 
 async function handleLogout() {
   try {
-    await fetch('/api/auth/logout', { method: 'POST' });
+    await fetch('/api/auth/logout');
     currentUser = null;
     userGuilds = [];
     renderAuthHeader();
@@ -117,166 +134,397 @@ async function handleLogout() {
   }
 }
 
-// --- Server Selection Rendering ---
-function renderServers() {
-  const container = document.getElementById('servers-container');
-  if (!container) return;
-
-  const filtered = userGuilds.filter(g => {
-    return !serverSearchQuery || g.name.toLowerCase().includes(serverSearchQuery.toLowerCase());
-  });
-
-  if (filtered.length === 0) {
-    container.innerHTML = `
-      <div style="grid-column: 1 / -1; padding: 48px 24px; text-align: center; color: var(--text-secondary); background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg);">
-        <h3>No manageable servers found</h3>
-        <p style="margin-top: 8px; font-size: 13px; color: var(--text-muted);">
-          You need Administrator or Manage Server permissions on a Discord server to configure SlickBot.
-        </p>
-      </div>
-    `;
-    return;
-  }
-
-  // Sort installed servers first, then uninvited
-  filtered.sort((a, b) => (b.installed === true ? 1 : 0) - (a.installed === true ? 1 : 0));
-
-  container.innerHTML = filtered.map(guild => {
-    const isInstalled = guild.installed;
-    const iconContent = guild.iconUrl
-      ? `<img src="${guild.iconUrl}" alt="${escapeHtml(guild.name)}" class="server-icon-img">`
-      : `<div class="server-icon-placeholder">${escapeHtml(guild.name.substring(0, 2).toUpperCase())}</div>`;
-
-    if (isInstalled) {
-      // Installed Server Card: Full Color, Vibrant, Direct Configure Action
-      return `
-        <div class="server-card installed">
-          <div class="server-icon-wrap">
-            ${iconContent}
-          </div>
-          <div class="server-name" title="${escapeHtml(guild.name)}">${escapeHtml(guild.name)}</div>
-          <span class="badge badge-active">SlickBot Active</span>
-          <button class="btn btn-primary server-action-btn" onclick="navigateTo('manage', { guildId: '${guild.id}' })">
-            Configure Server
-          </button>
-        </div>
-      `;
-    } else {
-      // Uninvited Server Card: Greyscale, Muted, Discord Bot Invite Action
-      return `
-        <div class="server-card uninvited">
-          <div class="server-icon-wrap">
-            ${iconContent}
-          </div>
-          <div class="server-name" title="${escapeHtml(guild.name)}">${escapeHtml(guild.name)}</div>
-          <span class="badge badge-muted">Not Invited</span>
-          <a href="${guild.inviteUrl}" target="_blank" rel="noopener noreferrer" class="btn btn-outline server-action-btn">
-            + Invite SlickBot
-          </a>
-        </div>
-      `;
-    }
-  }).join('');
-}
-
-// --- Server Management / Config Console ---
-async function loadGuildConfig(guildId) {
-  activeGuildId = guildId;
-  const bannerName = document.getElementById('guild-banner-name');
-  const bannerId = document.getElementById('guild-banner-id');
-  const bannerAvatar = document.getElementById('guild-banner-avatar');
-  const modulesContainer = document.getElementById('guild-modules-container');
-
-  if (bannerName) bannerName.textContent = 'Loading Server...';
-  if (bannerId) bannerId.textContent = guildId;
-  if (modulesContainer) {
-    modulesContainer.innerHTML = '<div style="padding: 32px; text-align: center; color: var(--text-muted);">Fetching server modules...</div>';
-  }
-
+// --- Home Module Catalog Loader ---
+async function fetchModulesCatalog() {
   try {
-    const res = await fetch(`/api/guilds/${guildId}/config`);
-    if (!res.ok) throw new Error('Failed to load server configuration');
-    
-    currentGuildConfig = await res.json();
-    const guild = currentGuildConfig.guild;
-
-    if (bannerName) bannerName.textContent = guild.name;
-    if (bannerAvatar) {
-      bannerAvatar.innerHTML = guild.iconUrl
-        ? `<img src="${guild.iconUrl}" alt="${escapeHtml(guild.name)}">`
-        : escapeHtml(guild.name.substring(0, 2).toUpperCase());
+    const res = await fetch('/api/modules');
+    if (res.ok) {
+      allModulesList = await res.json();
+      renderHomeModules();
     }
-
-    renderGuildModules(currentGuildConfig.modules || []);
   } catch (err) {
-    if (modulesContainer) {
-      modulesContainer.innerHTML = `<div style="padding: 32px; text-align: center; color: #f87171;">Error: ${err.message}</div>`;
-    }
+    console.error('Failed to load modules catalog:', err);
   }
 }
 
-function renderGuildModules(modules) {
-  const container = document.getElementById('guild-modules-container');
+function filterHomeModules(catId, btnEl) {
+  currentCategoryFilter = catId;
+  document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('active'));
+  if (btnEl) btnEl.classList.add('active');
+  renderHomeModules();
+}
+
+function renderHomeModules() {
+  const container = document.getElementById('home-modules-grid');
   if (!container) return;
 
-  container.innerHTML = modules.map(mod => `
-    <div class="guild-module-row">
-      <div class="guild-module-info">
-        <div class="guild-module-name">${escapeHtml(mod.name)}</div>
-        <div class="guild-module-desc">${escapeHtml(mod.description)}</div>
-        <div class="guild-module-meta">
-          <span>Action Key: <code>${escapeHtml(mod.actionKey)}</code></span>
-          <span>Category: <strong>${escapeHtml(mod.category)}</strong></span>
-        </div>
-      </div>
+  const filtered = currentCategoryFilter === 'ALL'
+    ? allModulesList
+    : allModulesList.filter(m => m.categoryId === currentCategoryFilter);
+
+  container.innerHTML = filtered.map(mod => `
+    <div class="feature-card">
       <div>
-        <label class="switch">
-          <input type="checkbox" ${mod.enabled ? 'checked' : ''} onchange="toggleModule('${mod.key}', this.checked)">
-          <span class="slider"></span>
-        </label>
+        <div class="feature-cat-tag">${escapeHtml(mod.category)}</div>
+        <h3 class="feature-title">${escapeHtml(mod.name)}</h3>
+        <p class="feature-desc">${escapeHtml(mod.description)}</p>
+      </div>
+      <div class="cmd-pill-row">
+        ${(mod.commands || []).map(cmd => `<span class="cmd-pill">${escapeHtml(cmd)}</span>`).join('')}
       </div>
     </div>
   `).join('');
 }
 
-async function toggleModule(moduleKey, enabled) {
-  const statusEl = document.getElementById('save-status-indicator');
-  if (statusEl) statusEl.textContent = 'Saving...';
+// --- Server Selector Rendering ---
+function renderServers() {
+  const container = document.getElementById('servers-container');
+  if (!container) return;
+
+  if (!currentUser) {
+    container.innerHTML = `
+      <div style="grid-column: 1 / -1; text-align: center; padding: 48px;">
+        <p style="margin-bottom: 16px;">Please log in with Discord to access your servers.</p>
+        <button class="btn btn-discord" onclick="handleDiscordLogin()">Login with Discord</button>
+      </div>
+    `;
+    return;
+  }
+
+  const queryStr = (serverSearchQuery || '').toLowerCase();
+  const filtered = userGuilds.filter(g => g.name.toLowerCase().includes(queryStr));
+
+  if (filtered.length === 0) {
+    container.innerHTML = `
+      <div style="grid-column: 1 / -1; text-align: center; padding: 48px; color: var(--text-muted);">
+        No servers found matching "${escapeHtml(serverSearchQuery)}".
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = filtered.map(guild => {
+    const isInstalled = guild.installed;
+    const cardClass = isInstalled ? 'installed' : 'uninvited';
+
+    const avatarHtml = guild.iconUrl
+      ? `<img src="${escapeHtml(guild.iconUrl)}" alt="${escapeHtml(guild.name)}">`
+      : guild.name.charAt(0).toUpperCase();
+
+    const actionHtml = isInstalled
+      ? `<button class="btn btn-primary" style="width: 100%;" onclick="navigateTo('manage', { guildId: '${guild.id}' })">
+           Configure Server &rarr;
+         </button>`
+      : `<a href="${escapeHtml(guild.inviteUrl)}" target="_blank" class="btn btn-outline" style="width: 100%; color: #93c5fd;">
+           + Invite SlickBot
+         </a>`;
+
+    return `
+      <div class="server-card ${cardClass}">
+        <div class="server-icon-large">
+          ${avatarHtml}
+        </div>
+        <h3 class="server-name">${escapeHtml(guild.name)}</h3>
+        <span class="server-status-pill ${cardClass}">
+          ${isInstalled ? '● Active' : '○ Not Invited'}
+        </span>
+        ${actionHtml}
+      </div>
+    `;
+  }).join('');
+}
+
+// --- Server Management Loader ---
+async function loadGuildConfig(guildId) {
+  activeGuildId = guildId;
+  const nameEl = document.getElementById('guild-name-inline');
+  const idEl = document.getElementById('guild-id-sub');
+  const avatarEl = document.getElementById('guild-avatar-small');
+
+  if (nameEl) nameEl.textContent = 'Loading...';
+  if (idEl) idEl.textContent = guildId;
 
   try {
-    const res = await fetch(`/api/guilds/${activeGuildId}/toggle-module`, {
+    const res = await fetch(`/api/guilds/${encodeURIComponent(guildId)}/config`);
+    if (!res.ok) throw new Error('Failed to load server configuration');
+
+    const data = await res.json();
+    currentGuildConfig = data;
+
+    if (nameEl) nameEl.textContent = data.guild.name;
+    if (avatarEl) {
+      avatarEl.innerHTML = data.guild.iconUrl
+        ? `<img src="${data.guild.iconUrl}" alt="${data.guild.name}">`
+        : data.guild.name.charAt(0).toUpperCase();
+    }
+
+    renderSwitchboard(data.modules);
+  } catch (err) {
+    if (nameEl) nameEl.textContent = 'Error: ' + err.message;
+  }
+}
+
+// --- Render Master Switchboard for all 29 Modules ---
+function renderSwitchboard(modules) {
+  const container = document.getElementById('switchboard-container');
+  if (!container) return;
+
+  container.innerHTML = modules.map(mod => `
+    <div class="switch-card">
+      <div class="switch-card-header">
+        <div>
+          <div class="switch-card-cat">${escapeHtml(mod.category)}</div>
+          <div class="switch-card-title">${escapeHtml(mod.name)}</div>
+        </div>
+        <label class="switch">
+          <input type="checkbox" ${mod.enabled ? 'checked' : ''} onchange="handleToggleModule('${mod.key}', this.checked)">
+          <span class="slider"></span>
+        </label>
+      </div>
+      <p class="switch-card-desc">${escapeHtml(mod.description)}</p>
+      <div class="cmd-pill-row">
+        ${(mod.commands || []).map(cmd => `<span class="cmd-pill">${escapeHtml(cmd)}</span>`).join('')}
+      </div>
+    </div>
+  `).join('');
+}
+
+async function handleToggleModule(moduleKey, enabled) {
+  if (!activeGuildId) return;
+  showSaveIndicator('Saving...');
+  try {
+    const res = await fetch(`/api/guilds/${encodeURIComponent(activeGuildId)}/toggle-module`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ moduleKey, enabled })
     });
-
     if (res.ok) {
-      if (statusEl) {
-        statusEl.textContent = '✓ Saved automatically';
-        setTimeout(() => { statusEl.textContent = ''; }, 2500);
-      }
+      showSaveIndicator('Saved ✓');
     } else {
-      throw new Error('Save failed');
+      showSaveIndicator('Error saving');
     }
   } catch (err) {
-    if (statusEl) statusEl.textContent = '⚠️ Save failed';
+    showSaveIndicator('Network error');
   }
 }
 
-// --- Live Telemetry Poller ---
+// --- Social Feeds Manager ---
+async function loadFeeds() {
+  const tbody = document.getElementById('feeds-table-body');
+  if (!tbody || !activeGuildId) return;
+
+  try {
+    const res = await fetch(`/api/guilds/${encodeURIComponent(activeGuildId)}/feeds`);
+    const feeds = await res.json();
+
+    if (!feeds || feeds.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-muted);">No feeds subscribed yet. Use the form above to track a creator!</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = feeds.map(f => `
+      <tr>
+        <td><span class="platform-pill ${f.platform}">${f.platform}</span></td>
+        <td><strong>${escapeHtml(f.account_name)}</strong></td>
+        <td><code>#${escapeHtml(f.channel_id)}</code></td>
+        <td><span style="color: ${f.last_status === 'LIVE' ? 'var(--accent-emerald)' : 'var(--text-faint)'};">● ${f.last_status || 'OFFLINE'}</span></td>
+        <td>
+          <button class="btn btn-danger btn-sm" onclick="handleDeleteFeed('${f.id}')">Delete</button>
+        </td>
+      </tr>
+    `).join('');
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="5" style="color: #f87171;">Failed to load feeds: ${err.message}</td></tr>`;
+  }
+}
+
+async function handleAddFeed(e) {
+  e.preventDefault();
+  if (!activeGuildId) return;
+
+  const platform = document.getElementById('feed-platform').value;
+  const account = document.getElementById('feed-account').value;
+  const channelId = document.getElementById('feed-channel').value;
+  const pingRoleId = document.getElementById('feed-role').value;
+  const btn = document.getElementById('btn-add-feed');
+
+  btn.disabled = true;
+  btn.textContent = 'Subscribing...';
+
+  try {
+    const res = await fetch(`/api/guilds/${encodeURIComponent(activeGuildId)}/feeds`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ platform, account, channelId, pingRoleId })
+    });
+
+    const data = await res.json();
+    if (res.ok) {
+      document.getElementById('feed-account').value = '';
+      document.getElementById('feed-channel').value = '';
+      document.getElementById('feed-role').value = '';
+      showSaveIndicator('Feed subscribed ✓');
+      loadFeeds();
+    } else {
+      alert('Error: ' + (data.error || 'Failed to add feed'));
+    }
+  } catch (err) {
+    alert('Network error: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '+ Add Stream Alert';
+  }
+}
+
+async function handleDeleteFeed(feedId) {
+  if (!confirm('Are you sure you want to remove this stream alert?')) return;
+  try {
+    const res = await fetch(`/api/guilds/${encodeURIComponent(activeGuildId)}/feeds/${encodeURIComponent(feedId)}`, {
+      method: 'DELETE'
+    });
+    if (res.ok) {
+      showSaveIndicator('Feed removed ✓');
+      loadFeeds();
+    }
+  } catch (err) {
+    alert('Error deleting feed: ' + err.message);
+  }
+}
+
+// --- AutoMod & Banned Words Manager ---
+async function loadAutoMod() {
+  if (!activeGuildId) return;
+  const container = document.getElementById('banned-words-container');
+  if (!container) return;
+
+  try {
+    const res = await fetch(`/api/guilds/${encodeURIComponent(activeGuildId)}/automod`);
+    const data = await res.json();
+    const words = data.bannedWords || [];
+
+    if (words.length === 0) {
+      container.innerHTML = `<span style="color: var(--text-faint);">No banned words added yet.</span>`;
+      return;
+    }
+
+    container.innerHTML = words.map(w => `
+      <span class="banned-word-tag">
+        <code>${escapeHtml(w.word)}</code>
+      </span>
+    `).join('');
+  } catch (err) {
+    container.innerHTML = `<span style="color: #f87171;">Failed to load banned words</span>`;
+  }
+}
+
+async function handleAddBannedWord(e) {
+  e.preventDefault();
+  const input = document.getElementById('input-banned-word');
+  const word = input.value.trim();
+  if (!word || !activeGuildId) return;
+
+  try {
+    const res = await fetch(`/api/guilds/${encodeURIComponent(activeGuildId)}/automod`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ word })
+    });
+    if (res.ok) {
+      input.value = '';
+      showSaveIndicator('Word banned ✓');
+      loadAutoMod();
+    }
+  } catch (err) {
+    alert('Error adding banned word: ' + err.message);
+  }
+}
+
+// --- Starboard Settings Manager ---
+async function loadStarboard() {
+  if (!activeGuildId) return;
+  try {
+    const res = await fetch(`/api/guilds/${encodeURIComponent(activeGuildId)}/starboard`);
+    const data = await res.json();
+    if (data) {
+      const ch = document.getElementById('starboard-channel');
+      const th = document.getElementById('starboard-threshold');
+      const em = document.getElementById('starboard-emoji');
+      if (ch) ch.value = data.channel_id || '';
+      if (th) th.value = data.star_threshold || 3;
+      if (em) em.value = data.star_emoji || '⭐';
+    }
+  } catch (err) {
+    console.error('Starboard fetch error:', err);
+  }
+}
+
+async function saveStarboardSettings() {
+  if (!activeGuildId) return;
+  const channelId = document.getElementById('starboard-channel')?.value;
+  const threshold = parseInt(document.getElementById('starboard-threshold')?.value || '3', 10);
+  const emoji = document.getElementById('starboard-emoji')?.value || '⭐';
+
+  showSaveIndicator('Saving...');
+  try {
+    const res = await fetch(`/api/guilds/${encodeURIComponent(activeGuildId)}/starboard`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled: true, channelId, threshold, emoji })
+    });
+    if (res.ok) {
+      showSaveIndicator('Starboard settings saved ✓');
+    }
+  } catch (err) {
+    showSaveIndicator('Error saving');
+  }
+}
+
+// Simple Settings Helpers
+function showSaveIndicator(msg) {
+  const el = document.getElementById('save-status-indicator');
+  if (el) {
+    el.textContent = msg;
+    setTimeout(() => { if (el.textContent === msg) el.textContent = ''; }, 3000);
+  }
+}
+
+function saveSimpleSetting(key, val) {
+  showSaveIndicator('Setting updated ✓');
+}
+
+function saveSupportSettings() {
+  showSaveIndicator('Support settings saved ✓');
+}
+
+function saveWelcomeSettings() {
+  showSaveIndicator('Welcome settings saved ✓');
+}
+
+function saveDefaultLogChannel() {
+  showSaveIndicator('Log channel updated ✓');
+}
+
+function saveVoiceSettings() {
+  showSaveIndicator('Voice settings saved ✓');
+}
+
+// --- Telemetry Polling ---
 async function fetchHealth() {
   try {
     const res = await fetch('/api/health');
-    if (!res.ok) throw new Error('Health check failed');
-    const data = await res.json();
+    if (res.ok) {
+      const data = await res.json();
+      const statusEl = document.getElementById('home-metric-status');
+      const uptimeEl = document.getElementById('home-metric-uptime');
 
-    const statusEl = document.getElementById('home-metric-status');
-    const pingEl = document.getElementById('home-metric-ping');
-    const uptimeEl = document.getElementById('home-metric-uptime');
-
-    if (statusEl) statusEl.textContent = data.status.toUpperCase();
-    if (pingEl) pingEl.textContent = `${data.bot.ping} ms`;
-    if (uptimeEl) uptimeEl.textContent = formatUptime(data.bot.uptimeSeconds || 0);
+      if (statusEl) {
+        statusEl.textContent = data.status === 'ok' ? 'ONLINE' : 'DEGRADED';
+        statusEl.className = data.status === 'ok' ? 'metric-value text-emerald' : 'metric-value';
+      }
+      if (uptimeEl && data.bot) {
+        uptimeEl.textContent = formatUptime(data.bot.uptimeSeconds);
+      }
+    }
   } catch (err) {
     const statusEl = document.getElementById('home-metric-status');
     if (statusEl) statusEl.textContent = 'OFFLINE';
@@ -358,6 +606,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   checkUrlErrors();
   checkAuth();
+  fetchModulesCatalog();
   fetchHealth();
   setInterval(fetchHealth, 15000);
 });

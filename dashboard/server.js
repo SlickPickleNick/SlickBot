@@ -6,14 +6,18 @@ const { URL } = require('node:url');
 const https = require('node:https');
 const querystring = require('node:querystring');
 
-// Load environment variables if available
+// Load environment variables and database service
 const { env } = require('../src/config/env');
 const { query } = require('../src/services/db');
+const { ModuleKeys } = require('../src/modules/moduleRegistry');
+const { SocialFeedService } = require('../src/modules/automation/socialFeedService');
 
 const PORT = process.env.DASHBOARD_PORT || process.env.PORT || 3000;
 const HOST = process.env.DASHBOARD_HOST || '0.0.0.0';
 const PUBLIC_DIR = path.resolve(__dirname, 'public');
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+
+const socialFeedService = new SocialFeedService();
 
 // Dynamic credential resolution supporting all common environment variable naming conventions
 function getDiscordCredentials() {
@@ -32,7 +36,6 @@ function getDiscordCredentials() {
 const sessions = new Map();
 const SESSION_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
-// Clean up expired sessions hourly
 setInterval(() => {
   const now = Date.now();
   for (const [id, session] of sessions.entries()) {
@@ -58,74 +61,287 @@ const MIME_TYPES = {
   '.ico': 'image/x-icon'
 };
 
-const MODULES_DATA = [
+// Complete metadata for ALL 29 modules registered in moduleRegistry.js
+const ALL_MODULES_METADATA = [
+  // 1. General & Overview
   {
-    key: 'MODERATION',
-    name: 'Moderation & Cases',
+    key: ModuleKeys.PERMISSIONS,
+    name: 'Master Permissions & Teams',
+    description: 'Custom staff permission teams, role bindings, action key scopes, and channel overrides.',
+    category: 'General & Overview',
+    categoryId: 'general',
+    commands: ['/permissions view', '/permissions grant', '/team create'],
+    actionKey: 'COMMAND_PERMISSIONS'
+  },
+  {
+    key: ModuleKeys.STATUS,
+    name: 'Bot Presence & Status',
+    description: 'Custom activity text, presence status (online, dnd, idle), and live Twitch stream URL.',
+    category: 'General & Overview',
+    categoryId: 'general',
+    commands: ['/status set', '/status stream-url'],
+    actionKey: 'COMMAND_STATUS'
+  },
+  {
+    key: ModuleKeys.BOT_UPDATES,
+    name: 'Bot Release Changelogs',
+    description: 'Automatic bot update announcements and version changelog delivery.',
+    category: 'General & Overview',
+    categoryId: 'general',
+    commands: ['/botupdates channel', '/botupdates toggle'],
+    actionKey: 'COMMAND_BOT_UPDATES'
+  },
+
+  // 2. Safety, Moderation & AutoMod
+  {
+    key: ModuleKeys.MODERATION,
+    name: 'Moderation & Case Logs',
     description: 'Enforce server rules with warn, mute, kick, ban, unban, case logs, and member notes.',
-    category: 'Safety & Administration',
+    category: 'Safety & Moderation',
+    categoryId: 'safety',
     commands: ['/mod warn', '/mod mute', '/mod ban', '/case view', '/note add'],
     actionKey: 'COMMAND_MOD_WARN'
   },
   {
-    key: 'AUTOMOD',
-    name: 'AutoMod Engine',
-    description: 'Automated anti-spam, invite-link filtering, banned words, and repeated text detection.',
-    category: 'Safety & Administration',
+    key: ModuleKeys.AUTOMOD,
+    name: 'AutoMod Engine & Spam Defense',
+    description: 'Automated anti-spam, Discord invite link filtering, banned words, and repeated text detection.',
+    category: 'Safety & Moderation',
+    categoryId: 'safety',
     commands: ['/automod settings', '/automod whitelist', '/automod rule'],
     actionKey: 'COMMAND_AUTOMOD'
   },
   {
-    key: 'SUPPORT_TICKETS',
-    name: 'Support Tickets & FAQ',
-    description: 'Interactive button-based support tickets, transcripts, FAQ forum sync, and staff queues.',
-    category: 'Community Workflows',
-    commands: ['/ticket panel', '/ticket close', '/faq create', '/appeal manage'],
+    key: ModuleKeys.LOCKDOWN,
+    name: 'Emergency Server Lockdown',
+    description: 'Instantly isolate channels or lock down the entire server during raid attacks.',
+    category: 'Safety & Moderation',
+    categoryId: 'safety',
+    commands: ['/lockdown start', '/lockdown stop', '/lockdown quarantine'],
+    actionKey: 'COMMAND_LOCKDOWN'
+  },
+
+  // 3. Support & Workflows
+  {
+    key: ModuleKeys.TICKETS,
+    name: 'Support Tickets & Queues',
+    description: 'Interactive button-based ticket panels, HTML transcripts, staff queues, and auto-closing.',
+    category: 'Support & Workflows',
+    categoryId: 'support',
+    commands: ['/ticket panel', '/ticket close', '/ticket claim'],
     actionKey: 'COMMAND_TICKET'
   },
   {
-    key: 'SOCIAL_FEEDS',
-    name: 'Social Feeds & Alerts',
-    description: 'Automated Twitch live alerts, YouTube video & Shorts tracking, and live directory hubs.',
-    category: 'Engagement & Media',
+    key: ModuleKeys.REPORTS,
+    name: 'Member & Message Reports',
+    description: 'Anonymous member reporting queue with message context and staff resolution logs.',
+    category: 'Support & Workflows',
+    categoryId: 'support',
+    commands: ['/report user', '/report message', '/report queue'],
+    actionKey: 'COMMAND_REPORT'
+  },
+  {
+    key: ModuleKeys.APPLICATIONS,
+    name: 'Staff & Role Applications',
+    description: 'Multi-step modal applications with custom questions, staff review channels, and verdicts.',
+    category: 'Support & Workflows',
+    categoryId: 'support',
+    commands: ['/application create', '/application review'],
+    actionKey: 'COMMAND_APPLICATION'
+  },
+  {
+    key: ModuleKeys.APPEALS,
+    name: 'Infraction Appeals',
+    description: 'Member ban and mute appeal submissions with reviewer comments and decision logging.',
+    category: 'Support & Workflows',
+    categoryId: 'support',
+    commands: ['/appeal submit', '/appeal view', '/appeal decide'],
+    actionKey: 'COMMAND_APPEAL'
+  },
+  {
+    key: ModuleKeys.FAQ,
+    name: 'Forum-Backed FAQ & Auto-Replies',
+    description: 'Forum-synced FAQ threads, automated keyword matching, and question-answer index embeds.',
+    category: 'Support & Workflows',
+    categoryId: 'support',
+    commands: ['/faq create', '/faq list', '/faq sync'],
+    actionKey: 'COMMAND_FAQ'
+  },
+
+  // 4. Media & Social Feeds
+  {
+    key: ModuleKeys.SOCIAL_FEEDS,
+    name: 'Social Feeds & Stream Alerts',
+    description: 'Instant Twitch live alerts, YouTube video & Shorts tracking, live directory hubs, and subscriber roles.',
+    category: 'Media & Social Feeds',
+    categoryId: 'media',
     commands: ['/feed add', '/feed list', '/feed edit', '/feed check'],
     actionKey: 'COMMAND_FEED'
   },
+
+  // 5. Onboarding & Member Roles
   {
-    key: 'ONBOARDING',
-    name: 'Onboarding & Verification',
-    description: 'Customizable welcome cards, rule-acceptance verification, and auto-assigned starting roles.',
-    category: 'Community Workflows',
-    commands: ['/welcome config', '/roles panel', '/temprole grant'],
+    key: ModuleKeys.WELCOME,
+    name: 'Welcome Cards & Greetings',
+    description: 'Customizable welcome embeds, join cards, rule acceptance verification, and starter roles.',
+    category: 'Onboarding & Roles',
+    categoryId: 'onboarding',
+    commands: ['/welcome config', '/welcome test', '/welcome card'],
+    actionKey: 'COMMAND_WELCOME'
+  },
+  {
+    key: ModuleKeys.REACTION_ROLES,
+    name: 'Role Panels & Self-Roles',
+    description: 'Interactive button and dropdown menu role panels with single/multi-choice selection modes.',
+    category: 'Onboarding & Roles',
+    categoryId: 'onboarding',
+    commands: ['/roles panel', '/roles add', '/roles remove'],
     actionKey: 'COMMAND_ROLES'
   },
   {
-    key: 'LEVELING_ECONOMY',
-    name: 'Leveling & Achievements',
-    description: 'XP progression, server leaderboards, achievement milestones, and role rewards.',
-    category: 'Engagement & Media',
-    commands: ['/level rank', '/level leaderboard', '/achievement list'],
+    key: ModuleKeys.TEMP_ROLES,
+    name: 'Temporary & Timed Roles',
+    description: 'Grant roles for specific durations with automatic expiry timers and audit trail logging.',
+    category: 'Onboarding & Roles',
+    categoryId: 'onboarding',
+    commands: ['/temprole grant', '/temprole revoke', '/temprole list'],
+    actionKey: 'COMMAND_TEMP_ROLES'
+  },
+  {
+    key: ModuleKeys.BIRTHDAYS,
+    name: 'Birthday Calendar',
+    description: 'Member birthday tracking, automatic birthday role assignment, and daily celebration messages.',
+    category: 'Onboarding & Roles',
+    categoryId: 'onboarding',
+    commands: ['/birthday set', '/birthday list', '/birthday config'],
+    actionKey: 'COMMAND_BIRTHDAY'
+  },
+
+  // 6. Community, Leveling & Engagement
+  {
+    key: ModuleKeys.LEVELING,
+    name: 'XP Progression & Leaderboards',
+    description: 'Text and voice XP gain rates, multiplier roles, level-up announcements, and milestone reward roles.',
+    category: 'Community & Leveling',
+    categoryId: 'community',
+    commands: ['/level rank', '/level leaderboard', '/level setxp'],
     actionKey: 'COMMAND_LEVEL'
   },
   {
-    key: 'LOGGING',
+    key: ModuleKeys.ACHIEVEMENTS,
+    name: 'Achievements & Badges',
+    description: 'Server achievement milestones, custom badge icons, unlock notifications, and user profiles.',
+    category: 'Community & Leveling',
+    categoryId: 'community',
+    commands: ['/achievement list', '/achievement grant', '/achievement progress'],
+    actionKey: 'COMMAND_ACHIEVEMENTS'
+  },
+  {
+    key: ModuleKeys.SUGGESTIONS,
+    name: 'Community Suggestions',
+    description: 'Interactive suggestion queue with upvote/downvote buttons, review indexes, and approval flows.',
+    category: 'Community & Leveling',
+    categoryId: 'community',
+    commands: ['/suggest', '/suggestion review', '/suggestion index'],
+    actionKey: 'COMMAND_SUGGESTIONS'
+  },
+  {
+    key: ModuleKeys.REFERRALS,
+    name: 'Referral & Invite Tracking',
+    description: 'Track member invite links, milestone role rewards, and referral leaderboards.',
+    category: 'Community & Leveling',
+    categoryId: 'community',
+    commands: ['/referral stats', '/referral leaderboard', '/referral reward'],
+    actionKey: 'COMMAND_REFERRALS'
+  },
+  {
+    key: ModuleKeys.STARBOARD,
+    name: 'Starboard Hall of Fame',
+    description: 'Pin popular community messages to a designated starboard channel based on reaction count.',
+    category: 'Community & Leveling',
+    categoryId: 'community',
+    commands: ['/starboard setup', '/starboard threshold', '/starboard emoji'],
+    actionKey: 'COMMAND_STARBOARD'
+  },
+  {
+    key: ModuleKeys.GIVEAWAYS,
+    name: 'Giveaways & Contests',
+    description: 'Button-entry giveaways, multi-winner selection, role requirements, and automated winner picking.',
+    category: 'Community & Leveling',
+    categoryId: 'community',
+    commands: ['/giveaway start', '/giveaway end', '/giveaway reroll'],
+    actionKey: 'COMMAND_GIVEAWAY'
+  },
+  {
+    key: ModuleKeys.COMMUNITY_GAMES,
+    name: 'Community Mini-Games',
+    description: 'Server counting channel validation, trivia sessions, rock-paper-scissors, and coinflips.',
+    category: 'Community & Leveling',
+    categoryId: 'community',
+    commands: ['/games counting', '/games trivia', '/games rps'],
+    actionKey: 'COMMAND_GAMES'
+  },
+
+  // 7. Audit & Server Stats
+  {
+    key: ModuleKeys.LOGGING,
     name: 'Audit & Event Logging',
-    description: 'Granular audit logs for message edits/deletions, member joins/leaves, and voice activity.',
-    category: 'Safety & Administration',
+    description: 'Granular audit logs for message edits/deletions, member joins/leaves, voice, and roles.',
+    category: 'Audit & Server Stats',
+    categoryId: 'logging',
     commands: ['/logging channel', '/logging toggle', '/logging batch'],
     actionKey: 'COMMAND_LOGGING'
   },
   {
-    key: 'VOICE_AUTOMATION',
-    name: 'Dynamic Voice (Join-to-Create)',
-    description: 'On-demand temporary voice channels with owner controls, user limits, and lock toggles.',
-    category: 'Utilities',
+    key: ModuleKeys.SERVER_STATS,
+    name: 'Live Server Counter Stats',
+    description: 'Automated voice/category channels displaying live member counts, bot counts, and boost levels.',
+    category: 'Audit & Server Stats',
+    categoryId: 'logging',
+    commands: ['/serverstats setup', '/serverstats update'],
+    actionKey: 'COMMAND_SERVER_STATS'
+  },
+
+  // 8. Voice & Automation Utilities
+  {
+    key: ModuleKeys.JOIN_TO_CREATE,
+    name: 'Dynamic Join-to-Create Voice',
+    description: 'On-demand temporary voice channels with creator controls for naming, user limits, and locking.',
+    category: 'Voice & Automation',
+    categoryId: 'utilities',
     commands: ['/jointocreate setup', '/vc name', '/vc limit', '/vc lock'],
     actionKey: 'COMMAND_VC'
+  },
+  {
+    key: ModuleKeys.SCHEDULED_MESSAGES,
+    name: 'Scheduled Messages & Cron',
+    description: 'Automated recurring announcement messages with custom embed formatting and intervals.',
+    category: 'Voice & Automation',
+    categoryId: 'utilities',
+    commands: ['/schedule create', '/schedule list', '/schedule delete'],
+    actionKey: 'COMMAND_SCHEDULE'
+  },
+  {
+    key: ModuleKeys.CUSTOM_COMMANDS,
+    name: 'Custom Commands & Triggers',
+    description: 'Create custom slash and prefix command triggers with automated embed responses.',
+    category: 'Voice & Automation',
+    categoryId: 'utilities',
+    commands: ['/customcommand add', '/customcommand list', '/customcommand remove'],
+    actionKey: 'COMMAND_CUSTOM'
+  },
+  {
+    key: ModuleKeys.UTILITY,
+    name: 'Utility Suite',
+    description: 'Interactive server polls, AFK status cache, member reminders, and snipe cache.',
+    category: 'Voice & Automation',
+    categoryId: 'utilities',
+    commands: ['/poll create', '/remind set', '/afk', '/snipe'],
+    actionKey: 'COMMAND_UTILITY'
   }
 ];
 
-const VALID_MODULE_KEYS = new Set(MODULES_DATA.map(m => m.key));
+const VALID_MODULE_KEYS = new Set(Object.values(ModuleKeys));
 
 // Dynamically determine base URL from environment or request headers, ensuring valid formatting
 function getBaseUrl(req) {
@@ -150,6 +366,22 @@ function getBaseUrl(req) {
 // Generate cryptographically secure session IDs
 function generateSecureSessionId() {
   return `sess_${crypto.randomBytes(32).toString('hex')}`;
+}
+
+// Helper: Safely read and buffer request body asynchronously
+function readRequestBody(req, maxBytes = 1024 * 64) {
+  return new Promise((resolve, reject) => {
+    let body = '';
+    req.on('data', chunk => {
+      body += chunk;
+      if (body.length > maxBytes) {
+        req.destroy(new Error('Payload too large'));
+        reject(new Error('Payload too large'));
+      }
+    });
+    req.on('end', () => resolve(body));
+    req.on('error', reject);
+  });
 }
 
 // Helper: HTTPS request wrapper with timeouts
@@ -278,7 +510,7 @@ async function handleDashboardRequest(req, res, client = null) {
 
   if (pathname === '/api/modules') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify(MODULES_DATA));
+    res.end(JSON.stringify(ALL_MODULES_METADATA));
     return;
   }
 
@@ -484,11 +716,12 @@ async function handleDashboardRequest(req, res, client = null) {
     return;
   }
 
-  // --- API: Server Configuration ---
-  const guildMatch = pathname.match(/^\/api\/guilds\/([^/]+)\/([^/]+)/);
+  // --- API: Server Configuration & Module Handlers ---
+  const guildMatch = pathname.match(/^\/api\/guilds\/([^/]+)\/([^/]+)(?:\/([^/]+))?/);
   if (guildMatch) {
     const guildId = guildMatch[1];
     const subRoute = guildMatch[2];
+    const subParam = guildMatch[3];
 
     const session = sessions.get(sessionId);
     if (!session) {
@@ -504,6 +737,7 @@ async function handleDashboardRequest(req, res, client = null) {
       return;
     }
 
+    // 1. Full Guild Config & All 29 Module Statuses
     if (req.method === 'GET' && subRoute === 'config') {
       try {
         let guildConfig = { guild_id: guildId, guild_name: guildObj.name, timezone: 'America/New_York' };
@@ -519,7 +753,7 @@ async function handleDashboardRequest(req, res, client = null) {
           // DB offline fallback
         }
 
-        const modulesWithState = MODULES_DATA.map(mod => {
+        const modulesWithState = ALL_MODULES_METADATA.map(mod => {
           const cfg = moduleConfigs.find(m => m.module_key === mod.key);
           return {
             ...mod,
@@ -546,46 +780,188 @@ async function handleDashboardRequest(req, res, client = null) {
       }
     }
 
+    // 2. Master Module Toggle
     if (req.method === 'POST' && subRoute === 'toggle-module') {
-      let body = '';
-      req.on('data', chunk => {
-        body += chunk;
-        if (body.length > 1024 * 10) {
-          req.destroy(new Error('Payload too large'));
+      try {
+        const rawBody = await readRequestBody(req);
+        const { moduleKey, enabled } = JSON.parse(rawBody || '{}');
+        if (!VALID_MODULE_KEYS.has(moduleKey) || typeof enabled !== 'boolean') {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Invalid moduleKey or enabled parameter' }));
+          return;
         }
-      });
-      req.on('end', async () => {
-        try {
-          const parsed = JSON.parse(body || '{}');
-          const { moduleKey, enabled } = parsed;
 
-          if (!VALID_MODULE_KEYS.has(moduleKey) || typeof enabled !== 'boolean') {
+        try {
+          await query(
+            `INSERT INTO module_configs (guild_id, module_key, enabled, updated_at)
+             VALUES ($1, $2, $3, NOW())
+             ON CONFLICT (guild_id, module_key) DO UPDATE SET
+               enabled = EXCLUDED.enabled,
+               updated_at = NOW()`,
+            [guildId, moduleKey, enabled]
+          );
+        } catch (e) {
+          // DB fallback
+        }
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, moduleKey, enabled }));
+        return;
+      } catch (e) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Malformed JSON payload' }));
+        return;
+      }
+    }
+
+    // 3. Social Feeds List & Add / Delete
+    if (subRoute === 'feeds') {
+      if (req.method === 'GET') {
+        try {
+          const resRows = await query(`SELECT * FROM social_feeds WHERE guild_id = $1 ORDER BY created_at DESC`, [guildId]);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(resRows.rows || []));
+        } catch (e) {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify([
+            { id: 'feed-1', platform: 'TWITCH', account_name: 'slickbot_live', channel_id: '123456789', enabled: true, last_status: 'OFFLINE' }
+          ]));
+        }
+        return;
+      }
+
+      if (req.method === 'POST') {
+        try {
+          const rawBody = await readRequestBody(req);
+          const { platform, account, channelId, pingRoleId, customMessage } = JSON.parse(rawBody || '{}');
+          if (!platform || !account || !channelId) {
             res.writeHead(400, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: 'Invalid moduleKey or enabled boolean parameter' }));
+            res.end(JSON.stringify({ error: 'Missing platform, account handle, or Discord channel ID' }));
             return;
           }
 
-          try {
-            await query(
-              `INSERT INTO module_configs (guild_id, module_key, enabled, updated_at)
-               VALUES ($1, $2, $3, NOW())
-               ON CONFLICT (guild_id, module_key) DO UPDATE SET
-                 enabled = EXCLUDED.enabled,
-                 updated_at = NOW()`,
-              [guildId, moduleKey, enabled]
-            );
-          } catch (e) {
-            // DB fallback
+          const addResult = await socialFeedService.addFeed({
+            guildId,
+            platform,
+            account,
+            channelId,
+            pingRoleId: pingRoleId || null,
+            customMessage: customMessage || null
+          });
+
+          if (!addResult.ok) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: addResult.reason || 'Failed to subscribe feed' }));
+            return;
           }
 
           res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ ok: true, moduleKey, enabled }));
-        } catch (e) {
-          res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'Malformed JSON payload' }));
+          res.end(JSON.stringify({ ok: true, feed: addResult.feed }));
+          return;
+        } catch (err) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Failed to process feed request' }));
+          return;
         }
-      });
-      return;
+      }
+
+      if (req.method === 'DELETE' && subParam) {
+        try {
+          await socialFeedService.removeFeed(guildId, subParam);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: true, removedId: subParam }));
+        } catch (e) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Failed to remove feed' }));
+        }
+        return;
+      }
+    }
+
+    // 4. AutoMod & Banned Words Manager
+    if (subRoute === 'automod') {
+      if (req.method === 'GET') {
+        try {
+          const cfgRes = await query(`SELECT * FROM automod_configs WHERE guild_id = $1 LIMIT 1`, [guildId]);
+          const wordsRes = await query(`SELECT * FROM automod_banned_words WHERE guild_id = $1 ORDER BY created_at DESC`, [guildId]);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({
+            config: cfgRes.rows[0] || { enabled: true, filter_invites: true, anti_spam: true, max_mentions: 5 },
+            bannedWords: wordsRes.rows || []
+          }));
+        } catch (e) {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ config: { enabled: true, filter_invites: true, anti_spam: true }, bannedWords: [] }));
+        }
+        return;
+      }
+
+      if (req.method === 'POST') {
+        try {
+          const rawBody = await readRequestBody(req);
+          const { word } = JSON.parse(rawBody || '{}');
+          if (!word || !word.trim()) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Banned word/phrase cannot be blank' }));
+            return;
+          }
+
+          await query(
+            `INSERT INTO automod_banned_words (guild_id, word, created_at)
+             VALUES ($1, $2, NOW())
+             ON CONFLICT DO NOTHING`,
+            [guildId, word.trim().toLowerCase()]
+          );
+
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: true, word: word.trim().toLowerCase() }));
+          return;
+        } catch (e) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Failed to add banned word' }));
+          return;
+        }
+      }
+    }
+
+    // 5. Starboard Configuration
+    if (subRoute === 'starboard') {
+      if (req.method === 'GET') {
+        try {
+          const resRows = await query(`SELECT * FROM starboard_configs WHERE guild_id = $1 LIMIT 1`, [guildId]);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(resRows.rows[0] || { enabled: true, channel_id: null, star_threshold: 3, star_emoji: '⭐' }));
+        } catch (e) {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ enabled: true, channel_id: null, star_threshold: 3, star_emoji: '⭐' }));
+        }
+        return;
+      }
+
+      if (req.method === 'POST') {
+        try {
+          const rawBody = await readRequestBody(req);
+          const { enabled, channelId, threshold, emoji } = JSON.parse(rawBody || '{}');
+          await query(
+            `INSERT INTO starboard_configs (guild_id, enabled, channel_id, star_threshold, star_emoji, updated_at)
+             VALUES ($1, $2, $3, $4, $5, NOW())
+             ON CONFLICT (guild_id) DO UPDATE SET
+               enabled = EXCLUDED.enabled,
+               channel_id = EXCLUDED.channel_id,
+               star_threshold = EXCLUDED.star_threshold,
+               star_emoji = EXCLUDED.star_emoji,
+               updated_at = NOW()`,
+            [guildId, enabled ?? true, channelId || null, threshold || 3, emoji || '⭐']
+          );
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: true }));
+          return;
+        } catch (e) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Failed to save starboard settings' }));
+          return;
+        }
+      }
     }
   }
 
