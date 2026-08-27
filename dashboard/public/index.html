@@ -146,11 +146,19 @@
               <span class="guild-id-sub">ID: <code id="guild-id-sub">--</code></span>
             </div>
           </div>
+        </div>
+        <div class="manage-header-actions" style="display: flex; align-items: center; gap: 8px;">
+          <div class="save-status" id="save-status-indicator"></div>
           <button class="btn btn-outline btn-sm btn-refresh" id="btn-refresh-guild" onclick="refreshServerData()" title="Re-sync server channels and roles from Discord">
-            <span class="refresh-icon">🔄</span> Refresh Channels & Roles
+            <span class="refresh-icon">🔄</span> Refresh Discord
+          </button>
+          <button class="btn btn-outline btn-sm" id="btn-reset-header" onclick="handleResetDashboard()" title="Discard unsaved changes">
+            ↺ Reset
+          </button>
+          <button class="btn btn-primary btn-sm" id="btn-save-header" onclick="handleSaveAllDashboard()" title="Push all changes to server">
+            💾 Save Changes
           </button>
         </div>
-        <div class="save-status" id="save-status-indicator"></div>
       </div>
 
       <!-- Split Layout: Left Sidebar + Right Content Area -->
@@ -199,7 +207,21 @@
           <div id="tab-panel-general" class="manage-panel active">
             <div class="panel-header">
               <h2 class="panel-title">Server Overview & Master Switchboard</h2>
-              <p class="panel-subtitle">Manage server-level settings and toggle any of the 29 integrated systems.</p>
+              <p class="panel-subtitle">Manage server-level settings, run diagnostics, and toggle any of the 29 integrated systems.</p>
+            </div>
+
+            <!-- Server Diagnostics & Health Check -->
+            <div class="panel-card-section" style="border-left: 4px solid var(--accent-emerald);">
+              <div class="section-header-flex" style="margin-bottom: 8px;">
+                <div>
+                  <h3 class="card-section-title" style="margin-bottom: 2px;">🩺 Server Configuration Health & Readiness Scan</h3>
+                  <div class="setting-desc" style="margin-bottom: 0;">Validate your channels, permissions, roles, and module readiness against latest metrics.</div>
+                </div>
+                <button class="btn btn-outline btn-sm" id="btn-run-diagnostics" onclick="runServerDiagnostics()">🔍 Run Health Scan</button>
+              </div>
+              <div id="diagnostics-container" class="diag-container">
+                <div style="color: var(--text-faint); font-size: 13px; padding: 6px 0;">Click "Run Health Scan" to verify server channel permissions, role bindings, and module readiness.</div>
+              </div>
             </div>
 
             <div class="panel-card-section">
@@ -207,7 +229,7 @@
               <div class="form-grid-2">
                 <div class="form-group">
                   <label class="form-label">Server Timezone</label>
-                  <select id="gen-timezone" class="form-select" onchange="saveGeneralSettings()">
+                  <select id="gen-timezone" class="form-select">
                     <option value="America/New_York">Eastern Time (America/New_York)</option>
                     <option value="America/Chicago">Central Time (America/Chicago)</option>
                     <option value="America/Denver">Mountain Time (America/Denver)</option>
@@ -219,7 +241,7 @@
                 </div>
                 <div class="form-group">
                   <label class="form-label">Changelog Announcements Channel</label>
-                  <select id="gen-changelog-channel" class="form-select channel-select" onchange="saveGeneralSettings()"></select>
+                  <select id="gen-changelog-channel" class="form-select channel-select"></select>
                 </div>
               </div>
             </div>
@@ -801,6 +823,18 @@
           </div>
 
         </main>
+      </div>
+    </div>
+
+    <!-- Floating Unsaved Changes Bottom Banner -->
+    <div id="unsaved-changes-bar" class="unsaved-bar">
+      <div class="unsaved-text">
+        <span class="unsaved-dot"></span>
+        <span><strong>Unsaved Changes:</strong> You have modified this server's configuration.</span>
+      </div>
+      <div class="unsaved-actions">
+        <button type="button" class="btn btn-outline btn-sm" onclick="handleResetDashboard()">↺ Reset Changes</button>
+        <button type="button" class="btn btn-primary btn-sm" id="btn-save-floating" onclick="handleSaveAllDashboard()">💾 Save Changes</button>
       </div>
     </div>
   </section>

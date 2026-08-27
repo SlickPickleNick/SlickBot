@@ -1226,4 +1226,168 @@ td {
   color: var(--text-faint);
 }
 
+/* Floating Unsaved Changes Banner */
+.unsaved-bar {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(100px);
+  background: rgba(23, 21, 19, 0.95);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--accent-orange);
+  border-radius: var(--radius-md);
+  padding: 12px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 32px;
+  box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.8), 0 0 15px rgba(245, 158, 11, 0.2);
+  z-index: 9999;
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease;
+  opacity: 0;
+  pointer-events: none;
+  max-width: 90vw;
+}
+
+.unsaved-bar.visible {
+  transform: translateX(-50%) translateY(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.unsaved-text {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+  color: var(--text-main);
+}
+
+.unsaved-dot {
+  width: 10px;
+  height: 10px;
+  background-color: var(--accent-orange);
+  border-radius: 50%;
+  box-shadow: 0 0 8px var(--accent-orange);
+  animation: pulse-dot 1.5s infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.85); }
+}
+
+.unsaved-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Section Actions Bar */
+.section-save-bar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+/* Server Configuration Health & Diagnostics */
+.diag-container {
+  margin-top: 16px;
+}
+
+.diag-summary-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  background: var(--bg-elevated);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+  margin-bottom: 16px;
+}
+
+.diag-score-display {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.diag-score-badge {
+  font-size: 24px;
+  font-weight: 800;
+  padding: 4px 14px;
+  border-radius: 8px;
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.diag-score-badge.WARN {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+  border-color: rgba(245, 158, 11, 0.3);
+}
+
+.diag-score-badge.FAIL {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+.diag-item-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.diag-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 14px 16px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  transition: border-color 0.15s ease;
+}
+
+.diag-item:hover {
+  border-color: var(--border-strong);
+}
+
+.diag-icon {
+  font-size: 18px;
+  line-height: 1;
+  margin-top: 2px;
+}
+
+.diag-body {
+  flex: 1;
+}
+
+.diag-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-main);
+  margin-bottom: 2px;
+}
+
+.diag-desc {
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.diag-rec {
+  font-size: 12px;
+  color: #93c5fd;
+  margin-top: 4px;
+  font-style: italic;
+}
+
+
 

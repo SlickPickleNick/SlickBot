@@ -7,9 +7,15 @@ let allModulesList = [];
 let currentCategoryFilter = 'ALL';
 let botClientId = '123456789012345678';
 let serverSearchQuery = '';
+let hasUnsavedChanges = false;
 
 // --- Navigation Router ---
 function navigateTo(viewName, params = {}) {
+  if (hasUnsavedChanges && !confirm('You have unsaved changes. Are you sure you want to leave without saving?')) {
+    return;
+  }
+  clearDashboardDirty();
+
   document.querySelectorAll('.page-view').forEach(view => view.classList.remove('active'));
   const targetView = document.getElementById(`view-${viewName}`);
   if (targetView) targetView.classList.add('active');
@@ -45,6 +51,25 @@ function switchManageTab(tabId, buttonEl) {
   }
 }
 
+// --- Unsaved Changes Dirty State Tracker ---
+function markDashboardDirty() {
+  hasUnsavedChanges = true;
+  const bar = document.getElementById('unsaved-changes-bar');
+  if (bar) bar.classList.add('visible');
+
+  const headerSave = document.getElementById('btn-save-header');
+  if (headerSave) {
+    headerSave.classList.remove('btn-outline');
+    headerSave.classList.add('btn-primary');
+  }
+}
+
+function clearDashboardDirty() {
+  hasUnsavedChanges = false;
+  const bar = document.getElementById('unsaved-changes-bar');
+  if (bar) bar.classList.remove('visible');
+}
+
 // --- Dynamic Channel & Role Select Dropdown Populators ---
 function populateAllDropdowns(channels = [], roles = []) {
   // Populate all Channel Selects
@@ -57,8 +82,9 @@ function populateAllDropdowns(channels = [], roles = []) {
     
     channels.forEach(ch => {
       if (!filterType || ch.type === filterType || (filterType === 'text' && (ch.type === 'text' || ch.type === 'announcement'))) {
-        const typeLabel = ch.type === 'voice' ? ' [Voice]' : ch.type === 'forum' ? ' [Forum]' : ch.type === 'category' ? ' [Category]' : '';
-        html += `<option value="${escapeHtml(ch.id)}">#${escapeHtml(ch.name)}${typeLabel}</option>`;
+        const typeLabel = ch.type === 'voice' ? ' [Voice]' : ch.type === 'forum' ? ' [Forum]' : ch.type === 'category' ? ' [Category]' : ch.type === 'announcement' ? ' [Announce]' : '';
+        const parentTag = ch.parentName ? ` (${ch.parentName})` : '';
+        html += `<option value="${escapeHtml(ch.id)}">#${escapeHtml(ch.name)}${typeLabel}${parentTag}</option>`;
       }
     });
 
@@ -178,6 +204,7 @@ function initSearchableSelects() {
         clearBtn.style.display = val ? 'inline-block' : 'none';
         wrapper.classList.remove('open');
         selectEl.dispatchEvent(new Event('change', { bubbles: true }));
+        markDashboardDirty();
       };
 
       input.addEventListener('focus', () => {
@@ -240,7 +267,7 @@ function insertPlaceholder(textareaId, tag) {
   el.value = el.value.substring(0, start) + tag + el.value.substring(end);
   el.focus();
   el.selectionStart = el.selectionEnd = start + tag.length;
-  el.dispatchEvent(new Event('change', { bubbles: true }));
+  markDashboardDirty();
 }
 
 // Helper: Format Channel Badge
@@ -286,6 +313,7 @@ async function refreshServerData() {
       renderSwitchboard(data.modules || []);
       loadFeeds();
       loadAuditLogs();
+      clearDashboardDirty();
       showSaveIndicator('Channels & roles refreshed ✓');
     } else {
       showSaveIndicator('Failed to refresh');
@@ -517,6 +545,7 @@ async function loadGuildConfig(guildId) {
     populateAllServerSettings(data.settings || {});
     renderSwitchboard(data.modules || []);
     loadAuditLogs();
+    clearDashboardDirty();
   } catch (err) {
     if (nameEl) nameEl.textContent = 'Error: ' + err.message;
   }
@@ -526,18 +555,13 @@ async function loadGuildConfig(guildId) {
 function populateAllServerSettings(s) {
   if (!s) return;
 
-  // Helper setter
   const setVal = (id, val) => {
     const el = document.getElementById(id);
-    if (el && val !== undefined && val !== null) {
-      el.value = val;
-    }
+    if (el && val !== undefined && val !== null) el.value = val;
   };
   const setChecked = (id, val) => {
     const el = document.getElementById(id);
-    if (el && typeof val === 'boolean') {
-      el.checked = val;
-    }
+    if (el && typeof val === 'boolean') el.checked = val;
   };
 
   // 1. General
@@ -635,6 +659,198 @@ function populateAllServerSettings(s) {
   initSearchableSelects();
 }
 
+// --- Collect All Dashboard Settings for Pushing to Server ---
+function collectAllDashboardSettings() {
+  return {
+    general: {
+      timezone: document.getElementById('gen-timezone')?.value,
+      changelog_channel_id: document.getElementById('gen-changelog-channel')?.value,
+      config_audit_channel_id: document.getElementById('log-config-audit-channel')?.value
+    },
+    moderation: {
+      mute_duration_ms: document.getElementById('mod-mute-duration')?.value,
+      mod_audit_channel_id: document.getElementById('mod-audit-channel')?.value,
+      warn_threshold: parseInt(document.getElementById('mod-warn-threshold')?.value || '3', 10),
+      staff_role_id: document.getElementById('mod-staff-role')?.value
+    },
+    automod: {
+      filter_invites: document.getElementById('automod-toggle-invites')?.checked,
+      anti_spam: document.getElementById('automod-toggle-spam')?.checked
+    },
+    lockdown: {
+      channel_id: document.getElementById('lockdown-channel')?.value,
+      quarantine_role_id: document.getElementById('lockdown-quarantine-role')?.value,
+      message: document.getElementById('lockdown-message-template')?.value
+    },
+    support: {
+      ticket_panel_channel_id: document.getElementById('ticket-panel-channel')?.value,
+      ticket_transcript_channel_id: document.getElementById('ticket-transcript-channel')?.value,
+      ticket_staff_role_id: document.getElementById('ticket-staff-role')?.value,
+      ticket_auto_close_hours: parseInt(document.getElementById('ticket-auto-close')?.value || '24', 10),
+      report_review_channel_id: document.getElementById('report-review-channel')?.value,
+      report_ping_role_id: document.getElementById('report-ping-role')?.value,
+      report_anonymous: document.getElementById('report-anonymous-toggle')?.checked,
+      app_submission_channel_id: document.getElementById('app-submission-channel')?.value,
+      app_reviewer_role_id: document.getElementById('app-reviewer-role')?.value,
+      appeal_review_channel_id: document.getElementById('appeal-review-channel')?.value,
+      appeal_reviewer_role_id: document.getElementById('appeal-reviewer-role')?.value,
+      faq_forum_channel_id: document.getElementById('faq-forum-channel')?.value,
+      faq_auto_reply_mode: document.getElementById('faq-auto-reply-mode')?.value
+    },
+    feeds: {
+      directory_channel_id: document.getElementById('feed-directory-channel')?.value,
+      refresh_interval: parseInt(document.getElementById('feed-refresh-interval')?.value || '120', 10)
+    },
+    onboarding: {
+      welcome_channel_id: document.getElementById('welcome-channel')?.value,
+      welcome_role_id: document.getElementById('welcome-role')?.value,
+      welcome_embed_title: document.getElementById('welcome-embed-title')?.value,
+      welcome_dm_enabled: document.getElementById('welcome-dm-toggle')?.value === 'true',
+      welcome_message: document.getElementById('welcome-message-template')?.value,
+      welcome_embed_desc: document.getElementById('welcome-embed-desc')?.value,
+      birthday_channel_id: document.getElementById('birthday-channel')?.value,
+      birthday_role_id: document.getElementById('birthday-role')?.value,
+      birthday_message: document.getElementById('birthday-message-template')?.value
+    },
+    community: {
+      starboard_channel_id: document.getElementById('starboard-channel')?.value,
+      starboard_threshold: parseInt(document.getElementById('starboard-threshold')?.value || '3', 10),
+      starboard_emoji: document.getElementById('starboard-emoji')?.value || '⭐',
+      leveling_channel_id: document.getElementById('leveling-channel')?.value,
+      leveling_multiplier_role_id: document.getElementById('leveling-multiplier-role')?.value,
+      leveling_message: document.getElementById('leveling-message-template')?.value,
+      suggest_channel_id: document.getElementById('suggest-channel')?.value,
+      suggest_review_channel_id: document.getElementById('suggest-review-channel')?.value
+    },
+    logging: {
+      config_audit_channel_id: document.getElementById('log-config-audit-channel')?.value,
+      log_msg_channel_id: document.getElementById('log-msg-channel')?.value,
+      log_member_channel_id: document.getElementById('log-member-channel')?.value,
+      log_voice_channel_id: document.getElementById('log-voice-channel')?.value,
+      log_role_channel_id: document.getElementById('log-role-channel')?.value,
+      stats_member_channel_id: document.getElementById('stats-member-channel')?.value,
+      stats_bot_channel_id: document.getElementById('stats-bot-channel')?.value
+    },
+    voice: {
+      jtc_hub_channel_id: document.getElementById('jtc-hub-channel')?.value,
+      jtc_name_template: document.getElementById('jtc-name-template')?.value,
+      util_poll_channel_id: document.getElementById('util-poll-channel')?.value,
+      util_snipe_limit: parseInt(document.getElementById('util-snipe-limit')?.value || '25', 10)
+    }
+  };
+}
+
+// --- "💾 Save Changes" Master Action ---
+async function handleSaveAllDashboard() {
+  if (!activeGuildId) return;
+
+  const btnHeader = document.getElementById('btn-save-header');
+  const btnFloating = document.getElementById('btn-save-floating');
+
+  if (btnHeader) btnHeader.textContent = 'Saving...';
+  if (btnFloating) btnFloating.textContent = 'Saving...';
+  showSaveIndicator('Pushing configuration to bot...');
+
+  const settingsPayload = collectAllDashboardSettings();
+
+  try {
+    const res = await fetch(`/api/guilds/${encodeURIComponent(activeGuildId)}/save-all`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ settings: settingsPayload })
+    });
+
+    if (res.ok) {
+      if (currentGuildConfig) currentGuildConfig.settings = settingsPayload;
+      clearDashboardDirty();
+      showSaveIndicator('Configuration saved to server ✓');
+      loadAuditLogs();
+    } else {
+      showSaveIndicator('Error saving changes');
+    }
+  } catch (err) {
+    showSaveIndicator('Network error: ' + err.message);
+  } finally {
+    if (btnHeader) btnHeader.textContent = '💾 Save Changes';
+    if (btnFloating) btnFloating.textContent = '💾 Save Changes';
+  }
+}
+
+// --- "↺ Reset Changes" Master Action ---
+function handleResetDashboard() {
+  if (!currentGuildConfig?.settings) return;
+  populateAllServerSettings(currentGuildConfig.settings);
+  clearDashboardDirty();
+  showSaveIndicator('Changes reset to server state ↺');
+}
+
+// --- Server Configuration Health & Readiness Diagnostics Scan ---
+async function runServerDiagnostics() {
+  if (!activeGuildId) return;
+  const container = document.getElementById('diagnostics-container');
+  const btn = document.getElementById('btn-run-diagnostics');
+  if (btn) btn.classList.add('spinning');
+  if (container) container.innerHTML = `<div style="padding: 12px; color: var(--text-muted);">Running deep configuration diagnostics...</div>`;
+
+  try {
+    const res = await fetch(`/api/guilds/${encodeURIComponent(activeGuildId)}/diagnostics`);
+    if (!res.ok) throw new Error('Diagnostics scan failed');
+
+    const data = await res.json();
+    const score = data.score || 100;
+    const checks = data.checks || [];
+
+    let scoreClass = 'PASS';
+    let scoreText = 'OPTIMAL & READY';
+    if (score < 70) {
+      scoreClass = 'FAIL';
+      scoreText = 'ACTION REQUIRED';
+    } else if (score < 90) {
+      scoreClass = 'WARN';
+      scoreText = 'NEEDS ATTENTION';
+    }
+
+    let html = `
+      <div class="diag-summary-header">
+        <div class="diag-score-display">
+          <div class="diag-score-badge ${scoreClass}">${score}%</div>
+          <div>
+            <div style="font-weight: 700; color: var(--text-main); font-size: 15px;">Overall Health Status: ${scoreText}</div>
+            <div style="font-size: 12px; color: var(--text-muted);">${checks.filter(c => c.status === 'PASS').length} of ${checks.length} system checks fully operational</div>
+          </div>
+        </div>
+        <button class="btn btn-outline btn-sm" onclick="runServerDiagnostics()">🔄 Re-Scan</button>
+      </div>
+
+      <div class="diag-item-list">
+    `;
+
+    checks.forEach(c => {
+      let icon = '🟢';
+      if (c.status === 'WARN') icon = '🟡';
+      if (c.status === 'FAIL') icon = '🔴';
+
+      html += `
+        <div class="diag-item">
+          <div class="diag-icon">${icon}</div>
+          <div class="diag-body">
+            <div class="diag-title">${escapeHtml(c.name)} <span class="cmd-pill" style="font-size: 10px; margin-left: 6px;">${escapeHtml(c.category)}</span></div>
+            <div class="diag-desc">${escapeHtml(c.message)}</div>
+            ${c.recommendation ? `<div class="diag-rec">💡 Recommendation: ${escapeHtml(c.recommendation)}</div>` : ''}
+          </div>
+        </div>
+      `;
+    });
+
+    html += `</div>`;
+    container.innerHTML = html;
+  } catch (err) {
+    container.innerHTML = `<div style="color: #f87171; padding: 8px;">Scan error: ${escapeHtml(err.message)}</div>`;
+  } finally {
+    if (btn) btn.classList.remove('spinning');
+  }
+}
+
 // --- Render Master Switchboard for all 29 Modules ---
 function renderSwitchboard(modules) {
   const container = document.getElementById('switchboard-container');
@@ -662,7 +878,7 @@ function renderSwitchboard(modules) {
 
 async function handleToggleModule(moduleKey, enabled) {
   if (!activeGuildId) return;
-  showSaveIndicator('Saving...');
+  showSaveIndicator('Updating module state...');
   try {
     const res = await fetch(`/api/guilds/${encodeURIComponent(activeGuildId)}/toggle-module`, {
       method: 'POST',
@@ -670,7 +886,7 @@ async function handleToggleModule(moduleKey, enabled) {
       body: JSON.stringify({ moduleKey, enabled })
     });
     if (res.ok) {
-      showSaveIndicator('Saved ✓');
+      showSaveIndicator('Module updated ✓');
       loadAuditLogs();
     } else {
       showSaveIndicator('Error saving');
@@ -836,171 +1052,6 @@ async function loadStarboard() {
   } catch (err) {
     console.error('Starboard fetch error:', err);
   }
-}
-
-// --- Unified Settings Save Handlers ---
-async function sendCategorySettings(category, payload) {
-  if (!activeGuildId) return;
-  showSaveIndicator('Saving changes...');
-
-  try {
-    const res = await fetch(`/api/guilds/${encodeURIComponent(activeGuildId)}/save-settings/${encodeURIComponent(category)}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    if (res.ok) {
-      showSaveIndicator('Settings saved ✓');
-      loadAuditLogs();
-    } else {
-      showSaveIndicator('Error saving');
-    }
-  } catch (err) {
-    showSaveIndicator('Network error');
-  }
-}
-
-function saveGeneralSettings() {
-  sendCategorySettings('general', {
-    timezone: document.getElementById('gen-timezone')?.value,
-    changelogChannelId: document.getElementById('gen-changelog-channel')?.value
-  });
-}
-
-function saveModerationSettings() {
-  sendCategorySettings('safety', {
-    muteDuration: document.getElementById('mod-mute-duration')?.value,
-    auditChannelId: document.getElementById('mod-audit-channel')?.value,
-    warnThreshold: parseInt(document.getElementById('mod-warn-threshold')?.value || '3', 10),
-    staffRoleId: document.getElementById('mod-staff-role')?.value
-  });
-}
-
-function saveAutoModSettings() {
-  sendCategorySettings('safety', {
-    filterInvites: document.getElementById('automod-toggle-invites')?.checked,
-    antiSpam: document.getElementById('automod-toggle-spam')?.checked
-  });
-}
-
-function saveLockdownSettings() {
-  sendCategorySettings('safety', {
-    lockdownChannelId: document.getElementById('lockdown-channel')?.value,
-    quarantineRoleId: document.getElementById('lockdown-quarantine-role')?.value,
-    lockdownMessage: document.getElementById('lockdown-message-template')?.value
-  });
-}
-
-function saveTicketSettings() {
-  sendCategorySettings('support', {
-    ticketPanelChannelId: document.getElementById('ticket-panel-channel')?.value,
-    ticketTranscriptChannelId: document.getElementById('ticket-transcript-channel')?.value,
-    ticketStaffRoleId: document.getElementById('ticket-staff-role')?.value,
-    ticketAutoCloseHours: parseInt(document.getElementById('ticket-auto-close')?.value || '24', 10)
-  });
-}
-
-function saveReportSettings() {
-  sendCategorySettings('support', {
-    reportReviewChannelId: document.getElementById('report-review-channel')?.value,
-    reportPingRoleId: document.getElementById('report-ping-role')?.value,
-    reportAnonymous: document.getElementById('report-anonymous-toggle')?.checked
-  });
-}
-
-function saveApplicationSettings() {
-  sendCategorySettings('support', {
-    appSubmissionChannelId: document.getElementById('app-submission-channel')?.value,
-    appReviewerRoleId: document.getElementById('app-reviewer-role')?.value
-  });
-}
-
-function saveAppealSettings() {
-  sendCategorySettings('support', {
-    appealReviewChannelId: document.getElementById('appeal-review-channel')?.value,
-    appealReviewerRoleId: document.getElementById('appeal-reviewer-role')?.value
-  });
-}
-
-function saveFaqSettings() {
-  sendCategorySettings('support', {
-    faqForumChannelId: document.getElementById('faq-forum-channel')?.value,
-    faqAutoReplyMode: document.getElementById('faq-auto-reply-mode')?.value
-  });
-}
-
-function saveFeedDirectorySettings() {
-  sendCategorySettings('media', {
-    directoryChannelId: document.getElementById('feed-directory-channel')?.value,
-    refreshInterval: parseInt(document.getElementById('feed-refresh-interval')?.value || '120', 10)
-  });
-}
-
-function saveWelcomeSettings() {
-  sendCategorySettings('onboarding', {
-    welcomeChannelId: document.getElementById('welcome-channel')?.value,
-    welcomeRoleId: document.getElementById('welcome-role')?.value,
-    welcomeTitle: document.getElementById('welcome-embed-title')?.value,
-    welcomeDmEnabled: document.getElementById('welcome-dm-toggle')?.value === 'true',
-    welcomeMessage: document.getElementById('welcome-message-template')?.value,
-    welcomeDesc: document.getElementById('welcome-embed-desc')?.value
-  });
-}
-
-function saveBirthdaySettings() {
-  sendCategorySettings('onboarding', {
-    birthdayChannelId: document.getElementById('birthday-channel')?.value,
-    birthdayRoleId: document.getElementById('birthday-role')?.value,
-    birthdayMessage: document.getElementById('birthday-message-template')?.value
-  });
-}
-
-function saveStarboardSettings() {
-  sendCategorySettings('community', {
-    starboardChannelId: document.getElementById('starboard-channel')?.value,
-    starboardThreshold: parseInt(document.getElementById('starboard-threshold')?.value || '3', 10),
-    starboardEmoji: document.getElementById('starboard-emoji')?.value || '⭐'
-  });
-}
-
-function saveLevelingSettings() {
-  sendCategorySettings('community', {
-    levelingChannelId: document.getElementById('leveling-channel')?.value,
-    levelingMultiplierRoleId: document.getElementById('leveling-multiplier-role')?.value,
-    levelingMessage: document.getElementById('leveling-message-template')?.value
-  });
-}
-
-function saveSuggestionSettings() {
-  sendCategorySettings('community', {
-    suggestChannelId: document.getElementById('suggest-channel')?.value,
-    suggestReviewChannelId: document.getElementById('suggest-review-channel')?.value
-  });
-}
-
-function saveLoggingSettings() {
-  sendCategorySettings('logging', {
-    logMsgChannelId: document.getElementById('log-msg-channel')?.value,
-    logMemberChannelId: document.getElementById('log-member-channel')?.value,
-    logVoiceChannelId: document.getElementById('log-voice-channel')?.value,
-    logRoleChannelId: document.getElementById('log-role-channel')?.value
-  });
-}
-
-function saveServerStatsSettings() {
-  sendCategorySettings('logging', {
-    statsMemberChannelId: document.getElementById('stats-member-channel')?.value,
-    statsBotChannelId: document.getElementById('stats-bot-channel')?.value
-  });
-}
-
-function saveVoiceSettings() {
-  sendCategorySettings('voice', {
-    jtcHubChannelId: document.getElementById('jtc-hub-channel')?.value,
-    jtcNameTemplate: document.getElementById('jtc-name-template')?.value,
-    utilPollChannelId: document.getElementById('util-poll-channel')?.value,
-    utilSnipeLimit: parseInt(document.getElementById('util-snipe-limit')?.value || '25', 10)
-  });
 }
 
 // --- Bot Configuration Audit Logging ---
@@ -1169,6 +1220,28 @@ document.addEventListener('DOMContentLoaded', () => {
       renderServers();
     });
   }
+
+  // Dirty change listener across all manage content inputs
+  const contentArea = document.querySelector('.manage-content-area');
+  if (contentArea) {
+    contentArea.addEventListener('input', (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') {
+        markDashboardDirty();
+      }
+    });
+    contentArea.addEventListener('change', (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') {
+        markDashboardDirty();
+      }
+    });
+  }
+
+  window.addEventListener('beforeunload', (e) => {
+    if (hasUnsavedChanges) {
+      e.preventDefault();
+      e.returnValue = '';
+    }
+  });
 
   checkUrlErrors();
   checkAuth();

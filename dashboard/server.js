@@ -345,18 +345,39 @@ const ALL_MODULES_METADATA = [
 const VALID_MODULE_KEYS = new Set(Object.values(ModuleKeys));
 
 // Extract human-readable channel hierarchy and roles from live bot client or sandbox fallback
-function getGuildStructure(guildId, client = null) {
+async function getGuildStructure(guildId, client = null) {
   if (client?.guilds?.cache?.has(guildId)) {
     const g = client.guilds.cache.get(guildId);
+    
+    // Refresh channel & role caches directly from Discord API
+    try {
+      await g.channels.fetch().catch(() => {});
+      await g.roles.fetch().catch(() => {});
+    } catch (e) {}
+
     const channels = Array.from(g.channels.cache.values())
-      .filter(c => c.type === 0 || c.type === 2 || c.type === 4 || c.type === 5 || c.type === 15)
-      .map(c => ({
-        id: c.id,
-        name: c.name,
-        type: c.type === 2 ? 'voice' : c.type === 4 ? 'category' : c.type === 15 ? 'forum' : 'text',
-        parentId: c.parentId
-      }))
-      .sort((a, b) => a.name.localeCompare(b.name));
+      .filter(c => c && [0, 2, 4, 5, 13, 15, 16].includes(c.type))
+      .map(c => {
+        let typeStr = 'text';
+        if (c.type === 2) typeStr = 'voice';
+        else if (c.type === 4) typeStr = 'category';
+        else if (c.type === 5) typeStr = 'announcement';
+        else if (c.type === 13) typeStr = 'stage';
+        else if (c.type === 15) typeStr = 'forum';
+        else if (c.type === 16) typeStr = 'media';
+
+        const parentName = c.parentId ? g.channels.cache.get(c.parentId)?.name : null;
+
+        return {
+          id: c.id,
+          name: c.name,
+          type: typeStr,
+          parentId: c.parentId || null,
+          parentName: parentName || null,
+          position: c.position || 0
+        };
+      })
+      .sort((a, b) => (a.parentName || '').localeCompare(b.parentName || '') || a.position - b.position || a.name.localeCompare(b.name));
 
     const roles = Array.from(g.roles.cache.values())
       .filter(r => r.name !== '@everyone')
@@ -860,7 +881,7 @@ async function handleDashboardRequest(req, res, client = null) {
         });
 
         // Resolve real Discord Channels & Roles for this server
-        const { channels, roles } = getGuildStructure(guildId, client);
+        const { channels, roles } = await getGuildStructure(guildId, client);
 
         // Build comprehensive settings payload
         const settings = {
@@ -1218,6 +1239,267 @@ async function handleDashboardRequest(req, res, client = null) {
       } catch (err) {
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: 'Failed to save settings: ' + err.message }));
+        return;
+      }
+    }
+
+    // 3.8 Unified "Save All Changes" Master Endpoint
+    if (req.method === 'POST' && subRoute === 'save-all') {
+      try {
+        const rawBody = await readRequestBody(req);
+        const { settings, moduleToggles } = JSON.parse(rawBody || '{}');
+        const s = settings || {};
+
+        // 1. Save General
+        if (s.general) {
+          await query(
+            `UPDATE guild_configs
+             SET timezone = COALESCE($2, timezone),
+                 default_log_channel_id = $3,
+                 config_audit_channel_id = COALESCE($4, config_audit_channel_id),
+                 updated_at = NOW()
+             WHERE guild_id = $1`,
+            [guildId, s.general.timezone || 'America/New_York', s.general.changelog_channel_id || null, s.general.config_audit_channel_id || null]
+          ).catch(() => {});
+        }
+
+        // 2. Save Onboarding & Welcome / Birthday
+        if (s.onboarding) {
+          await query(
+            `INSERT INTO welcome_configs (guild_id, channel_id, message_template, embed_title, embed_description, dm_enabled, updated_at)
+             VALUES ($1, $2, $3, $4, $5, $6, NOW())
+             ON CONFLICT (guild_id) DO UPDATE SET
+               channel_id = EXCLUDED.channel_id,
+               message_template = EXCLUDED.message_template,
+               embed_title = EXCLUDED.embed_title,
+               embed_description = EXCLUDED.embed_description,
+               dm_enabled = EXCLUDED.dm_enabled,
+               updated_at = NOW()`,
+            [guildId, s.onboarding.welcome_channel_id || null, s.onboarding.welcome_message || null, s.onboarding.welcome_embed_title || null, s.onboarding.welcome_embed_desc || null, Boolean(s.onboarding.welcome_dm_enabled)]
+          ).catch(() => {});
+
+          await query(
+            `INSERT INTO birthday_configs (guild_id, channel_id, birthday_role_id, announcement_template, updated_at)
+             VALUES ($1, $2, $3, $4, NOW())
+             ON CONFLICT (guild_id) DO UPDATE SET
+               channel_id = EXCLUDED.channel_id,
+               birthday_role_id = EXCLUDED.birthday_role_id,
+               announcement_template = EXCLUDED.announcement_template,
+               updated_at = NOW()`,
+            [guildId, s.onboarding.birthday_channel_id || null, s.onboarding.birthday_role_id || null, s.onboarding.birthday_message || null]
+          ).catch(() => {});
+        }
+
+        // 3. Save Starboard & Community
+        if (s.community) {
+          await query(
+            `INSERT INTO starboard_configs (guild_id, channel_id, star_threshold, star_emoji, updated_at)
+             VALUES ($1, $2, $3, $4, NOW())
+             ON CONFLICT (guild_id) DO UPDATE SET
+               channel_id = EXCLUDED.channel_id,
+               star_threshold = EXCLUDED.star_threshold,
+               star_emoji = EXCLUDED.star_emoji,
+               updated_at = NOW()`,
+            [guildId, s.community.starboard_channel_id || null, parseInt(s.community.starboard_threshold || '3', 10), s.community.starboard_emoji || '⭐']
+          ).catch(() => {});
+
+          await query(
+            `INSERT INTO leveling_configs (guild_id, announcement_channel_id, updated_at)
+             VALUES ($1, $2, NOW())
+             ON CONFLICT (guild_id) DO UPDATE SET
+               announcement_channel_id = EXCLUDED.announcement_channel_id,
+               updated_at = NOW()`,
+            [guildId, s.community.leveling_channel_id || null]
+          ).catch(() => {});
+        }
+
+        // 4. Save Support
+        if (s.support) {
+          await query(
+            `INSERT INTO ticket_configs (guild_id, category_id, log_channel_id, staff_role_id, updated_at)
+             VALUES ($1, $2, $3, $4, NOW())
+             ON CONFLICT (guild_id) DO UPDATE SET
+               category_id = EXCLUDED.category_id,
+               log_channel_id = EXCLUDED.log_channel_id,
+               staff_role_id = EXCLUDED.staff_role_id,
+               updated_at = NOW()`,
+            [guildId, s.support.ticket_panel_channel_id || null, s.support.ticket_transcript_channel_id || null, s.support.ticket_staff_role_id || null]
+          ).catch(() => {});
+
+          await query(
+            `INSERT INTO report_configs (guild_id, review_channel_id, ping_role_id, updated_at)
+             VALUES ($1, $2, $3, NOW())
+             ON CONFLICT (guild_id) DO UPDATE SET
+               review_channel_id = EXCLUDED.review_channel_id,
+               ping_role_id = EXCLUDED.ping_role_id,
+               updated_at = NOW()`,
+            [guildId, s.support.report_review_channel_id || null, s.support.report_ping_role_id || null]
+          ).catch(() => {});
+        }
+
+        // 5. Save Safety & AutoMod
+        if (s.automod) {
+          await query(
+            `INSERT INTO automod_configs (guild_id, filter_invites, anti_spam, updated_at)
+             VALUES ($1, $2, $3, NOW())
+             ON CONFLICT (guild_id) DO UPDATE SET
+               filter_invites = EXCLUDED.filter_invites,
+               anti_spam = EXCLUDED.anti_spam,
+               updated_at = NOW()`,
+            [guildId, s.automod.filter_invites ?? true, s.automod.anti_spam ?? true]
+          ).catch(() => {});
+        }
+
+        // 6. Save Logging & Audit
+        if (s.logging?.config_audit_channel_id) {
+          await configAuditService.setConfigAuditChannel(guildId, s.logging.config_audit_channel_id).catch(() => {});
+        }
+
+        // Record Audit Entry
+        await configAuditService.recordChange({
+          guildId,
+          actorId,
+          actorTag,
+          source: 'DASHBOARD',
+          moduleKey: 'SERVER_CONFIG',
+          action: 'Pushed Server Configuration Update',
+          details: 'Synchronized full server configuration settings across all active modules from the Web Dashboard.',
+          client
+        });
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, message: 'Server configuration saved successfully' }));
+        return;
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Failed to save server configuration: ' + err.message }));
+        return;
+      }
+    }
+
+    // 3.9 Server Diagnostics & Configuration Readiness Check
+    if (req.method === 'GET' && subRoute === 'diagnostics') {
+      try {
+        const { channels, roles } = await getGuildStructure(guildId, client);
+        const channelIds = new Set(channels.map(c => c.id));
+        const roleIds = new Set(roles.map(r => r.id));
+
+        const checks = [];
+
+        // Check 1: Timezone
+        const gRes = await query('SELECT timezone, default_log_channel_id, config_audit_channel_id FROM guild_configs WHERE guild_id = $1', [guildId]).catch(() => ({ rows: [] }));
+        const gCfg = gRes.rows[0] || {};
+        checks.push({
+          category: 'General',
+          name: 'Server Timezone',
+          status: gCfg.timezone ? 'PASS' : 'WARN',
+          message: gCfg.timezone ? `Configured as ${gCfg.timezone}` : 'Defaulting to America/New_York (ET).',
+          recommendation: 'Verify your local timezone in Overview if needed.'
+        });
+
+        // Check 2: Audit Log Channel
+        if (gCfg.config_audit_channel_id) {
+          const isValid = channelIds.has(gCfg.config_audit_channel_id);
+          checks.push({
+            category: 'Logging',
+            name: 'Bot Config Audit Log Channel',
+            status: isValid ? 'PASS' : 'FAIL',
+            message: isValid ? 'Dedicated config change log channel is connected.' : 'Configured log channel was deleted or is missing from Discord.',
+            recommendation: isValid ? null : 'Select an active channel in the Logging panel.'
+          });
+        } else {
+          checks.push({
+            category: 'Logging',
+            name: 'Bot Config Audit Log Channel',
+            status: 'WARN',
+            message: 'No dedicated channel set for bot configuration changes.',
+            recommendation: 'Designate a staff channel to receive live embeds when settings change.'
+          });
+        }
+
+        // Check 3: Starboard Channel
+        const sRes = await query('SELECT channel_id, enabled FROM starboard_configs WHERE guild_id = $1', [guildId]).catch(() => ({ rows: [] }));
+        const sCfg = sRes.rows[0] || {};
+        if (sCfg.channel_id) {
+          const isValid = channelIds.has(sCfg.channel_id);
+          checks.push({
+            category: 'Community',
+            name: 'Starboard Showcase Channel',
+            status: isValid ? 'PASS' : 'FAIL',
+            message: isValid ? 'Starboard channel is active and valid.' : 'Starboard channel does not exist in this Discord server.',
+            recommendation: isValid ? null : 'Re-assign the showcase channel in Community settings.'
+          });
+        } else {
+          checks.push({
+            category: 'Community',
+            name: 'Starboard Showcase Channel',
+            status: 'WARN',
+            message: 'Starboard showcase channel has not been designated.',
+            recommendation: 'Select a channel like #starboard to activate community pin reactions.'
+          });
+        }
+
+        // Check 4: Welcome Channel & Message
+        const wRes = await query('SELECT channel_id, message_template FROM welcome_configs WHERE guild_id = $1', [guildId]).catch(() => ({ rows: [] }));
+        const wCfg = wRes.rows[0] || {};
+        if (wCfg.channel_id) {
+          const isValid = channelIds.has(wCfg.channel_id);
+          checks.push({
+            category: 'Onboarding',
+            name: 'Welcome Greetings Channel',
+            status: isValid ? 'PASS' : 'FAIL',
+            message: isValid ? 'Welcome greetings channel is linked.' : 'Configured welcome channel not found in server.',
+            recommendation: isValid ? null : 'Re-link your welcome channel in Onboarding settings.'
+          });
+        } else {
+          checks.push({
+            category: 'Onboarding',
+            name: 'Welcome Greetings Channel',
+            status: 'WARN',
+            message: 'Welcome greetings channel is not configured.',
+            recommendation: 'Designate a channel like #welcome to greet new members automatically.'
+          });
+        }
+
+        // Check 5: Tickets Transcript Channel
+        const tRes = await query('SELECT log_channel_id, staff_role_id FROM ticket_configs WHERE guild_id = $1', [guildId]).catch(() => ({ rows: [] }));
+        const tCfg = tRes.rows[0] || {};
+        if (tCfg.log_channel_id) {
+          const isValid = channelIds.has(tCfg.log_channel_id);
+          checks.push({
+            category: 'Support',
+            name: 'Ticket Transcripts Channel',
+            status: isValid ? 'PASS' : 'FAIL',
+            message: isValid ? 'Ticket transcript archive channel is valid.' : 'Ticket transcript channel not found.',
+            recommendation: isValid ? null : 'Assign a valid channel to store closed ticket HTML transcripts.'
+          });
+        } else {
+          checks.push({
+            category: 'Support',
+            name: 'Ticket Transcripts Channel',
+            status: 'WARN',
+            message: 'Transcript archive channel not set.',
+            recommendation: 'Set a transcript channel in Support & Workflows to save ticket histories.'
+          });
+        }
+
+        // Compute Score
+        const total = checks.length;
+        const passed = checks.filter(c => c.status === 'PASS').length;
+        const warns = checks.filter(c => c.status === 'WARN').length;
+        const score = total > 0 ? Math.round(((passed + warns * 0.5) / total) * 100) : 100;
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          ok: true,
+          score,
+          status: score >= 90 ? 'HEALTHY' : score >= 70 ? 'ATTENTION_NEEDED' : 'CRITICAL',
+          checks
+        }));
+        return;
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Diagnostics scan error: ' + err.message }));
         return;
       }
     }

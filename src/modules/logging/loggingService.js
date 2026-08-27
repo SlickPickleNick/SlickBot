@@ -2,6 +2,7 @@ const { EmbedBuilder } = require('discord.js');
 const { query } = require('../../services/db');
 const { truncate } = require('../../utils/format');
 const { getLogEvent, getLogModule } = require('./logEventCatalog');
+const { configAuditService } = require('./configAuditService');
 
 const LogDeliveryMode = Object.freeze({
   IMMEDIATE: 'IMMEDIATE',
@@ -73,21 +74,36 @@ class LoggingService {
   }
 
   async writeAudit(input) {
-    await query(
-      `INSERT INTO audit_logs
-       (guild_id, actor_user_id, action_key, target_type, target_id, severity, summary, metadata)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      [
-        input.guildId,
-        input.actorUserId || null,
-        input.actionKey,
-        input.targetType || null,
-        input.targetId || null,
-        input.severity || 'INFO',
-        input.summary,
-        input.metadata ? JSON.stringify(input.metadata) : null
-      ]
-    );
+    try {
+      await query(
+        `INSERT INTO audit_logs
+         (guild_id, actor_user_id, action_key, target_type, target_id, severity, summary, metadata)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [
+          input.guildId,
+          input.actorUserId || null,
+          input.actionKey,
+          input.targetType || null,
+          input.targetId || null,
+          input.severity || 'INFO',
+          input.summary,
+          input.metadata ? JSON.stringify(input.metadata) : null
+        ]
+      );
+    } catch (e) {}
+
+    try {
+      await configAuditService.recordChange({
+        guildId: input.guildId,
+        actorId: input.actorUserId,
+        actorTag: input.actorTag || (input.actorUserId ? `<@${input.actorUserId}>` : 'Discord Administrator'),
+        source: 'DISCORD',
+        moduleKey: input.targetType || 'CONFIG',
+        action: input.actionKey || 'Configuration Update',
+        details: input.summary,
+        client: this.client || input.client || defaultDiscordClient || null
+      });
+    } catch (e) {}
   }
 
   /**
