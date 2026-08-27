@@ -160,8 +160,11 @@ function hasManagePermission(permissionsString) {
 }
 
 // Helper: Fetch bot-installed guild IDs from DB safely
-async function getBotInstalledGuildIds() {
+async function getBotInstalledGuildIds(client = null) {
   try {
+    if (client?.guilds?.cache?.size) {
+      return new Set(client.guilds.cache.keys());
+    }
     const res = await query(`SELECT guild_id FROM guild_configs WHERE active = true`);
     return new Set(res.rows.map(r => r.guild_id));
   } catch (e) {
@@ -190,7 +193,7 @@ function buildSessionCookie(sessionId, maxAgeSeconds = 604800) {
   return `slickbot_session=${sessionId}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAgeSeconds}${secureFlag}`;
 }
 
-const server = http.createServer(async (req, res) => {
+async function handleDashboardRequest(req, res, client = null) {
   const host = req.headers.host || `localhost:${PORT}`;
   const reqUrl = new URL(req.url, `http://${host}`);
   const pathname = reqUrl.pathname;
@@ -209,17 +212,25 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // --- API: Public Health & Modules ---
-  if (pathname === '/api/health') {
+  // --- API: Public Health & Railway Deployment Probe ---
+  if (pathname === '/health' || pathname === '/api/health') {
     const dbCheck = await query('SELECT 1').then(() => true).catch(() => false);
-    res.writeHead(200, { 'Content-Type': 'application/json' });
+    const isReady = client?.isReady?.() ?? true;
+    const status = dbCheck && isReady ? 'ok' : 'degraded';
+    const statusCode = status === 'ok' ? 200 : 503;
+
+    res.writeHead(statusCode, {
+      'Content-Type': 'application/json',
+      'Cache-Control': 'no-store'
+    });
     res.end(JSON.stringify({
-      status: 'ok',
+      status,
       bot: {
         name: 'SlickBot',
         version: '0.9.8',
-        ready: true,
-        ping: 24,
+        ready: isReady,
+        ping: client?.ws?.ping ?? 24,
+        guilds: client?.guilds?.cache?.size ?? 1,
         uptimeSeconds: Math.floor(process.uptime()),
         clientId: DISCORD_CLIENT_ID || '123456789012345678'
       },
@@ -229,7 +240,7 @@ const server = http.createServer(async (req, res) => {
       },
       authConfigured: Boolean(DISCORD_CLIENT_ID && DISCORD_CLIENT_SECRET),
       timestamp: new Date().toISOString()
-    }));
+    }, null, 2));
     return;
   }
 
@@ -398,7 +409,7 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    const botInstalledSet = await getBotInstalledGuildIds();
+    const botInstalledSet = await getBotInstalledGuildIds(client);
 
     const manageableGuilds = session.guilds
       .filter(g => g.owner || hasManagePermission(g.permissions))
@@ -451,7 +462,6 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    // Permission Verification: User must own or have Manage/Admin rights on the guild
     const guildObj = session.guilds.find(g => g.id === guildId);
     if (!guildObj || (!guildObj.owner && !hasManagePermission(guildObj.permissions))) {
       res.writeHead(403, { 'Content-Type': 'application/json' });
@@ -505,7 +515,7 @@ const server = http.createServer(async (req, res) => {
       let body = '';
       req.on('data', chunk => {
         body += chunk;
-        if (body.length > 1024 * 10) { // Limit payload to 10KB
+        if (body.length > 1024 * 10) {
           req.destroy(new Error('Payload too large'));
         }
       });
@@ -514,7 +524,6 @@ const server = http.createServer(async (req, res) => {
           const parsed = JSON.parse(body || '{}');
           const { moduleKey, enabled } = parsed;
 
-          // Input Validation & Whitelisting
           if (!VALID_MODULE_KEYS.has(moduleKey) || typeof enabled !== 'boolean') {
             res.writeHead(400, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: 'Invalid moduleKey or enabled boolean parameter' }));
@@ -577,7 +586,9 @@ const server = http.createServer(async (req, res) => {
       res.end(content);
     });
   });
-});
+}
+
+const server = http.createServer((req, res) => handleDashboardRequest(req, res));
 
 if (require.main === module) {
   server.listen(PORT, HOST, () => {
@@ -585,4 +596,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { server };
+module.exports = { server, handleDashboardRequest };
