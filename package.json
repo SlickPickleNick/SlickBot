@@ -13,6 +13,7 @@
     "start:dashboard": "node dashboard/server.js",
     "deploy:commands": "node src/deployCommands.js",
     "deploy:commands:global": "node src/deployCommands.js --global",
+    "deploy:clean": "node src/scripts/purgeGuildCommands.js",
     "db:init": "node src/services/initDatabase.js",
     "validate:commands": "node src/scripts/validateCommands.js",
     "dashboard": "node dashboard/server.js",

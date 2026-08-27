@@ -201,6 +201,20 @@ client.once(Events.ClientReady, async (readyClient) => {
         .catch((error) => console.error(`Failed to sync reaction panels for ${guild.name}:`, error));
     }
   }
+
+  // Command Deduplication: If running with global commands, sweep guilds to purge any leftover legacy guild-scoped commands
+  if (!env.DISCORD_GUILD_ID) {
+    for (const guild of readyClient.guilds.cache.values()) {
+      guild.commands.fetch().then((guildCommands) => {
+        if (guildCommands && guildCommands.size > 0) {
+          console.log(`[Command Deduplication] Detected ${guildCommands.size} legacy guild-scoped command(s) in "${guild.name}" (${guild.id}). Purging to resolve duplicate entries...`);
+          guild.commands.set([]).then(() => {
+            console.log(`[Command Deduplication] Successfully cleared legacy guild commands for "${guild.name}". Only global commands remain.`);
+          }).catch((err) => console.warn(`[Command Deduplication] Could not clear guild commands for "${guild.name}":`, err.message));
+        }
+      }).catch(() => {});
+    }
+  }
 });
 
 client.on(Events.GuildCreate, async (guild) => {
