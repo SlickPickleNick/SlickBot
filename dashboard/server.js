@@ -127,10 +127,17 @@ const MODULES_DATA = [
 
 const VALID_MODULE_KEYS = new Set(MODULES_DATA.map(m => m.key));
 
-// Dynamically determine base URL from environment or request headers
+// Dynamically determine base URL from environment or request headers, ensuring valid formatting
 function getBaseUrl(req) {
-  if (process.env.DASHBOARD_URL) return process.env.DASHBOARD_URL.replace(/\/+$/, '');
-  if (process.env.PUBLIC_URL) return process.env.PUBLIC_URL.replace(/\/+$/, '');
+  let customUrl = (process.env.DASHBOARD_URL || process.env.PUBLIC_URL || '').trim();
+  if (customUrl) {
+    customUrl = customUrl.replace(/["']/g, '').trim();
+    if (!customUrl.startsWith('http://') && !customUrl.startsWith('https://')) {
+      customUrl = `https://${customUrl}`;
+    }
+    customUrl = customUrl.replace(/\/api\/auth\/callback\/?$/i, '');
+    return customUrl.replace(/\/+$/, '');
+  }
   
   const forwardedProto = req.headers['x-forwarded-proto'];
   const proto = forwardedProto ? forwardedProto.split(',')[0].trim() : (req.socket?.encrypted ? 'https' : 'http');
