@@ -946,10 +946,21 @@ async function buildLoggingPanel(guildId) {
     }).join('\n')
     : `No event overrides configured. All ${LogModuleCatalog.length} modules follow their parent group settings.`;
 
+  let configAuditChannelId = null;
+  try {
+    const gRes = await query(`SELECT config_audit_channel_id FROM guild_configs WHERE guild_id = $1`, [guildId]);
+    configAuditChannelId = gRes.rows[0]?.config_audit_channel_id;
+  } catch (e) {}
+
+  const auditChannelDisplay = configAuditChannelId ? `<#${configAuditChannelId}>` : '*Not configured (use `/logging config-channel`)*';
+
   const embed = createBaseEmbed({
     title: 'SlickBot Core Setup • Logging Center',
     description: [
       `**Viewing:** Server Event Logging (${LogModuleCatalog.length} Tracking Modules in 6 Hubs)`,
+      '',
+      '**⚙️ Bot Configuration Audit Channel**',
+      `Live settings change alerts → ${auditChannelDisplay}`,
       '',
       '**Aggregated Log Groups**',
       groupBlocks,
@@ -957,7 +968,7 @@ async function buildLoggingPanel(guildId) {
       '**Event Overrides**',
       overrideLines,
       '',
-      'Click **Quick Setup** for guided onboarding across all 6 log hubs, or configure individual routes with `/logging set-channel`.'
+      'Click **Quick Setup** for guided onboarding across all 6 log hubs, or configure individual routes with `/logging set-channel` or `/logging config-channel`.'
     ].join('\n'),
     color: SlickBotColors.INFO,
     footer: 'SlickBot Logging • Instant Delivery'

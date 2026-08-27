@@ -567,7 +567,9 @@ function populateAllServerSettings(s) {
   // 1. General
   if (s.general) {
     setVal('gen-timezone', s.general.timezone);
+    setVal('gen-prefix', s.general.prefix || '!');
     setVal('gen-changelog-channel', s.general.changelog_channel_id);
+    setVal('gen-config-audit-channel', s.general.config_audit_channel_id);
     setVal('log-config-audit-channel', s.general.config_audit_channel_id);
   }
 
@@ -577,14 +579,19 @@ function populateAllServerSettings(s) {
     setVal('mod-audit-channel', s.moderation.mod_audit_channel_id);
     setVal('mod-warn-threshold', s.moderation.warn_threshold);
     setVal('mod-staff-role', s.moderation.staff_role_id);
+    setChecked('mod-dm-notifications', s.moderation.dm_notifications ?? true);
   }
   if (s.automod) {
-    setChecked('automod-toggle-invites', s.automod.filter_invites);
-    setChecked('automod-toggle-spam', s.automod.anti_spam);
+    setChecked('automod-toggle-invites', s.automod.filter_invites ?? true);
+    setChecked('automod-toggle-spam', s.automod.anti_spam ?? true);
+    setVal('automod-max-mentions', s.automod.max_mentions || 5);
+    setVal('automod-anti-caps', s.automod.anti_caps_percent || 70);
+    setVal('automod-exempt-role', s.automod.exempt_role_id);
   }
   if (s.lockdown) {
     setVal('lockdown-channel', s.lockdown.channel_id);
     setVal('lockdown-quarantine-role', s.lockdown.quarantine_role_id);
+    setVal('lockdown-scope', s.lockdown.scope || 'TEXT_CHANNELS');
     setVal('lockdown-message-template', s.lockdown.message);
   }
 
@@ -593,22 +600,31 @@ function populateAllServerSettings(s) {
     setVal('ticket-panel-channel', s.support.ticket_panel_channel_id);
     setVal('ticket-transcript-channel', s.support.ticket_transcript_channel_id);
     setVal('ticket-staff-role', s.support.ticket_staff_role_id);
-    setVal('ticket-auto-close', s.support.ticket_auto_close_hours);
+    setVal('ticket-admin-role', s.support.ticket_admin_role_id);
+    setVal('ticket-auto-close', s.support.ticket_auto_close_hours || 24);
+    setVal('ticket-naming-format', s.support.ticket_naming_format || 'ticket-{username}');
+    setVal('ticket-welcome-message', s.support.ticket_welcome_message);
     setVal('report-review-channel', s.support.report_review_channel_id);
     setVal('report-ping-role', s.support.report_ping_role_id);
-    setChecked('report-anonymous-toggle', s.support.report_anonymous);
+    setChecked('report-anonymous-toggle', s.support.report_anonymous ?? true);
+    setChecked('report-require-reason', s.support.report_require_reason ?? true);
     setVal('app-submission-channel', s.support.app_submission_channel_id);
     setVal('app-reviewer-role', s.support.app_reviewer_role_id);
+    setVal('app-approved-role', s.support.app_approved_role_id);
+    setVal('app-q1', s.support.app_q1);
+    setVal('app-q2', s.support.app_q2);
     setVal('appeal-review-channel', s.support.appeal_review_channel_id);
     setVal('appeal-reviewer-role', s.support.appeal_reviewer_role_id);
+    setVal('appeal-cooldown-days', s.support.appeal_cooldown_days || 30);
     setVal('faq-forum-channel', s.support.faq_forum_channel_id);
-    setVal('faq-auto-reply-mode', s.support.faq_auto_reply_mode);
+    setVal('faq-auto-reply-mode', s.support.faq_auto_reply_mode || 'ENABLED');
   }
 
   // 4. Feeds
   if (s.feeds) {
     setVal('feed-directory-channel', s.feeds.directory_channel_id);
-    setVal('feed-refresh-interval', s.feeds.refresh_interval);
+    setVal('feed-refresh-interval', s.feeds.refresh_interval || 120);
+    setVal('feed-message-template', s.feeds.message_template);
   }
 
   // 5. Onboarding & Member Greetings
@@ -616,43 +632,66 @@ function populateAllServerSettings(s) {
     setVal('welcome-channel', s.onboarding.welcome_channel_id);
     setVal('welcome-role', s.onboarding.welcome_role_id);
     setVal('welcome-embed-title', s.onboarding.welcome_embed_title);
-    setVal('welcome-dm-toggle', String(s.onboarding.welcome_dm_enabled));
+    setVal('welcome-dm-toggle', String(s.onboarding.welcome_dm_enabled ?? false));
+    setVal('welcome-banner-url', s.onboarding.welcome_banner_url);
+    setVal('welcome-embed-color', s.onboarding.welcome_embed_color || '#3b82f6');
     setVal('welcome-message-template', s.onboarding.welcome_message);
     setVal('welcome-embed-desc', s.onboarding.welcome_embed_desc);
     setVal('birthday-channel', s.onboarding.birthday_channel_id);
     setVal('birthday-role', s.onboarding.birthday_role_id);
     setVal('birthday-message-template', s.onboarding.birthday_message);
+    setVal('role-panel-channel', s.onboarding.role_panel_channel_id);
+    setVal('role-panel-mode', s.onboarding.role_panel_mode || 'BUTTONS');
+    setVal('temprole-max-hours', s.onboarding.temprole_max_hours || 168);
   }
 
   // 6. Community, Leveling & Starboard
   if (s.community) {
     setVal('starboard-channel', s.community.starboard_channel_id);
-    setVal('starboard-threshold', s.community.starboard_threshold);
-    setVal('starboard-emoji', s.community.starboard_emoji);
+    setVal('starboard-threshold', s.community.starboard_threshold || 3);
+    setVal('starboard-emoji', s.community.starboard_emoji || '⭐');
+    setChecked('starboard-self-stars', s.community.starboard_self_stars ?? false);
+    setChecked('starboard-allow-nsfw', s.community.starboard_allow_nsfw ?? false);
     setVal('leveling-channel', s.community.leveling_channel_id);
     setVal('leveling-multiplier-role', s.community.leveling_multiplier_role_id);
+    setVal('leveling-xp-rate', s.community.leveling_xp_rate || 15);
+    setVal('leveling-reward-5', s.community.leveling_reward_5);
+    setVal('leveling-reward-10', s.community.leveling_reward_10);
+    setVal('leveling-reward-25', s.community.leveling_reward_25);
     setVal('leveling-message-template', s.community.leveling_message);
     setVal('suggest-channel', s.community.suggest_channel_id);
     setVal('suggest-review-channel', s.community.suggest_review_channel_id);
+    setChecked('suggest-auto-thread', s.community.suggest_auto_thread ?? true);
+    setChecked('suggest-anonymous', s.community.suggest_anonymous ?? false);
+    setVal('giveaway-channel', s.community.giveaway_channel_id);
+    setVal('giveaway-manager-role', s.community.giveaway_manager_role_id);
+    setVal('games-counting-channel', s.community.games_counting_channel_id);
+    setVal('games-trivia-channel', s.community.games_trivia_channel_id);
   }
 
   // 7. Audit Logging & Stats
   if (s.logging) {
+    setVal('gen-config-audit-channel', s.logging.config_audit_channel_id);
     setVal('log-config-audit-channel', s.logging.config_audit_channel_id);
     setVal('log-msg-channel', s.logging.log_msg_channel_id);
     setVal('log-member-channel', s.logging.log_member_channel_id);
     setVal('log-voice-channel', s.logging.log_voice_channel_id);
     setVal('log-role-channel', s.logging.log_role_channel_id);
     setVal('stats-member-channel', s.logging.stats_member_channel_id);
+    setVal('stats-member-format', s.logging.stats_member_format || 'Members: {count}');
     setVal('stats-bot-channel', s.logging.stats_bot_channel_id);
+    setVal('stats-bot-format', s.logging.stats_bot_format || 'Bots: {count}');
   }
 
   // 8. Voice & Utilities
   if (s.voice) {
     setVal('jtc-hub-channel', s.voice.jtc_hub_channel_id);
-    setVal('jtc-name-template', s.voice.jtc_name_template);
+    setVal('jtc-name-template', s.voice.jtc_name_template || "{user}'s Lounge");
+    setVal('jtc-user-limit', s.voice.jtc_user_limit || 0);
+    setVal('jtc-category', s.voice.jtc_category_id);
     setVal('util-poll-channel', s.voice.util_poll_channel_id);
-    setVal('util-snipe-limit', s.voice.util_snipe_limit);
+    setVal('util-snipe-limit', s.voice.util_snipe_limit || 25);
+    setChecked('util-afk-toggle', s.voice.util_afk_toggle ?? true);
   }
 
   // Re-sync autocomplete labels
@@ -661,81 +700,120 @@ function populateAllServerSettings(s) {
 
 // --- Collect All Dashboard Settings for Pushing to Server ---
 function collectAllDashboardSettings() {
+  const configAuditChan = document.getElementById('gen-config-audit-channel')?.value || document.getElementById('log-config-audit-channel')?.value;
+
   return {
     general: {
       timezone: document.getElementById('gen-timezone')?.value,
+      prefix: document.getElementById('gen-prefix')?.value || '!',
       changelog_channel_id: document.getElementById('gen-changelog-channel')?.value,
-      config_audit_channel_id: document.getElementById('log-config-audit-channel')?.value
+      config_audit_channel_id: configAuditChan
     },
     moderation: {
       mute_duration_ms: document.getElementById('mod-mute-duration')?.value,
       mod_audit_channel_id: document.getElementById('mod-audit-channel')?.value,
       warn_threshold: parseInt(document.getElementById('mod-warn-threshold')?.value || '3', 10),
-      staff_role_id: document.getElementById('mod-staff-role')?.value
+      staff_role_id: document.getElementById('mod-staff-role')?.value,
+      dm_notifications: document.getElementById('mod-dm-notifications')?.checked ?? true
     },
     automod: {
-      filter_invites: document.getElementById('automod-toggle-invites')?.checked,
-      anti_spam: document.getElementById('automod-toggle-spam')?.checked
+      filter_invites: document.getElementById('automod-toggle-invites')?.checked ?? true,
+      anti_spam: document.getElementById('automod-toggle-spam')?.checked ?? true,
+      max_mentions: parseInt(document.getElementById('automod-max-mentions')?.value || '5', 10),
+      anti_caps_percent: parseInt(document.getElementById('automod-anti-caps')?.value || '70', 10),
+      exempt_role_id: document.getElementById('automod-exempt-role')?.value
     },
     lockdown: {
       channel_id: document.getElementById('lockdown-channel')?.value,
       quarantine_role_id: document.getElementById('lockdown-quarantine-role')?.value,
+      scope: document.getElementById('lockdown-scope')?.value || 'TEXT_CHANNELS',
       message: document.getElementById('lockdown-message-template')?.value
     },
     support: {
       ticket_panel_channel_id: document.getElementById('ticket-panel-channel')?.value,
       ticket_transcript_channel_id: document.getElementById('ticket-transcript-channel')?.value,
       ticket_staff_role_id: document.getElementById('ticket-staff-role')?.value,
+      ticket_admin_role_id: document.getElementById('ticket-admin-role')?.value,
       ticket_auto_close_hours: parseInt(document.getElementById('ticket-auto-close')?.value || '24', 10),
+      ticket_naming_format: document.getElementById('ticket-naming-format')?.value || 'ticket-{username}',
+      ticket_welcome_message: document.getElementById('ticket-welcome-message')?.value,
       report_review_channel_id: document.getElementById('report-review-channel')?.value,
       report_ping_role_id: document.getElementById('report-ping-role')?.value,
-      report_anonymous: document.getElementById('report-anonymous-toggle')?.checked,
+      report_anonymous: document.getElementById('report-anonymous-toggle')?.checked ?? true,
+      report_require_reason: document.getElementById('report-require-reason')?.checked ?? true,
       app_submission_channel_id: document.getElementById('app-submission-channel')?.value,
       app_reviewer_role_id: document.getElementById('app-reviewer-role')?.value,
+      app_approved_role_id: document.getElementById('app-approved-role')?.value,
+      app_q1: document.getElementById('app-q1')?.value,
+      app_q2: document.getElementById('app-q2')?.value,
       appeal_review_channel_id: document.getElementById('appeal-review-channel')?.value,
       appeal_reviewer_role_id: document.getElementById('appeal-reviewer-role')?.value,
+      appeal_cooldown_days: parseInt(document.getElementById('appeal-cooldown-days')?.value || '30', 10),
       faq_forum_channel_id: document.getElementById('faq-forum-channel')?.value,
-      faq_auto_reply_mode: document.getElementById('faq-auto-reply-mode')?.value
+      faq_auto_reply_mode: document.getElementById('faq-auto-reply-mode')?.value || 'ENABLED'
     },
     feeds: {
       directory_channel_id: document.getElementById('feed-directory-channel')?.value,
-      refresh_interval: parseInt(document.getElementById('feed-refresh-interval')?.value || '120', 10)
+      refresh_interval: parseInt(document.getElementById('feed-refresh-interval')?.value || '120', 10),
+      message_template: document.getElementById('feed-message-template')?.value
     },
     onboarding: {
       welcome_channel_id: document.getElementById('welcome-channel')?.value,
       welcome_role_id: document.getElementById('welcome-role')?.value,
       welcome_embed_title: document.getElementById('welcome-embed-title')?.value,
       welcome_dm_enabled: document.getElementById('welcome-dm-toggle')?.value === 'true',
+      welcome_banner_url: document.getElementById('welcome-banner-url')?.value,
+      welcome_embed_color: document.getElementById('welcome-embed-color')?.value,
       welcome_message: document.getElementById('welcome-message-template')?.value,
       welcome_embed_desc: document.getElementById('welcome-embed-desc')?.value,
       birthday_channel_id: document.getElementById('birthday-channel')?.value,
       birthday_role_id: document.getElementById('birthday-role')?.value,
-      birthday_message: document.getElementById('birthday-message-template')?.value
+      birthday_message: document.getElementById('birthday-message-template')?.value,
+      role_panel_channel_id: document.getElementById('role-panel-channel')?.value,
+      role_panel_mode: document.getElementById('role-panel-mode')?.value || 'BUTTONS',
+      temprole_max_hours: parseInt(document.getElementById('temprole-max-hours')?.value || '168', 10)
     },
     community: {
       starboard_channel_id: document.getElementById('starboard-channel')?.value,
       starboard_threshold: parseInt(document.getElementById('starboard-threshold')?.value || '3', 10),
       starboard_emoji: document.getElementById('starboard-emoji')?.value || '⭐',
+      starboard_self_stars: document.getElementById('starboard-self-stars')?.checked ?? false,
+      starboard_allow_nsfw: document.getElementById('starboard-allow-nsfw')?.checked ?? false,
       leveling_channel_id: document.getElementById('leveling-channel')?.value,
       leveling_multiplier_role_id: document.getElementById('leveling-multiplier-role')?.value,
+      leveling_xp_rate: parseInt(document.getElementById('leveling-xp-rate')?.value || '15', 10),
+      leveling_reward_5: document.getElementById('leveling-reward-5')?.value,
+      leveling_reward_10: document.getElementById('leveling-reward-10')?.value,
+      leveling_reward_25: document.getElementById('leveling-reward-25')?.value,
       leveling_message: document.getElementById('leveling-message-template')?.value,
       suggest_channel_id: document.getElementById('suggest-channel')?.value,
-      suggest_review_channel_id: document.getElementById('suggest-review-channel')?.value
+      suggest_review_channel_id: document.getElementById('suggest-review-channel')?.value,
+      suggest_auto_thread: document.getElementById('suggest-auto-thread')?.checked ?? true,
+      suggest_anonymous: document.getElementById('suggest-anonymous')?.checked ?? false,
+      giveaway_channel_id: document.getElementById('giveaway-channel')?.value,
+      giveaway_manager_role_id: document.getElementById('giveaway-manager-role')?.value,
+      games_counting_channel_id: document.getElementById('games-counting-channel')?.value,
+      games_trivia_channel_id: document.getElementById('games-trivia-channel')?.value
     },
     logging: {
-      config_audit_channel_id: document.getElementById('log-config-audit-channel')?.value,
+      config_audit_channel_id: configAuditChan,
       log_msg_channel_id: document.getElementById('log-msg-channel')?.value,
       log_member_channel_id: document.getElementById('log-member-channel')?.value,
       log_voice_channel_id: document.getElementById('log-voice-channel')?.value,
       log_role_channel_id: document.getElementById('log-role-channel')?.value,
       stats_member_channel_id: document.getElementById('stats-member-channel')?.value,
-      stats_bot_channel_id: document.getElementById('stats-bot-channel')?.value
+      stats_member_format: document.getElementById('stats-member-format')?.value || 'Members: {count}',
+      stats_bot_channel_id: document.getElementById('stats-bot-channel')?.value,
+      stats_bot_format: document.getElementById('stats-bot-format')?.value || 'Bots: {count}'
     },
     voice: {
       jtc_hub_channel_id: document.getElementById('jtc-hub-channel')?.value,
-      jtc_name_template: document.getElementById('jtc-name-template')?.value,
+      jtc_name_template: document.getElementById('jtc-name-template')?.value || "{user}'s Lounge",
+      jtc_user_limit: parseInt(document.getElementById('jtc-user-limit')?.value || '0', 10),
+      jtc_category_id: document.getElementById('jtc-category')?.value,
       util_poll_channel_id: document.getElementById('util-poll-channel')?.value,
-      util_snipe_limit: parseInt(document.getElementById('util-snipe-limit')?.value || '25', 10)
+      util_snipe_limit: parseInt(document.getElementById('util-snipe-limit')?.value || '25', 10),
+      util_afk_toggle: document.getElementById('util-afk-toggle')?.checked ?? true
     }
   };
 }

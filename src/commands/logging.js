@@ -192,6 +192,18 @@ module.exports = {
     )
     .addSubcommand((subcommand) =>
       subcommand
+        .setName('config-channel')
+        .setDescription('Set or clear the dedicated channel for bot configuration audit logs.')
+        .addChannelOption((option) =>
+          option
+            .setName('channel')
+            .setDescription('Channel to receive live configuration change alerts (leave blank to disable).')
+            .addChannelTypes(ChannelType.GuildText)
+            .setRequired(false)
+        )
+    )
+    .addSubcommand((subcommand) =>
+      subcommand
         .setName('reset')
         .setDescription('Reset all logging routes, channels, and event overrides.')
     ),
@@ -215,6 +227,29 @@ module.exports = {
       const embed = createSuccessEmbed(
         'Logging Configuration Reset',
         'All logging channels, module routes, and event overrides have been wiped.\nYou can now configure logging from scratch using `/logging setup` or the Quick Setup wizard.'
+      );
+      await replyPrivate(interaction, { embeds: [embed] });
+      return;
+    }
+
+    if (subcommand === 'config-channel') {
+      const channel = interaction.options.getChannel('channel');
+      const { configAuditService } = require('../modules/logging/configAuditService');
+      await configAuditService.setConfigAuditChannel(interaction.guildId, channel?.id || null);
+      await ctx.logger.writeAudit({
+        guildId: interaction.guildId,
+        actorUserId: interaction.user.id,
+        actionKey: ActionKeys.LoggingConfigure,
+        targetType: 'GuildConfig',
+        targetId: interaction.guildId,
+        summary: channel ? `Dedicated bot config audit channel set to #${channel.name}.` : 'Dedicated bot config audit channel disabled.'
+      });
+
+      const embed = createSuccessEmbed(
+        'Bot Configuration Audit Channel Updated',
+        channel
+          ? `All bot settings changes made on the Web Dashboard or via Discord commands will now be logged into <#${channel.id}>.`
+          : 'Dedicated bot configuration audit logging to Discord has been disabled.'
       );
       await replyPrivate(interaction, { embeds: [embed] });
       return;
