@@ -485,10 +485,10 @@ async function handleDashboardRequest(req, res, client = null) {
   }
 
   // --- API: Server Configuration ---
-  if (pathname.startsWith('/api/guilds/')) {
-    const parts = pathname.split('/').filter(Boolean);
-    const guildId = parts[1];
-    const subRoute = parts[2];
+  const guildMatch = pathname.match(/^\/api\/guilds\/([^/]+)\/([^/]+)/);
+  if (guildMatch) {
+    const guildId = guildMatch[1];
+    const subRoute = guildMatch[2];
 
     const session = sessions.get(sessionId);
     if (!session) {
