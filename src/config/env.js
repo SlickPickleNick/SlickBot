@@ -42,6 +42,7 @@ if (databaseUrl) {
 const env = {
   DISCORD_TOKEN: readOptionalVariable('DISCORD_TOKEN', [], ''),
   DISCORD_CLIENT_ID: readOptionalVariable('DISCORD_CLIENT_ID', ['CLIENT_ID'], ''),
+  DISCORD_CLIENT_SECRET: readOptionalVariable('DISCORD_CLIENT_SECRET', ['CLIENT_SECRET', 'DISCORD_SECRET', 'DISCORD_OAUTH_SECRET', 'BOT_CLIENT_SECRET'], ''),
   DISCORD_GUILD_ID: readOptionalVariable('DISCORD_GUILD_ID', ['GUILD_ID']),
   DATABASE_URL: databaseUrl,
   AUTO_DEPLOY_COMMANDS: readOptionalVariable('AUTO_DEPLOY_COMMANDS', [], 'true'),

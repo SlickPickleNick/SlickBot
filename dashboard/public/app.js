@@ -306,24 +306,25 @@ function checkUrlErrors() {
   if (!error || !banner) return;
 
   if (error === 'oauth_not_configured') {
+    const missingVar = urlParams.get('missing') || 'DISCORD_CLIENT_SECRET';
     banner.className = 'alert-banner';
     banner.style.display = 'flex';
     banner.innerHTML = `
       <div class="alert-banner-title">
-        <span>⚠️ Discord OAuth2 Configuration Required</span>
+        <span>⚠️ Discord OAuth2 Configuration Required: Missing <code>${escapeHtml(missingVar)}</code></span>
       </div>
       <div class="alert-banner-body">
-        To use real Discord login, you must add your Discord Client Secret to Railway and configure the Redirect URI in the Discord Developer Portal:
+        The bot cannot initiate Discord OAuth login because <code>${escapeHtml(missingVar)}</code> is missing from your environment variables.
         <ol style="margin-left: 20px; margin-top: 8px;">
-          <li>Go to <strong>Railway &rarr; Variables</strong> and set <code>DISCORD_CLIENT_SECRET</code>.</li>
-          <li>Go to <a href="https://discord.com/developers/applications" target="_blank" style="color:#93c5fd;text-decoration:underline;">Discord Developer Portal</a> &rarr; Your App &rarr; <strong>OAuth2 &rarr; Redirects</strong>.</li>
-          <li>Add this exact Redirect URL:</li>
+          <li>Open your <strong>Railway Dashboard &rarr; Your SlickBot Service &rarr; Variables</strong> tab.</li>
+          <li>Add <code>${escapeHtml(missingVar)}</code> = <em>(Paste your secret from Discord Developer Portal)</em>.</li>
+          <li>Ensure the Redirect URL below is added under <strong>OAuth2 &rarr; Redirects</strong> in Discord:</li>
         </ol>
         <div class="alert-code-row">
           <code>${escapeHtml(redirectUri)}</code>
         </div>
         <p style="margin-top: 8px;">
-          <em>Want to test right now without secrets? Click <strong>"Try Sandbox Demo Mode"</strong> below!</em>
+          <em>Want to test the dashboard right now without API keys? Click <strong>"Try Sandbox Demo Mode"</strong> below!</em>
         </p>
       </div>
     `;

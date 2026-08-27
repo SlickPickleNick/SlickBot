@@ -13,10 +13,20 @@ const { query } = require('../src/services/db');
 const PORT = process.env.DASHBOARD_PORT || process.env.PORT || 3000;
 const HOST = process.env.DASHBOARD_HOST || '0.0.0.0';
 const PUBLIC_DIR = path.resolve(__dirname, 'public');
-
-const DISCORD_CLIENT_ID = process.env.DISCORD_CLIENT_ID || process.env.CLIENT_ID || env?.DISCORD_CLIENT_ID || '';
-const DISCORD_CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET || process.env.CLIENT_SECRET || '';
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+
+// Dynamic credential resolution supporting all common environment variable naming conventions
+function getDiscordCredentials() {
+  const clientId = process.env.DISCORD_CLIENT_ID || process.env.CLIENT_ID || env?.DISCORD_CLIENT_ID || '';
+  const clientSecret = process.env.DISCORD_CLIENT_SECRET || 
+                       process.env.CLIENT_SECRET || 
+                       process.env.DISCORD_SECRET || 
+                       process.env.DISCORD_OAUTH_SECRET || 
+                       process.env.BOT_CLIENT_SECRET || 
+                       env?.DISCORD_CLIENT_SECRET || 
+                       '';
+  return { clientId, clientSecret };
+}
 
 // In-memory sessions store (sessionId -> sessionData) with TTL cleanup
 const sessions = new Map();
@@ -212,6 +222,7 @@ async function handleDashboardRequest(req, res, client = null) {
   const cookies = parseCookies(req);
   const sessionId = cookies.slickbot_session || req.headers['x-session-id'];
   const baseUrl = getBaseUrl(req);
+  const { clientId, clientSecret } = getDiscordCredentials();
 
   // Security Headers
   res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -245,13 +256,13 @@ async function handleDashboardRequest(req, res, client = null) {
         ping: client?.ws?.ping ?? 24,
         guilds: client?.guilds?.cache?.size ?? 1,
         uptimeSeconds: Math.floor(process.uptime()),
-        clientId: DISCORD_CLIENT_ID || '123456789012345678'
+        clientId: clientId || '123456789012345678'
       },
       database: {
         connected: dbCheck,
         engine: 'PostgreSQL'
       },
-      authConfigured: Boolean(DISCORD_CLIENT_ID && DISCORD_CLIENT_SECRET),
+      authConfigured: Boolean(clientId && clientSecret),
       redirectUri: `${baseUrl}/api/auth/callback`,
       timestamp: new Date().toISOString()
     }, null, 2));
@@ -267,12 +278,13 @@ async function handleDashboardRequest(req, res, client = null) {
   // --- API: Discord OAuth2 Login ---
   if (pathname === '/api/auth/login') {
     const redirectUri = `${baseUrl}/api/auth/callback`;
-    if (!DISCORD_CLIENT_ID || !DISCORD_CLIENT_SECRET) {
-      res.writeHead(302, { Location: `/?error=oauth_not_configured&redirect_uri=${encodeURIComponent(redirectUri)}` });
+    if (!clientId || !clientSecret) {
+      const missing = !clientId ? 'DISCORD_CLIENT_ID' : 'DISCORD_CLIENT_SECRET';
+      res.writeHead(302, { Location: `/?error=oauth_not_configured&missing=${missing}&redirect_uri=${encodeURIComponent(redirectUri)}` });
       res.end();
       return;
     }
-    const discordAuthUrl = `https://discord.com/api/oauth2/authorize?client_id=${encodeURIComponent(DISCORD_CLIENT_ID)}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=identify%20guilds`;
+    const discordAuthUrl = `https://discord.com/api/oauth2/authorize?client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=identify%20guilds`;
     res.writeHead(302, { Location: discordAuthUrl });
     res.end();
     return;
@@ -291,8 +303,8 @@ async function handleDashboardRequest(req, res, client = null) {
 
     try {
       const tokenPayload = querystring.stringify({
-        client_id: DISCORD_CLIENT_ID,
-        client_secret: DISCORD_CLIENT_SECRET,
+        client_id: clientId,
+        client_secret: clientSecret,
         grant_type: 'authorization_code',
         code,
         redirect_uri: redirectUri
@@ -431,7 +443,7 @@ async function handleDashboardRequest(req, res, client = null) {
       .filter(g => g.owner || hasManagePermission(g.permissions))
       .map(g => {
         const isInstalled = botInstalledSet.has(g.id);
-        const inviteUrl = `https://discord.com/oauth2/authorize?client_id=${encodeURIComponent(DISCORD_CLIENT_ID || '123456789012345678')}&permissions=8&scope=bot%20applications.commands&guild_id=${encodeURIComponent(g.id)}&response_type=code&redirect_uri=${encodeURIComponent(`${baseUrl}/api/auth/callback`)}`;
+        const inviteUrl = `https://discord.com/oauth2/authorize?client_id=${encodeURIComponent(clientId || '123456789012345678')}&permissions=8&scope=bot%20applications.commands&guild_id=${encodeURIComponent(g.id)}&response_type=code&redirect_uri=${encodeURIComponent(`${baseUrl}/api/auth/callback`)}`;
         
         return {
           id: g.id,
@@ -449,7 +461,7 @@ async function handleDashboardRequest(req, res, client = null) {
       authenticated: true,
       user: session.user,
       guilds: manageableGuilds,
-      clientId: DISCORD_CLIENT_ID || '123456789012345678'
+      clientId: clientId || '123456789012345678'
     }));
     return;
   }
