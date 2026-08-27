@@ -80,6 +80,167 @@ function populateAllDropdowns(channels = [], roles = []) {
     selectEl.innerHTML = html;
     if (currentValue) selectEl.value = currentValue;
   });
+
+  // Enhance with live searchable autocomplete dropdown comboboxes
+  initSearchableSelects();
+}
+
+// --- Interactive Searchable Autocomplete Combobox ---
+function initSearchableSelects() {
+  document.querySelectorAll('select.channel-select, select.role-select').forEach(selectEl => {
+    const targetKey = selectEl.id || selectEl.name || Math.random().toString(36).substring(7);
+    let wrapper = selectEl.parentElement.querySelector(`.searchable-select-wrapper[data-target-id="${targetKey}"]`);
+    const isRole = selectEl.classList.contains('role-select');
+
+    if (!wrapper) {
+      wrapper = document.createElement('div');
+      wrapper.className = 'searchable-select-wrapper';
+      wrapper.setAttribute('data-target-id', targetKey);
+
+      const container = document.createElement('div');
+      container.className = 'searchable-select-input-container';
+
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'searchable-select-input';
+      input.placeholder = isRole ? 'Search or select role (e.g. @Mod)...' : 'Search or select channel (e.g. #stream)...';
+      input.autocomplete = 'off';
+
+      const controls = document.createElement('div');
+      controls.className = 'searchable-select-controls';
+
+      const clearBtn = document.createElement('button');
+      clearBtn.type = 'button';
+      clearBtn.className = 'searchable-select-clear';
+      clearBtn.innerHTML = '&times;';
+      clearBtn.title = 'Clear selection';
+
+      const arrow = document.createElement('span');
+      arrow.className = 'searchable-select-arrow';
+      arrow.innerHTML = '&#9660;';
+
+      controls.appendChild(clearBtn);
+      controls.appendChild(arrow);
+      container.appendChild(input);
+      container.appendChild(controls);
+
+      const dropdown = document.createElement('div');
+      dropdown.className = 'searchable-select-dropdown';
+
+      wrapper.appendChild(container);
+      wrapper.appendChild(dropdown);
+
+      // Hide raw native select while preserving DOM accessibility
+      selectEl.style.display = 'none';
+      selectEl.parentNode.insertBefore(wrapper, selectEl.nextSibling);
+
+      const renderOptions = (filterText = '') => {
+        dropdown.innerHTML = '';
+        const options = Array.from(selectEl.options);
+        const query = filterText.toLowerCase().trim();
+        const filtered = options.filter(opt => !query || opt.text.toLowerCase().includes(query) || opt.value.toLowerCase().includes(query));
+
+        if (filtered.length === 0) {
+          dropdown.innerHTML = `<div class="searchable-select-empty">No matching ${isRole ? 'roles' : 'channels'} found</div>`;
+          return;
+        }
+
+        filtered.forEach(opt => {
+          const item = document.createElement('div');
+          item.className = 'searchable-select-option' + (opt.value === selectEl.value ? ' selected' : '');
+          item.setAttribute('data-value', opt.value);
+          
+          let icon = isRole ? '🏷️' : '#';
+          if (opt.text.includes('[Voice]')) icon = '🔊';
+          if (opt.text.includes('[Forum]')) icon = '💬';
+          if (opt.text.includes('[Category]')) icon = '📂';
+          if (!opt.value) icon = '🚫';
+
+          item.innerHTML = `
+            <span class="option-label">
+              <span>${icon}</span>
+              <span>${escapeHtml(opt.text)}</span>
+            </span>
+          `;
+
+          item.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            selectOption(opt.value, opt.text);
+          });
+
+          dropdown.appendChild(item);
+        });
+      };
+
+      const selectOption = (val, text) => {
+        selectEl.value = val;
+        input.value = val ? text : '';
+        clearBtn.style.display = val ? 'inline-block' : 'none';
+        wrapper.classList.remove('open');
+        selectEl.dispatchEvent(new Event('change', { bubbles: true }));
+      };
+
+      input.addEventListener('focus', () => {
+        wrapper.classList.add('open');
+        renderOptions(input.value);
+      });
+
+      input.addEventListener('input', () => {
+        wrapper.classList.add('open');
+        renderOptions(input.value);
+      });
+
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          wrapper.classList.remove('open');
+        } else if (e.key === 'Enter') {
+          e.preventDefault();
+          const firstOption = dropdown.querySelector('.searchable-select-option');
+          if (firstOption) {
+            firstOption.dispatchEvent(new MouseEvent('mousedown'));
+          }
+        }
+      });
+
+      clearBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        selectOption('', '');
+      });
+
+      document.addEventListener('click', (e) => {
+        if (!wrapper.contains(e.target)) {
+          wrapper.classList.remove('open');
+          const selectedOpt = selectEl.options[selectEl.selectedIndex];
+          input.value = (selectEl.value && selectedOpt && selectEl.value !== '') ? selectedOpt.text : '';
+          clearBtn.style.display = (selectEl.value && selectEl.value !== '') ? 'inline-block' : 'none';
+        }
+      });
+    }
+
+    // Sync input text with current select option
+    const input = wrapper.querySelector('.searchable-select-input');
+    const clearBtn = wrapper.querySelector('.searchable-select-clear');
+    const selectedOpt = selectEl.options[selectEl.selectedIndex];
+    if (input) {
+      input.value = (selectEl.value && selectedOpt && selectEl.value !== '') ? selectedOpt.text : '';
+    }
+    if (clearBtn) {
+      clearBtn.style.display = (selectEl.value && selectEl.value !== '') ? 'inline-block' : 'none';
+    }
+  });
+}
+
+// Helper: Insert Placeholders into Textareas
+function insertPlaceholder(textareaId, tag) {
+  const el = document.getElementById(textareaId);
+  if (!el) return;
+  const start = el.selectionStart || el.value.length;
+  const end = el.selectionEnd || el.value.length;
+  el.value = el.value.substring(0, start) + tag + el.value.substring(end);
+  el.focus();
+  el.selectionStart = el.selectionEnd = start + tag.length;
+  el.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
 // Helper: Format Channel Badge
@@ -121,12 +282,7 @@ async function refreshServerData() {
       const data = await res.json();
       currentGuildConfig = data;
       populateAllDropdowns(data.channels || [], data.roles || []);
-      
-      const configAuditSelect = document.getElementById('log-config-audit-channel');
-      if (configAuditSelect && data.config?.config_audit_channel_id) {
-        configAuditSelect.value = data.config.config_audit_channel_id;
-      }
-
+      populateAllServerSettings(data.settings || {});
       renderSwitchboard(data.modules || []);
       loadFeeds();
       loadAuditLogs();
@@ -358,17 +514,125 @@ async function loadGuildConfig(guildId) {
     }
 
     populateAllDropdowns(data.channels || [], data.roles || []);
-    
-    const configAuditSelect = document.getElementById('log-config-audit-channel');
-    if (configAuditSelect && data.config?.config_audit_channel_id) {
-      configAuditSelect.value = data.config.config_audit_channel_id;
-    }
-
+    populateAllServerSettings(data.settings || {});
     renderSwitchboard(data.modules || []);
     loadAuditLogs();
   } catch (err) {
     if (nameEl) nameEl.textContent = 'Error: ' + err.message;
   }
+}
+
+// Populate all form controls and message customizers with current active server configuration
+function populateAllServerSettings(s) {
+  if (!s) return;
+
+  // Helper setter
+  const setVal = (id, val) => {
+    const el = document.getElementById(id);
+    if (el && val !== undefined && val !== null) {
+      el.value = val;
+    }
+  };
+  const setChecked = (id, val) => {
+    const el = document.getElementById(id);
+    if (el && typeof val === 'boolean') {
+      el.checked = val;
+    }
+  };
+
+  // 1. General
+  if (s.general) {
+    setVal('gen-timezone', s.general.timezone);
+    setVal('gen-changelog-channel', s.general.changelog_channel_id);
+    setVal('log-config-audit-channel', s.general.config_audit_channel_id);
+  }
+
+  // 2. Moderation & Safety
+  if (s.moderation) {
+    setVal('mod-mute-duration', s.moderation.mute_duration_ms);
+    setVal('mod-audit-channel', s.moderation.mod_audit_channel_id);
+    setVal('mod-warn-threshold', s.moderation.warn_threshold);
+    setVal('mod-staff-role', s.moderation.staff_role_id);
+  }
+  if (s.automod) {
+    setChecked('automod-toggle-invites', s.automod.filter_invites);
+    setChecked('automod-toggle-spam', s.automod.anti_spam);
+  }
+  if (s.lockdown) {
+    setVal('lockdown-channel', s.lockdown.channel_id);
+    setVal('lockdown-quarantine-role', s.lockdown.quarantine_role_id);
+    setVal('lockdown-message-template', s.lockdown.message);
+  }
+
+  // 3. Support & Workflows
+  if (s.support) {
+    setVal('ticket-panel-channel', s.support.ticket_panel_channel_id);
+    setVal('ticket-transcript-channel', s.support.ticket_transcript_channel_id);
+    setVal('ticket-staff-role', s.support.ticket_staff_role_id);
+    setVal('ticket-auto-close', s.support.ticket_auto_close_hours);
+    setVal('report-review-channel', s.support.report_review_channel_id);
+    setVal('report-ping-role', s.support.report_ping_role_id);
+    setChecked('report-anonymous-toggle', s.support.report_anonymous);
+    setVal('app-submission-channel', s.support.app_submission_channel_id);
+    setVal('app-reviewer-role', s.support.app_reviewer_role_id);
+    setVal('appeal-review-channel', s.support.appeal_review_channel_id);
+    setVal('appeal-reviewer-role', s.support.appeal_reviewer_role_id);
+    setVal('faq-forum-channel', s.support.faq_forum_channel_id);
+    setVal('faq-auto-reply-mode', s.support.faq_auto_reply_mode);
+  }
+
+  // 4. Feeds
+  if (s.feeds) {
+    setVal('feed-directory-channel', s.feeds.directory_channel_id);
+    setVal('feed-refresh-interval', s.feeds.refresh_interval);
+  }
+
+  // 5. Onboarding & Member Greetings
+  if (s.onboarding) {
+    setVal('welcome-channel', s.onboarding.welcome_channel_id);
+    setVal('welcome-role', s.onboarding.welcome_role_id);
+    setVal('welcome-embed-title', s.onboarding.welcome_embed_title);
+    setVal('welcome-dm-toggle', String(s.onboarding.welcome_dm_enabled));
+    setVal('welcome-message-template', s.onboarding.welcome_message);
+    setVal('welcome-embed-desc', s.onboarding.welcome_embed_desc);
+    setVal('birthday-channel', s.onboarding.birthday_channel_id);
+    setVal('birthday-role', s.onboarding.birthday_role_id);
+    setVal('birthday-message-template', s.onboarding.birthday_message);
+  }
+
+  // 6. Community, Leveling & Starboard
+  if (s.community) {
+    setVal('starboard-channel', s.community.starboard_channel_id);
+    setVal('starboard-threshold', s.community.starboard_threshold);
+    setVal('starboard-emoji', s.community.starboard_emoji);
+    setVal('leveling-channel', s.community.leveling_channel_id);
+    setVal('leveling-multiplier-role', s.community.leveling_multiplier_role_id);
+    setVal('leveling-message-template', s.community.leveling_message);
+    setVal('suggest-channel', s.community.suggest_channel_id);
+    setVal('suggest-review-channel', s.community.suggest_review_channel_id);
+  }
+
+  // 7. Audit Logging & Stats
+  if (s.logging) {
+    setVal('log-config-audit-channel', s.logging.config_audit_channel_id);
+    setVal('log-msg-channel', s.logging.log_msg_channel_id);
+    setVal('log-member-channel', s.logging.log_member_channel_id);
+    setVal('log-voice-channel', s.logging.log_voice_channel_id);
+    setVal('log-role-channel', s.logging.log_role_channel_id);
+    setVal('stats-member-channel', s.logging.stats_member_channel_id);
+    setVal('stats-bot-channel', s.logging.stats_bot_channel_id);
+  }
+
+  // 8. Voice & Utilities
+  if (s.voice) {
+    setVal('jtc-hub-channel', s.voice.jtc_hub_channel_id);
+    setVal('jtc-name-template', s.voice.jtc_name_template);
+    setVal('util-poll-channel', s.voice.util_poll_channel_id);
+    setVal('util-snipe-limit', s.voice.util_snipe_limit);
+  }
+
+  // Re-sync autocomplete labels
+  initSearchableSelects();
 }
 
 // --- Render Master Switchboard for all 29 Modules ---
@@ -567,32 +831,176 @@ async function loadStarboard() {
       if (ch && data.channel_id) ch.value = data.channel_id;
       if (th && data.star_threshold) th.value = data.star_threshold;
       if (em && data.star_emoji) em.value = data.star_emoji;
+      initSearchableSelects();
     }
   } catch (err) {
     console.error('Starboard fetch error:', err);
   }
 }
 
-async function saveStarboardSettings() {
+// --- Unified Settings Save Handlers ---
+async function sendCategorySettings(category, payload) {
   if (!activeGuildId) return;
-  const channelId = document.getElementById('starboard-channel')?.value;
-  const threshold = parseInt(document.getElementById('starboard-threshold')?.value || '3', 10);
-  const emoji = document.getElementById('starboard-emoji')?.value || '⭐';
+  showSaveIndicator('Saving changes...');
 
-  showSaveIndicator('Saving...');
   try {
-    const res = await fetch(`/api/guilds/${encodeURIComponent(activeGuildId)}/starboard`, {
+    const res = await fetch(`/api/guilds/${encodeURIComponent(activeGuildId)}/save-settings/${encodeURIComponent(category)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ enabled: true, channelId, threshold, emoji })
+      body: JSON.stringify(payload)
     });
     if (res.ok) {
-      showSaveIndicator('Starboard settings saved ✓');
+      showSaveIndicator('Settings saved ✓');
       loadAuditLogs();
+    } else {
+      showSaveIndicator('Error saving');
     }
   } catch (err) {
-    showSaveIndicator('Error saving');
+    showSaveIndicator('Network error');
   }
+}
+
+function saveGeneralSettings() {
+  sendCategorySettings('general', {
+    timezone: document.getElementById('gen-timezone')?.value,
+    changelogChannelId: document.getElementById('gen-changelog-channel')?.value
+  });
+}
+
+function saveModerationSettings() {
+  sendCategorySettings('safety', {
+    muteDuration: document.getElementById('mod-mute-duration')?.value,
+    auditChannelId: document.getElementById('mod-audit-channel')?.value,
+    warnThreshold: parseInt(document.getElementById('mod-warn-threshold')?.value || '3', 10),
+    staffRoleId: document.getElementById('mod-staff-role')?.value
+  });
+}
+
+function saveAutoModSettings() {
+  sendCategorySettings('safety', {
+    filterInvites: document.getElementById('automod-toggle-invites')?.checked,
+    antiSpam: document.getElementById('automod-toggle-spam')?.checked
+  });
+}
+
+function saveLockdownSettings() {
+  sendCategorySettings('safety', {
+    lockdownChannelId: document.getElementById('lockdown-channel')?.value,
+    quarantineRoleId: document.getElementById('lockdown-quarantine-role')?.value,
+    lockdownMessage: document.getElementById('lockdown-message-template')?.value
+  });
+}
+
+function saveTicketSettings() {
+  sendCategorySettings('support', {
+    ticketPanelChannelId: document.getElementById('ticket-panel-channel')?.value,
+    ticketTranscriptChannelId: document.getElementById('ticket-transcript-channel')?.value,
+    ticketStaffRoleId: document.getElementById('ticket-staff-role')?.value,
+    ticketAutoCloseHours: parseInt(document.getElementById('ticket-auto-close')?.value || '24', 10)
+  });
+}
+
+function saveReportSettings() {
+  sendCategorySettings('support', {
+    reportReviewChannelId: document.getElementById('report-review-channel')?.value,
+    reportPingRoleId: document.getElementById('report-ping-role')?.value,
+    reportAnonymous: document.getElementById('report-anonymous-toggle')?.checked
+  });
+}
+
+function saveApplicationSettings() {
+  sendCategorySettings('support', {
+    appSubmissionChannelId: document.getElementById('app-submission-channel')?.value,
+    appReviewerRoleId: document.getElementById('app-reviewer-role')?.value
+  });
+}
+
+function saveAppealSettings() {
+  sendCategorySettings('support', {
+    appealReviewChannelId: document.getElementById('appeal-review-channel')?.value,
+    appealReviewerRoleId: document.getElementById('appeal-reviewer-role')?.value
+  });
+}
+
+function saveFaqSettings() {
+  sendCategorySettings('support', {
+    faqForumChannelId: document.getElementById('faq-forum-channel')?.value,
+    faqAutoReplyMode: document.getElementById('faq-auto-reply-mode')?.value
+  });
+}
+
+function saveFeedDirectorySettings() {
+  sendCategorySettings('media', {
+    directoryChannelId: document.getElementById('feed-directory-channel')?.value,
+    refreshInterval: parseInt(document.getElementById('feed-refresh-interval')?.value || '120', 10)
+  });
+}
+
+function saveWelcomeSettings() {
+  sendCategorySettings('onboarding', {
+    welcomeChannelId: document.getElementById('welcome-channel')?.value,
+    welcomeRoleId: document.getElementById('welcome-role')?.value,
+    welcomeTitle: document.getElementById('welcome-embed-title')?.value,
+    welcomeDmEnabled: document.getElementById('welcome-dm-toggle')?.value === 'true',
+    welcomeMessage: document.getElementById('welcome-message-template')?.value,
+    welcomeDesc: document.getElementById('welcome-embed-desc')?.value
+  });
+}
+
+function saveBirthdaySettings() {
+  sendCategorySettings('onboarding', {
+    birthdayChannelId: document.getElementById('birthday-channel')?.value,
+    birthdayRoleId: document.getElementById('birthday-role')?.value,
+    birthdayMessage: document.getElementById('birthday-message-template')?.value
+  });
+}
+
+function saveStarboardSettings() {
+  sendCategorySettings('community', {
+    starboardChannelId: document.getElementById('starboard-channel')?.value,
+    starboardThreshold: parseInt(document.getElementById('starboard-threshold')?.value || '3', 10),
+    starboardEmoji: document.getElementById('starboard-emoji')?.value || '⭐'
+  });
+}
+
+function saveLevelingSettings() {
+  sendCategorySettings('community', {
+    levelingChannelId: document.getElementById('leveling-channel')?.value,
+    levelingMultiplierRoleId: document.getElementById('leveling-multiplier-role')?.value,
+    levelingMessage: document.getElementById('leveling-message-template')?.value
+  });
+}
+
+function saveSuggestionSettings() {
+  sendCategorySettings('community', {
+    suggestChannelId: document.getElementById('suggest-channel')?.value,
+    suggestReviewChannelId: document.getElementById('suggest-review-channel')?.value
+  });
+}
+
+function saveLoggingSettings() {
+  sendCategorySettings('logging', {
+    logMsgChannelId: document.getElementById('log-msg-channel')?.value,
+    logMemberChannelId: document.getElementById('log-member-channel')?.value,
+    logVoiceChannelId: document.getElementById('log-voice-channel')?.value,
+    logRoleChannelId: document.getElementById('log-role-channel')?.value
+  });
+}
+
+function saveServerStatsSettings() {
+  sendCategorySettings('logging', {
+    statsMemberChannelId: document.getElementById('stats-member-channel')?.value,
+    statsBotChannelId: document.getElementById('stats-bot-channel')?.value
+  });
+}
+
+function saveVoiceSettings() {
+  sendCategorySettings('voice', {
+    jtcHubChannelId: document.getElementById('jtc-hub-channel')?.value,
+    jtcNameTemplate: document.getElementById('jtc-name-template')?.value,
+    utilPollChannelId: document.getElementById('util-poll-channel')?.value,
+    utilSnipeLimit: parseInt(document.getElementById('util-snipe-limit')?.value || '25', 10)
+  });
 }
 
 // --- Bot Configuration Audit Logging ---
@@ -658,7 +1066,6 @@ async function saveConfigAuditChannel() {
   }
 }
 
-// Simple Settings Handlers
 function showSaveIndicator(msg) {
   const el = document.getElementById('save-status-indicator');
   if (el) {
@@ -666,24 +1073,6 @@ function showSaveIndicator(msg) {
     setTimeout(() => { if (el.textContent === msg) el.textContent = ''; }, 3000);
   }
 }
-
-function saveGeneralSettings() { showSaveIndicator('General settings saved ✓'); }
-function saveModerationSettings() { showSaveIndicator('Moderation settings saved ✓'); }
-function saveAutoModSettings() { showSaveIndicator('AutoMod rules saved ✓'); }
-function saveLockdownSettings() { showSaveIndicator('Lockdown settings saved ✓'); }
-function saveTicketSettings() { showSaveIndicator('Support ticket settings saved ✓'); }
-function saveReportSettings() { showSaveIndicator('Report workflow saved ✓'); }
-function saveApplicationSettings() { showSaveIndicator('Applications settings saved ✓'); }
-function saveAppealSettings() { showSaveIndicator('Appeals settings saved ✓'); }
-function saveFaqSettings() { showSaveIndicator('FAQ settings saved ✓'); }
-function saveFeedDirectorySettings() { showSaveIndicator('Live directory hub saved ✓'); }
-function saveWelcomeSettings() { showSaveIndicator('Onboarding settings saved ✓'); }
-function saveBirthdaySettings() { showSaveIndicator('Birthday calendar saved ✓'); }
-function saveLevelingSettings() { showSaveIndicator('Leveling settings saved ✓'); }
-function saveSuggestionSettings() { showSaveIndicator('Suggestions queue saved ✓'); }
-function saveLoggingSettings() { showSaveIndicator('Audit log channels saved ✓'); }
-function saveServerStatsSettings() { showSaveIndicator('Stat voice counters saved ✓'); }
-function saveVoiceSettings() { showSaveIndicator('Voice & utility settings saved ✓'); }
 
 // --- Telemetry Polling ---
 async function fetchHealth() {

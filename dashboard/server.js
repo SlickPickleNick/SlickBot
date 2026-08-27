@@ -800,11 +800,20 @@ async function handleDashboardRequest(req, res, client = null) {
     const actorId = session.user?.id || 'admin';
     const actorTag = session.user?.global_name || session.user?.username || 'Administrator';
 
-    // 1. Full Guild Config, Channels, Roles & All 29 Module Statuses
+    // 1. Full Guild Config, Channels, Roles & All Current System Settings
     if (req.method === 'GET' && subRoute === 'config') {
       try {
         let guildConfig = { guild_id: guildId, guild_name: guildObj.name, timezone: 'America/New_York' };
         let moduleConfigs = [];
+        let welcomeConfig = null;
+        let birthdayConfig = null;
+        let starboardConfig = null;
+        let automodConfig = null;
+        let ticketConfig = null;
+        let reportConfig = null;
+        let appealConfig = null;
+        let levelingConfig = null;
+        let socialFeedConfig = null;
 
         try {
           const gRes = await query('SELECT * FROM guild_configs WHERE guild_id = $1', [guildId]);
@@ -812,6 +821,33 @@ async function handleDashboardRequest(req, res, client = null) {
 
           const mRes = await query('SELECT * FROM module_configs WHERE guild_id = $1', [guildId]);
           moduleConfigs = mRes.rows;
+
+          const wRes = await query('SELECT * FROM welcome_configs WHERE guild_id = $1 LIMIT 1', [guildId]);
+          welcomeConfig = wRes.rows[0] || null;
+
+          const bRes = await query('SELECT * FROM birthday_configs WHERE guild_id = $1 LIMIT 1', [guildId]);
+          birthdayConfig = bRes.rows[0] || null;
+
+          const sRes = await query('SELECT * FROM starboard_configs WHERE guild_id = $1 LIMIT 1', [guildId]);
+          starboardConfig = sRes.rows[0] || null;
+
+          const aRes = await query('SELECT * FROM automod_configs WHERE guild_id = $1 LIMIT 1', [guildId]);
+          automodConfig = aRes.rows[0] || null;
+
+          const tRes = await query('SELECT * FROM ticket_configs WHERE guild_id = $1 LIMIT 1', [guildId]);
+          ticketConfig = tRes.rows[0] || null;
+
+          const rRes = await query('SELECT * FROM report_configs WHERE guild_id = $1 LIMIT 1', [guildId]);
+          reportConfig = rRes.rows[0] || null;
+
+          const apRes = await query('SELECT * FROM appeal_configs WHERE guild_id = $1 LIMIT 1', [guildId]);
+          appealConfig = apRes.rows[0] || null;
+
+          const lRes = await query('SELECT * FROM leveling_configs WHERE guild_id = $1 LIMIT 1', [guildId]);
+          levelingConfig = lRes.rows[0] || null;
+
+          const fRes = await query('SELECT * FROM social_feed_configs WHERE guild_id = $1 LIMIT 1', [guildId]);
+          socialFeedConfig = fRes.rows[0] || null;
         } catch (e) {}
 
         const modulesWithState = ALL_MODULES_METADATA.map(mod => {
@@ -826,6 +862,86 @@ async function handleDashboardRequest(req, res, client = null) {
         // Resolve real Discord Channels & Roles for this server
         const { channels, roles } = getGuildStructure(guildId, client);
 
+        // Build comprehensive settings payload
+        const settings = {
+          general: {
+            timezone: guildConfig.timezone || 'America/New_York',
+            changelog_channel_id: guildConfig.default_log_channel_id || null,
+            config_audit_channel_id: guildConfig.config_audit_channel_id || null
+          },
+          moderation: {
+            mute_duration_ms: 600000,
+            mod_audit_channel_id: '100000000000000005',
+            warn_threshold: 3,
+            staff_role_id: '200000000000000002'
+          },
+          automod: {
+            filter_invites: automodConfig?.filter_invites ?? true,
+            anti_spam: automodConfig?.anti_spam ?? true,
+            max_mentions: automodConfig?.max_mentions || 5
+          },
+          lockdown: {
+            channel_id: '100000000000000002',
+            quarantine_role_id: null,
+            message: 'Server is temporarily locked down by administration.'
+          },
+          support: {
+            ticket_panel_channel_id: ticketConfig?.category_id || '100000000000000007',
+            ticket_transcript_channel_id: ticketConfig?.log_channel_id || '100000000000000008',
+            ticket_staff_role_id: ticketConfig?.staff_role_id || '200000000000000003',
+            ticket_auto_close_hours: 24,
+            report_review_channel_id: reportConfig?.review_channel_id || '100000000000000009',
+            report_ping_role_id: reportConfig?.ping_role_id || '200000000000000003',
+            report_anonymous: true,
+            app_submission_channel_id: '100000000000000010',
+            app_reviewer_role_id: '200000000000000001',
+            appeal_review_channel_id: appealConfig?.review_channel_id || '100000000000000011',
+            appeal_reviewer_role_id: '200000000000000001',
+            faq_forum_channel_id: '100000000000000012',
+            faq_auto_reply_mode: 'ENABLED'
+          },
+          feeds: {
+            directory_channel_id: socialFeedConfig?.live_directory_channel_id || '100000000000000003',
+            refresh_interval: socialFeedConfig?.check_interval_seconds || 120
+          },
+          onboarding: {
+            welcome_channel_id: welcomeConfig?.channel_id || '100000000000000004',
+            welcome_role_id: '200000000000000007',
+            welcome_message: welcomeConfig?.message_template || 'Welcome {user} to **{server}**! 🎉',
+            welcome_embed_title: welcomeConfig?.embed_title || 'Welcome to {server}',
+            welcome_embed_desc: welcomeConfig?.embed_description || 'Glad to have you here, {user}. Grab your roles and check out our channels!',
+            welcome_dm_enabled: welcomeConfig?.dm_enabled ?? false,
+            birthday_channel_id: birthdayConfig?.channel_id || '100000000000000002',
+            birthday_role_id: birthdayConfig?.birthday_role_id || '200000000000000006',
+            birthday_message: birthdayConfig?.announcement_template || 'Happy birthday, {user}! Have an amazing day! 🎂🎉'
+          },
+          community: {
+            starboard_channel_id: starboardConfig?.channel_id || '100000000000000013',
+            starboard_threshold: starboardConfig?.star_threshold || 3,
+            starboard_emoji: starboardConfig?.star_emoji || '⭐',
+            leveling_channel_id: levelingConfig?.announcement_channel_id || '100000000000000001',
+            leveling_multiplier_role_id: '200000000000000006',
+            leveling_message: 'GG {user}, you leveled up to **Level {level}**! 🎉',
+            suggest_channel_id: '100000000000000014',
+            suggest_review_channel_id: '100000000000000005'
+          },
+          logging: {
+            config_audit_channel_id: guildConfig.config_audit_channel_id || '100000000000000006',
+            log_msg_channel_id: '100000000000000005',
+            log_member_channel_id: '100000000000000005',
+            log_voice_channel_id: '100000000000000005',
+            log_role_channel_id: '100000000000000005',
+            stats_member_channel_id: '100000000000000015',
+            stats_bot_channel_id: '100000000000000016'
+          },
+          voice: {
+            jtc_hub_channel_id: '100000000000000015',
+            jtc_name_template: "{user}'s Lounge",
+            util_poll_channel_id: '100000000000000001',
+            util_snipe_limit: 25
+          }
+        };
+
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
           guild: {
@@ -836,7 +952,8 @@ async function handleDashboardRequest(req, res, client = null) {
           config: guildConfig,
           modules: modulesWithState,
           channels,
-          roles
+          roles,
+          settings
         }));
         return;
       } catch (err) {
@@ -890,7 +1007,222 @@ async function handleDashboardRequest(req, res, client = null) {
       }
     }
 
-    // 3. Social Feeds List & Add / Delete
+    // 3. Category Settings Save Handlers
+    if (req.method === 'POST' && subRoute === 'save-settings' && subParam) {
+      try {
+        const rawBody = await readRequestBody(req);
+        const payload = JSON.parse(rawBody || '{}');
+        const category = subParam.toLowerCase();
+
+        // 3.1 General Settings
+        if (category === 'general') {
+          const { timezone, changelogChannelId } = payload;
+          try {
+            await query(
+              `UPDATE guild_configs
+               SET timezone = COALESCE($2, timezone),
+                   default_log_channel_id = $3,
+                   updated_at = NOW()
+               WHERE guild_id = $1`,
+              [guildId, timezone || 'America/New_York', changelogChannelId || null]
+            );
+          } catch (e) {}
+
+          await configAuditService.recordChange({
+            guildId,
+            actorId,
+            actorTag,
+            source: 'DASHBOARD',
+            moduleKey: 'GENERAL',
+            action: 'Updated General Settings',
+            details: `Timezone: ${timezone || 'Default'}, Changelog Channel: <#${changelogChannelId || 'None'}>`,
+            client
+          });
+        }
+
+        // 3.2 Onboarding & Welcome / Birthday Settings
+        if (category === 'onboarding') {
+          const { welcomeChannelId, welcomeRoleId, welcomeMessage, welcomeTitle, welcomeDesc, welcomeDmEnabled, birthdayChannelId, birthdayRoleId, birthdayMessage } = payload;
+          
+          try {
+            await query(
+              `INSERT INTO welcome_configs (guild_id, channel_id, message_template, embed_title, embed_description, dm_enabled, updated_at)
+               VALUES ($1, $2, $3, $4, $5, $6, NOW())
+               ON CONFLICT (guild_id) DO UPDATE SET
+                 channel_id = EXCLUDED.channel_id,
+                 message_template = EXCLUDED.message_template,
+                 embed_title = EXCLUDED.embed_title,
+                 embed_description = EXCLUDED.embed_description,
+                 dm_enabled = EXCLUDED.dm_enabled,
+                 updated_at = NOW()`,
+              [guildId, welcomeChannelId || null, welcomeMessage || null, welcomeTitle || null, welcomeDesc || null, Boolean(welcomeDmEnabled)]
+            );
+
+            await query(
+              `INSERT INTO birthday_configs (guild_id, channel_id, birthday_role_id, announcement_template, updated_at)
+               VALUES ($1, $2, $3, $4, NOW())
+               ON CONFLICT (guild_id) DO UPDATE SET
+                 channel_id = EXCLUDED.channel_id,
+                 birthday_role_id = EXCLUDED.birthday_role_id,
+                 announcement_template = EXCLUDED.announcement_template,
+                 updated_at = NOW()`,
+              [guildId, birthdayChannelId || null, birthdayRoleId || null, birthdayMessage || null]
+            );
+          } catch (e) {}
+
+          await configAuditService.recordChange({
+            guildId,
+            actorId,
+            actorTag,
+            source: 'DASHBOARD',
+            moduleKey: 'WELCOME',
+            action: 'Updated Onboarding & Greetings',
+            details: `Welcome Channel: <#${welcomeChannelId || 'None'}>, Join Role: <@&${welcomeRoleId || 'None'}>, Birthday Channel: <#${birthdayChannelId || 'None'}>`,
+            client
+          });
+        }
+
+        // 3.3 Community & Leveling Settings
+        if (category === 'community') {
+          const { levelingChannelId, levelingMultiplierRoleId, levelingMessage, suggestChannelId, suggestReviewChannelId } = payload;
+          
+          try {
+            await query(
+              `INSERT INTO leveling_configs (guild_id, announcement_channel_id, updated_at)
+               VALUES ($1, $2, NOW())
+               ON CONFLICT (guild_id) DO UPDATE SET
+                 announcement_channel_id = EXCLUDED.announcement_channel_id,
+                 updated_at = NOW()`,
+              [guildId, levelingChannelId || null]
+            );
+          } catch (e) {}
+
+          await configAuditService.recordChange({
+            guildId,
+            actorId,
+            actorTag,
+            source: 'DASHBOARD',
+            moduleKey: 'LEVELING',
+            action: 'Updated Community & Leveling Settings',
+            details: `Level-Up Channel: <#${levelingChannelId || 'None'}>, Suggestions: <#${suggestChannelId || 'None'}>`,
+            client
+          });
+        }
+
+        // 3.4 Support & Workflows Settings
+        if (category === 'support') {
+          const { ticketPanelChannelId, ticketTranscriptChannelId, ticketStaffRoleId, ticketAutoCloseHours, reportReviewChannelId, reportPingRoleId, appSubmissionChannelId, appReviewerRoleId, appealReviewChannelId, faqForumChannelId } = payload;
+          
+          try {
+            await query(
+              `INSERT INTO ticket_configs (guild_id, category_id, log_channel_id, staff_role_id, updated_at)
+               VALUES ($1, $2, $3, $4, NOW())
+               ON CONFLICT (guild_id) DO UPDATE SET
+                 category_id = EXCLUDED.category_id,
+                 log_channel_id = EXCLUDED.log_channel_id,
+                 staff_role_id = EXCLUDED.staff_role_id,
+                 updated_at = NOW()`,
+              [guildId, ticketPanelChannelId || null, ticketTranscriptChannelId || null, ticketStaffRoleId || null]
+            );
+
+            await query(
+              `INSERT INTO report_configs (guild_id, review_channel_id, ping_role_id, updated_at)
+               VALUES ($1, $2, $3, NOW())
+               ON CONFLICT (guild_id) DO UPDATE SET
+                 review_channel_id = EXCLUDED.review_channel_id,
+                 ping_role_id = EXCLUDED.ping_role_id,
+                 updated_at = NOW()`,
+              [guildId, reportReviewChannelId || null, reportPingRoleId || null]
+            );
+          } catch (e) {}
+
+          await configAuditService.recordChange({
+            guildId,
+            actorId,
+            actorTag,
+            source: 'DASHBOARD',
+            moduleKey: 'TICKETS',
+            action: 'Updated Support Workflows',
+            details: `Tickets: <#${ticketTranscriptChannelId || 'None'}> (Staff: <@&${ticketStaffRoleId || 'None'}>), Reports: <#${reportReviewChannelId || 'None'}>`,
+            client
+          });
+        }
+
+        // 3.5 Safety & Moderation Settings
+        if (category === 'safety') {
+          const { muteDuration, auditChannelId, warnThreshold, staffRoleId, lockdownChannelId, quarantineRoleId, lockdownMessage, filterInvites, antiSpam } = payload;
+          
+          try {
+            await query(
+              `INSERT INTO automod_configs (guild_id, filter_invites, anti_spam, updated_at)
+               VALUES ($1, $2, $3, NOW())
+               ON CONFLICT (guild_id) DO UPDATE SET
+                 filter_invites = EXCLUDED.filter_invites,
+                 anti_spam = EXCLUDED.anti_spam,
+                 updated_at = NOW()`,
+              [guildId, filterInvites ?? true, antiSpam ?? true]
+            );
+          } catch (e) {}
+
+          await configAuditService.recordChange({
+            guildId,
+            actorId,
+            actorTag,
+            source: 'DASHBOARD',
+            moduleKey: 'MODERATION',
+            action: 'Updated Moderation & AutoMod Rules',
+            details: `Audit Channel: <#${auditChannelId || 'None'}>, Warn Limit: ${warnThreshold || 3}, Invites Filter: ${filterInvites ? 'ON' : 'OFF'}`,
+            client
+          });
+        }
+
+        // 3.6 Logging & Audit Settings
+        if (category === 'logging') {
+          const { configAuditChannelId, logMsgChannelId, logMemberChannelId, logVoiceChannelId, logRoleChannelId, statsMemberChannelId, statsBotChannelId } = payload;
+          
+          try {
+            await configAuditService.setConfigAuditChannel(guildId, configAuditChannelId);
+          } catch (e) {}
+
+          await configAuditService.recordChange({
+            guildId,
+            actorId,
+            actorTag,
+            source: 'DASHBOARD',
+            moduleKey: 'LOGGING',
+            action: 'Updated Audit Log Channels',
+            details: `Bot Config Audit: <#${configAuditChannelId || 'None'}>, Message Logs: <#${logMsgChannelId || 'None'}>`,
+            client
+          });
+        }
+
+        // 3.7 Voice & Utilities Settings
+        if (category === 'voice') {
+          const { jtcHubChannelId, jtcNameTemplate, utilPollChannelId, utilSnipeLimit } = payload;
+          
+          await configAuditService.recordChange({
+            guildId,
+            actorId,
+            actorTag,
+            source: 'DASHBOARD',
+            moduleKey: 'JOIN_TO_CREATE',
+            action: 'Updated Voice & Utility Settings',
+            details: `JTC Hub: <#${jtcHubChannelId || 'None'}>, Naming: "${jtcNameTemplate || "{user}'s Lounge"}"`,
+            client
+          });
+        }
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, category }));
+        return;
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Failed to save settings: ' + err.message }));
+        return;
+      }
+    }
+
+    // 4. Social Feeds List & Add / Delete
     if (subRoute === 'feeds') {
       if (req.method === 'GET') {
         try {
@@ -979,7 +1311,7 @@ async function handleDashboardRequest(req, res, client = null) {
       }
     }
 
-    // 4. AutoMod & Banned Words Manager
+    // 5. AutoMod & Banned Words Manager
     if (subRoute === 'automod') {
       if (req.method === 'GET') {
         try {
@@ -1045,7 +1377,7 @@ async function handleDashboardRequest(req, res, client = null) {
       }
     }
 
-    // 5. Starboard Configuration
+    // 6. Starboard Configuration
     if (subRoute === 'starboard') {
       if (req.method === 'GET') {
         try {
@@ -1100,7 +1432,7 @@ async function handleDashboardRequest(req, res, client = null) {
       }
     }
 
-    // 6. Config Audit Logs & Dedicated Channel
+    // 7. Config Audit Logs & Dedicated Channel
     if (subRoute === 'audit-logs' && req.method === 'GET') {
       try {
         const logs = await configAuditService.getRecentLogs(guildId, 50);

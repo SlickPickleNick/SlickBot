@@ -1127,6 +1127,10 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
 
     await handleComponentInteraction(interaction, { client, permissions, logger, status, moderation }).catch(async (error) => {
+      if (error?.code === 10062) {
+        console.warn(`[interactionCreate] Interaction expired (DiscordAPIError 10062) for customId "${interaction.customId}":`, error.message);
+        return;
+      }
       console.error('Component interaction failed:', error);
       await replyPrivate(interaction, 'Something went wrong while processing this action. Check the bot logs for details.').catch(() => {});
     });

@@ -2483,6 +2483,9 @@ async function handleButton(interaction, ctx) {
 }
 
 async function routeModuleToManager(interaction, ctx, moduleKey) {
+  if (!interaction.deferred && !interaction.replied && typeof interaction.deferUpdate === 'function') {
+    await interaction.deferUpdate().catch(() => {});
+  }
   if (!(await requireAction(interaction, ctx, ActionKeys.Setup, ModuleKeys.PERMISSIONS))) return true;
   if (!moduleKey) return true;
 
@@ -4114,15 +4117,26 @@ function withSetupSubheader(payload, masterTitle, subcategory) {
 }
 
 async function updatePanel(interaction, payload) {
-  if (interaction.deferred || interaction.replied) {
-    await interaction.editReply(payload);
-    return;
+  if (!interaction) return;
+  try {
+    if (interaction.deferred || interaction.replied) {
+      await interaction.editReply(payload);
+      return;
+    }
+    if (typeof interaction.update === 'function') {
+      await interaction.update(payload);
+      return;
+    }
+    await replyPrivate(interaction, payload);
+  } catch (err) {
+    if (err.code === 10062) {
+      console.warn('[updatePanel] Interaction expired (DiscordAPIError 10062):', err.message);
+    } else if (err.code === 40060) {
+      await interaction.editReply(payload).catch(() => {});
+    } else {
+      throw err;
+    }
   }
-  if (typeof interaction.update === 'function') {
-    await interaction.update(payload);
-    return;
-  }
-  await replyPrivate(interaction, payload);
 }
 
 
