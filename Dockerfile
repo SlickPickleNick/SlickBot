@@ -17,4 +17,4 @@ RUN npm ci --omit=dev --prefer-online --no-audit --no-fund --loglevel=warn
 
 COPY . .
 
-CMD ["node", "src/index.js"]
+CMD ["node", "src/entrypoint.js"]

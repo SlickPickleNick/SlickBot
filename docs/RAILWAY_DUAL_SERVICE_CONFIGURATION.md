@@ -17,15 +17,26 @@ When multiple Railway services (or multiple repository deployments) connect to P
 
 ---
 
+## 💡 Codebase Fix Applied (Smart Entrypoint)
+
+We updated the repository to automatically resolve the `"The value is set in /railway.json"` lock:
+
+1. **Unlocked `railway.json`**: Removed the hardcoded `startCommand: "npm start"` from `railway.json`, which previously prevented Railway UI from allowing per-service custom start commands.
+2. **Added Smart Auto-Detect Entrypoint (`src/entrypoint.js`)**:
+   - If `SERVICE_ROLE=dashboard` is set **OR** if `DISCORD_TOKEN` is missing, it boots **Standalone Web Dashboard Mode** (`dashboard/server.js`) with **zero** Discord Gateway connections.
+   - If `DISCORD_TOKEN` is present (and `SERVICE_ROLE` is not dashboard), it boots **Full Bot Gateway Mode** (`src/index.js`).
+
+---
+
 ## 🛠️ Step-by-Step Fix in Railway
 
-Choose either **Option 1 (Recommended if you want separate services)** or **Option 2 (Simpler All-in-One)**.
+Choose either **Option 1 (Two Services)** or **Option 2 (Simpler All-in-One)**.
 
 ---
 
 ### Option 1: Two Separate Railway Services (Microservices Architecture)
 
-If you have two services in your Railway project (e.g. **Service 1: Bot Gateway** and **Service 2: Web Dashboard / API**):
+If you have two services in your Railway project (**Service 1: Bot Gateway** and **Service 2: Web Dashboard / API**):
 
 #### 1. Root Directory Setting (Both Services)
 * **Leave the Root Directory at `/` (default/unchanged) for BOTH services.**
@@ -36,7 +47,7 @@ If you have two services in your Railway project (e.g. **Service 1: Bot Gateway*
 #### 2. Service 1: Discord Bot (`SlickBot`) Configuration
 * **Service Name:** `SlickBot` (or your primary bot service)
 * **Root Directory:** `/`
-* **Custom Start Command:** `npm start` *(or leave blank / default `node src/index.js`)*
+* **Custom Start Command:** *(Leave blank or default `npm start`)*
 * **Replicas:** Ensure **Replicas = 1** *(under Settings ➔ Deploy ➔ Replicas)*
 * **Variables to KEEP:**
   ```env
@@ -56,16 +67,13 @@ If you have two services in your Railway project (e.g. **Service 1: Bot Gateway*
 #### 3. Service 2: Web Dashboard / API Configuration
 * **Service Name:** `Dashboard` (or your second web service)
 * **Root Directory:** `/`
-* **Custom Start Command:** *(Go to **Settings** ➔ **Deploy** ➔ **Custom Start Command**)*:
-  ```bash
-  node dashboard/server.js
-  ```
-  *(or `npm run dashboard`)*
-* **Variables to REMOVE / EXCLUDE:**
+* **Custom Start Command:** You can now enter `node dashboard/server.js` (or leave it blank because the Smart Entrypoint handles it!).
+* **Variables to SET:**
+  - Add: `SERVICE_ROLE=dashboard`
   - ❌ **REMOVE `DISCORD_TOKEN`** from this service.
-    > The standalone dashboard only needs database access and OAuth2 REST credentials. Removing `DISCORD_TOKEN` ensures this service **cannot** connect to the Discord Gateway.
 * **Variables to KEEP in Dashboard Service:**
   ```env
+  SERVICE_ROLE=dashboard
   DATABASE_URL=postgresql://...
   DISCORD_CLIENT_ID=your_client_id_here
   DISCORD_CLIENT_SECRET=your_client_secret_here
@@ -96,7 +104,6 @@ If you do not strictly require two separate Railway services:
 | **Railway Replicas** | Check **Settings ➔ Deploy ➔ Replicas** on the bot service. | Must be set to **`1`** (more than 1 replica without custom sharding duplicates all gateway events). |
 | **Railway Environments** | Check the top Environment switcher (e.g. `production` vs `staging` / `preview`). | Ensure inactive environments are deleted/paused or use a separate Test Bot Token. |
 | **Local Machine Process** | Check your local terminal. | Ensure `npm start` is **not running locally** while Railway is also running with the same bot token. |
-| **Start Command Override** | Check second service start command. | Must be `node dashboard/server.js`, NOT `npm start` or `node src/index.js`. |
 
 ---
 
@@ -105,14 +112,15 @@ If you do not strictly require two separate Railway services:
 1. **Check Railway Logs:**
    - In the Bot service logs, you should see:
      ```text
+     [SlickBot Entrypoint] Launching in FULL DISCORD BOT GATEWAY mode.
      SlickBot logged in as SlickBot#0000.
      Health & Dashboard server listening on 0.0.0.0:3000.
      ```
    - In the Dashboard service logs (if using Option 1), you should see:
      ```text
+     [SlickBot Entrypoint] Launching in STANDALONE WEB DASHBOARD mode (No Discord Gateway connection).
      [Dashboard] SlickBot web dashboard listening on http://0.0.0.0:3000
      ```
-     *(Notice: It will NOT log in to Discord as a bot client).*
 
 2. **Test Counting in Discord:**
    - Type the next consecutive number in your server's `#counting` channel.

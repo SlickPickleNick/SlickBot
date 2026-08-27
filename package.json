@@ -8,7 +8,9 @@
     "node": ">=22.12.0"
   },
   "scripts": {
-    "start": "node src/index.js",
+    "start": "node src/entrypoint.js",
+    "start:bot": "node src/index.js",
+    "start:dashboard": "node dashboard/server.js",
     "deploy:commands": "node src/deployCommands.js",
     "deploy:commands:global": "node src/deployCommands.js --global",
     "db:init": "node src/services/initDatabase.js",
