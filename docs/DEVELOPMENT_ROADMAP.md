@@ -140,6 +140,7 @@ graph TD
 
 ### 1.2 Verification & Gatekeeper Shield (`VERIFICATION`)
 Protects communities from automated raid bots, spammers, and malicious accounts through customizable entry gates.
+*Detailed Specification: [VERIFICATION_GATEKEEPER_MODULE_PLAN.md](./VERIFICATION_GATEKEEPER_MODULE_PLAN.md)*
 
 #### Feature Capabilities:
 * **Multiple Verification Modes:**
@@ -168,16 +169,20 @@ Protects communities from automated raid bots, spammers, and malicious accounts 
 ---
 
 ### 1.3 Canvas Rank Cards & Leveling 2.0 (`LEVELING_PRO`)
-Transforms text-based rank inspection into visually stunning, shareable social cards.
+Transforms text-based rank inspection into visually stunning, shareable social cards and delivers progression rewards through level milestone unlocks.
+*Detailed Specification: [LEVELING_PRO_MODULE_PLAN.md](./LEVELING_PRO_MODULE_PLAN.md)*
 
 #### Feature Capabilities:
-* **Customizable Graphic Cards:**
-  - High-resolution SVG / `@napi-rs/canvas` generation for `/rank`.
-  - Displays user avatar, custom banner, current level, server rank badge, exact XP/progress bar, and total voice hours.
-* **Member Personalization:**
-  - `/rank theme` allowing members to select accent colors, custom background images (unlocked via level or booster status), and card layouts (Neon, Cyberpunk, Minimalist, Glassmorphism).
+* **Customizable Canvas Graphic Cards:**
+  - High-resolution `@napi-rs/canvas` graphic card generation for `/rank`.
+  - Displays user avatar, custom banner, current level, server rank badge, exact XP/progress bar, total voice hours, and equipped collectible badges.
+* **Level Milestone & Unlockable Perks Engine:**
+  - Replaces external economy clutter with direct leveling progression rewards.
+  - Unlocks tiered vanity roles, collectible profile badges, custom rank card backgrounds, custom nickname color access (`/rank color`), and temporary booster passes as members reach higher levels.
+* **Member Customization Studio:**
+  - `/rank customize` allowing members to select accent colors, equipped badges, and card layouts (Neon Cyberpunk, Minimalist, Glassmorphism, Retro Synthwave).
 * **Double XP Multipliers & Events:**
-  - Scheduled weekend server-wide XP multipliers (`/level event double-xp 48h`).
+  - Scheduled weekend server-wide XP multipliers (`/level event start multiplier:2.0 duration:48h`).
 
 ```text
 +-------------------------------------------------------------+
@@ -188,41 +193,17 @@ Transforms text-based rank inspection into visually stunning, shareable social c
 +-------------------------------------------------------------+
 ```
 
-#### Step-by-Step Implementation:
-1. **Canvas Pipeline:**
-   - Install `@napi-rs/canvas` for ultra-fast, zero-native-dependency graphic rendering.
-   - Build template renderer supporting avatar clipping, gradient progress bars, and custom font glyphs.
-2. **Database Extensions:**
-   - Add `card_theme`, `card_background_url`, `card_accent_color`, and `card_layout` to `leveling_profiles`.
-3. **Commands:**
-   - Update `/rank [user]` to output rich image attachment with fallback embeds.
-   - Add `/rank customize` modal editor.
-   - Add `/level leaderboard --web` / graphic leaderboard top 10 banner.
-
 ---
 
-### 1.4 Dynamic Voice Hubs 2.0 (`JOIN_TO_CREATE_PRO`)
-Expands SlickBot's temporary voice channel system into a full in-channel controller panel.
-
-#### Feature Capabilities:
-* **In-Channel Voice Controller Message:**
-  - When a temporary channel is created, SlickBot sends a sticky control panel embed directly in the voice text chat.
-  - Buttons: 🔒 Lock/Unlock, 👁️ Hide/Unhide, 👥 Set User Limit, 🔊 Set Bitrate, 👑 Transfer Ownership, 🚫 Kick/Ban Member, 📝 Rename Channel.
-* **Auto-Sync Permissions:**
-  - Automatically creates a private text thread/channel bound to the temporary voice channel, archiving it when the channel empties.
-
-#### Step-by-Step Implementation:
-1. **Database Schema:**
-   - Extend `join_create_temp_channels` with `control_message_id`, `text_channel_id`, `is_locked`, `is_hidden`, `user_limit`, `custom_bitrate`.
-2. **Voice Event Hooks:**
-   - Listen to `voiceStateUpdate` in `src/index.js` to dispatch the control panel embed into the voice channel's native text chat upon creation.
-3. **Interaction Handlers:**
-   - Route button interactions with strict ownership checks (`interaction.user.id === tempChannel.owner_id`).
+### 1.4 Dynamic Temporary Voice Channels (`JOIN_TO_CREATE`)
+*Status: Complete & Sufficient*
+SlickBot's core `JOIN_TO_CREATE` module already provides comprehensive auto-provisioned temporary voice channels, clean lifecycle cleanup, and role-based permissions without requiring additional complexity.
 
 ---
 
 ### 1.5 Event Management & Google Calendar Sync Hub (`EVENTS`)
 Bridges the gap between external calendars (Google Calendar, Outlook, Apple iCal), Discord Scheduled Events, and active community participation.
+*Detailed Specification: [EVENTS_MODULE_PLAN.md](./EVENTS_MODULE_PLAN.md)*
 
 #### Feature Capabilities:
 * **Google Calendar Auto-Subscription (iCal Engine):**
@@ -233,86 +214,34 @@ Bridges the gap between external calendars (Google Calendar, Outlook, Apple iCal
 * **Automated Event Countdown & Reminders:**
   - Automated reminder pings in the event channel (24 hours before, 1 hour before, 10 minutes before) mentioning only members marked as **Going** with optional private DM alerts.
 * **Live Voice Attendance Tracker & XP Rewards:**
-  - Automatically checks attendees who show up in the event voice channel during the event window and awards custom Leveling XP, Server Coins, and Achievements.
-
-#### Step-by-Step Implementation:
-1. **Database Schema:**
-   - Create `event_configs`, `calendar_subscriptions`, `community_events`, `community_event_rsvps`, and `event_attendance_logs`.
-2. **Scheduler Tasks:**
-   - Calendar Sync Runner (15 min polling cycle) and Reminder Runner (60-sec due check).
-3. **Commands:**
-   - `/event create`, `/event list`, `/event rsvp`, `/event attendees`, `/event calendar link`, `/event calendar sync`, `/event manager`.
-4. **Integration Guide:**
-   - Detailed implementation steps, iCal parser architecture, and setup instructions documented in [Events & Google Calendar Module Plan](./EVENTS_MODULE_PLAN.md).
+  - Automatically checks attendees who show up in the event voice channel during the event window and awards custom Leveling XP and Achievements.
 
 ---
 
 ### 1.6 Streamer.bot Integration Hub (`STREAMERBOT`)
 Bridges live stream engagement on Twitch and YouTube directly with Discord server progression on a per-server basis.
+*Detailed Specification: [STREAMERBOT_DEVELOPMENT.md](./STREAMERBOT_DEVELOPMENT.md)*
 
 #### Feature Capabilities:
-* **Stream Attendance XP & Coin Ticks:**
-  - Streamer.bot sends periodic viewer batches via secure inbound HTTPS API (`/v1/streamerbot/events`), automatically awarding Leveling XP and Economy coins to linked Discord members.
+* **Stream Attendance XP Ticks:**
+  - Streamer.bot sends periodic viewer batches via secure inbound HTTPS API (`/v1/streamerbot/events`), automatically awarding Leveling XP to linked Discord members.
 * **Stream Drop Codes (`/redeem`):**
   - Streamers trigger drop codes during streams; viewers redeem them in Discord with single-claim enforcement and expiration limits.
 * **Twitch Channel Point to Discord Perks:**
   - Automated temporary role grants (e.g. 24h VIP Role) when viewers redeem Twitch channel points.
-* **Milestone Hype Alerts:**
-  - Instant Discord announcement triggers on raids, sub bombs, and hype trains.
-
-#### Step-by-Step Implementation:
-1. **Database Schema:**
-   - Create `streamerbot_configs`, `streamerbot_member_links`, `streamerbot_redeem_codes`, `streamerbot_code_claims`, and `streamerbot_events_log`.
-2. **Inbound Webhook API Gateway:**
-   - Implement Express endpoint in `src/services/healthServer.js` with SHA-256 token hashing, per-guild routing, and rate limiters.
-3. **Commands Suite:**
-   - Member: `/streamerbot link`, `/redeem`, `/streamerbot profile`.
-   - Admin: `/streamerbot setup`, `/streamerbot manager`, `/streamerbot key <generate|rotate|revoke>`, `/streamerbot code create`.
-4. **Integration Guide:**
-   - For full technical architecture, C# code samples, and Streamer.bot Fetch URL setup steps, see the dedicated [Streamer.bot Integration Guide](./STREAMERBOT_DEVELOPMENT.md).
 
 ---
 
 ## 💎 Horizon 2: Ecosystem Growth & Retention Modules (v1.1 – v1.3)
 
-### 2.1 Server Economy & Virtual Shop (`ECONOMY`)
-Drives long-term server retention through gamified currency, daily streaks, rewards, and custom item shops.
-
-```mermaid
-graph LR
-    A["Chat and Voice XP"] --> B["Earn Coins"]
-    C["Daily and Weekly Commands"] --> B
-    D["Community Games and Mini-Games"] --> B
-    B --> E["Virtual Server Shop"]
-    E --> F["Custom Roles"]
-    E --> G["Temporary Voice Upgrades"]
-    E --> H["Badge and Profile Cosmetics"]
-    E --> I["Custom Color Roles"]
-```
-
-#### Feature Capabilities:
-* **Currency Engine:**
-  - Server-specific virtual wallet and bank accounts (`/balance`, `/deposit`, `/withdraw`, `/pay`).
-  - Daily & weekly reward streaks (`/daily`, `/weekly`, `/work`, `/crime`, `/rob`).
-* **Server Item & Role Shop:**
-  - Server admins configure items: Custom Vanity Roles, Temporary Immunity Passes, Giveaway Extra Entry Multipliers, XP Boosters, Custom Badges.
-  - Automatic role assignment and inventory management upon purchase.
-* **Mini-Games & Wagering:**
-  - Blackjack, Roulette, Coinflip, Slots, and High-Low against the bot or other members.
-
-#### Step-by-Step Implementation:
-1. **Database Schema:**
-   - `economy_configs` (`guild_id`, `currency_name`, `currency_symbol`, `daily_min`, `daily_max`, `streak_bonus`, `enabled`).
-   - `economy_wallets` (`guild_id`, `user_id`, `wallet_balance`, `bank_balance`, `last_daily_at`, `streak_count`).
-   - `economy_shop_items` (`id`, `guild_id`, `name`, `description`, `price`, `item_type`, `role_id`, `duration_days`, `stock`).
-   - `economy_inventories` (`guild_id`, `user_id`, `item_id`, `quantity`, `expires_at`).
-2. **Commands & Modules:**
-   - `/economy setup`, `/economy shop`, `/economy buy`, `/daily`, `/pay`, `/blackjack`, `/leaderboard economy`.
+### 2.1 Level Milestone Progression & Rewards (`LEVEL_REWARDS`)
+*Note: Consolidated directly into [LEVELING_PRO](./LEVELING_PRO_MODULE_PLAN.md) to eliminate currency clutter and streamline community unlocks.*
 
 ---
 
 ### 2.2 Expanded Social Feeds & Webhook Hub (`SOCIAL_EXPANSION`)
 Extends SlickBot's social tracker beyond Twitch and YouTube into a universal content aggregator.
+*Detailed Specification: [EXPANDED_SOCIAL_FEEDS_MODULE_PLAN.md](./EXPANDED_SOCIAL_FEEDS_MODULE_PLAN.md)*
 
 #### Target Services & Integrations:
 1. **Kick.com Live Streams:**
@@ -323,21 +252,14 @@ Extends SlickBot's social tracker beyond Twitch and YouTube into a universal con
    - Polling top or new posts from specified subreddits with rich image embeds.
 4. **Custom RSS / Atom & Webhook Feeds:**
    - Follow game update blogs, Medium publications, news sites, or GitHub repository releases.
-5. **Bluesky & Social Syndication:**
-   - Tracks creator posts and announcements.
-
-#### Step-by-Step Implementation:
-1. **Service Adapters:**
-   - Create unified `FeedAdapter` abstract class in `src/modules/automation/` with implementations: `KickAdapter`, `TikTokAdapter`, `RedditAdapter`, `RssAdapter`.
-2. **TaskScheduler Integration:**
-   - Stagger feed checks across 3-minute buckets in `TaskScheduler` to prevent API rate limiting.
-3. **UI Updates:**
-   - Update `/feed add platform:<kick|tiktok|reddit|rss>` with platform-specific options.
+5. **Self-Service Creator Subscriptions (`🔔 Get Alerts`):**
+   - Interactive button on feed posts allowing members to toggle notifications for specific creators.
 
 ---
 
 ### 2.3 Interactive HTML Transcripts & Satisfaction Ratings (`TICKETS_PRO`)
 Upgrades SlickBot's customer support workflows to enterprise standards.
+*Detailed Specification: [HTML_TRANSCRIPTS_AND_SATISFACTION_RATINGS_PLAN.md](./HTML_TRANSCRIPTS_AND_SATISFACTION_RATINGS_PLAN.md)*
 
 #### Feature Capabilities:
 * **Interactive HTML Transcripts:**
@@ -347,29 +269,24 @@ Upgrades SlickBot's customer support workflows to enterprise standards.
   - Upon closing a ticket, the bot DMs the member an interactive star rating (⭐⭐⭐⭐⭐ 1–5 Stars) with optional feedback text modal.
   - Logs CSAT scores to a staff review channel and aggregates moderator performance metrics.
 
-#### Step-by-Step Implementation:
-1. **Transcript Builder Engine:**
-   - Create `src/utils/htmlTranscript.js` using responsive CSS mimicking Discord's dark theme.
-2. **CSAT Schema:**
-   - Create `ticket_ratings` (`guild_id`, `ticket_id`, `user_id`, `staff_user_id`, `rating`, `feedback`, `created_at`).
-3. **Ticket Close Lifecycle:**
-   - Generate HTML file buffer -> upload to configured log channel -> send copy to user DM with CSAT rating buttons.
-
 ---
 
 ### 2.4 Server Analytics & Engagement Pulse (`ANALYTICS`)
 Provides server owners with deep, actionable insights into community health without leaving Discord.
+*Detailed Specification: [SERVER_ANALYTICS_MODULE_PLAN.md](./SERVER_ANALYTICS_MODULE_PLAN.md)*
 
 #### Metrics Tracked:
-* **Hourly Message & Voice Velocity:** Visualizing peak chat times and active timezones.
+* **Hourly Message & Voice Velocity:** Visualizing peak chat times and active timezones with ASCII/Unicode heatmaps.
 * **Member Retention & Conversion Funnel:** Joins vs leaves, onboarding completion rates, and referral efficacy.
 * **Moderation Audit Metrics:** Total warnings, timeouts, bans, auto-mod triggers, and individual staff activity logs.
 * **Channel Health Scores:** Identifying ghost channels vs high-engagement discussions.
 
 #### Implementation:
-* `/analytics overview [timeframe: 7d/30d]`
-* `/analytics staff [timeframe: 7d/30d]`
-* `/analytics retention`
+* `/analytics overview [timeframe: 7d/30d/90d]`
+* `/analytics activity [metric: messages/voice] [timeframe]`
+* `/analytics retention [timeframe]`
+* `/analytics channels [sort: most_active/ghost]`
+* `/analytics staff [staff_member] [timeframe]`
 * Scheduled weekly server summary report posted to staff channels.
 
 ---
@@ -467,22 +384,26 @@ To maintain SlickBot's gold standard of code quality, performance, and maintaina
 | :--- | :--- | :--- | :--- | :---: |
 | **v1.0.0-RC1** | `STICKY_MESSAGES` | Automation | Persistent channel notices, debounced repost runner, `/sticky` command suite. | 🔥 High |
 | **v1.0.0-RC2** | `VERIFICATION` | Safety / Core | Button/Captcha/Questionnaire gates, quarantine role lifecycle, raid shield lock. | 🔥 High |
-| **v1.0.0-RC3** | `LEVELING_PRO` | Community | Canvas/SVG rendered rank cards, customizable card themes, double XP events. | 🔥 High |
-| **v1.0.0-Final** | `JOIN_TO_CREATE_PRO` | Voice | In-channel voice control panel embed with lock/hide/limit/bitrate buttons. | 🔥 High |
+| **v1.0.0-RC3** | `LEVELING_PRO` | Community | Canvas graphic rank cards, customization studio, level milestone unlockable perks & vanity roles. | 🔥 High |
+| **v1.0.0-Final** | `JOIN_TO_CREATE` | Voice | Dynamic temporary voice channels with auto-provisioning and lifecycle cleanup (*Complete*). | 🔥 High |
 | **v1.0.0-Final** | `EVENTS` | Community | Discord Scheduled Event sync, RSVP cards (Going/Maybe), automated reminder pings. | Medium |
 | **v1.0.0-Final** | `STREAMERBOT` | Creator / Community | Inbound HTTPS webhook API, stream attendance XP, drop codes (`/redeem`), Channel Point roles. | 🔥 High |
-| **v1.1.0** | `ECONOMY` | Community | Server coins, daily/weekly streaks, virtual shop, role purchases, gambling mini-games. | Medium |
-| **v1.2.0** | `SOCIAL_EXPANSION` | Automation | Kick.com streams, TikTok videos, Reddit subreddits, custom RSS/Atom blog feeds. | Medium |
-| **v1.3.0** | `TICKETS_PRO` | Support | Self-contained dark-mode HTML transcripts, post-close CSAT 5-star rating surveys. | Medium |
-| **v1.3.0** | `ANALYTICS` | Utility / Core | Message/voice activity heatmaps, retention funnels, staff moderation KPI reports. | Low |
-| **v1.4.0** | `SHARDING_REDIS` | Infrastructure | `ShardingManager`, Redis Pub/Sub cross-shard caching, connection pool scaling. | 🔥 High |
-| **v1.5.0** | `WEB_DASHBOARD` | Platform | Next.js companion web portal, OAuth2 login, visual embed builder, web leaderboards. | Medium |
+| **v1.1.0** | `SOCIAL_EXPANSION` | Automation | Kick.com streams, TikTok videos, Reddit subreddits, custom RSS/Atom blog feeds. | Medium |
+| **v1.2.0** | `TICKETS_PRO` | Support | Self-contained dark-mode HTML transcripts, post-close CSAT 5-star rating surveys. | Medium |
+| **v1.2.0** | `ANALYTICS` | Utility / Core | Message/voice activity heatmaps, retention funnels, staff moderation KPI reports. | Low |
+| **v1.3.0** | `SHARDING_REDIS` | Infrastructure | `ShardingManager`, Redis Pub/Sub cross-shard caching, connection pool scaling. | 🔥 High |
+| **v1.4.0** | `WEB_DASHBOARD` | Platform | Next.js companion web portal, OAuth2 login, visual embed builder, web leaderboards. | Medium |
 | **v2.0.0** | `AI_INTELLIGENCE` | Automation | Contextual toxic intent detection, RAG rule Q&A assistant, support ticket summarizer. | Low |
 
 ---
 
-*Related Documentation:*
-* [Multi-Server Expansion Roadmap](./EXPANSION_ROADMAP.md) — Multi-tenancy, Discord Bot Verification, and infrastructure scaling.
-* [Streamer.bot Integration Architecture](./STREAMERBOT_DEVELOPMENT.md) — Technical API gateway, C# scripts, and Streamer.bot setup guide.
+*Related Module Documentation:*
+* [Verification & Gatekeeper Shield Plan](./VERIFICATION_GATEKEEPER_MODULE_PLAN.md) — Button/Captcha/Questionnaire gates and raid velocity shield.
+* [Canvas Rank Cards & Leveling 2.0 Plan](./LEVELING_PRO_MODULE_PLAN.md) — Canvas graphics, customization studio, and level milestone perks.
+* [Expanded Social Feeds & Webhook Hub Plan](./EXPANDED_SOCIAL_FEEDS_MODULE_PLAN.md) — Kick streams, TikTok videos, Reddit feeds, and universal RSS.
+* [Interactive HTML Transcripts & Satisfaction Ratings Plan](./HTML_TRANSCRIPTS_AND_SATISFACTION_RATINGS_PLAN.md) — HTML transcript builder and CSAT surveys.
+* [Server Analytics & Engagement Pulse Plan](./SERVER_ANALYTICS_MODULE_PLAN.md) — In-Discord activity heatmaps, retention funnels, and ghost channels.
 * [Events & Google Calendar Module Plan](./EVENTS_MODULE_PLAN.md) — Google Calendar sync, interactive RSVP cards, and attendance XP.
+* [Streamer.bot Integration Architecture](./STREAMERBOT_DEVELOPMENT.md) — Technical API gateway, C# scripts, and Streamer.bot setup guide.
 * [Web Dashboard & Billing Plan](./WEB_DASHBOARD_AND_BILLING_PLAN.md) — Next.js dashboard, Stripe subscription lifecycle, and quota enforcement.
+* [Multi-Server Expansion Roadmap](./EXPANSION_ROADMAP.md) — Multi-tenancy, Discord Bot Verification, and infrastructure scaling.
