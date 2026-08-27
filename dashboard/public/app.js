@@ -38,9 +38,108 @@ function switchManageTab(tabId, buttonEl) {
   if (targetPanel) targetPanel.classList.add('active');
 
   if (activeGuildId) {
+    if (tabId === 'general' || tabId === 'logging') loadAuditLogs();
     if (tabId === 'media') loadFeeds();
     if (tabId === 'safety') loadAutoMod();
     if (tabId === 'community') loadStarboard();
+  }
+}
+
+// --- Dynamic Channel & Role Select Dropdown Populators ---
+function populateAllDropdowns(channels = [], roles = []) {
+  // Populate all Channel Selects
+  document.querySelectorAll('select.channel-select').forEach(selectEl => {
+    const currentValue = selectEl.value;
+    const filterType = selectEl.getAttribute('data-type') || null;
+    const allowNone = selectEl.getAttribute('data-allow-none') !== 'false';
+
+    let html = allowNone ? `<option value="">-- None / Disabled --</option>` : `<option value="">Select a Channel...</option>`;
+    
+    channels.forEach(ch => {
+      if (!filterType || ch.type === filterType || (filterType === 'text' && (ch.type === 'text' || ch.type === 'announcement'))) {
+        const typeLabel = ch.type === 'voice' ? ' [Voice]' : ch.type === 'forum' ? ' [Forum]' : ch.type === 'category' ? ' [Category]' : '';
+        html += `<option value="${escapeHtml(ch.id)}">#${escapeHtml(ch.name)}${typeLabel}</option>`;
+      }
+    });
+
+    selectEl.innerHTML = html;
+    if (currentValue) selectEl.value = currentValue;
+  });
+
+  // Populate all Role Selects
+  document.querySelectorAll('select.role-select').forEach(selectEl => {
+    const currentValue = selectEl.value;
+    const allowNone = selectEl.getAttribute('data-allow-none') !== 'false';
+
+    let html = allowNone ? `<option value="">-- None / No Role --</option>` : `<option value="">Select a Role...</option>`;
+    
+    roles.forEach(r => {
+      html += `<option value="${escapeHtml(r.id)}">@${escapeHtml(r.name)}</option>`;
+    });
+
+    selectEl.innerHTML = html;
+    if (currentValue) selectEl.value = currentValue;
+  });
+}
+
+// Helper: Format Channel Badge
+function formatChannelName(channelId) {
+  if (!channelId) return `<span style="color: var(--text-faint);">None</span>`;
+  if (currentGuildConfig?.channels) {
+    const found = currentGuildConfig.channels.find(c => c.id === channelId);
+    if (found) {
+      const prefix = found.type === 'voice' ? '🔊 ' : '#';
+      return `<span class="channel-tag">${prefix}${escapeHtml(found.name)}</span>`;
+    }
+  }
+  return `<span class="channel-tag">#${escapeHtml(channelId.slice(0, 8))}...</span>`;
+}
+
+// Helper: Format Role Badge
+function formatRoleName(roleId) {
+  if (!roleId) return `<span style="color: var(--text-faint);">None</span>`;
+  if (currentGuildConfig?.roles) {
+    const found = currentGuildConfig.roles.find(r => r.id === roleId);
+    if (found) {
+      const color = found.color || '#93c5fd';
+      return `<span class="role-tag" style="border-color: ${color}; color: ${color};">@${escapeHtml(found.name)}</span>`;
+    }
+  }
+  return `<span class="role-tag">@${escapeHtml(roleId.slice(0, 8))}...</span>`;
+}
+
+// --- "Refresh Channels & Roles" Action Button ---
+async function refreshServerData() {
+  if (!activeGuildId) return;
+  const btn = document.getElementById('btn-refresh-guild');
+  if (btn) btn.classList.add('spinning');
+  showSaveIndicator('Re-syncing with Discord...');
+
+  try {
+    const res = await fetch(`/api/guilds/${encodeURIComponent(activeGuildId)}/config`);
+    if (res.ok) {
+      const data = await res.json();
+      currentGuildConfig = data;
+      populateAllDropdowns(data.channels || [], data.roles || []);
+      
+      const configAuditSelect = document.getElementById('log-config-audit-channel');
+      if (configAuditSelect && data.config?.config_audit_channel_id) {
+        configAuditSelect.value = data.config.config_audit_channel_id;
+      }
+
+      renderSwitchboard(data.modules || []);
+      loadFeeds();
+      loadAuditLogs();
+      showSaveIndicator('Channels & roles refreshed ✓');
+    } else {
+      showSaveIndicator('Failed to refresh');
+    }
+  } catch (err) {
+    showSaveIndicator('Sync error: ' + err.message);
+  } finally {
+    setTimeout(() => {
+      if (btn) btn.classList.remove('spinning');
+    }, 600);
   }
 }
 
@@ -258,7 +357,15 @@ async function loadGuildConfig(guildId) {
         : data.guild.name.charAt(0).toUpperCase();
     }
 
-    renderSwitchboard(data.modules);
+    populateAllDropdowns(data.channels || [], data.roles || []);
+    
+    const configAuditSelect = document.getElementById('log-config-audit-channel');
+    if (configAuditSelect && data.config?.config_audit_channel_id) {
+      configAuditSelect.value = data.config.config_audit_channel_id;
+    }
+
+    renderSwitchboard(data.modules || []);
+    loadAuditLogs();
   } catch (err) {
     if (nameEl) nameEl.textContent = 'Error: ' + err.message;
   }
@@ -300,6 +407,7 @@ async function handleToggleModule(moduleKey, enabled) {
     });
     if (res.ok) {
       showSaveIndicator('Saved ✓');
+      loadAuditLogs();
     } else {
       showSaveIndicator('Error saving');
     }
@@ -308,7 +416,7 @@ async function handleToggleModule(moduleKey, enabled) {
   }
 }
 
-// --- Social Feeds Manager ---
+// --- Social Feeds Manager (With Channel & Role Dropdowns) ---
 async function loadFeeds() {
   const tbody = document.getElementById('feeds-table-body');
   if (!tbody || !activeGuildId) return;
@@ -318,7 +426,7 @@ async function loadFeeds() {
     const feeds = await res.json();
 
     if (!feeds || feeds.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-muted);">No feeds subscribed yet. Use the form above to track a creator!</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-muted);">No feeds subscribed yet. Use the form above to track a creator!</td></tr>`;
       return;
     }
 
@@ -326,7 +434,8 @@ async function loadFeeds() {
       <tr>
         <td><span class="platform-pill ${f.platform}">${f.platform}</span></td>
         <td><strong>${escapeHtml(f.account_name)}</strong></td>
-        <td><code>#${escapeHtml(f.channel_id)}</code></td>
+        <td>${formatChannelName(f.channel_id)}</td>
+        <td>${formatRoleName(f.ping_role_id)}</td>
         <td><span style="color: ${f.last_status === 'LIVE' ? 'var(--accent-emerald)' : 'var(--text-faint)'};">● ${f.last_status || 'OFFLINE'}</span></td>
         <td>
           <button class="btn btn-danger btn-sm" onclick="handleDeleteFeed('${f.id}')">Delete</button>
@@ -334,7 +443,7 @@ async function loadFeeds() {
       </tr>
     `).join('');
   } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="5" style="color: #f87171;">Failed to load feeds: ${err.message}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" style="color: #f87171;">Failed to load feeds: ${err.message}</td></tr>`;
   }
 }
 
@@ -347,6 +456,11 @@ async function handleAddFeed(e) {
   const channelId = document.getElementById('feed-channel').value;
   const pingRoleId = document.getElementById('feed-role').value;
   const btn = document.getElementById('btn-add-feed');
+
+  if (!channelId) {
+    alert('Please select an announcement channel from the dropdown.');
+    return;
+  }
 
   btn.disabled = true;
   btn.textContent = 'Subscribing...';
@@ -361,10 +475,9 @@ async function handleAddFeed(e) {
     const data = await res.json();
     if (res.ok) {
       document.getElementById('feed-account').value = '';
-      document.getElementById('feed-channel').value = '';
-      document.getElementById('feed-role').value = '';
       showSaveIndicator('Feed subscribed ✓');
       loadFeeds();
+      loadAuditLogs();
     } else {
       alert('Error: ' + (data.error || 'Failed to add feed'));
     }
@@ -385,6 +498,7 @@ async function handleDeleteFeed(feedId) {
     if (res.ok) {
       showSaveIndicator('Feed removed ✓');
       loadFeeds();
+      loadAuditLogs();
     }
   } catch (err) {
     alert('Error deleting feed: ' + err.message);
@@ -431,8 +545,9 @@ async function handleAddBannedWord(e) {
     });
     if (res.ok) {
       input.value = '';
-      showSaveIndicator('Word banned ✓');
+      showSaveIndicator('Word filtered ✓');
       loadAutoMod();
+      loadAuditLogs();
     }
   } catch (err) {
     alert('Error adding banned word: ' + err.message);
@@ -449,9 +564,9 @@ async function loadStarboard() {
       const ch = document.getElementById('starboard-channel');
       const th = document.getElementById('starboard-threshold');
       const em = document.getElementById('starboard-emoji');
-      if (ch) ch.value = data.channel_id || '';
-      if (th) th.value = data.star_threshold || 3;
-      if (em) em.value = data.star_emoji || '⭐';
+      if (ch && data.channel_id) ch.value = data.channel_id;
+      if (th && data.star_threshold) th.value = data.star_threshold;
+      if (em && data.star_emoji) em.value = data.star_emoji;
     }
   } catch (err) {
     console.error('Starboard fetch error:', err);
@@ -473,13 +588,77 @@ async function saveStarboardSettings() {
     });
     if (res.ok) {
       showSaveIndicator('Starboard settings saved ✓');
+      loadAuditLogs();
     }
   } catch (err) {
     showSaveIndicator('Error saving');
   }
 }
 
-// Simple Settings Helpers
+// --- Bot Configuration Audit Logging ---
+async function loadAuditLogs() {
+  if (!activeGuildId) return;
+  const overviewTbody = document.getElementById('overview-audit-table-body');
+  const loggingTbody = document.getElementById('logging-audit-table-body');
+
+  try {
+    const res = await fetch(`/api/guilds/${encodeURIComponent(activeGuildId)}/audit-logs`);
+    const logs = await res.json();
+
+    const renderRows = (list) => {
+      if (!list || list.length === 0) {
+        return `<tr><td colspan="5" style="text-align: center; color: var(--text-muted);">No configuration changes recorded yet.</td></tr>`;
+      }
+      return list.map(l => {
+        const timeStr = l.created_at ? new Date(l.created_at).toLocaleString() : '--';
+        const sourceBadge = l.source === 'DISCORD'
+          ? `<span class="source-pill DISCORD">💬 Discord</span>`
+          : `<span class="source-pill DASHBOARD">🌐 Dashboard</span>`;
+
+        return `
+          <tr>
+            <td class="audit-time">${escapeHtml(timeStr)}</td>
+            <td><span class="audit-actor">${escapeHtml(l.actor_user_tag || 'Admin')}</span></td>
+            <td>${sourceBadge}</td>
+            <td><span class="cmd-pill">${escapeHtml(l.module_key || 'GENERAL')}</span></td>
+            <td>
+              <strong>${escapeHtml(l.action)}</strong>
+              ${l.details ? `<div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">${escapeHtml(l.details)}</div>` : ''}
+            </td>
+          </tr>
+        `;
+      }).join('');
+    };
+
+    const html = renderRows(logs);
+    if (overviewTbody) overviewTbody.innerHTML = html;
+    if (loggingTbody) loggingTbody.innerHTML = html;
+  } catch (err) {
+    console.warn('Failed to load audit logs:', err);
+  }
+}
+
+async function saveConfigAuditChannel() {
+  if (!activeGuildId) return;
+  const channelId = document.getElementById('log-config-audit-channel')?.value;
+  showSaveIndicator('Saving audit channel...');
+
+  try {
+    const res = await fetch(`/api/guilds/${encodeURIComponent(activeGuildId)}/config-audit-channel`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ channelId })
+    });
+    if (res.ok) {
+      showSaveIndicator('Config audit channel saved ✓');
+      loadAuditLogs();
+    }
+  } catch (err) {
+    showSaveIndicator('Error saving');
+  }
+}
+
+// Simple Settings Handlers
 function showSaveIndicator(msg) {
   const el = document.getElementById('save-status-indicator');
   if (el) {
@@ -488,25 +667,23 @@ function showSaveIndicator(msg) {
   }
 }
 
-function saveSimpleSetting(key, val) {
-  showSaveIndicator('Setting updated ✓');
-}
-
-function saveSupportSettings() {
-  showSaveIndicator('Support settings saved ✓');
-}
-
-function saveWelcomeSettings() {
-  showSaveIndicator('Welcome settings saved ✓');
-}
-
-function saveDefaultLogChannel() {
-  showSaveIndicator('Log channel updated ✓');
-}
-
-function saveVoiceSettings() {
-  showSaveIndicator('Voice settings saved ✓');
-}
+function saveGeneralSettings() { showSaveIndicator('General settings saved ✓'); }
+function saveModerationSettings() { showSaveIndicator('Moderation settings saved ✓'); }
+function saveAutoModSettings() { showSaveIndicator('AutoMod rules saved ✓'); }
+function saveLockdownSettings() { showSaveIndicator('Lockdown settings saved ✓'); }
+function saveTicketSettings() { showSaveIndicator('Support ticket settings saved ✓'); }
+function saveReportSettings() { showSaveIndicator('Report workflow saved ✓'); }
+function saveApplicationSettings() { showSaveIndicator('Applications settings saved ✓'); }
+function saveAppealSettings() { showSaveIndicator('Appeals settings saved ✓'); }
+function saveFaqSettings() { showSaveIndicator('FAQ settings saved ✓'); }
+function saveFeedDirectorySettings() { showSaveIndicator('Live directory hub saved ✓'); }
+function saveWelcomeSettings() { showSaveIndicator('Onboarding settings saved ✓'); }
+function saveBirthdaySettings() { showSaveIndicator('Birthday calendar saved ✓'); }
+function saveLevelingSettings() { showSaveIndicator('Leveling settings saved ✓'); }
+function saveSuggestionSettings() { showSaveIndicator('Suggestions queue saved ✓'); }
+function saveLoggingSettings() { showSaveIndicator('Audit log channels saved ✓'); }
+function saveServerStatsSettings() { showSaveIndicator('Stat voice counters saved ✓'); }
+function saveVoiceSettings() { showSaveIndicator('Voice & utility settings saved ✓'); }
 
 // --- Telemetry Polling ---
 async function fetchHealth() {

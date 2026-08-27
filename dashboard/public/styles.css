@@ -262,6 +262,23 @@ a:hover {
   color: #fff;
 }
 
+/* Refresh Button with Spin */
+.btn-refresh {
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-color: #52525b;
+}
+
+.btn-refresh.spinning .refresh-icon {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  100% { transform: rotate(360deg); }
+}
+
 /* Alert Banner */
 .alert-banner {
   background-color: #1c1917;
@@ -621,7 +638,8 @@ a:hover {
 .manage-header-left {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 16px;
+  flex-wrap: wrap;
 }
 
 .guild-badge-inline {
@@ -761,14 +779,17 @@ a:hover {
 
 .card-section-title {
   font-size: 16px;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-/* Forms & Inputs */
+/* Forms & Dropdowns */
 .form-grid-2 {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 18px;
 }
 
 .form-grid-3 {
@@ -792,6 +813,7 @@ a:hover {
   font-weight: 600;
   color: var(--text-muted);
   text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .form-input, .form-select {
@@ -802,11 +824,38 @@ a:hover {
   border-radius: var(--radius-sm);
   font-size: 14px;
   font-family: inherit;
+  width: 100%;
 }
 
 .form-input:focus, .form-select:focus {
   outline: none;
   border-color: var(--accent-blue);
+}
+
+/* Channel & Role Badges */
+.channel-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background-color: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  color: #93c5fd;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+
+.role-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background-color: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-subtle);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
 }
 
 /* Switchboard Grid for All 29 Modules */
@@ -1006,3 +1055,39 @@ td {
 .banned-word-remove:hover {
   color: var(--accent-red);
 }
+
+/* Config Audit Log Styles */
+.source-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+
+.source-pill.DASHBOARD {
+  background-color: rgba(59, 130, 246, 0.15);
+  color: #93c5fd;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.source-pill.DISCORD {
+  background-color: rgba(88, 101, 242, 0.15);
+  color: #a5b4fc;
+  border: 1px solid rgba(88, 101, 242, 0.3);
+}
+
+.audit-time {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.audit-actor {
+  font-weight: 600;
+  color: var(--text-main);
+}
+

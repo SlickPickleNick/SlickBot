@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SlickBot — Management Console & Complete Server Control</title>
+  <title>SlickBot — Complete Server Configuration & Dashboard</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -108,9 +108,7 @@
           </div>
         </div>
 
-        <div class="features-grid" id="home-modules-grid">
-          <!-- Rendered dynamically by app.js -->
-        </div>
+        <div class="features-grid" id="home-modules-grid"></div>
       </div>
     </div>
   </section>
@@ -128,16 +126,14 @@
         </div>
       </div>
 
-      <div class="servers-grid" id="servers-container">
-        <!-- Rendered dynamically by app.js -->
-      </div>
+      <div class="servers-grid" id="servers-container"></div>
     </div>
   </section>
 
   <!-- VIEW 3: FULL SERVER MANAGEMENT CONSOLE WITH SIDEBAR -->
   <section id="view-manage" class="page-view">
     <div class="container-manage">
-      <!-- Breadcrumbs & Banner -->
+      <!-- Breadcrumbs & Server Bar -->
       <div class="manage-top-header">
         <div class="manage-header-left">
           <button class="btn btn-outline btn-sm" onclick="navigateTo('servers')">
@@ -150,6 +146,9 @@
               <span class="guild-id-sub">ID: <code id="guild-id-sub">--</code></span>
             </div>
           </div>
+          <button class="btn btn-outline btn-sm btn-refresh" id="btn-refresh-guild" onclick="refreshServerData()" title="Re-sync server channels and roles from Discord">
+            <span class="refresh-icon">🔄</span> Refresh Channels & Roles
+          </button>
         </div>
         <div class="save-status" id="save-status-indicator"></div>
       </div>
@@ -195,27 +194,104 @@
 
         <!-- Right Content Panels Area -->
         <main class="manage-content-area">
+          
           <!-- PANEL 1: GENERAL OVERVIEW & ALL 29 MODULES SWITCHBOARD -->
           <div id="tab-panel-general" class="manage-panel active">
             <div class="panel-header">
-              <h2 class="panel-title">Master Module Switchboard</h2>
-              <p class="panel-subtitle">Enable or disable any of the 29 integrated server systems.</p>
+              <h2 class="panel-title">Server Overview & Master Switchboard</h2>
+              <p class="panel-subtitle">Manage server-level settings and toggle any of the 29 integrated systems.</p>
             </div>
 
-            <div class="switchboard-grid" id="switchboard-container">
-              <!-- Injected dynamically by app.js -->
+            <div class="panel-card-section">
+              <h3 class="card-section-title">Server Configuration</h3>
+              <div class="form-grid-2">
+                <div class="form-group">
+                  <label class="form-label">Server Timezone</label>
+                  <select id="gen-timezone" class="form-select" onchange="saveGeneralSettings()">
+                    <option value="America/New_York">Eastern Time (America/New_York)</option>
+                    <option value="America/Chicago">Central Time (America/Chicago)</option>
+                    <option value="America/Denver">Mountain Time (America/Denver)</option>
+                    <option value="America/Los_Angeles">Pacific Time (America/Los_Angeles)</option>
+                    <option value="UTC">UTC / GMT</option>
+                    <option value="Europe/London">London (GMT/BST)</option>
+                    <option value="Europe/Paris">Central European Time (Paris/Berlin)</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Changelog Announcements Channel</label>
+                  <select id="gen-changelog-channel" class="form-select channel-select" onchange="saveGeneralSettings()"></select>
+                </div>
+              </div>
+            </div>
+
+            <div class="panel-card-section">
+              <h3 class="card-section-title">All 29 Modular Systems</h3>
+              <div class="switchboard-grid" id="switchboard-container"></div>
+            </div>
+
+            <!-- Recent Configuration Changes Audit Table -->
+            <div class="panel-card-section">
+              <div class="section-header-flex" style="margin-bottom: 12px;">
+                <h3 class="card-section-title" style="margin-bottom: 0;">📜 Recent Configuration Changes</h3>
+                <button class="btn btn-outline btn-sm" onclick="loadAuditLogs()">🔄 Refresh Log</button>
+              </div>
+              <div class="table-container">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Timestamp</th>
+                      <th>Administrator</th>
+                      <th>Source</th>
+                      <th>Module</th>
+                      <th>Action & Details</th>
+                    </tr>
+                  </thead>
+                  <tbody id="overview-audit-table-body">
+                    <tr><td colspan="5" style="text-align: center; color: var(--text-muted);">Loading audit history...</td></tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
 
           <!-- PANEL 2: SAFETY, MODERATION & AUTOMOD -->
           <div id="tab-panel-safety" class="manage-panel">
             <div class="panel-header">
-              <h2 class="panel-title">AutoMod & Security Protection</h2>
-              <p class="panel-subtitle">Configure automated link filtering, anti-spam heuristics, and banned words.</p>
+              <h2 class="panel-title">Safety, Moderation & AutoMod Protection</h2>
+              <p class="panel-subtitle">Configure automated link filtering, anti-spam heuristics, and case logs.</p>
             </div>
 
+            <!-- Moderation Defaults -->
             <div class="panel-card-section">
-              <h3 class="card-section-title">Automated Filters</h3>
+              <h3 class="card-section-title">Moderation Engine Defaults</h3>
+              <div class="form-grid-2">
+                <div class="form-group">
+                  <label class="form-label">Default Mute Duration</label>
+                  <select id="mod-mute-duration" class="form-select" onchange="saveModerationSettings()">
+                    <option value="600000">10 Minutes</option>
+                    <option value="3600000">1 Hour</option>
+                    <option value="86400000">24 Hours (1 Day)</option>
+                    <option value="604800000">7 Days (1 Week)</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Moderation Audit Channel</label>
+                  <select id="mod-audit-channel" class="form-select channel-select" onchange="saveModerationSettings()"></select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Warning Auto-Escalation Threshold</label>
+                  <input type="number" id="mod-warn-threshold" class="form-input" value="3" min="1" max="10" onchange="saveModerationSettings()">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Staff Moderator Role</label>
+                  <select id="mod-staff-role" class="form-select role-select" onchange="saveModerationSettings()"></select>
+                </div>
+              </div>
+            </div>
+
+            <!-- AutoMod Filters & Spam Defense -->
+            <div class="panel-card-section">
+              <h3 class="card-section-title">AutoMod Filters & Spam Defense</h3>
               <div class="filter-toggle-list">
                 <div class="setting-row">
                   <div>
@@ -223,7 +299,7 @@
                     <div class="setting-desc">Blocks unauthorized Discord server invitation links in chat.</div>
                   </div>
                   <label class="switch">
-                    <input type="checkbox" checked onchange="saveSimpleSetting('filter_invites', this.checked)">
+                    <input type="checkbox" id="automod-toggle-invites" checked onchange="saveAutoModSettings()">
                     <span class="slider"></span>
                   </label>
                 </div>
@@ -233,29 +309,38 @@
                     <div class="setting-desc">Automatically mutes members sending repeated rapid messages.</div>
                   </div>
                   <label class="switch">
-                    <input type="checkbox" checked onchange="saveSimpleSetting('anti_spam', this.checked)">
+                    <input type="checkbox" id="automod-toggle-spam" checked onchange="saveAutoModSettings()">
                     <span class="slider"></span>
                   </label>
                 </div>
               </div>
             </div>
 
+            <!-- Banned Keywords Manager -->
             <div class="panel-card-section">
-              <div class="section-header-flex">
-                <div>
-                  <h3 class="card-section-title">Banned Keywords & Phrases</h3>
-                  <div class="setting-desc">Messages containing these terms will be automatically filtered.</div>
-                </div>
-              </div>
+              <h3 class="card-section-title">Banned Keywords & Phrases</h3>
+              <div class="setting-desc">Messages containing these terms will be automatically filtered.</div>
 
-              <!-- Add Banned Word Form -->
               <form class="inline-add-form" onsubmit="handleAddBannedWord(event)">
-                <input type="text" id="input-banned-word" class="form-input" placeholder="Enter word or regex to ban..." required>
+                <input type="text" id="input-banned-word" class="form-input" placeholder="Enter word or phrase to filter..." required>
                 <button type="submit" class="btn btn-primary">+ Add Banned Word</button>
               </form>
 
-              <div class="banned-words-tags" id="banned-words-container">
-                <span class="text-muted">Loading banned words...</span>
+              <div class="banned-words-tags" id="banned-words-container"></div>
+            </div>
+
+            <!-- Emergency Server Lockdown -->
+            <div class="panel-card-section">
+              <h3 class="card-section-title">Emergency Lockdown Settings</h3>
+              <div class="form-grid-2">
+                <div class="form-group">
+                  <label class="form-label">Lockdown Broadcast Channel</label>
+                  <select id="lockdown-channel" class="form-select channel-select" onchange="saveLockdownSettings()"></select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Quarantine Role (Optional)</label>
+                  <select id="lockdown-quarantine-role" class="form-select role-select" onchange="saveLockdownSettings()"></select>
+                </div>
               </div>
             </div>
           </div>
@@ -263,35 +348,119 @@
           <!-- PANEL 3: SUPPORT & WORKFLOWS -->
           <div id="tab-panel-support" class="manage-panel">
             <div class="panel-header">
-              <h2 class="panel-title">Support Tickets & Staff Queues</h2>
-              <p class="panel-subtitle">Configure interactive ticket panels, transcript logging, and forum FAQ sync.</p>
+              <h2 class="panel-title">Support & Workflows (Tickets, Reports, Applications, Appeals, FAQ)</h2>
+              <p class="panel-subtitle">Configure all 5 support suites with dedicated staff queues, channels, and forum sync.</p>
             </div>
 
+            <!-- 1. Support Tickets -->
             <div class="panel-card-section">
-              <h3 class="card-section-title">Ticket System Settings</h3>
+              <h3 class="card-section-title">🎫 Support Tickets Console</h3>
               <div class="form-grid-2">
                 <div class="form-group">
-                  <label class="form-label">Transcript Log Channel ID</label>
-                  <input type="text" id="ticket-log-channel" class="form-input" placeholder="e.g. 123456789012345678">
+                  <label class="form-label">Ticket Creation Panel Channel</label>
+                  <select id="ticket-panel-channel" class="form-select channel-select" onchange="saveTicketSettings()"></select>
                 </div>
                 <div class="form-group">
-                  <label class="form-label">Support Staff Role ID</label>
-                  <input type="text" id="ticket-staff-role" class="form-input" placeholder="e.g. 987654321098765432">
+                  <label class="form-label">Transcript Log Channel</label>
+                  <select id="ticket-transcript-channel" class="form-select channel-select" onchange="saveTicketSettings()"></select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Support Staff Handling Role</label>
+                  <select id="ticket-staff-role" class="form-select role-select" onchange="saveTicketSettings()"></select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Auto-Close Inactive Tickets</label>
+                  <select id="ticket-auto-close" class="form-select" onchange="saveTicketSettings()">
+                    <option value="24">After 24 Hours</option>
+                    <option value="48">After 48 Hours</option>
+                    <option value="72">After 72 Hours</option>
+                    <option value="0">Never (Manual Close Only)</option>
+                  </select>
                 </div>
               </div>
-              <button class="btn btn-primary btn-sm" onclick="saveSupportSettings()" style="margin-top: 12px;">Save Support Settings</button>
+            </div>
+
+            <!-- 2. Member Reports -->
+            <div class="panel-card-section">
+              <h3 class="card-section-title">📢 Member & Message Reports</h3>
+              <div class="form-grid-2">
+                <div class="form-group">
+                  <label class="form-label">Report Review Channel</label>
+                  <select id="report-review-channel" class="form-select channel-select" onchange="saveReportSettings()"></select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Report Handler Ping Role</label>
+                  <select id="report-ping-role" class="form-select role-select" onchange="saveReportSettings()"></select>
+                </div>
+              </div>
+              <div class="filter-toggle-list" style="margin-top: 14px;">
+                <div class="setting-row">
+                  <div>
+                    <strong>Anonymous Reporting</strong>
+                    <div class="setting-desc">Hides submitter identity from standard logs.</div>
+                  </div>
+                  <label class="switch">
+                    <input type="checkbox" id="report-anonymous-toggle" checked onchange="saveReportSettings()">
+                    <span class="slider"></span>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <!-- 3. Staff & Role Applications -->
+            <div class="panel-card-section">
+              <h3 class="card-section-title">📝 Staff & Role Applications</h3>
+              <div class="form-grid-2">
+                <div class="form-group">
+                  <label class="form-label">Applications Submission Channel</label>
+                  <select id="app-submission-channel" class="form-select channel-select" onchange="saveApplicationSettings()"></select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Reviewer Role</label>
+                  <select id="app-reviewer-role" class="form-select role-select" onchange="saveApplicationSettings()"></select>
+                </div>
+              </div>
+            </div>
+
+            <!-- 4. Infraction Appeals -->
+            <div class="panel-card-section">
+              <h3 class="card-section-title">⚖️ Ban & Infraction Appeals</h3>
+              <div class="form-grid-2">
+                <div class="form-group">
+                  <label class="form-label">Appeals Review Channel</label>
+                  <select id="appeal-review-channel" class="form-select channel-select" onchange="saveAppealSettings()"></select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Reviewer Role</label>
+                  <select id="appeal-reviewer-role" class="form-select role-select" onchange="saveAppealSettings()"></select>
+                </div>
+              </div>
+            </div>
+
+            <!-- 5. Forum-Backed FAQ -->
+            <div class="panel-card-section">
+              <h3 class="card-section-title">❓ Forum FAQ & Auto-Replies</h3>
+              <div class="form-grid-2">
+                <div class="form-group">
+                  <label class="form-label">FAQ Forum Channel</label>
+                  <select id="faq-forum-channel" class="form-select channel-select" onchange="saveFaqSettings()"></select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Auto-Reply in Chat to Common Questions</label>
+                  <select id="faq-auto-reply-mode" class="form-select" onchange="saveFaqSettings()">
+                    <option value="ENABLED">Enabled (Suggest matching FAQ threads)</option>
+                    <option value="DISABLED">Disabled</option>
+                  </select>
+                </div>
+              </div>
             </div>
           </div>
 
           <!-- PANEL 4: MEDIA & SOCIAL FEEDS (INTERACTIVE LIST & ADD) -->
           <div id="tab-panel-media" class="manage-panel">
             <div class="panel-header">
-              <div class="section-header-flex">
-                <div>
-                  <h2 class="panel-title">Social Stream Alerts & Creator Tracking</h2>
-                  <p class="panel-subtitle">Subscribe to live Twitch channels and YouTube creator updates.</p>
-                </div>
-              </div>
+              <h2 class="panel-title">Social Stream Alerts & Creator Tracking</h2>
+              <p class="panel-subtitle">Subscribe to live Twitch channels and YouTube creator updates with channel & role dropdowns.</p>
             </div>
 
             <!-- Add Feed Card / Form -->
@@ -310,12 +479,12 @@
                   <input type="text" id="feed-account" class="form-input" placeholder="e.g. shroud or @MrBeast" required>
                 </div>
                 <div class="form-group">
-                  <label class="form-label">Announcement Channel ID</label>
-                  <input type="text" id="feed-channel" class="form-input" placeholder="Discord Channel ID" required>
+                  <label class="form-label">Announcement Target Channel</label>
+                  <select id="feed-channel" class="form-select channel-select" required></select>
                 </div>
                 <div class="form-group">
-                  <label class="form-label">Ping Role ID (Optional)</label>
-                  <input type="text" id="feed-role" class="form-input" placeholder="Role ID to mention">
+                  <label class="form-label">Ping Role (Optional)</label>
+                  <select id="feed-role" class="form-select role-select"></select>
                 </div>
                 <div class="form-group span-full">
                   <button type="submit" class="btn btn-primary" id="btn-add-feed">+ Add Stream Alert</button>
@@ -323,7 +492,7 @@
               </form>
             </div>
 
-            <!-- Active Subscribed Feeds Table -->
+            <!-- Active Subscriptions Table -->
             <div class="panel-card-section">
               <h3 class="card-section-title">Active Subscriptions</h3>
               <div class="table-container">
@@ -333,14 +502,34 @@
                       <th>Platform</th>
                       <th>Creator / Account</th>
                       <th>Alert Channel</th>
+                      <th>Ping Role</th>
                       <th>Status</th>
                       <th>Actions</th>
                     </tr>
                   </thead>
                   <tbody id="feeds-table-body">
-                    <tr><td colspan="5" style="text-align: center; color: var(--text-muted);">Loading active feeds...</td></tr>
+                    <tr><td colspan="6" style="text-align: center; color: var(--text-muted);">Loading active feeds...</td></tr>
                   </tbody>
                 </table>
+              </div>
+            </div>
+
+            <!-- Live Directory Hub Settings -->
+            <div class="panel-card-section">
+              <h3 class="card-section-title">Live Directory Hub</h3>
+              <div class="form-grid-2">
+                <div class="form-group">
+                  <label class="form-label">Live Streams Directory Channel</label>
+                  <select id="feed-directory-channel" class="form-select channel-select" onchange="saveFeedDirectorySettings()"></select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Auto-Update Interval</label>
+                  <select id="feed-refresh-interval" class="form-select" onchange="saveFeedDirectorySettings()">
+                    <option value="60">Every 1 Minute</option>
+                    <option value="120">Every 2 Minutes</option>
+                    <option value="300">Every 5 Minutes</option>
+                  </select>
+                </div>
               </div>
             </div>
           </div>
@@ -349,91 +538,219 @@
           <div id="tab-panel-onboarding" class="manage-panel">
             <div class="panel-header">
               <h2 class="panel-title">Onboarding, Welcome & Roles</h2>
-              <p class="panel-subtitle">Configure welcome cards, auto-roles, and reaction panels.</p>
+              <p class="panel-subtitle">Configure welcome cards, auto-roles, reaction panels, and birthday calendar.</p>
             </div>
 
             <div class="panel-card-section">
-              <h3 class="card-section-title">Welcome Greetings</h3>
+              <h3 class="card-section-title">Welcome Greetings & Join Cards</h3>
               <div class="form-grid-2">
                 <div class="form-group">
-                  <label class="form-label">Welcome Channel ID</label>
-                  <input type="text" id="welcome-channel" class="form-input" placeholder="Discord Channel ID">
+                  <label class="form-label">Welcome Channel</label>
+                  <select id="welcome-channel" class="form-select channel-select" onchange="saveWelcomeSettings()"></select>
                 </div>
                 <div class="form-group">
-                  <label class="form-label">Auto-Assigned Member Role ID</label>
-                  <input type="text" id="welcome-role" class="form-input" placeholder="Role ID given on join">
+                  <label class="form-label">Auto-Assigned Starting Member Role</label>
+                  <select id="welcome-role" class="form-select role-select" onchange="saveWelcomeSettings()"></select>
                 </div>
               </div>
-              <button class="btn btn-primary btn-sm" onclick="saveWelcomeSettings()" style="margin-top: 12px;">Save Onboarding Settings</button>
+            </div>
+
+            <div class="panel-card-section">
+              <h3 class="card-section-title">🎂 Birthday Announcements Calendar</h3>
+              <div class="form-grid-2">
+                <div class="form-group">
+                  <label class="form-label">Birthday Announcement Channel</label>
+                  <select id="birthday-channel" class="form-select channel-select" onchange="saveBirthdaySettings()"></select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Birthday Special Role</label>
+                  <select id="birthday-role" class="form-select role-select" onchange="saveBirthdaySettings()"></select>
+                </div>
+              </div>
             </div>
           </div>
 
-          <!-- PANEL 6: COMMUNITY & LEVELING -->
+          <!-- PANEL 6: COMMUNITY, LEVELING & STARBOARD -->
           <div id="tab-panel-community" class="manage-panel">
             <div class="panel-header">
               <h2 class="panel-title">Community, Leveling & Starboard</h2>
-              <p class="panel-subtitle">Manage XP progression rates, reward roles, and the community starboard.</p>
+              <p class="panel-subtitle">Manage XP progression rates, reward roles, community suggestions, and starboard.</p>
             </div>
 
+            <!-- Starboard Console -->
             <div class="panel-card-section">
-              <h3 class="card-section-title">Starboard Hall of Fame</h3>
+              <h3 class="card-section-title">⭐ Starboard Hall of Fame</h3>
               <div class="form-grid-3">
                 <div class="form-group">
-                  <label class="form-label">Starboard Channel ID</label>
-                  <input type="text" id="starboard-channel" class="form-input" placeholder="Channel ID">
+                  <label class="form-label">Starboard Channel</label>
+                  <select id="starboard-channel" class="form-select channel-select" onchange="saveStarboardSettings()"></select>
                 </div>
                 <div class="form-group">
                   <label class="form-label">Reaction Threshold</label>
-                  <input type="number" id="starboard-threshold" class="form-input" value="3" min="1" max="25">
+                  <input type="number" id="starboard-threshold" class="form-input" value="3" min="1" max="25" onchange="saveStarboardSettings()">
                 </div>
                 <div class="form-group">
                   <label class="form-label">Star Emoji</label>
-                  <input type="text" id="starboard-emoji" class="form-input" value="⭐">
+                  <input type="text" id="starboard-emoji" class="form-input" value="⭐" onchange="saveStarboardSettings()">
                 </div>
               </div>
-              <button class="btn btn-primary btn-sm" onclick="saveStarboardSettings()" style="margin-top: 12px;">Save Starboard Settings</button>
+            </div>
+
+            <!-- Leveling & XP Progression -->
+            <div class="panel-card-section">
+              <h3 class="card-section-title">🏆 XP Progression & Level-Ups</h3>
+              <div class="form-grid-2">
+                <div class="form-group">
+                  <label class="form-label">Level-Up Announcement Channel</label>
+                  <select id="leveling-channel" class="form-select channel-select" onchange="saveLevelingSettings()"></select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">XP Multiplier Role (2x XP)</label>
+                  <select id="leveling-multiplier-role" class="form-select role-select" onchange="saveLevelingSettings()"></select>
+                </div>
+              </div>
+            </div>
+
+            <!-- Community Suggestions -->
+            <div class="panel-card-section">
+              <h3 class="card-section-title">💡 Community Suggestions</h3>
+              <div class="form-grid-2">
+                <div class="form-group">
+                  <label class="form-label">Suggestions Submission Channel</label>
+                  <select id="suggest-channel" class="form-select channel-select" onchange="saveSuggestionSettings()"></select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Staff Review Channel</label>
+                  <select id="suggest-review-channel" class="form-select channel-select" onchange="saveSuggestionSettings()"></select>
+                </div>
+              </div>
             </div>
           </div>
 
           <!-- PANEL 7: AUDIT & SERVER STATS -->
           <div id="tab-panel-logging" class="manage-panel">
             <div class="panel-header">
-              <h2 class="panel-title">Audit Logging & Telemetry</h2>
-              <p class="panel-subtitle">Assign dedicated audit channels for deletions, edits, member joins, and voice activity.</p>
+              <h2 class="panel-title">Audit Logging & Server Stats</h2>
+              <p class="panel-subtitle">Assign dedicated audit channels for deletions, edits, member joins, and live counter voice stats.</p>
             </div>
 
-            <div class="panel-card-section">
-              <h3 class="card-section-title">Default Log Channel</h3>
-              <div class="form-group" style="max-width: 400px;">
-                <label class="form-label">Default Audit Channel ID</label>
-                <input type="text" id="default-log-channel" class="form-input" placeholder="Discord Channel ID">
+            <!-- Bot Configuration Audit Channel -->
+            <div class="panel-card-section" style="border-left: 4px solid var(--accent-blue);">
+              <h3 class="card-section-title">⚙️ Dedicated Bot Configuration Change Logs</h3>
+              <div class="setting-desc" style="margin-bottom: 12px;">
+                Sends a rich Discord embed whenever an administrator modifies any SlickBot setting (via Web Dashboard or Slash Commands).
               </div>
-              <button class="btn btn-primary btn-sm" onclick="saveDefaultLogChannel()" style="margin-top: 12px;">Save Log Channel</button>
+              <div class="form-grid-2">
+                <div class="form-group">
+                  <label class="form-label">Bot Config Log Channel</label>
+                  <select id="log-config-audit-channel" class="form-select channel-select" onchange="saveConfigAuditChannel()"></select>
+                </div>
+              </div>
+            </div>
+
+            <!-- Granular Event Logging -->
+            <div class="panel-card-section">
+              <h3 class="card-section-title">Granular Event Audit Logging</h3>
+              <div class="form-grid-2">
+                <div class="form-group">
+                  <label class="form-label">Message Edits & Deletions</label>
+                  <select id="log-msg-channel" class="form-select channel-select" onchange="saveLoggingSettings()"></select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Member Joins & Leaves</label>
+                  <select id="log-member-channel" class="form-select channel-select" onchange="saveLoggingSettings()"></select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Voice Activity Logs</label>
+                  <select id="log-voice-channel" class="form-select channel-select" onchange="saveLoggingSettings()"></select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Role & Channel Changes</label>
+                  <select id="log-role-channel" class="form-select channel-select" onchange="saveLoggingSettings()"></select>
+                </div>
+              </div>
+            </div>
+
+            <!-- Live Server Stat Counters -->
+            <div class="panel-card-section">
+              <h3 class="card-section-title">Live Server Stat Voice Counters</h3>
+              <div class="form-grid-2">
+                <div class="form-group">
+                  <label class="form-label">Member Count Voice Channel</label>
+                  <select id="stats-member-channel" class="form-select channel-select" onchange="saveServerStatsSettings()"></select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Bot Count Voice Channel</label>
+                  <select id="stats-bot-channel" class="form-select channel-select" onchange="saveServerStatsSettings()"></select>
+                </div>
+              </div>
+            </div>
+
+            <!-- Full Audit Trail Feed -->
+            <div class="panel-card-section">
+              <div class="section-header-flex" style="margin-bottom: 12px;">
+                <h3 class="card-section-title" style="margin-bottom: 0;">📜 Bot Configuration Audit Trail</h3>
+                <button class="btn btn-outline btn-sm" onclick="loadAuditLogs()">🔄 Refresh Log</button>
+              </div>
+              <div class="table-container">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Timestamp</th>
+                      <th>Administrator</th>
+                      <th>Source</th>
+                      <th>Module</th>
+                      <th>Action & Details</th>
+                    </tr>
+                  </thead>
+                  <tbody id="logging-audit-table-body">
+                    <tr><td colspan="5" style="text-align: center; color: var(--text-muted);">Loading audit history...</td></tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
 
           <!-- PANEL 8: VOICE & AUTOMATION UTILITIES -->
           <div id="tab-panel-utilities" class="manage-panel">
             <div class="panel-header">
-              <h2 class="panel-title">Dynamic Voice & Automation</h2>
-              <p class="panel-subtitle">Configure Join-to-Create temporary voice hubs and scheduled cron messages.</p>
+              <h2 class="panel-title">Dynamic Voice & Automation Utilities</h2>
+              <p class="panel-subtitle">Configure Join-to-Create temporary voice hubs, scheduled messages, and utility tools.</p>
             </div>
 
             <div class="panel-card-section">
-              <h3 class="card-section-title">Join-to-Create Voice Hub</h3>
+              <h3 class="card-section-title">🎙️ Join-to-Create Dynamic Voice Hub</h3>
               <div class="form-grid-2">
                 <div class="form-group">
-                  <label class="form-label">Hub Voice Channel ID</label>
-                  <input type="text" id="jtc-hub-channel" class="form-input" placeholder="Voice Channel ID">
+                  <label class="form-label">Hub Voice Channel</label>
+                  <select id="jtc-hub-channel" class="form-select channel-select" onchange="saveVoiceSettings()"></select>
                 </div>
                 <div class="form-group">
                   <label class="form-label">Default Channel Name Template</label>
-                  <input type="text" id="jtc-name-template" class="form-input" value="{user}'s Lounge">
+                  <input type="text" id="jtc-name-template" class="form-input" value="{user}'s Lounge" onchange="saveVoiceSettings()">
                 </div>
               </div>
-              <button class="btn btn-primary btn-sm" onclick="saveVoiceSettings()" style="margin-top: 12px;">Save Voice Hub Settings</button>
+            </div>
+
+            <div class="panel-card-section">
+              <h3 class="card-section-title">⚙️ Utility Suite Settings</h3>
+              <div class="form-grid-2">
+                <div class="form-group">
+                  <label class="form-label">Polls Channel</label>
+                  <select id="util-poll-channel" class="form-select channel-select" onchange="saveVoiceSettings()"></select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Snipe Cache Capacity</label>
+                  <select id="util-snipe-limit" class="form-select" onchange="saveVoiceSettings()">
+                    <option value="10">10 Messages</option>
+                    <option value="25">25 Messages</option>
+                    <option value="50">50 Messages</option>
+                  </select>
+                </div>
+              </div>
             </div>
           </div>
+
         </main>
       </div>
     </div>

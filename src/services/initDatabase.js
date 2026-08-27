@@ -142,6 +142,21 @@ async function initDatabase() {
   `);
 
   await query(`ALTER TABLE log_queue_items ADD COLUMN IF NOT EXISTS module_key TEXT;`);
+  await query(`ALTER TABLE guild_configs ADD COLUMN IF NOT EXISTS config_audit_channel_id TEXT;`);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS config_audit_logs (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL,
+      actor_user_id TEXT,
+      actor_user_tag TEXT,
+      source TEXT NOT NULL,
+      module_key TEXT,
+      action TEXT NOT NULL,
+      details TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
 
 
 

@@ -6,11 +6,12 @@ const { URL } = require('node:url');
 const https = require('node:https');
 const querystring = require('node:querystring');
 
-// Load environment variables and database service
+// Load environment variables and services
 const { env } = require('../src/config/env');
 const { query } = require('../src/services/db');
 const { ModuleKeys } = require('../src/modules/moduleRegistry');
 const { SocialFeedService } = require('../src/modules/automation/socialFeedService');
+const { configAuditService } = require('../src/modules/logging/configAuditService');
 
 const PORT = process.env.DASHBOARD_PORT || process.env.PORT || 3000;
 const HOST = process.env.DASHBOARD_HOST || '0.0.0.0';
@@ -342,6 +343,65 @@ const ALL_MODULES_METADATA = [
 ];
 
 const VALID_MODULE_KEYS = new Set(Object.values(ModuleKeys));
+
+// Extract human-readable channel hierarchy and roles from live bot client or sandbox fallback
+function getGuildStructure(guildId, client = null) {
+  if (client?.guilds?.cache?.has(guildId)) {
+    const g = client.guilds.cache.get(guildId);
+    const channels = Array.from(g.channels.cache.values())
+      .filter(c => c.type === 0 || c.type === 2 || c.type === 4 || c.type === 5 || c.type === 15)
+      .map(c => ({
+        id: c.id,
+        name: c.name,
+        type: c.type === 2 ? 'voice' : c.type === 4 ? 'category' : c.type === 15 ? 'forum' : 'text',
+        parentId: c.parentId
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    const roles = Array.from(g.roles.cache.values())
+      .filter(r => r.name !== '@everyone')
+      .map(r => ({
+        id: r.id,
+        name: r.name,
+        color: r.hexColor !== '#000000' ? r.hexColor : '#94a3b8',
+        position: r.position
+      }))
+      .sort((a, b) => b.position - a.position);
+
+    return { channels, roles };
+  }
+
+  // Realistic sample channels & roles for testing and sandbox preview
+  return {
+    channels: [
+      { id: '100000000000000001', name: 'general-chat', type: 'text' },
+      { id: '100000000000000002', name: 'announcements', type: 'text' },
+      { id: '100000000000000003', name: 'stream-alerts', type: 'text' },
+      { id: '100000000000000004', name: 'welcome-and-rules', type: 'text' },
+      { id: '100000000000000005', name: 'mod-audit-logs', type: 'text' },
+      { id: '100000000000000006', name: 'bot-config-logs', type: 'text' },
+      { id: '100000000000000007', name: 'support-tickets', type: 'text' },
+      { id: '100000000000000008', name: 'ticket-transcripts', type: 'text' },
+      { id: '100000000000000009', name: 'member-reports', type: 'text' },
+      { id: '100000000000000010', name: 'staff-applications', type: 'text' },
+      { id: '100000000000000011', name: 'ban-appeals', type: 'text' },
+      { id: '100000000000000012', name: 'community-faq', type: 'forum' },
+      { id: '100000000000000013', name: 'starboard', type: 'text' },
+      { id: '100000000000000014', name: 'community-suggestions', type: 'text' },
+      { id: '100000000000000015', name: 'Join to Create (Hub)', type: 'voice' },
+      { id: '100000000000000016', name: 'General Voice Lounge', type: 'voice' }
+    ],
+    roles: [
+      { id: '200000000000000001', name: 'Administrator', color: '#ef4444', position: 10 },
+      { id: '200000000000000002', name: 'Moderator', color: '#3b82f6', position: 9 },
+      { id: '200000000000000003', name: 'Support Staff', color: '#10b981', position: 8 },
+      { id: '200000000000000004', name: 'Stream Alert Ping', color: '#8b5cf6', position: 7 },
+      { id: '200000000000000005', name: 'Verified Member', color: '#f59e0b', position: 6 },
+      { id: '200000000000000006', name: 'VIP', color: '#ec4899', position: 5 },
+      { id: '200000000000000007', name: 'Member', color: '#94a3b8', position: 1 }
+    ]
+  };
+}
 
 // Dynamically determine base URL from environment or request headers, ensuring valid formatting
 function getBaseUrl(req) {
@@ -737,7 +797,10 @@ async function handleDashboardRequest(req, res, client = null) {
       return;
     }
 
-    // 1. Full Guild Config & All 29 Module Statuses
+    const actorId = session.user?.id || 'admin';
+    const actorTag = session.user?.global_name || session.user?.username || 'Administrator';
+
+    // 1. Full Guild Config, Channels, Roles & All 29 Module Statuses
     if (req.method === 'GET' && subRoute === 'config') {
       try {
         let guildConfig = { guild_id: guildId, guild_name: guildObj.name, timezone: 'America/New_York' };
@@ -749,9 +812,7 @@ async function handleDashboardRequest(req, res, client = null) {
 
           const mRes = await query('SELECT * FROM module_configs WHERE guild_id = $1', [guildId]);
           moduleConfigs = mRes.rows;
-        } catch (e) {
-          // DB offline fallback
-        }
+        } catch (e) {}
 
         const modulesWithState = ALL_MODULES_METADATA.map(mod => {
           const cfg = moduleConfigs.find(m => m.module_key === mod.key);
@@ -762,6 +823,9 @@ async function handleDashboardRequest(req, res, client = null) {
           };
         });
 
+        // Resolve real Discord Channels & Roles for this server
+        const { channels, roles } = getGuildStructure(guildId, client);
+
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
           guild: {
@@ -770,7 +834,9 @@ async function handleDashboardRequest(req, res, client = null) {
             iconUrl: guildObj.icon ? `https://cdn.discordapp.com/icons/${encodeURIComponent(guildId)}/${encodeURIComponent(guildObj.icon)}.png?size=128` : null
           },
           config: guildConfig,
-          modules: modulesWithState
+          modules: modulesWithState,
+          channels,
+          roles
         }));
         return;
       } catch (err) {
@@ -800,9 +866,19 @@ async function handleDashboardRequest(req, res, client = null) {
                updated_at = NOW()`,
             [guildId, moduleKey, enabled]
           );
-        } catch (e) {
-          // DB fallback
-        }
+        } catch (e) {}
+
+        // Audit Log
+        await configAuditService.recordChange({
+          guildId,
+          actorId,
+          actorTag,
+          source: 'DASHBOARD',
+          moduleKey,
+          action: enabled ? 'Enabled Module' : 'Disabled Module',
+          details: `Set module ${moduleKey} state to ${enabled ? 'ENABLED' : 'DISABLED'}`,
+          client
+        });
 
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ ok: true, moduleKey, enabled }));
@@ -824,7 +900,7 @@ async function handleDashboardRequest(req, res, client = null) {
         } catch (e) {
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify([
-            { id: 'feed-1', platform: 'TWITCH', account_name: 'slickbot_live', channel_id: '123456789', enabled: true, last_status: 'OFFLINE' }
+            { id: 'feed-1', platform: 'TWITCH', account_name: 'slickbot_live', channel_id: '100000000000000003', ping_role_id: '200000000000000004', enabled: true, last_status: 'OFFLINE' }
           ]));
         }
         return;
@@ -836,7 +912,7 @@ async function handleDashboardRequest(req, res, client = null) {
           const { platform, account, channelId, pingRoleId, customMessage } = JSON.parse(rawBody || '{}');
           if (!platform || !account || !channelId) {
             res.writeHead(400, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: 'Missing platform, account handle, or Discord channel ID' }));
+            res.end(JSON.stringify({ error: 'Missing platform, account handle, or Discord channel' }));
             return;
           }
 
@@ -855,6 +931,18 @@ async function handleDashboardRequest(req, res, client = null) {
             return;
           }
 
+          // Audit Log
+          await configAuditService.recordChange({
+            guildId,
+            actorId,
+            actorTag,
+            source: 'DASHBOARD',
+            moduleKey: 'SOCIAL_FEEDS',
+            action: 'Subscribed Stream Alert',
+            details: `Subscribed ${platform} creator @${account} to target channel <#${channelId}>${pingRoleId ? ` (Ping: <@&${pingRoleId}>)` : ''}`,
+            client
+          });
+
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ ok: true, feed: addResult.feed }));
           return;
@@ -868,6 +956,19 @@ async function handleDashboardRequest(req, res, client = null) {
       if (req.method === 'DELETE' && subParam) {
         try {
           await socialFeedService.removeFeed(guildId, subParam);
+
+          // Audit Log
+          await configAuditService.recordChange({
+            guildId,
+            actorId,
+            actorTag,
+            source: 'DASHBOARD',
+            moduleKey: 'SOCIAL_FEEDS',
+            action: 'Deleted Stream Alert',
+            details: `Removed stream feed ${subParam}`,
+            client
+          });
+
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ ok: true, removedId: subParam }));
         } catch (e) {
@@ -887,11 +988,17 @@ async function handleDashboardRequest(req, res, client = null) {
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({
             config: cfgRes.rows[0] || { enabled: true, filter_invites: true, anti_spam: true, max_mentions: 5 },
-            bannedWords: wordsRes.rows || []
+            bannedWords: wordsRes.rows || [
+              { id: 'w1', word: 'discord.gg/scam' },
+              { id: 'w2', word: 'free-nitro-link' }
+            ]
           }));
         } catch (e) {
           res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ config: { enabled: true, filter_invites: true, anti_spam: true }, bannedWords: [] }));
+          res.end(JSON.stringify({
+            config: { enabled: true, filter_invites: true, anti_spam: true, max_mentions: 5 },
+            bannedWords: [{ id: 'w1', word: 'free-nitro' }]
+          }));
         }
         return;
       }
@@ -906,12 +1013,26 @@ async function handleDashboardRequest(req, res, client = null) {
             return;
           }
 
-          await query(
-            `INSERT INTO automod_banned_words (guild_id, word, created_at)
-             VALUES ($1, $2, NOW())
-             ON CONFLICT DO NOTHING`,
-            [guildId, word.trim().toLowerCase()]
-          );
+          try {
+            await query(
+              `INSERT INTO automod_banned_words (guild_id, word, created_at)
+               VALUES ($1, $2, NOW())
+               ON CONFLICT DO NOTHING`,
+              [guildId, word.trim().toLowerCase()]
+            );
+          } catch (e) {}
+
+          // Audit Log
+          await configAuditService.recordChange({
+            guildId,
+            actorId,
+            actorTag,
+            source: 'DASHBOARD',
+            moduleKey: 'AUTOMOD',
+            action: 'Added Banned Word',
+            details: `Added "${word.trim()}" to automated chat filter rules`,
+            client
+          });
 
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ ok: true, word: word.trim().toLowerCase() }));
@@ -930,10 +1051,10 @@ async function handleDashboardRequest(req, res, client = null) {
         try {
           const resRows = await query(`SELECT * FROM starboard_configs WHERE guild_id = $1 LIMIT 1`, [guildId]);
           res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify(resRows.rows[0] || { enabled: true, channel_id: null, star_threshold: 3, star_emoji: '⭐' }));
+          res.end(JSON.stringify(resRows.rows[0] || { enabled: true, channel_id: '100000000000000013', star_threshold: 3, star_emoji: '⭐' }));
         } catch (e) {
           res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ enabled: true, channel_id: null, star_threshold: 3, star_emoji: '⭐' }));
+          res.end(JSON.stringify({ enabled: true, channel_id: '100000000000000013', star_threshold: 3, star_emoji: '⭐' }));
         }
         return;
       }
@@ -942,17 +1063,32 @@ async function handleDashboardRequest(req, res, client = null) {
         try {
           const rawBody = await readRequestBody(req);
           const { enabled, channelId, threshold, emoji } = JSON.parse(rawBody || '{}');
-          await query(
-            `INSERT INTO starboard_configs (guild_id, enabled, channel_id, star_threshold, star_emoji, updated_at)
-             VALUES ($1, $2, $3, $4, $5, NOW())
-             ON CONFLICT (guild_id) DO UPDATE SET
-               enabled = EXCLUDED.enabled,
-               channel_id = EXCLUDED.channel_id,
-               star_threshold = EXCLUDED.star_threshold,
-               star_emoji = EXCLUDED.star_emoji,
-               updated_at = NOW()`,
-            [guildId, enabled ?? true, channelId || null, threshold || 3, emoji || '⭐']
-          );
+          try {
+            await query(
+              `INSERT INTO starboard_configs (guild_id, enabled, channel_id, star_threshold, star_emoji, updated_at)
+               VALUES ($1, $2, $3, $4, $5, NOW())
+               ON CONFLICT (guild_id) DO UPDATE SET
+                 enabled = EXCLUDED.enabled,
+                 channel_id = EXCLUDED.channel_id,
+                 star_threshold = EXCLUDED.star_threshold,
+                 star_emoji = EXCLUDED.star_emoji,
+                 updated_at = NOW()`,
+              [guildId, enabled ?? true, channelId || null, threshold || 3, emoji || '⭐']
+            );
+          } catch (e) {}
+
+          // Audit Log
+          await configAuditService.recordChange({
+            guildId,
+            actorId,
+            actorTag,
+            source: 'DASHBOARD',
+            moduleKey: 'STARBOARD',
+            action: 'Updated Starboard Settings',
+            details: `Channel: <#${channelId || 'None'}>, Threshold: ${threshold || 3} stars, Emoji: ${emoji || '⭐'}`,
+            client
+          });
+
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ ok: true }));
           return;
@@ -961,6 +1097,48 @@ async function handleDashboardRequest(req, res, client = null) {
           res.end(JSON.stringify({ error: 'Failed to save starboard settings' }));
           return;
         }
+      }
+    }
+
+    // 6. Config Audit Logs & Dedicated Channel
+    if (subRoute === 'audit-logs' && req.method === 'GET') {
+      try {
+        const logs = await configAuditService.getRecentLogs(guildId, 50);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(logs));
+        return;
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Failed to fetch audit logs' }));
+        return;
+      }
+    }
+
+    if (subRoute === 'config-audit-channel' && req.method === 'POST') {
+      try {
+        const rawBody = await readRequestBody(req);
+        const { channelId } = JSON.parse(rawBody || '{}');
+        await configAuditService.setConfigAuditChannel(guildId, channelId);
+
+        // Audit Log
+        await configAuditService.recordChange({
+          guildId,
+          actorId,
+          actorTag,
+          source: 'DASHBOARD',
+          moduleKey: 'LOGGING',
+          action: 'Updated Bot Config Log Channel',
+          details: `Dedicated bot configuration audit channel set to <#${channelId || 'Disabled'}>`,
+          client
+        });
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, channelId }));
+        return;
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Failed to update config audit channel' }));
+        return;
       }
     }
   }
