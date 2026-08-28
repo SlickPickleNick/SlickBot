@@ -162,7 +162,7 @@ function populateAllDropdowns(channels = [], roles = []) {
 // --- Interactive Searchable Autocomplete Combobox ---
 function initSearchableSelects() {
   document.querySelectorAll('select.channel-select, select.role-select').forEach(selectEl => {
-    const targetKey = selectEl.id || selectEl.name || Math.random().toString(36).substring(7);
+    const targetKey = selectEl.dataset.selectId || (selectEl.dataset.selectId = (selectEl.id || selectEl.name || 'sel_' + Math.random().toString(36).substring(7)));
     let wrapper = selectEl.parentElement.querySelector(`.searchable-select-wrapper[data-target-id="${targetKey}"]`);
     const isRole = selectEl.classList.contains('role-select');
 
@@ -177,7 +177,7 @@ function initSearchableSelects() {
       const input = document.createElement('input');
       input.type = 'text';
       input.className = 'searchable-select-input';
-      input.placeholder = isRole ? 'Search or select role (e.g. @Mod)...' : 'Search or select channel (e.g. #stream)...';
+      input.placeholder = isRole ? 'Search or select role (e.g. @Moderator)...' : 'Search or select channel (e.g. #announcements)...';
       input.autocomplete = 'off';
 
       const controls = document.createElement('div');
@@ -224,22 +224,34 @@ function initSearchableSelects() {
           item.className = 'searchable-select-option' + (opt.value === selectEl.value ? ' selected' : '');
           item.setAttribute('data-value', opt.value);
           
-          let icon = isRole ? '🏷️' : '#';
-          if (opt.text.includes('📢')) icon = '📢';
-          else if (opt.text.includes('🔊') || opt.text.includes('[Voice')) icon = '🔊';
-          else if (opt.text.includes('💬') || opt.text.includes('[Forum')) icon = '💬';
-          else if (opt.text.includes('🧵') || opt.text.includes('[Thread')) icon = '🧵';
-          else if (opt.text.includes('🎬') || opt.text.includes('[Media')) icon = '🎬';
-          else if (opt.text.includes('📂') || opt.text.includes('[Category')) icon = '📂';
-          else if (!opt.value) icon = '🚫';
+          let iconHtml = '';
+          if (isRole) {
+            if (!opt.value) {
+              iconHtml = '🚫';
+            } else {
+              const roleObj = (currentGuildConfig?.roles || []).find(r => r.id === opt.value);
+              const colorHex = roleObj?.color && roleObj.color !== '#000000' ? roleObj.color : '#94a3b8';
+              iconHtml = `<span class="role-color-dot" style="background: ${colorHex};"></span>`;
+            }
+          } else {
+            let icon = '#';
+            if (opt.text.includes('📢')) icon = '📢';
+            else if (opt.text.includes('🔊') || opt.text.includes('[Voice')) icon = '🔊';
+            else if (opt.text.includes('💬') || opt.text.includes('[Forum')) icon = '💬';
+            else if (opt.text.includes('🧵') || opt.text.includes('[Thread')) icon = '🧵';
+            else if (opt.text.includes('🎬') || opt.text.includes('[Media')) icon = '🎬';
+            else if (opt.text.includes('📂') || opt.text.includes('[Category')) icon = '📂';
+            else if (!opt.value) icon = '🚫';
+            iconHtml = `<span>${icon}</span>`;
+          }
 
           const groupLabel = opt.parentElement?.tagName === 'OPTGROUP' ? opt.parentElement.label : '';
           const groupBadge = groupLabel ? `<span style="font-size: 11px; color: var(--text-faint); margin-left: auto; white-space: nowrap;">${escapeHtml(groupLabel)}</span>` : '';
 
           item.innerHTML = `
             <span class="option-label" style="display: flex; align-items: center; gap: 8px; width: 100%;">
-              <span>${icon}</span>
-              <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(opt.text.replace(/^[#📢🔊💬🧵🎬📂]\s*/, ''))}</span>
+              ${iconHtml}
+              <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(opt.text.replace(/^[#📢🔊💬🧵🎬📂@]\s*/, ''))}</span>
               ${groupBadge}
             </span>
           `;
@@ -2166,6 +2178,8 @@ function renderRolePanelOptions() {
       </div>
     </div>
   `).join('');
+
+  initSearchableSelects();
 }
 
 function updateRolePanelPreview() {
