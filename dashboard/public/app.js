@@ -177,7 +177,7 @@ function initSearchableSelects() {
       const input = document.createElement('input');
       input.type = 'text';
       input.className = 'searchable-select-input';
-      input.placeholder = isRole ? 'Search or select role (e.g. @Moderator)...' : 'Search or select channel (e.g. #announcements)...';
+      input.placeholder = isRole ? 'Search or select role (e.g. @Moderator)...' : 'Search or select channel (e.g. #💬・general)...';
       input.autocomplete = 'off';
 
       const controls = document.createElement('div');
@@ -188,6 +188,10 @@ function initSearchableSelects() {
       clearBtn.className = 'searchable-select-clear';
       clearBtn.innerHTML = '&times;';
       clearBtn.title = 'Clear selection';
+
+      const arrow = document.createElement('span');
+      arrow.className = 'searchable-select-arrow';
+      arrow.innerHTML = '&#9660;';
 
       arrow.addEventListener('click', (e) => {
         e.preventDefault();
@@ -220,12 +224,23 @@ function initSearchableSelects() {
       const renderOptions = (filterText = '') => {
         dropdown.innerHTML = '';
         const options = Array.from(selectEl.options);
-        const query = (filterText || '').toLowerCase().trim().replace(/^[#@📢🔊💬🧵🎬📂]\s*/, '');
+        const query = (filterText || '').toLowerCase().trim();
+        const queryNoPrefix = query.replace(/^[#@]\s*/, '');
+
         const filtered = options.filter(opt => {
           if (!opt.value && !query) return true;
           if (!opt.value && query) return false;
-          const cleanText = opt.text.toLowerCase().replace(/^[#@📢🔊💬🧵🎬📂]\s*/, '');
-          return !query || cleanText.includes(query) || opt.value.toLowerCase().includes(query) || (opt.parentElement?.label || '').toLowerCase().includes(query);
+          
+          const rawText = opt.text.toLowerCase();
+          const optVal = opt.value.toLowerCase();
+          const groupLabel = (opt.parentElement?.label || '').toLowerCase();
+
+          // Full Unicode and emoji matching
+          return !query || 
+                 rawText.includes(query) || 
+                 rawText.includes(queryNoPrefix) || 
+                 optVal.includes(query) || 
+                 groupLabel.includes(query);
         });
 
         if (filtered.length === 0) {
@@ -251,6 +266,7 @@ function initSearchableSelects() {
             let icon = '#';
             if (opt.text.includes('📢')) icon = '📢';
             else if (opt.text.includes('🔊') || opt.text.includes('[Voice')) icon = '🔊';
+            else if (opt.text.includes('🎭') || opt.text.includes('[Stage')) icon = '🎭';
             else if (opt.text.includes('💬') || opt.text.includes('[Forum')) icon = '💬';
             else if (opt.text.includes('🧵') || opt.text.includes('[Thread')) icon = '🧵';
             else if (opt.text.includes('🎬') || opt.text.includes('[Media')) icon = '🎬';
@@ -262,10 +278,11 @@ function initSearchableSelects() {
           const groupLabel = opt.parentElement?.tagName === 'OPTGROUP' ? opt.parentElement.label : '';
           const groupBadge = groupLabel ? `<span style="font-size: 11px; color: var(--text-faint); margin-left: auto; white-space: nowrap;">${escapeHtml(groupLabel)}</span>` : '';
 
+          // Preserve emojis and special characters in channel and role names
           item.innerHTML = `
             <span class="option-label" style="display: flex; align-items: center; gap: 8px; width: 100%;">
               ${iconHtml}
-              <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(opt.text.replace(/^[#📢🔊💬🧵🎬📂@]\s*/, ''))}</span>
+              <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(opt.text.replace(/^[#@]\s*/, ''))}</span>
               ${groupBadge}
             </span>
           `;
@@ -282,7 +299,7 @@ function initSearchableSelects() {
       const selectOption = (val, text) => {
         selectEl.value = val;
         const isPlaceholder = !val || text.startsWith('Select a') || text.startsWith('-- None');
-        input.value = (val && !isPlaceholder) ? text.replace(/^[#📢🔊💬🧵🎬📂@]\s*/, '') : '';
+        input.value = (val && !isPlaceholder) ? text.replace(/^[#@]\s*/, '') : '';
         clearBtn.style.display = (val && !isPlaceholder) ? 'inline-block' : 'none';
         wrapper.classList.remove('open');
         selectEl.dispatchEvent(new Event('change', { bubbles: true }));
@@ -329,7 +346,7 @@ function initSearchableSelects() {
           wrapper.classList.remove('open');
           const selectedOpt = selectEl.options[selectEl.selectedIndex];
           const isPlaceholder = !selectEl.value || (selectedOpt && (selectedOpt.text.startsWith('Select a') || selectedOpt.text.startsWith('-- None')));
-          input.value = (selectEl.value && selectedOpt && !isPlaceholder) ? selectedOpt.text.replace(/^[#📢🔊💬🧵🎬📂@]\s*/, '') : '';
+          input.value = (selectEl.value && selectedOpt && !isPlaceholder) ? selectedOpt.text.replace(/^[#@]\s*/, '') : '';
           clearBtn.style.display = (selectEl.value && !isPlaceholder) ? 'inline-block' : 'none';
         }
       });
@@ -341,7 +358,7 @@ function initSearchableSelects() {
     const selectedOpt = selectEl.options[selectEl.selectedIndex];
     const isPlaceholder = !selectEl.value || (selectedOpt && (selectedOpt.text.startsWith('Select a') || selectedOpt.text.startsWith('-- None')));
     if (input) {
-      input.value = (selectEl.value && selectedOpt && !isPlaceholder) ? selectedOpt.text.replace(/^[#📢🔊💬🧵🎬📂@]\s*/, '') : '';
+      input.value = (selectEl.value && selectedOpt && !isPlaceholder) ? selectedOpt.text.replace(/^[#@]\s*/, '') : '';
     }
     if (clearBtn) {
       clearBtn.style.display = (selectEl.value && !isPlaceholder) ? 'inline-block' : 'none';
