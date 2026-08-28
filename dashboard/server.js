@@ -348,37 +348,64 @@ const ALL_MODULES_METADATA = [
 
 const VALID_MODULE_KEYS = new Set(Object.values(ModuleKeys));
 
+function normalizeChannelType(type) {
+  const t = Number(type);
+  if (t === 0) return 'text';
+  if (t === 2) return 'voice';
+  if (t === 4) return 'category';
+  if (t === 5) return 'announcement';
+  if (t === 10 || t === 11 || t === 12) return 'thread';
+  if (t === 13) return 'stage';
+  if (t === 15) return 'forum';
+  if (t === 16) return 'media';
+  if (typeof type === 'string') {
+    const s = type.toLowerCase();
+    if (s.includes('voice')) return 'voice';
+    if (s.includes('category')) return 'category';
+    if (s.includes('announce') || s.includes('news')) return 'announcement';
+    if (s.includes('thread')) return 'thread';
+    if (s.includes('stage')) return 'stage';
+    if (s.includes('forum')) return 'forum';
+    if (s.includes('media')) return 'media';
+  }
+  return 'text';
+}
+
 // Extract human-readable channel hierarchy and roles from live bot client or sandbox fallback
 async function getGuildStructure(guildId, client = null) {
+  // 1. Fetch from live bot client gateway if available
   if (client?.guilds?.cache?.has(guildId)) {
     const g = client.guilds.cache.get(guildId);
     
-    // Refresh channel & role caches directly from Discord API
+    let fetchedChannels = null;
     try {
-      await g.channels.fetch().catch(() => {});
+      fetchedChannels = await g.channels.fetch().catch(() => null);
       await g.roles.fetch().catch(() => {});
+      const activeThreads = await g.channels.fetchActiveThreads().catch(() => null);
+      if (activeThreads?.threads) {
+        for (const thread of activeThreads.threads.values()) {
+          g.channels.cache.set(thread.id, thread);
+        }
+      }
     } catch (e) {}
 
-    const channels = Array.from(g.channels.cache.values())
-      .filter(c => c && [0, 2, 4, 5, 13, 15, 16].includes(c.type))
+    const channelSource = fetchedChannels || g.channels.cache;
+    const channels = Array.from(channelSource.values())
+      .filter(c => c && c.id && c.name)
       .map(c => {
-        let typeStr = 'text';
-        if (c.type === 2) typeStr = 'voice';
-        else if (c.type === 4) typeStr = 'category';
-        else if (c.type === 5) typeStr = 'announcement';
-        else if (c.type === 13) typeStr = 'stage';
-        else if (c.type === 15) typeStr = 'forum';
-        else if (c.type === 16) typeStr = 'media';
-
+        const typeStr = normalizeChannelType(c.type);
         const parentName = c.parentId ? g.channels.cache.get(c.parentId)?.name : null;
+        const canSend = Boolean(c.isTextBased?.() || [0, 2, 5, 10, 11, 12, 13, 15, 16].includes(Number(c.type)));
 
         return {
           id: c.id,
           name: c.name,
           type: typeStr,
+          rawType: c.type,
           parentId: c.parentId || null,
           parentName: parentName || null,
-          position: c.position || 0
+          position: c.position ?? 0,
+          canSend
         };
       })
       .sort((a, b) => (a.parentName || '').localeCompare(b.parentName || '') || a.position - b.position || a.name.localeCompare(b.name));
@@ -389,32 +416,85 @@ async function getGuildStructure(guildId, client = null) {
         id: r.id,
         name: r.name,
         color: r.hexColor !== '#000000' ? r.hexColor : '#94a3b8',
-        position: r.position
+        position: r.position ?? 0
       }))
       .sort((a, b) => b.position - a.position);
 
     return { channels, roles };
   }
 
-  // Realistic sample channels & roles for testing and sandbox preview
+  // 2. Fetch directly from Discord REST API if Bot Token is available
+  const botToken = process.env.DISCORD_BOT_TOKEN || process.env.DISCORD_TOKEN;
+  if (botToken) {
+    try {
+      const [chRes, roRes] = await Promise.all([
+        makeHttpsRequest({
+          hostname: 'discord.com',
+          path: `/api/v10/guilds/${guildId}/channels`,
+          method: 'GET',
+          headers: { Authorization: `Bot ${botToken}` }
+        }),
+        makeHttpsRequest({
+          hostname: 'discord.com',
+          path: `/api/v10/guilds/${guildId}/roles`,
+          method: 'GET',
+          headers: { Authorization: `Bot ${botToken}` }
+        })
+      ]);
+
+      if (Array.isArray(chRes.data) && chRes.data.length > 0) {
+        const parentLookup = new Map(chRes.data.map(c => [c.id, c.name]));
+        const channels = chRes.data
+          .map(c => ({
+            id: c.id,
+            name: c.name,
+            type: normalizeChannelType(c.type),
+            rawType: c.type,
+            parentId: c.parent_id || null,
+            parentName: c.parent_id ? parentLookup.get(c.parent_id) || null : null,
+            position: c.position ?? 0,
+            canSend: [0, 2, 5, 10, 11, 12, 13, 15, 16].includes(Number(c.type))
+          }))
+          .sort((a, b) => (a.parentName || '').localeCompare(b.parentName || '') || a.position - b.position || a.name.localeCompare(b.name));
+
+        const roles = (Array.isArray(roRes.data) ? roRes.data : [])
+          .filter(r => r.name !== '@everyone')
+          .map(r => ({
+            id: r.id,
+            name: r.name,
+            color: r.color ? '#' + r.color.toString(16).padStart(6, '0') : '#94a3b8',
+            position: r.position ?? 0
+          }))
+          .sort((a, b) => b.position - a.position);
+
+        return { channels, roles };
+      }
+    } catch (apiErr) {}
+  }
+
+  // 3. Realistic comprehensive channels & roles for testing and sandbox preview
   return {
     channels: [
-      { id: '100000000000000001', name: 'general-chat', type: 'text' },
-      { id: '100000000000000002', name: 'announcements', type: 'text' },
-      { id: '100000000000000003', name: 'stream-alerts', type: 'text' },
-      { id: '100000000000000004', name: 'welcome-and-rules', type: 'text' },
-      { id: '100000000000000005', name: 'mod-audit-logs', type: 'text' },
-      { id: '100000000000000006', name: 'bot-config-logs', type: 'text' },
-      { id: '100000000000000007', name: 'support-tickets', type: 'text' },
-      { id: '100000000000000008', name: 'ticket-transcripts', type: 'text' },
-      { id: '100000000000000009', name: 'member-reports', type: 'text' },
-      { id: '100000000000000010', name: 'staff-applications', type: 'text' },
-      { id: '100000000000000011', name: 'ban-appeals', type: 'text' },
-      { id: '100000000000000012', name: 'community-faq', type: 'forum' },
-      { id: '100000000000000013', name: 'starboard', type: 'text' },
-      { id: '100000000000000014', name: 'community-suggestions', type: 'text' },
-      { id: '100000000000000015', name: 'Join to Create (Hub)', type: 'voice' },
-      { id: '100000000000000016', name: 'General Voice Lounge', type: 'voice' }
+      { id: '100000000000000001', name: 'general-chat', type: 'text', parentName: 'Text Channels', position: 1 },
+      { id: '100000000000000002', name: 'announcements', type: 'announcement', parentName: 'Information', position: 1 },
+      { id: '100000000000000003', name: 'stream-alerts', type: 'announcement', parentName: 'Information', position: 2 },
+      { id: '100000000000000004', name: 'welcome-and-rules', type: 'text', parentName: 'Information', position: 3 },
+      { id: '100000000000000005', name: 'mod-audit-logs', type: 'text', parentName: 'Staff & Logs', position: 1 },
+      { id: '100000000000000006', name: 'bot-config-logs', type: 'text', parentName: 'Staff & Logs', position: 2 },
+      { id: '100000000000000007', name: 'support-tickets', type: 'text', parentName: 'Support Desk', position: 1 },
+      { id: '100000000000000008', name: 'ticket-transcripts', type: 'text', parentName: 'Support Desk', position: 2 },
+      { id: '100000000000000009', name: 'member-reports', type: 'text', parentName: 'Support Desk', position: 3 },
+      { id: '100000000000000010', name: 'staff-applications', type: 'text', parentName: 'Staff & Logs', position: 3 },
+      { id: '100000000000000011', name: 'ban-appeals', type: 'text', parentName: 'Support Desk', position: 4 },
+      { id: '100000000000000012', name: 'community-faq', type: 'forum', parentName: 'Information', position: 4 },
+      { id: '100000000000000013', name: 'starboard', type: 'text', parentName: 'Community', position: 2 },
+      { id: '100000000000000014', name: 'community-suggestions', type: 'text', parentName: 'Community', position: 3 },
+      { id: '100000000000000015', name: 'bot-commands', type: 'text', parentName: 'Community', position: 4 },
+      { id: '100000000000000016', name: 'patch-notes', type: 'announcement', parentName: 'Information', position: 5 },
+      { id: '100000000000000017', name: 'media-and-clips', type: 'media', parentName: 'Community', position: 5 },
+      { id: '100000000000000018', name: 'General Voice Lounge', type: 'voice', parentName: 'Voice Lounges', position: 1 },
+      { id: '100000000000000019', name: 'Gaming Lounge 1', type: 'voice', parentName: 'Voice Lounges', position: 2 },
+      { id: '100000000000000020', name: 'Community Stage', type: 'stage', parentName: 'Voice Lounges', position: 3 }
     ],
     roles: [
       { id: '200000000000000001', name: 'Administrator', color: '#ef4444', position: 10 },

@@ -82,15 +82,59 @@ function populateAllDropdowns(channels = [], roles = []) {
     const filterType = selectEl.getAttribute('data-type') || null;
     const allowNone = selectEl.getAttribute('data-allow-none') !== 'false';
 
-    let html = allowNone ? `<option value="">-- None / Disabled --</option>` : `<option value="">Select a Channel...</option>`;
+    let html = allowNone ? `<option value="">-- None / Disabled --</option>` : `<option value="">Select a Target Channel...</option>`;
     
+    // Group channels by Category / Parent
+    const uncategorized = [];
+    const categoriesMap = new Map();
+
     channels.forEach(ch => {
-      if (!filterType || ch.type === filterType || (filterType === 'text' && (ch.type === 'text' || ch.type === 'announcement'))) {
-        const typeLabel = ch.type === 'voice' ? ' [Voice]' : ch.type === 'forum' ? ' [Forum]' : ch.type === 'category' ? ' [Category]' : ch.type === 'announcement' ? ' [Announce]' : '';
-        const parentTag = ch.parentName ? ` (${ch.parentName})` : '';
-        html += `<option value="${escapeHtml(ch.id)}">#${escapeHtml(ch.name)}${typeLabel}${parentTag}</option>`;
+      // Exclude pure category headers from message destination lists unless explicitly requested
+      if (ch.type === 'category' && filterType !== 'category') return;
+
+      const isTextEligible = ch.canSend ?? (!filterType || ch.type === 'text' || ch.type === 'announcement' || ch.type === 'thread' || ch.type === 'forum' || ch.type === 'voice' || ch.type === 'stage' || ch.type === 'media');
+
+      if (!filterType || ch.type === filterType || (filterType === 'text' && isTextEligible)) {
+        if (ch.parentName) {
+          if (!categoriesMap.has(ch.parentName)) categoriesMap.set(ch.parentName, []);
+          categoriesMap.get(ch.parentName).push(ch);
+        } else {
+          uncategorized.push(ch);
+        }
       }
     });
+
+    const formatOptionHtml = (ch) => {
+      let icon = '#';
+      let typeLabel = '';
+      if (ch.type === 'announcement') { icon = '📢'; typeLabel = ' [Announce]'; }
+      else if (ch.type === 'voice') { icon = '🔊'; typeLabel = ' [Voice Text]'; }
+      else if (ch.type === 'stage') { icon = '🎭'; typeLabel = ' [Stage Text]'; }
+      else if (ch.type === 'forum') { icon = '💬'; typeLabel = ' [Forum]'; }
+      else if (ch.type === 'thread') { icon = '🧵'; typeLabel = ' [Thread]'; }
+      else if (ch.type === 'media') { icon = '🎬'; typeLabel = ' [Media]'; }
+      else if (ch.type === 'category') { icon = '📂'; typeLabel = ' [Category]'; }
+
+      return `<option value="${escapeHtml(ch.id)}">${icon} ${escapeHtml(ch.name)}${typeLabel}</option>`;
+    };
+
+    if (categoriesMap.size > 0) {
+      if (uncategorized.length > 0) {
+        html += `<optgroup label="General / Uncategorized">`;
+        uncategorized.forEach(ch => { html += formatOptionHtml(ch); });
+        html += `</optgroup>`;
+      }
+      for (const [catName, catChannels] of categoriesMap.entries()) {
+        html += `<optgroup label="📂 ${escapeHtml(catName)}">`;
+        catChannels.forEach(ch => { html += formatOptionHtml(ch); });
+        html += `</optgroup>`;
+      }
+    } else {
+      channels.forEach(ch => {
+        if (ch.type === 'category' && filterType !== 'category') return;
+        html += formatOptionHtml(ch);
+      });
+    }
 
     selectEl.innerHTML = html;
     if (currentValue) selectEl.value = currentValue;
@@ -181,15 +225,22 @@ function initSearchableSelects() {
           item.setAttribute('data-value', opt.value);
           
           let icon = isRole ? '🏷️' : '#';
-          if (opt.text.includes('[Voice]')) icon = '🔊';
-          if (opt.text.includes('[Forum]')) icon = '💬';
-          if (opt.text.includes('[Category]')) icon = '📂';
-          if (!opt.value) icon = '🚫';
+          if (opt.text.includes('📢')) icon = '📢';
+          else if (opt.text.includes('🔊') || opt.text.includes('[Voice')) icon = '🔊';
+          else if (opt.text.includes('💬') || opt.text.includes('[Forum')) icon = '💬';
+          else if (opt.text.includes('🧵') || opt.text.includes('[Thread')) icon = '🧵';
+          else if (opt.text.includes('🎬') || opt.text.includes('[Media')) icon = '🎬';
+          else if (opt.text.includes('📂') || opt.text.includes('[Category')) icon = '📂';
+          else if (!opt.value) icon = '🚫';
+
+          const groupLabel = opt.parentElement?.tagName === 'OPTGROUP' ? opt.parentElement.label : '';
+          const groupBadge = groupLabel ? `<span style="font-size: 11px; color: var(--text-faint); margin-left: auto; white-space: nowrap;">${escapeHtml(groupLabel)}</span>` : '';
 
           item.innerHTML = `
-            <span class="option-label">
+            <span class="option-label" style="display: flex; align-items: center; gap: 8px; width: 100%;">
               <span>${icon}</span>
-              <span>${escapeHtml(opt.text)}</span>
+              <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(opt.text.replace(/^[#📢🔊💬🧵🎬📂]\s*/, ''))}</span>
+              ${groupBadge}
             </span>
           `;
 
@@ -1365,6 +1416,9 @@ function formatDiscordMarkdown(text) {
 }
 
 function initEmbedStudio() {
+  if (currentGuildConfig?.channels) {
+    populateAllDropdowns(currentGuildConfig.channels, currentGuildConfig.roles || []);
+  }
   if (embedFieldsList.length === 0) {
     embedFieldsList = [
       { id: 'f_1', name: '📌 Important Guidelines', value: 'Please respect all members and follow Discord TOS.', inline: false },
