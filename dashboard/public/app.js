@@ -2492,6 +2492,12 @@ let currentAnalyticsRange = '24h';
 async function loadServerAnalytics() {
   if (!activeGuildId) return;
 
+  const btn = document.querySelector('#tab-panel-analytics-studio .btn-outline');
+  if (btn) {
+    btn.innerHTML = '<span class="refresh-icon">🔄</span> Loading...';
+    btn.disabled = true;
+  }
+
   try {
     const res = await fetch(`/api/guilds/${activeGuildId}/analytics`);
     const data = await res.json();
@@ -2515,8 +2521,16 @@ async function loadServerAnalytics() {
     // 4. Top Channels & Member Flow
     renderAnalyticsTopChannels(data.topChannels || []);
     renderAnalyticsMemberFlow(data.memberFlow || []);
+
+    showSaveNotification('Server analytics updated', 'success');
   } catch (e) {
     console.error('Analytics load error:', e);
+    showSaveNotification('Failed to fetch server analytics: ' + e.message, 'error');
+  } finally {
+    if (btn) {
+      btn.innerHTML = '🔄 Refresh Analytics';
+      btn.disabled = false;
+    }
   }
 }
 

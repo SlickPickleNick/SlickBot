@@ -2190,6 +2190,41 @@ async function initDatabase() {
     );
   `);
 
+  await query(`
+    CREATE TABLE IF NOT EXISTS guild_daily_analytics (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      record_date DATE NOT NULL,
+      messages_count INT NOT NULL DEFAULT 0,
+      voice_minutes INT NOT NULL DEFAULT 0,
+      active_users_count INT NOT NULL DEFAULT 0,
+      joins_count INT NOT NULL DEFAULT 0,
+      leaves_count INT NOT NULL DEFAULT 0,
+      moderation_count INT NOT NULL DEFAULT 0,
+      tickets_count INT NOT NULL DEFAULT 0,
+      commands_count INT NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(guild_id, record_date)
+    );
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS guild_hourly_activity (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      hour_timestamp TIMESTAMPTZ NOT NULL,
+      messages_count INT NOT NULL DEFAULT 0,
+      voice_minutes INT NOT NULL DEFAULT 0,
+      joins_count INT NOT NULL DEFAULT 0,
+      leaves_count INT NOT NULL DEFAULT 0,
+      commands_count INT NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(guild_id, hour_timestamp)
+    );
+  `);
+
   await query(`ALTER TABLE guild_configs ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT true;`);
   await query(`ALTER TABLE guild_configs ADD COLUMN IF NOT EXISTS left_at TIMESTAMPTZ;`);
   await query(`CREATE INDEX IF NOT EXISTS idx_guild_configs_active ON guild_configs(guild_id, active);`);
@@ -2198,6 +2233,8 @@ async function initDatabase() {
   await query(`CREATE INDEX IF NOT EXISTS idx_starboard_entries_lookup ON starboard_entries(guild_id, original_message_id);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_starboard_entries_starboard_msg ON starboard_entries(guild_id, starboard_message_id);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_starboard_entries_stars ON starboard_entries(guild_id, star_count DESC);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_guild_daily_analytics_lookup ON guild_daily_analytics(guild_id, record_date DESC);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_guild_hourly_activity_lookup ON guild_hourly_activity(guild_id, hour_timestamp DESC);`);
 }
 
 if (require.main === module) {

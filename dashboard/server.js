@@ -1044,14 +1044,25 @@ async function handleDashboardRequest(req, res, client = null) {
         // Resolve real Discord Channels & Roles for this server
         const { channels, roles } = await getGuildStructure(guildId, client);
 
-        // Helper to find log channel for a module or event
+        // Helper to find log channel for a module or event (case-insensitive across all tables)
         const getLogChan = (key) => {
-          const modRow = logModuleConfigs.find(r => r.module_key === key);
+          const cleanKey = String(key || '').trim().toLowerCase();
+
+          // 1. Check log_module_settings
+          const modRow = logModuleConfigs.find(r => String(r.module_key || '').trim().toLowerCase() === cleanKey);
           if (modRow?.channel_id) return modRow.channel_id;
-          const evtRow = logSettingsConfigs.find(r => r.event_key === key || r.event_key?.startsWith(key));
-          if (evtRow?.channel_id) return evtRow.channel_id;
-          const modCfg = moduleConfigs.find(m => m.module_key === key);
+
+          // 2. Check module_configs (e.g. SUGGESTIONS, FAQ, GIVEAWAYS, etc.)
+          const modCfg = moduleConfigs.find(m => String(m.module_key || '').trim().toLowerCase() === cleanKey);
           if (modCfg?.log_channel_id) return modCfg.log_channel_id;
+
+          // 3. Check log_settings
+          const evtRow = logSettingsConfigs.find(r => {
+            const k = String(r.event_key || '').trim().toLowerCase();
+            return k === cleanKey || k.startsWith(cleanKey + '.') || k.startsWith(cleanKey + '_');
+          });
+          if (evtRow?.channel_id) return evtRow.channel_id;
+
           return null;
         };
 
@@ -1065,7 +1076,7 @@ async function handleDashboardRequest(req, res, client = null) {
           },
           moderation: {
             mute_duration_ms: 600000,
-            mod_audit_channel_id: getLogChan('MODERATION') || guildConfig.default_log_channel_id || null,
+            mod_audit_channel_id: getLogChan('moderation') || guildConfig.default_log_channel_id || null,
             warn_threshold: 3,
             staff_role_id: ticketConfig?.staff_role_id || modStaffRole?.role_id || null,
             dm_notifications: true
@@ -1104,7 +1115,7 @@ async function handleDashboardRequest(req, res, client = null) {
             appeal_review_channel_id: appealConfig?.review_channel_id || null,
             appeal_reviewer_role_id: ticketConfig?.staff_role_id || null,
             appeal_cooldown_days: 30,
-            faq_forum_channel_id: getLogChan('FAQ') || null,
+            faq_forum_channel_id: getLogChan('faq') || null,
             faq_auto_reply_mode: 'ENABLED'
           },
           feeds: {
@@ -1124,7 +1135,7 @@ async function handleDashboardRequest(req, res, client = null) {
             birthday_channel_id: birthdayConfig?.channel_id || null,
             birthday_role_id: birthdayConfig?.birthday_role_id || null,
             birthday_message: birthdayConfig?.announcement_template || 'Happy birthday, {user}! Have an amazing day! 🎂🎉',
-            role_panel_channel_id: null,
+            role_panel_channel_id: getLogChan('reaction_roles') || null,
             role_panel_mode: 'BUTTONS',
             temprole_max_hours: 168
           },
@@ -1141,21 +1152,21 @@ async function handleDashboardRequest(req, res, client = null) {
             leveling_reward_10: null,
             leveling_reward_25: null,
             leveling_message: levelingConfig?.level_up_message || 'GG {user}, you leveled up to **Level {level}**! 🎉',
-            suggest_channel_id: getLogChan('SUGGESTIONS') || null,
-            suggest_review_channel_id: getLogChan('MODERATION') || null,
+            suggest_channel_id: getLogChan('suggestions') || null,
+            suggest_review_channel_id: getLogChan('moderation') || null,
             suggest_auto_thread: true,
             suggest_anonymous: false,
-            giveaway_channel_id: null,
+            giveaway_channel_id: getLogChan('giveaways') || null,
             giveaway_manager_role_id: null,
-            games_counting_channel_id: null,
+            games_counting_channel_id: getLogChan('community_games') || null,
             games_trivia_channel_id: null
           },
           logging: {
             config_audit_channel_id: guildConfig.config_audit_channel_id || null,
-            log_msg_channel_id: getLogChan('MESSAGE') || null,
-            log_member_channel_id: getLogChan('MEMBER') || null,
-            log_voice_channel_id: getLogChan('VOICE') || null,
-            log_role_channel_id: getLogChan('ROLE') || null,
+            log_msg_channel_id: getLogChan('message') || null,
+            log_member_channel_id: getLogChan('member') || null,
+            log_voice_channel_id: getLogChan('voice') || null,
+            log_role_channel_id: getLogChan('role') || null,
             stats_member_channel_id: serverStatsConfig?.member_channel_id || null,
             stats_member_format: serverStatsConfig?.member_template || 'Members: {members}',
             stats_bot_channel_id: serverStatsConfig?.bot_channel_id || null,
@@ -1166,7 +1177,7 @@ async function handleDashboardRequest(req, res, client = null) {
             jtc_name_template: jtcHubConfig?.name_template || "{user}'s Lounge",
             jtc_user_limit: jtcHubConfig?.user_limit || 0,
             jtc_category_id: jtcHubConfig?.category_id || null,
-            util_poll_channel_id: null,
+            util_poll_channel_id: getLogChan('utility') || null,
             util_snipe_limit: 25,
             util_afk_toggle: true
           }
@@ -2653,14 +2664,16 @@ async function handleDashboardRequest(req, res, client = null) {
           g = await client.guilds.fetch(guildId).catch(() => null);
         }
 
-        // Query real database metrics from actual tables
-        const [modCasesRes, ticketsRes, reportsRes, auditRes, levelsRes, appsRes] = await Promise.all([
+        // Query real database metrics from actual tables + analytics telemetry rollups
+        const [modCasesRes, ticketsRes, reportsRes, auditRes, levelsRes, appsRes, hourlyActivityRes, dailyAnalyticsRes] = await Promise.all([
           query(`SELECT COUNT(*)::int AS count FROM moderation_cases WHERE guild_id = $1`, [guildId]).catch(() => ({ rows: [{ count: 0 }] })),
           query(`SELECT COUNT(*)::int AS count FROM tickets WHERE guild_id = $1`, [guildId]).catch(() => ({ rows: [{ count: 0 }] })),
           query(`SELECT COUNT(*)::int AS count FROM reports WHERE guild_id = $1`, [guildId]).catch(() => ({ rows: [{ count: 0 }] })),
           query(`SELECT COUNT(*)::int AS count FROM config_audit_logs WHERE guild_id = $1`, [guildId]).catch(() => ({ rows: [{ count: 0 }] })),
           query(`SELECT COUNT(*)::int AS count, COALESCE(SUM(message_count), 0)::int AS total_msgs, COALESCE(SUM(voice_minutes), 0)::int AS total_voice_min FROM leveling_profiles WHERE guild_id = $1`, [guildId]).catch(() => ({ rows: [{ count: 0, total_msgs: 0, total_voice_min: 0 }] })),
-          query(`SELECT COUNT(*)::int AS count FROM application_submissions WHERE guild_id = $1`, [guildId]).catch(() => ({ rows: [{ count: 0 }] }))
+          query(`SELECT COUNT(*)::int AS count FROM application_submissions WHERE guild_id = $1`, [guildId]).catch(() => ({ rows: [{ count: 0 }] })),
+          query(`SELECT EXTRACT(HOUR FROM hour_timestamp)::int AS hr, messages_count, voice_minutes FROM guild_hourly_activity WHERE guild_id = $1 AND hour_timestamp >= NOW() - INTERVAL '24 hours'`, [guildId]).catch(() => ({ rows: [] })),
+          query(`SELECT record_date, messages_count, voice_minutes FROM guild_daily_analytics WHERE guild_id = $1 AND record_date >= CURRENT_DATE - 30`, [guildId]).catch(() => ({ rows: [] }))
         ]);
 
         const totalModCases = modCasesRes.rows[0]?.count || 0;
@@ -2680,26 +2693,34 @@ async function handleDashboardRequest(req, res, client = null) {
         ]);
 
         const hourlyMap = new Map();
+        const hourlyVoiceMap = new Map();
         [...hourlyAudit.rows, ...hourlyMod.rows, ...hourlyTickets.rows].forEach(r => {
           hourlyMap.set(r.hr, (hourlyMap.get(r.hr) || 0) + Number(r.count));
+        });
+        hourlyActivityRes.rows.forEach(r => {
+          hourlyMap.set(r.hr, (hourlyMap.get(r.hr) || 0) + Number(r.messages_count || 0));
+          hourlyVoiceMap.set(r.hr, (hourlyVoiceMap.get(r.hr) || 0) + Number(r.voice_minutes || 0));
         });
 
         const now = new Date();
         const velocity24h = [];
         let msgs24h = 0;
+        let voiceMin24h = 0;
         for (let i = 23; i >= 0; i--) {
           const d = new Date(now.getTime() - i * 60 * 60 * 1000);
           const hr = d.getHours();
           const count = hourlyMap.get(hr) || 0;
+          const voiceM = hourlyVoiceMap.get(hr) || 0;
           msgs24h += count;
+          voiceMin24h += voiceM;
           velocity24h.push({
             hour: `${hr.toString().padStart(2, '0')}:00`,
             messages: count,
-            voiceMinutes: 0
+            voiceMinutes: voiceM
           });
         }
 
-        // 7-day velocity from real daily audit/ticket/mod events
+        // 7-day velocity from real daily audit/ticket/mod events + daily rollups
         const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
         const [dailyAudit, dailyMod, dailyTickets] = await Promise.all([
           query(`SELECT DATE_TRUNC('day', created_at) AS day_ts, COUNT(*)::int AS count FROM config_audit_logs WHERE guild_id = $1 AND created_at >= NOW() - INTERVAL '7 days' GROUP BY day_ts`, [guildId]).catch(() => ({ rows: [] })),
@@ -2708,9 +2729,15 @@ async function handleDashboardRequest(req, res, client = null) {
         ]);
 
         const dailyMap = new Map();
+        const dailyVoiceMap = new Map();
         [...dailyAudit.rows, ...dailyMod.rows, ...dailyTickets.rows].forEach(r => {
           const key = new Date(r.day_ts).toDateString();
           dailyMap.set(key, (dailyMap.get(key) || 0) + Number(r.count));
+        });
+        dailyAnalyticsRes.rows.forEach(r => {
+          const key = new Date(r.record_date).toDateString();
+          dailyMap.set(key, (dailyMap.get(key) || 0) + Number(r.messages_count || 0));
+          dailyVoiceMap.set(key, (dailyVoiceMap.get(key) || 0) + Number(r.voice_minutes || 0));
         });
 
         const velocity7d = [];
@@ -2718,11 +2745,12 @@ async function handleDashboardRequest(req, res, client = null) {
           const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
           const key = d.toDateString();
           const count = dailyMap.get(key) || 0;
+          const voiceM = dailyVoiceMap.get(key) || 0;
           velocity7d.push({
             day: days[d.getDay()],
             date: `${d.getMonth() + 1}/${d.getDate()}`,
             messages: count,
-            voiceMinutes: 0
+            voiceMinutes: voiceM
           });
         }
 

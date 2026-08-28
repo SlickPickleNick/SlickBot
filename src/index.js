@@ -32,6 +32,7 @@ const { handleReactionRole, syncAllPublishedReactionPanels } = require('./module
 const { handleComponentInteraction } = require('./services/interactionRouter');
 const { ActionKeys } = require('./modules/permissions/actionKeys');
 const { ModuleKeys } = require('./modules/moduleRegistry');
+const { guildAnalyticsService } = require('./modules/logging/analyticsService');
 
 const client = new Client({
   intents: [
@@ -289,6 +290,7 @@ client.on(Events.ChannelCreate, async (channel) => {
 });
 
 client.on(Events.GuildMemberAdd, async (member) => {
+  guildAnalyticsService.trackMemberJoin(member.guild.id);
   await logger.log({
     guildId: member.guild.id,
     eventKey: 'member-join',
@@ -312,6 +314,7 @@ client.on(Events.GuildMemberAdd, async (member) => {
 });
 
 client.on(Events.GuildMemberRemove, async (member) => {
+  guildAnalyticsService.trackMemberLeave(member.guild.id);
   serverStats.scheduleUpdate(member.guild, logger, 'member leave', 10 * 1000, { forceMemberFetch: true });
   const joinedTime = member.joinedTimestamp ? `<t:${Math.floor(member.joinedTimestamp / 1000)}:R>` : '*Unknown*';
   const roleList = member.roles?.cache
@@ -614,6 +617,7 @@ client.on(Events.MessageCreate, async (message) => {
   if (message.author?.bot) return;
 
   if (message.guild) {
+    guildAnalyticsService.trackMessage(message.guild.id, message.author.id);
     if (await permissions.isIgnored(message.guild.id, message.author.id).catch(() => false)) return;
 
     const autoModEnabled = await permissions.isModuleEnabled(message.guild.id, ModuleKeys.AUTOMOD).catch(() => false);
@@ -1104,6 +1108,10 @@ client.on(Events.MessageReactionRemove, async (reaction, user) => {
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
+  if (interaction.guildId) {
+    guildAnalyticsService.trackCommand(interaction.guildId);
+  }
+
   if (interaction.isAutocomplete()) {
     const command = commandMap.get(interaction.commandName);
     if (command && typeof command.autocomplete === 'function') {
