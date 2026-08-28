@@ -211,8 +211,13 @@ function initSearchableSelects() {
       const renderOptions = (filterText = '') => {
         dropdown.innerHTML = '';
         const options = Array.from(selectEl.options);
-        const query = filterText.toLowerCase().trim();
-        const filtered = options.filter(opt => !query || opt.text.toLowerCase().includes(query) || opt.value.toLowerCase().includes(query));
+        const query = (filterText || '').toLowerCase().trim().replace(/^[#@📢🔊💬🧵🎬📂]\s*/, '');
+        const filtered = options.filter(opt => {
+          if (!opt.value && !query) return true;
+          if (!opt.value && query) return false;
+          const cleanText = opt.text.toLowerCase().replace(/^[#@📢🔊💬🧵🎬📂]\s*/, '');
+          return !query || cleanText.includes(query) || opt.value.toLowerCase().includes(query) || (opt.parentElement?.label || '').toLowerCase().includes(query);
+        });
 
         if (filtered.length === 0) {
           dropdown.innerHTML = `<div class="searchable-select-empty">No matching ${isRole ? 'roles' : 'channels'} found</div>`;
@@ -267,8 +272,9 @@ function initSearchableSelects() {
 
       const selectOption = (val, text) => {
         selectEl.value = val;
-        input.value = val ? text : '';
-        clearBtn.style.display = val ? 'inline-block' : 'none';
+        const isPlaceholder = !val || text.startsWith('Select a') || text.startsWith('-- None');
+        input.value = (val && !isPlaceholder) ? text.replace(/^[#📢🔊💬🧵🎬📂@]\s*/, '') : '';
+        clearBtn.style.display = (val && !isPlaceholder) ? 'inline-block' : 'none';
         wrapper.classList.remove('open');
         selectEl.dispatchEvent(new Event('change', { bubbles: true }));
         markDashboardDirty();
@@ -276,7 +282,8 @@ function initSearchableSelects() {
 
       input.addEventListener('focus', () => {
         wrapper.classList.add('open');
-        renderOptions(input.value);
+        input.select();
+        renderOptions('');
       });
 
       input.addEventListener('input', () => {
@@ -300,14 +307,16 @@ function initSearchableSelects() {
         e.preventDefault();
         e.stopPropagation();
         selectOption('', '');
+        renderOptions('');
       });
 
       document.addEventListener('click', (e) => {
         if (!wrapper.contains(e.target)) {
           wrapper.classList.remove('open');
           const selectedOpt = selectEl.options[selectEl.selectedIndex];
-          input.value = (selectEl.value && selectedOpt && selectEl.value !== '') ? selectedOpt.text : '';
-          clearBtn.style.display = (selectEl.value && selectEl.value !== '') ? 'inline-block' : 'none';
+          const isPlaceholder = !selectEl.value || (selectedOpt && (selectedOpt.text.startsWith('Select a') || selectedOpt.text.startsWith('-- None')));
+          input.value = (selectEl.value && selectedOpt && !isPlaceholder) ? selectedOpt.text.replace(/^[#📢🔊💬🧵🎬📂@]\s*/, '') : '';
+          clearBtn.style.display = (selectEl.value && !isPlaceholder) ? 'inline-block' : 'none';
         }
       });
     }
@@ -316,11 +325,12 @@ function initSearchableSelects() {
     const input = wrapper.querySelector('.searchable-select-input');
     const clearBtn = wrapper.querySelector('.searchable-select-clear');
     const selectedOpt = selectEl.options[selectEl.selectedIndex];
+    const isPlaceholder = !selectEl.value || (selectedOpt && (selectedOpt.text.startsWith('Select a') || selectedOpt.text.startsWith('-- None')));
     if (input) {
-      input.value = (selectEl.value && selectedOpt && selectEl.value !== '') ? selectedOpt.text : '';
+      input.value = (selectEl.value && selectedOpt && !isPlaceholder) ? selectedOpt.text.replace(/^[#📢🔊💬🧵🎬📂@]\s*/, '') : '';
     }
     if (clearBtn) {
-      clearBtn.style.display = (selectEl.value && selectEl.value !== '') ? 'inline-block' : 'none';
+      clearBtn.style.display = (selectEl.value && !isPlaceholder) ? 'inline-block' : 'none';
     }
   });
 }
@@ -380,6 +390,15 @@ async function refreshServerData() {
       renderSwitchboard(data.modules || []);
       loadFeeds();
       loadAuditLogs();
+      if (document.getElementById('tab-panel-analytics-studio')?.classList.contains('active')) {
+        loadServerAnalytics();
+      }
+      if (document.getElementById('tab-panel-role-studio')?.classList.contains('active')) {
+        loadRolePanelsList();
+      }
+      if (document.getElementById('tab-panel-custom-studio')?.classList.contains('active')) {
+        loadCustomCommandsList();
+      }
       clearDashboardDirty();
       showSaveIndicator('Channels & roles refreshed ✓');
     } else {
