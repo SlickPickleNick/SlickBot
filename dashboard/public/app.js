@@ -189,9 +189,18 @@ function initSearchableSelects() {
       clearBtn.innerHTML = '&times;';
       clearBtn.title = 'Clear selection';
 
-      const arrow = document.createElement('span');
-      arrow.className = 'searchable-select-arrow';
-      arrow.innerHTML = '&#9660;';
+      arrow.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const isOpen = wrapper.classList.contains('open');
+        if (isOpen) {
+          wrapper.classList.remove('open');
+        } else {
+          wrapper.classList.add('open');
+          input.focus();
+          renderOptions('');
+        }
+      });
 
       controls.appendChild(clearBtn);
       controls.appendChild(arrow);
@@ -284,6 +293,11 @@ function initSearchableSelects() {
         wrapper.classList.add('open');
         input.select();
         renderOptions('');
+      });
+
+      input.addEventListener('click', () => {
+        wrapper.classList.add('open');
+        renderOptions(input.value);
       });
 
       input.addEventListener('input', () => {

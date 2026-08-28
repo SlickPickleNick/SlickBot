@@ -372,7 +372,23 @@ function normalizeChannelType(type) {
   return 'text';
 }
 
-// Extract human-readable channel hierarchy and roles from live bot client or sandbox fallback
+// Dynamic Bot Token resolution supporting all common naming aliases and stripping 'Bot ' prefix
+function getDiscordBotToken() {
+  let token = (
+    process.env.DISCORD_BOT_TOKEN ||
+    process.env.DISCORD_TOKEN ||
+    process.env.BOT_TOKEN ||
+    process.env.TOKEN ||
+    env?.DISCORD_TOKEN ||
+    ''
+  ).trim().replace(/["']/g, '');
+  if (token.startsWith('Bot ')) {
+    token = token.slice(4).trim();
+  }
+  return token;
+}
+
+// Extract human-readable channel hierarchy and roles from live bot client or Discord REST API
 async function getGuildStructure(guildId, client = null) {
   // 1. Fetch from live bot client gateway if available
   if (client) {
@@ -435,7 +451,7 @@ async function getGuildStructure(guildId, client = null) {
   }
 
   // 2. Fetch directly from Discord REST API using Bot Token
-  const botToken = (process.env.DISCORD_BOT_TOKEN || process.env.DISCORD_TOKEN || env?.DISCORD_TOKEN || '').trim().replace(/["']/g, '');
+  const botToken = getDiscordBotToken();
   if (botToken) {
     try {
       const [chRes, roRes] = await Promise.all([
@@ -487,6 +503,9 @@ async function getGuildStructure(guildId, client = null) {
 
           return { channels, roles };
         }
+      } else {
+        const errBody = await chRes.text().catch(() => '');
+        console.warn(`[Dashboard] Discord REST API channel fetch for guild ${guildId} returned status ${chRes.status}: ${errBody}`);
       }
     } catch (apiErr) {
       console.warn('[Dashboard] Discord REST API channel fetch error:', apiErr.message);
@@ -938,6 +957,7 @@ async function handleDashboardRequest(req, res, client = null) {
         let guildConfig = { guild_id: guildId, guild_name: guildObj.name, timezone: 'America/New_York' };
         let moduleConfigs = [];
         let welcomeConfig = null;
+        let welcomeAutoRole = null;
         let birthdayConfig = null;
         let starboardConfig = null;
         let automodConfig = null;
@@ -945,42 +965,72 @@ async function handleDashboardRequest(req, res, client = null) {
         let reportConfig = null;
         let appealConfig = null;
         let levelingConfig = null;
+        let levelingMultiplierRole = null;
         let socialFeedConfig = null;
+        let logModuleConfigs = [];
+        let logSettingsConfigs = [];
+        let jtcHubConfig = null;
+        let serverStatsConfig = null;
+        let customCommandConfig = null;
+        let modStaffRole = null;
+        let staffAppType = null;
+        let staffAppQuestions = [];
 
         try {
-          const gRes = await query('SELECT * FROM guild_configs WHERE guild_id = $1', [guildId]);
+          const [
+            gRes, mRes, wRes, warRes, bRes, sRes, aRes, tRes, rRes, apRes,
+            lRes, lmrRes, fRes, lmRes, lsRes, jtcRes, statsRes, ccRes, staffRoleRes, appRes
+          ] = await Promise.all([
+            query('SELECT * FROM guild_configs WHERE guild_id = $1 LIMIT 1', [guildId]).catch(() => ({ rows: [] })),
+            query('SELECT * FROM module_configs WHERE guild_id = $1', [guildId]).catch(() => ({ rows: [] })),
+            query('SELECT * FROM welcome_configs WHERE guild_id = $1 LIMIT 1', [guildId]).catch(() => ({ rows: [] })),
+            query('SELECT role_id FROM welcome_auto_roles WHERE guild_id = $1 AND active = true LIMIT 1', [guildId]).catch(() => ({ rows: [] })),
+            query('SELECT * FROM birthday_configs WHERE guild_id = $1 LIMIT 1', [guildId]).catch(() => ({ rows: [] })),
+            query('SELECT * FROM starboard_configs WHERE guild_id = $1 LIMIT 1', [guildId]).catch(() => ({ rows: [] })),
+            query('SELECT * FROM automod_configs WHERE guild_id = $1 LIMIT 1', [guildId]).catch(() => ({ rows: [] })),
+            query('SELECT * FROM ticket_configs WHERE guild_id = $1 LIMIT 1', [guildId]).catch(() => ({ rows: [] })),
+            query('SELECT * FROM report_configs WHERE guild_id = $1 LIMIT 1', [guildId]).catch(() => ({ rows: [] })),
+            query('SELECT * FROM appeal_configs WHERE guild_id = $1 LIMIT 1', [guildId]).catch(() => ({ rows: [] })),
+            query('SELECT * FROM leveling_configs WHERE guild_id = $1 LIMIT 1', [guildId]).catch(() => ({ rows: [] })),
+            query('SELECT role_id FROM leveling_multiplier_roles WHERE guild_id = $1 AND active = true LIMIT 1', [guildId]).catch(() => ({ rows: [] })),
+            query('SELECT * FROM social_feed_configs WHERE guild_id = $1 LIMIT 1', [guildId]).catch(() => ({ rows: [] })),
+            query('SELECT * FROM log_module_settings WHERE guild_id = $1', [guildId]).catch(() => ({ rows: [] })),
+            query('SELECT * FROM log_settings WHERE guild_id = $1', [guildId]).catch(() => ({ rows: [] })),
+            query('SELECT * FROM join_create_hubs WHERE guild_id = $1 LIMIT 1', [guildId]).catch(() => ({ rows: [] })),
+            query('SELECT * FROM server_stats_configs WHERE guild_id = $1 LIMIT 1', [guildId]).catch(() => ({ rows: [] })),
+            query('SELECT * FROM custom_command_configs WHERE guild_id = $1 LIMIT 1', [guildId]).catch(() => ({ rows: [] })),
+            query('SELECT ptr.role_id FROM permission_teams pt JOIN permission_team_roles ptr ON pt.id = ptr.team_id WHERE pt.guild_id = $1 LIMIT 1', [guildId]).catch(() => ({ rows: [] })),
+            query('SELECT * FROM application_types WHERE guild_id = $1 ORDER BY created_at ASC LIMIT 1', [guildId]).catch(() => ({ rows: [] }))
+          ]);
+
           if (gRes.rows[0]) guildConfig = gRes.rows[0];
-
-          const mRes = await query('SELECT * FROM module_configs WHERE guild_id = $1', [guildId]);
-          moduleConfigs = mRes.rows;
-
-          const wRes = await query('SELECT * FROM welcome_configs WHERE guild_id = $1 LIMIT 1', [guildId]);
+          moduleConfigs = mRes.rows || [];
           welcomeConfig = wRes.rows[0] || null;
-
-          const bRes = await query('SELECT * FROM birthday_configs WHERE guild_id = $1 LIMIT 1', [guildId]);
+          welcomeAutoRole = warRes.rows[0] || null;
           birthdayConfig = bRes.rows[0] || null;
-
-          const sRes = await query('SELECT * FROM starboard_configs WHERE guild_id = $1 LIMIT 1', [guildId]);
           starboardConfig = sRes.rows[0] || null;
-
-          const aRes = await query('SELECT * FROM automod_configs WHERE guild_id = $1 LIMIT 1', [guildId]);
           automodConfig = aRes.rows[0] || null;
-
-          const tRes = await query('SELECT * FROM ticket_configs WHERE guild_id = $1 LIMIT 1', [guildId]);
           ticketConfig = tRes.rows[0] || null;
-
-          const rRes = await query('SELECT * FROM report_configs WHERE guild_id = $1 LIMIT 1', [guildId]);
           reportConfig = rRes.rows[0] || null;
-
-          const apRes = await query('SELECT * FROM appeal_configs WHERE guild_id = $1 LIMIT 1', [guildId]);
           appealConfig = apRes.rows[0] || null;
-
-          const lRes = await query('SELECT * FROM leveling_configs WHERE guild_id = $1 LIMIT 1', [guildId]);
           levelingConfig = lRes.rows[0] || null;
-
-          const fRes = await query('SELECT * FROM social_feed_configs WHERE guild_id = $1 LIMIT 1', [guildId]);
+          levelingMultiplierRole = lmrRes.rows[0] || null;
           socialFeedConfig = fRes.rows[0] || null;
-        } catch (e) {}
+          logModuleConfigs = lmRes.rows || [];
+          logSettingsConfigs = lsRes.rows || [];
+          jtcHubConfig = jtcRes.rows[0] || null;
+          serverStatsConfig = statsRes.rows[0] || null;
+          customCommandConfig = ccRes.rows[0] || null;
+          modStaffRole = staffRoleRes.rows[0] || null;
+          staffAppType = appRes.rows[0] || null;
+
+          if (staffAppType) {
+            const qRes = await query('SELECT question_text FROM application_questions WHERE application_type_id = $1 ORDER BY display_order ASC LIMIT 2', [staffAppType.id]).catch(() => ({ rows: [] }));
+            staffAppQuestions = qRes.rows || [];
+          }
+        } catch (e) {
+          console.error('[Dashboard] Error querying guild configs from DB:', e);
+        }
 
         const modulesWithState = ALL_MODULES_METADATA.map(mod => {
           const cfg = moduleConfigs.find(m => m.module_key === mod.key);
@@ -994,83 +1044,131 @@ async function handleDashboardRequest(req, res, client = null) {
         // Resolve real Discord Channels & Roles for this server
         const { channels, roles } = await getGuildStructure(guildId, client);
 
+        // Helper to find log channel for a module or event
+        const getLogChan = (key) => {
+          const modRow = logModuleConfigs.find(r => r.module_key === key);
+          if (modRow?.channel_id) return modRow.channel_id;
+          const evtRow = logSettingsConfigs.find(r => r.event_key === key || r.event_key?.startsWith(key));
+          if (evtRow?.channel_id) return evtRow.channel_id;
+          const modCfg = moduleConfigs.find(m => m.module_key === key);
+          if (modCfg?.log_channel_id) return modCfg.log_channel_id;
+          return null;
+        };
+
         // Build comprehensive settings payload with real DB values (or null if unconfigured)
         const settings = {
           general: {
             timezone: guildConfig.timezone || 'America/New_York',
+            prefix: customCommandConfig?.prefix || '!',
             changelog_channel_id: guildConfig.default_log_channel_id || null,
             config_audit_channel_id: guildConfig.config_audit_channel_id || null
           },
           moderation: {
             mute_duration_ms: 600000,
-            mod_audit_channel_id: null,
+            mod_audit_channel_id: getLogChan('MODERATION') || guildConfig.default_log_channel_id || null,
             warn_threshold: 3,
-            staff_role_id: null
+            staff_role_id: ticketConfig?.staff_role_id || modStaffRole?.role_id || null,
+            dm_notifications: true
           },
           automod: {
-            filter_invites: automodConfig?.filter_invites ?? true,
-            anti_spam: automodConfig?.anti_spam ?? true,
-            max_mentions: automodConfig?.max_mentions || 5
+            filter_invites: automodConfig?.anti_invites_enabled ?? true,
+            anti_spam: automodConfig?.anti_spam_enabled ?? true,
+            max_mentions: automodConfig?.anti_mentions_max_count || 5,
+            anti_caps_percent: automodConfig?.anti_caps_percent || 70,
+            exempt_role_id: (automodConfig?.exempt_role_ids && automodConfig.exempt_role_ids[0]) || null,
+            alert_channel_id: automodConfig?.raid_alert_channel_id || automodConfig?.alert_channel_id || null
           },
           lockdown: {
-            channel_id: null,
-            quarantine_role_id: null,
+            channel_id: automodConfig?.raid_alert_channel_id || null,
+            quarantine_role_id: automodConfig?.timeout_role_id || null,
+            scope: 'TEXT_CHANNELS',
             message: 'Server is temporarily locked down by administration.'
           },
           support: {
             ticket_panel_channel_id: ticketConfig?.category_id || null,
             ticket_transcript_channel_id: ticketConfig?.log_channel_id || null,
             ticket_staff_role_id: ticketConfig?.staff_role_id || null,
-            ticket_auto_close_hours: 24,
+            ticket_admin_role_id: ticketConfig?.escalated_role_id || null,
+            ticket_auto_close_hours: ticketConfig?.close_delete_seconds ? Math.round(ticketConfig.close_delete_seconds / 3600) : 24,
+            ticket_naming_format: ticketConfig?.naming_format || 'ticket-{username}',
+            ticket_welcome_message: ticketConfig?.panel_description || null,
             report_review_channel_id: reportConfig?.review_channel_id || null,
             report_ping_role_id: reportConfig?.ping_role_id || null,
             report_anonymous: true,
-            app_submission_channel_id: null,
-            app_reviewer_role_id: null,
+            report_require_reason: true,
+            app_submission_channel_id: staffAppType?.review_channel_id || null,
+            app_reviewer_role_id: staffAppType?.pending_role_id || null,
+            app_approved_role_id: staffAppType?.approved_role_id || null,
+            app_q1: staffAppQuestions[0]?.question_text || null,
+            app_q2: staffAppQuestions[1]?.question_text || null,
             appeal_review_channel_id: appealConfig?.review_channel_id || null,
-            appeal_reviewer_role_id: null,
-            faq_forum_channel_id: null,
+            appeal_reviewer_role_id: ticketConfig?.staff_role_id || null,
+            appeal_cooldown_days: 30,
+            faq_forum_channel_id: getLogChan('FAQ') || null,
             faq_auto_reply_mode: 'ENABLED'
           },
           feeds: {
             directory_channel_id: socialFeedConfig?.live_directory_channel_id || null,
-            refresh_interval: socialFeedConfig?.check_interval_seconds || 120
+            refresh_interval: socialFeedConfig?.check_interval_seconds || 120,
+            message_template: null
           },
           onboarding: {
             welcome_channel_id: welcomeConfig?.channel_id || null,
-            welcome_role_id: null,
+            welcome_role_id: welcomeAutoRole?.role_id || null,
             welcome_message: welcomeConfig?.message_template || 'Welcome {user} to **{server}**! 🎉',
             welcome_embed_title: welcomeConfig?.embed_title || 'Welcome to {server}',
             welcome_embed_desc: welcomeConfig?.embed_description || 'Glad to have you here, {user}. Grab your roles and check out our channels!',
             welcome_dm_enabled: welcomeConfig?.dm_enabled ?? false,
+            welcome_banner_url: null,
+            welcome_embed_color: welcomeConfig?.embed_color || '#7869ff',
             birthday_channel_id: birthdayConfig?.channel_id || null,
             birthday_role_id: birthdayConfig?.birthday_role_id || null,
-            birthday_message: birthdayConfig?.announcement_template || 'Happy birthday, {user}! Have an amazing day! 🎂🎉'
+            birthday_message: birthdayConfig?.announcement_template || 'Happy birthday, {user}! Have an amazing day! 🎂🎉',
+            role_panel_channel_id: null,
+            role_panel_mode: 'BUTTONS',
+            temprole_max_hours: 168
           },
           community: {
             starboard_channel_id: starboardConfig?.channel_id || null,
             starboard_threshold: starboardConfig?.star_threshold || 3,
             starboard_emoji: starboardConfig?.star_emoji || '⭐',
-            leveling_channel_id: levelingConfig?.announcement_channel_id || null,
-            leveling_multiplier_role_id: null,
-            leveling_message: 'GG {user}, you leveled up to **Level {level}**! 🎉',
-            suggest_channel_id: null,
-            suggest_review_channel_id: null
+            starboard_self_stars: false,
+            starboard_allow_nsfw: false,
+            leveling_channel_id: levelingConfig?.level_up_channel_id || null,
+            leveling_multiplier_role_id: levelingMultiplierRole?.role_id || null,
+            leveling_xp_rate: levelingConfig?.xp_min || 15,
+            leveling_reward_5: null,
+            leveling_reward_10: null,
+            leveling_reward_25: null,
+            leveling_message: levelingConfig?.level_up_message || 'GG {user}, you leveled up to **Level {level}**! 🎉',
+            suggest_channel_id: getLogChan('SUGGESTIONS') || null,
+            suggest_review_channel_id: getLogChan('MODERATION') || null,
+            suggest_auto_thread: true,
+            suggest_anonymous: false,
+            giveaway_channel_id: null,
+            giveaway_manager_role_id: null,
+            games_counting_channel_id: null,
+            games_trivia_channel_id: null
           },
           logging: {
             config_audit_channel_id: guildConfig.config_audit_channel_id || null,
-            log_msg_channel_id: null,
-            log_member_channel_id: null,
-            log_voice_channel_id: null,
-            log_role_channel_id: null,
-            stats_member_channel_id: null,
-            stats_bot_channel_id: null
+            log_msg_channel_id: getLogChan('MESSAGE') || null,
+            log_member_channel_id: getLogChan('MEMBER') || null,
+            log_voice_channel_id: getLogChan('VOICE') || null,
+            log_role_channel_id: getLogChan('ROLE') || null,
+            stats_member_channel_id: serverStatsConfig?.member_channel_id || null,
+            stats_member_format: serverStatsConfig?.member_template || 'Members: {members}',
+            stats_bot_channel_id: serverStatsConfig?.bot_channel_id || null,
+            stats_bot_format: serverStatsConfig?.bot_template || 'Bots: {bots}'
           },
           voice: {
-            jtc_hub_channel_id: null,
-            jtc_name_template: "{user}'s Lounge",
+            jtc_hub_channel_id: jtcHubConfig?.source_channel_id || null,
+            jtc_name_template: jtcHubConfig?.name_template || "{user}'s Lounge",
+            jtc_user_limit: jtcHubConfig?.user_limit || 0,
+            jtc_category_id: jtcHubConfig?.category_id || null,
             util_poll_channel_id: null,
-            util_snipe_limit: 25
+            util_snipe_limit: 25,
+            util_afk_toggle: true
           }
         };
 
@@ -1090,7 +1188,7 @@ async function handleDashboardRequest(req, res, client = null) {
         return;
       } catch (err) {
         res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Failed to fetch guild configuration' }));
+        res.end(JSON.stringify({ error: 'Failed to fetch guild configuration: ' + err.message }));
         return;
       }
     }
@@ -1148,16 +1246,25 @@ async function handleDashboardRequest(req, res, client = null) {
 
         // 3.1 General Settings
         if (category === 'general') {
-          const { timezone, changelogChannelId } = payload;
+          const { timezone, changelogChannelId, configAuditChannelId, prefix } = payload;
           try {
             await query(
               `UPDATE guild_configs
                SET timezone = COALESCE($2, timezone),
                    default_log_channel_id = $3,
+                   config_audit_channel_id = COALESCE($4, config_audit_channel_id),
                    updated_at = NOW()
                WHERE guild_id = $1`,
-              [guildId, timezone || 'America/New_York', changelogChannelId || null]
+              [guildId, timezone || 'America/New_York', changelogChannelId || null, configAuditChannelId || null]
             );
+            if (prefix) {
+              await query(
+                `INSERT INTO custom_command_configs (guild_id, prefix, enabled, updated_at)
+                 VALUES ($1, $2, true, NOW())
+                 ON CONFLICT (guild_id) DO UPDATE SET prefix = EXCLUDED.prefix, updated_at = NOW()`,
+                [guildId, prefix]
+              ).catch(() => {});
+            }
           } catch (e) {}
 
           await configAuditService.recordChange({
@@ -1190,6 +1297,15 @@ async function handleDashboardRequest(req, res, client = null) {
               [guildId, welcomeChannelId || null, welcomeMessage || null, welcomeTitle || null, welcomeDesc || null, Boolean(welcomeDmEnabled)]
             );
 
+            if (welcomeRoleId) {
+              await query(
+                `INSERT INTO welcome_auto_roles (guild_id, role_id, active, updated_at)
+                 VALUES ($1, $2, true, NOW())
+                 ON CONFLICT (guild_id, role_id) DO UPDATE SET active = true, updated_at = NOW()`,
+                [guildId, welcomeRoleId]
+              ).catch(() => {});
+            }
+
             await query(
               `INSERT INTO birthday_configs (guild_id, channel_id, birthday_role_id, announcement_template, updated_at)
                VALUES ($1, $2, $3, $4, NOW())
@@ -1216,17 +1332,40 @@ async function handleDashboardRequest(req, res, client = null) {
 
         // 3.3 Community & Leveling Settings
         if (category === 'community') {
-          const { levelingChannelId, levelingMultiplierRoleId, levelingMessage, suggestChannelId, suggestReviewChannelId } = payload;
+          const { levelingChannelId, levelingMultiplierRoleId, levelingMessage, suggestChannelId, suggestReviewChannelId, starboardChannelId, starboardThreshold, starboardEmoji } = payload;
           
           try {
             await query(
-              `INSERT INTO leveling_configs (guild_id, announcement_channel_id, updated_at)
-               VALUES ($1, $2, NOW())
+              `INSERT INTO leveling_configs (guild_id, level_up_channel_id, level_up_message, updated_at)
+               VALUES ($1, $2, $3, NOW())
                ON CONFLICT (guild_id) DO UPDATE SET
-                 announcement_channel_id = EXCLUDED.announcement_channel_id,
+                 level_up_channel_id = EXCLUDED.level_up_channel_id,
+                 level_up_message = EXCLUDED.level_up_message,
                  updated_at = NOW()`,
-              [guildId, levelingChannelId || null]
+              [guildId, levelingChannelId || null, levelingMessage || null]
             );
+
+            if (levelingMultiplierRoleId) {
+              await query(
+                `INSERT INTO leveling_multiplier_roles (guild_id, role_id, multiplier, active, updated_at)
+                 VALUES ($1, $2, 1.5, true, NOW())
+                 ON CONFLICT (guild_id, role_id) DO UPDATE SET active = true, updated_at = NOW()`,
+                [guildId, levelingMultiplierRoleId]
+              ).catch(() => {});
+            }
+
+            if (starboardChannelId) {
+              await query(
+                `INSERT INTO starboard_configs (guild_id, channel_id, star_threshold, star_emoji, updated_at)
+                 VALUES ($1, $2, $3, $4, NOW())
+                 ON CONFLICT (guild_id) DO UPDATE SET
+                   channel_id = EXCLUDED.channel_id,
+                   star_threshold = EXCLUDED.star_threshold,
+                   star_emoji = EXCLUDED.star_emoji,
+                   updated_at = NOW()`,
+                [guildId, starboardChannelId, parseInt(starboardThreshold || '3', 10), starboardEmoji || '⭐']
+              ).catch(() => {});
+            }
           } catch (e) {}
 
           await configAuditService.recordChange({
@@ -1243,18 +1382,19 @@ async function handleDashboardRequest(req, res, client = null) {
 
         // 3.4 Support & Workflows Settings
         if (category === 'support') {
-          const { ticketPanelChannelId, ticketTranscriptChannelId, ticketStaffRoleId, ticketAutoCloseHours, reportReviewChannelId, reportPingRoleId, appSubmissionChannelId, appReviewerRoleId, appealReviewChannelId, faqForumChannelId } = payload;
+          const { ticketPanelChannelId, ticketTranscriptChannelId, ticketStaffRoleId, ticketAutoCloseHours, reportReviewChannelId, reportPingRoleId, appealReviewChannelId } = payload;
           
           try {
             await query(
-              `INSERT INTO ticket_configs (guild_id, category_id, log_channel_id, staff_role_id, updated_at)
-               VALUES ($1, $2, $3, $4, NOW())
+              `INSERT INTO ticket_configs (guild_id, category_id, log_channel_id, staff_role_id, close_delete_seconds, updated_at)
+               VALUES ($1, $2, $3, $4, $5, NOW())
                ON CONFLICT (guild_id) DO UPDATE SET
                  category_id = EXCLUDED.category_id,
                  log_channel_id = EXCLUDED.log_channel_id,
                  staff_role_id = EXCLUDED.staff_role_id,
+                 close_delete_seconds = EXCLUDED.close_delete_seconds,
                  updated_at = NOW()`,
-              [guildId, ticketPanelChannelId || null, ticketTranscriptChannelId || null, ticketStaffRoleId || null]
+              [guildId, ticketPanelChannelId || null, ticketTranscriptChannelId || null, ticketStaffRoleId || null, (parseInt(ticketAutoCloseHours || '24', 10) * 3600)]
             );
 
             await query(
@@ -1266,6 +1406,15 @@ async function handleDashboardRequest(req, res, client = null) {
                  updated_at = NOW()`,
               [guildId, reportReviewChannelId || null, reportPingRoleId || null]
             );
+
+            if (appealReviewChannelId) {
+              await query(
+                `INSERT INTO appeal_configs (guild_id, review_channel_id, updated_at)
+                 VALUES ($1, $2, NOW())
+                 ON CONFLICT (guild_id) DO UPDATE SET review_channel_id = EXCLUDED.review_channel_id, updated_at = NOW()`,
+                [guildId, appealReviewChannelId]
+              ).catch(() => {});
+            }
           } catch (e) {}
 
           await configAuditService.recordChange({
@@ -1282,18 +1431,29 @@ async function handleDashboardRequest(req, res, client = null) {
 
         // 3.5 Safety & Moderation Settings
         if (category === 'safety') {
-          const { muteDuration, auditChannelId, warnThreshold, staffRoleId, lockdownChannelId, quarantineRoleId, lockdownMessage, filterInvites, antiSpam } = payload;
+          const { auditChannelId, warnThreshold, staffRoleId, lockdownChannelId, quarantineRoleId, filterInvites, antiSpam } = payload;
           
           try {
             await query(
-              `INSERT INTO automod_configs (guild_id, filter_invites, anti_spam, updated_at)
-               VALUES ($1, $2, $3, NOW())
+              `INSERT INTO automod_configs (guild_id, anti_invites_enabled, anti_spam_enabled, timeout_role_id, raid_alert_channel_id, updated_at)
+               VALUES ($1, $2, $3, $4, $5, NOW())
                ON CONFLICT (guild_id) DO UPDATE SET
-                 filter_invites = EXCLUDED.filter_invites,
-                 anti_spam = EXCLUDED.anti_spam,
+                 anti_invites_enabled = EXCLUDED.anti_invites_enabled,
+                 anti_spam_enabled = EXCLUDED.anti_spam_enabled,
+                 timeout_role_id = EXCLUDED.timeout_role_id,
+                 raid_alert_channel_id = EXCLUDED.raid_alert_channel_id,
                  updated_at = NOW()`,
-              [guildId, filterInvites ?? true, antiSpam ?? true]
+              [guildId, filterInvites ?? true, antiSpam ?? true, quarantineRoleId || null, lockdownChannelId || null]
             );
+
+            if (auditChannelId) {
+              await query(
+                `INSERT INTO log_module_settings (guild_id, module_key, channel_id, enabled, updated_at)
+                 VALUES ($1, 'MODERATION', $2, true, NOW())
+                 ON CONFLICT (guild_id, module_key) DO UPDATE SET channel_id = EXCLUDED.channel_id, updated_at = NOW()`,
+                [guildId, auditChannelId]
+              ).catch(() => {});
+            }
           } catch (e) {}
 
           await configAuditService.recordChange({
@@ -1313,7 +1473,24 @@ async function handleDashboardRequest(req, res, client = null) {
           const { configAuditChannelId, logMsgChannelId, logMemberChannelId, logVoiceChannelId, logRoleChannelId, statsMemberChannelId, statsBotChannelId } = payload;
           
           try {
-            await configAuditService.setConfigAuditChannel(guildId, configAuditChannelId);
+            if (configAuditChannelId) {
+              await configAuditService.setConfigAuditChannel(guildId, configAuditChannelId);
+            }
+            if (logMsgChannelId) {
+              await query(`INSERT INTO log_module_settings (guild_id, module_key, channel_id, enabled, updated_at) VALUES ($1, 'MESSAGE', $2, true, NOW()) ON CONFLICT (guild_id, module_key) DO UPDATE SET channel_id = EXCLUDED.channel_id, updated_at = NOW()`, [guildId, logMsgChannelId]).catch(() => {});
+            }
+            if (logMemberChannelId) {
+              await query(`INSERT INTO log_module_settings (guild_id, module_key, channel_id, enabled, updated_at) VALUES ($1, 'MEMBER', $2, true, NOW()) ON CONFLICT (guild_id, module_key) DO UPDATE SET channel_id = EXCLUDED.channel_id, updated_at = NOW()`, [guildId, logMemberChannelId]).catch(() => {});
+            }
+            if (logVoiceChannelId) {
+              await query(`INSERT INTO log_module_settings (guild_id, module_key, channel_id, enabled, updated_at) VALUES ($1, 'VOICE', $2, true, NOW()) ON CONFLICT (guild_id, module_key) DO UPDATE SET channel_id = EXCLUDED.channel_id, updated_at = NOW()`, [guildId, logVoiceChannelId]).catch(() => {});
+            }
+            if (logRoleChannelId) {
+              await query(`INSERT INTO log_module_settings (guild_id, module_key, channel_id, enabled, updated_at) VALUES ($1, 'ROLE', $2, true, NOW()) ON CONFLICT (guild_id, module_key) DO UPDATE SET channel_id = EXCLUDED.channel_id, updated_at = NOW()`, [guildId, logRoleChannelId]).catch(() => {});
+            }
+            if (statsMemberChannelId || statsBotChannelId) {
+              await query(`INSERT INTO server_stats_configs (guild_id, member_channel_id, bot_channel_id, enabled, updated_at) VALUES ($1, $2, $3, true, NOW()) ON CONFLICT (guild_id) DO UPDATE SET member_channel_id = EXCLUDED.member_channel_id, bot_channel_id = EXCLUDED.bot_channel_id, updated_at = NOW()`, [guildId, statsMemberChannelId || null, statsBotChannelId || null]).catch(() => {});
+            }
           } catch (e) {}
 
           await configAuditService.recordChange({
@@ -1330,7 +1507,15 @@ async function handleDashboardRequest(req, res, client = null) {
 
         // 3.7 Voice & Utilities Settings
         if (category === 'voice') {
-          const { jtcHubChannelId, jtcNameTemplate, utilPollChannelId, utilSnipeLimit } = payload;
+          const { jtcHubChannelId, jtcNameTemplate, jtcCategoryId } = payload;
+          if (jtcHubChannelId) {
+            await query(
+              `INSERT INTO join_create_hubs (guild_id, source_channel_id, category_id, name_template, enabled, updated_at)
+               VALUES ($1, $2, $3, $4, true, NOW())
+               ON CONFLICT (guild_id, source_channel_id) DO UPDATE SET category_id = EXCLUDED.category_id, name_template = EXCLUDED.name_template, updated_at = NOW()`,
+              [guildId, jtcHubChannelId, jtcCategoryId || null, jtcNameTemplate || "{user}'s Lounge"]
+            ).catch(() => {});
+          }
           
           await configAuditService.recordChange({
             guildId,
@@ -1358,7 +1543,7 @@ async function handleDashboardRequest(req, res, client = null) {
     if (req.method === 'POST' && subRoute === 'save-all') {
       try {
         const rawBody = await readRequestBody(req);
-        const { settings, moduleToggles } = JSON.parse(rawBody || '{}');
+        const { settings } = JSON.parse(rawBody || '{}');
         const s = settings || {};
 
         // 1. Save General
@@ -1372,6 +1557,15 @@ async function handleDashboardRequest(req, res, client = null) {
              WHERE guild_id = $1`,
             [guildId, s.general.timezone || 'America/New_York', s.general.changelog_channel_id || null, s.general.config_audit_channel_id || null]
           ).catch(() => {});
+
+          if (s.general.prefix) {
+            await query(
+              `INSERT INTO custom_command_configs (guild_id, prefix, enabled, updated_at)
+               VALUES ($1, $2, true, NOW())
+               ON CONFLICT (guild_id) DO UPDATE SET prefix = EXCLUDED.prefix, updated_at = NOW()`,
+              [guildId, s.general.prefix]
+            ).catch(() => {});
+          }
         }
 
         // 2. Save Onboarding & Welcome / Birthday
@@ -1388,6 +1582,15 @@ async function handleDashboardRequest(req, res, client = null) {
                updated_at = NOW()`,
             [guildId, s.onboarding.welcome_channel_id || null, s.onboarding.welcome_message || null, s.onboarding.welcome_embed_title || null, s.onboarding.welcome_embed_desc || null, Boolean(s.onboarding.welcome_dm_enabled)]
           ).catch(() => {});
+
+          if (s.onboarding.welcome_role_id) {
+            await query(
+              `INSERT INTO welcome_auto_roles (guild_id, role_id, active, updated_at)
+               VALUES ($1, $2, true, NOW())
+               ON CONFLICT (guild_id, role_id) DO UPDATE SET active = true, updated_at = NOW()`,
+              [guildId, s.onboarding.welcome_role_id]
+            ).catch(() => {});
+          }
 
           await query(
             `INSERT INTO birthday_configs (guild_id, channel_id, birthday_role_id, announcement_template, updated_at)
@@ -1415,26 +1618,46 @@ async function handleDashboardRequest(req, res, client = null) {
           ).catch(() => {});
 
           await query(
-            `INSERT INTO leveling_configs (guild_id, announcement_channel_id, updated_at)
-             VALUES ($1, $2, NOW())
+            `INSERT INTO leveling_configs (guild_id, level_up_channel_id, level_up_message, updated_at)
+             VALUES ($1, $2, $3, NOW())
              ON CONFLICT (guild_id) DO UPDATE SET
-               announcement_channel_id = EXCLUDED.announcement_channel_id,
+               level_up_channel_id = EXCLUDED.level_up_channel_id,
+               level_up_message = EXCLUDED.level_up_message,
                updated_at = NOW()`,
-            [guildId, s.community.leveling_channel_id || null]
+            [guildId, s.community.leveling_channel_id || null, s.community.leveling_message || null]
           ).catch(() => {});
+
+          if (s.community.leveling_multiplier_role_id) {
+            await query(
+              `INSERT INTO leveling_multiplier_roles (guild_id, role_id, multiplier, active, updated_at)
+               VALUES ($1, $2, 1.5, true, NOW())
+               ON CONFLICT (guild_id, role_id) DO UPDATE SET active = true, updated_at = NOW()`,
+              [guildId, s.community.leveling_multiplier_role_id]
+            ).catch(() => {});
+          }
+
+          if (s.community.suggest_channel_id) {
+            await query(
+              `INSERT INTO module_configs (guild_id, module_key, enabled, log_channel_id, updated_at)
+               VALUES ($1, 'SUGGESTIONS', true, $2, NOW())
+               ON CONFLICT (guild_id, module_key) DO UPDATE SET log_channel_id = EXCLUDED.log_channel_id, updated_at = NOW()`,
+              [guildId, s.community.suggest_channel_id]
+            ).catch(() => {});
+          }
         }
 
         // 4. Save Support
         if (s.support) {
           await query(
-            `INSERT INTO ticket_configs (guild_id, category_id, log_channel_id, staff_role_id, updated_at)
-             VALUES ($1, $2, $3, $4, NOW())
+            `INSERT INTO ticket_configs (guild_id, category_id, log_channel_id, staff_role_id, close_delete_seconds, updated_at)
+             VALUES ($1, $2, $3, $4, $5, NOW())
              ON CONFLICT (guild_id) DO UPDATE SET
                category_id = EXCLUDED.category_id,
                log_channel_id = EXCLUDED.log_channel_id,
                staff_role_id = EXCLUDED.staff_role_id,
+               close_delete_seconds = EXCLUDED.close_delete_seconds,
                updated_at = NOW()`,
-            [guildId, s.support.ticket_panel_channel_id || null, s.support.ticket_transcript_channel_id || null, s.support.ticket_staff_role_id || null]
+            [guildId, s.support.ticket_panel_channel_id || null, s.support.ticket_transcript_channel_id || null, s.support.ticket_staff_role_id || null, (parseInt(s.support.ticket_auto_close_hours || '24', 10) * 3600)]
           ).catch(() => {});
 
           await query(
@@ -1446,24 +1669,72 @@ async function handleDashboardRequest(req, res, client = null) {
                updated_at = NOW()`,
             [guildId, s.support.report_review_channel_id || null, s.support.report_ping_role_id || null]
           ).catch(() => {});
+
+          if (s.support.appeal_review_channel_id) {
+            await query(
+              `INSERT INTO appeal_configs (guild_id, review_channel_id, updated_at)
+               VALUES ($1, $2, NOW())
+               ON CONFLICT (guild_id) DO UPDATE SET review_channel_id = EXCLUDED.review_channel_id, updated_at = NOW()`,
+              [guildId, s.support.appeal_review_channel_id]
+            ).catch(() => {});
+          }
         }
 
         // 5. Save Safety & AutoMod
         if (s.automod) {
           await query(
-            `INSERT INTO automod_configs (guild_id, filter_invites, anti_spam, updated_at)
-             VALUES ($1, $2, $3, NOW())
+            `INSERT INTO automod_configs (guild_id, anti_invites_enabled, anti_spam_enabled, anti_mentions_max_count, anti_caps_percent, timeout_role_id, raid_alert_channel_id, updated_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
              ON CONFLICT (guild_id) DO UPDATE SET
-               filter_invites = EXCLUDED.filter_invites,
-               anti_spam = EXCLUDED.anti_spam,
+               anti_invites_enabled = EXCLUDED.anti_invites_enabled,
+               anti_spam_enabled = EXCLUDED.anti_spam_enabled,
+               anti_mentions_max_count = EXCLUDED.anti_mentions_max_count,
+               anti_caps_percent = EXCLUDED.anti_caps_percent,
+               timeout_role_id = EXCLUDED.timeout_role_id,
+               raid_alert_channel_id = EXCLUDED.raid_alert_channel_id,
                updated_at = NOW()`,
-            [guildId, s.automod.filter_invites ?? true, s.automod.anti_spam ?? true]
+            [
+              guildId,
+              s.automod.filter_invites ?? true,
+              s.automod.anti_spam ?? true,
+              parseInt(s.automod.max_mentions || '5', 10),
+              parseInt(s.automod.anti_caps_percent || '70', 10),
+              s.lockdown?.quarantine_role_id || null,
+              s.lockdown?.channel_id || null
+            ]
           ).catch(() => {});
         }
 
         // 6. Save Logging & Audit
-        if (s.logging?.config_audit_channel_id) {
-          await configAuditService.setConfigAuditChannel(guildId, s.logging.config_audit_channel_id).catch(() => {});
+        if (s.logging) {
+          if (s.logging.config_audit_channel_id) {
+            await configAuditService.setConfigAuditChannel(guildId, s.logging.config_audit_channel_id).catch(() => {});
+          }
+          if (s.logging.log_msg_channel_id) {
+            await query(`INSERT INTO log_module_settings (guild_id, module_key, channel_id, enabled, updated_at) VALUES ($1, 'MESSAGE', $2, true, NOW()) ON CONFLICT (guild_id, module_key) DO UPDATE SET channel_id = EXCLUDED.channel_id, updated_at = NOW()`, [guildId, s.logging.log_msg_channel_id]).catch(() => {});
+          }
+          if (s.logging.log_member_channel_id) {
+            await query(`INSERT INTO log_module_settings (guild_id, module_key, channel_id, enabled, updated_at) VALUES ($1, 'MEMBER', $2, true, NOW()) ON CONFLICT (guild_id, module_key) DO UPDATE SET channel_id = EXCLUDED.channel_id, updated_at = NOW()`, [guildId, s.logging.log_member_channel_id]).catch(() => {});
+          }
+          if (s.logging.log_voice_channel_id) {
+            await query(`INSERT INTO log_module_settings (guild_id, module_key, channel_id, enabled, updated_at) VALUES ($1, 'VOICE', $2, true, NOW()) ON CONFLICT (guild_id, module_key) DO UPDATE SET channel_id = EXCLUDED.channel_id, updated_at = NOW()`, [guildId, s.logging.log_voice_channel_id]).catch(() => {});
+          }
+          if (s.logging.log_role_channel_id) {
+            await query(`INSERT INTO log_module_settings (guild_id, module_key, channel_id, enabled, updated_at) VALUES ($1, 'ROLE', $2, true, NOW()) ON CONFLICT (guild_id, module_key) DO UPDATE SET channel_id = EXCLUDED.channel_id, updated_at = NOW()`, [guildId, s.logging.log_role_channel_id]).catch(() => {});
+          }
+          if (s.logging.stats_member_channel_id || s.logging.stats_bot_channel_id) {
+            await query(`INSERT INTO server_stats_configs (guild_id, member_channel_id, bot_channel_id, enabled, updated_at) VALUES ($1, $2, $3, true, NOW()) ON CONFLICT (guild_id) DO UPDATE SET member_channel_id = EXCLUDED.member_channel_id, bot_channel_id = EXCLUDED.bot_channel_id, updated_at = NOW()`, [guildId, s.logging.stats_member_channel_id || null, s.logging.stats_bot_channel_id || null]).catch(() => {});
+          }
+        }
+
+        // 7. Save Voice & Utilities
+        if (s.voice?.jtc_hub_channel_id) {
+          await query(
+            `INSERT INTO join_create_hubs (guild_id, source_channel_id, category_id, name_template, user_limit, enabled, updated_at)
+             VALUES ($1, $2, $3, $4, $5, true, NOW())
+             ON CONFLICT (guild_id, source_channel_id) DO UPDATE SET category_id = EXCLUDED.category_id, name_template = EXCLUDED.name_template, user_limit = EXCLUDED.user_limit, updated_at = NOW()`,
+            [guildId, s.voice.jtc_hub_channel_id, s.voice.jtc_category_id || null, s.voice.jtc_name_template || "{user}'s Lounge", parseInt(s.voice.jtc_user_limit || '0', 10)]
+          ).catch(() => {});
         }
 
         // Record Audit Entry
