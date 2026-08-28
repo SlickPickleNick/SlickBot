@@ -954,7 +954,7 @@ async function handleDashboardRequest(req, res, client = null) {
     // 1. Full Guild Config, Channels, Roles & All Current System Settings
     if (req.method === 'GET' && subRoute === 'config') {
       try {
-        let guildConfig = { guild_id: guildId, guild_name: guildObj.name, timezone: 'America/New_York' };
+        let guildConfig = { timezone: 'America/New_York' };
         let moduleConfigs = [];
         let welcomeConfig = null;
         let welcomeAutoRole = null;
@@ -966,6 +966,7 @@ async function handleDashboardRequest(req, res, client = null) {
         let appealConfig = null;
         let levelingConfig = null;
         let levelingMultiplierRole = null;
+        let levelingRoleRewards = [];
         let socialFeedConfig = null;
         let logModuleConfigs = [];
         let logSettingsConfigs = [];
@@ -979,7 +980,7 @@ async function handleDashboardRequest(req, res, client = null) {
         try {
           const [
             gRes, mRes, wRes, warRes, bRes, sRes, aRes, tRes, rRes, apRes,
-            lRes, lmrRes, fRes, lmRes, lsRes, jtcRes, statsRes, ccRes, staffRoleRes, appRes
+            lRes, lmrRes, lrrRes, fRes, lmRes, lsRes, jtcRes, statsRes, ccRes, staffRoleRes, appRes
           ] = await Promise.all([
             query('SELECT * FROM guild_configs WHERE guild_id = $1 LIMIT 1', [guildId]).catch(() => ({ rows: [] })),
             query('SELECT * FROM module_configs WHERE guild_id = $1', [guildId]).catch(() => ({ rows: [] })),
@@ -993,6 +994,7 @@ async function handleDashboardRequest(req, res, client = null) {
             query('SELECT * FROM appeal_configs WHERE guild_id = $1 LIMIT 1', [guildId]).catch(() => ({ rows: [] })),
             query('SELECT * FROM leveling_configs WHERE guild_id = $1 LIMIT 1', [guildId]).catch(() => ({ rows: [] })),
             query('SELECT role_id FROM leveling_multiplier_roles WHERE guild_id = $1 AND active = true LIMIT 1', [guildId]).catch(() => ({ rows: [] })),
+            query('SELECT * FROM leveling_role_rewards WHERE guild_id = $1', [guildId]).catch(() => ({ rows: [] })),
             query('SELECT * FROM social_feed_configs WHERE guild_id = $1 LIMIT 1', [guildId]).catch(() => ({ rows: [] })),
             query('SELECT * FROM log_module_settings WHERE guild_id = $1', [guildId]).catch(() => ({ rows: [] })),
             query('SELECT * FROM log_settings WHERE guild_id = $1', [guildId]).catch(() => ({ rows: [] })),
@@ -1015,6 +1017,7 @@ async function handleDashboardRequest(req, res, client = null) {
           appealConfig = apRes.rows[0] || null;
           levelingConfig = lRes.rows[0] || null;
           levelingMultiplierRole = lmrRes.rows[0] || null;
+          levelingRoleRewards = lrrRes.rows || [];
           socialFeedConfig = fRes.rows[0] || null;
           logModuleConfigs = lmRes.rows || [];
           logSettingsConfigs = lsRes.rows || [];
@@ -1033,7 +1036,7 @@ async function handleDashboardRequest(req, res, client = null) {
         }
 
         const modulesWithState = ALL_MODULES_METADATA.map(mod => {
-          const cfg = moduleConfigs.find(m => m.module_key === mod.key);
+          const cfg = moduleConfigs.find(m => String(m.module_key || '').trim().toUpperCase() === String(mod.key || '').trim().toUpperCase());
           return {
             ...mod,
             enabled: cfg ? cfg.enabled : true,
@@ -1066,6 +1069,10 @@ async function handleDashboardRequest(req, res, client = null) {
           return null;
         };
 
+        const rew5 = levelingRoleRewards.find(r => Number(r.level_requirement) === 5)?.role_id || null;
+        const rew10 = levelingRoleRewards.find(r => Number(r.level_requirement) === 10)?.role_id || null;
+        const rew25 = levelingRoleRewards.find(r => Number(r.level_requirement) === 25)?.role_id || null;
+
         // Build comprehensive settings payload with real DB values (or null if unconfigured)
         const settings = {
           general: {
@@ -1086,7 +1093,7 @@ async function handleDashboardRequest(req, res, client = null) {
             anti_spam: automodConfig?.anti_spam_enabled ?? true,
             max_mentions: automodConfig?.anti_mentions_max_count || 5,
             anti_caps_percent: automodConfig?.anti_caps_percent || 70,
-            exempt_role_id: (automodConfig?.exempt_role_ids && automodConfig.exempt_role_ids[0]) || null,
+            exempt_role_id: (automodConfig?.exempt_roles && automodConfig.exempt_roles[0]) || (automodConfig?.exempt_role_ids && automodConfig.exempt_role_ids[0]) || null,
             alert_channel_id: automodConfig?.raid_alert_channel_id || automodConfig?.alert_channel_id || null
           },
           lockdown: {
@@ -1105,8 +1112,8 @@ async function handleDashboardRequest(req, res, client = null) {
             ticket_welcome_message: ticketConfig?.panel_description || null,
             report_review_channel_id: reportConfig?.review_channel_id || null,
             report_ping_role_id: reportConfig?.ping_role_id || null,
-            report_anonymous: true,
-            report_require_reason: true,
+            report_anonymous: reportConfig?.anonymous_enabled ?? true,
+            report_require_reason: reportConfig?.require_reason ?? true,
             app_submission_channel_id: staffAppType?.review_channel_id || null,
             app_reviewer_role_id: staffAppType?.pending_role_id || null,
             app_approved_role_id: staffAppType?.approved_role_id || null,
@@ -1114,7 +1121,7 @@ async function handleDashboardRequest(req, res, client = null) {
             app_q2: staffAppQuestions[1]?.question_text || null,
             appeal_review_channel_id: appealConfig?.review_channel_id || null,
             appeal_reviewer_role_id: ticketConfig?.staff_role_id || null,
-            appeal_cooldown_days: 30,
+            appeal_cooldown_days: appealConfig?.cooldown_days || 30,
             faq_forum_channel_id: getLogChan('faq') || null,
             faq_auto_reply_mode: 'ENABLED'
           },
@@ -1143,14 +1150,14 @@ async function handleDashboardRequest(req, res, client = null) {
             starboard_channel_id: starboardConfig?.channel_id || null,
             starboard_threshold: starboardConfig?.star_threshold || 3,
             starboard_emoji: starboardConfig?.star_emoji || '⭐',
-            starboard_self_stars: false,
-            starboard_allow_nsfw: false,
+            starboard_self_stars: starboardConfig?.allow_self_star ?? false,
+            starboard_allow_nsfw: starboardConfig?.allow_nsfw ?? false,
             leveling_channel_id: levelingConfig?.level_up_channel_id || null,
             leveling_multiplier_role_id: levelingMultiplierRole?.role_id || null,
             leveling_xp_rate: levelingConfig?.xp_min || 15,
-            leveling_reward_5: null,
-            leveling_reward_10: null,
-            leveling_reward_25: null,
+            leveling_reward_5: rew5,
+            leveling_reward_10: rew10,
+            leveling_reward_25: rew25,
             leveling_message: levelingConfig?.level_up_message || 'GG {user}, you leveled up to **Level {level}**! 🎉',
             suggest_channel_id: getLogChan('suggestions') || null,
             suggest_review_channel_id: getLogChan('moderation') || null,
@@ -2208,32 +2215,89 @@ async function handleDashboardRequest(req, res, client = null) {
         if (content && content.trim()) messagePayload.content = content.trim();
         if (discordEmbed) messagePayload.embeds = [discordEmbed];
 
-        // Send via live bot client if available
+        let sentViaClient = false;
+
+        // 1. Try sending via live bot client if available
         if (client?.guilds?.cache?.has(guildId)) {
           const g = client.guilds.cache.get(guildId);
           const ch = await g.channels.fetch(channelId).catch(() => null);
-          if (!ch || !ch.isTextBased()) {
-            res.writeHead(400, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: `Channel <#${channelId}> not found or is not a text channel` }));
-            return;
+          if (ch && ch.isTextBased()) {
+            if (messageId) {
+              const existingMsg = await ch.messages.fetch(messageId).catch(() => null);
+              if (existingMsg) {
+                await existingMsg.edit(messagePayload);
+                sentMessageId = existingMsg.id;
+                sentViaClient = true;
+              }
+            } else {
+              const sent = await ch.send(messagePayload);
+              sentMessageId = sent.id;
+              sentViaClient = true;
+            }
           }
+        }
 
-          if (messageId) {
-            const existingMsg = await ch.messages.fetch(messageId).catch(() => null);
-            if (!existingMsg) {
-              res.writeHead(404, { 'Content-Type': 'application/json' });
-              res.end(JSON.stringify({ error: `Message ID ${messageId} not found in channel <#${channelId}>` }));
+        // 2. If client is not available/cached, dispatch directly via Discord REST API v10
+        if (!sentViaClient) {
+          const botToken = getDiscordBotToken();
+          if (!botToken) {
+            sentMessageId = messageId || `sim_msg_${Date.now()}`;
+          } else {
+            const rawRestEmbed = embed ? {
+              title: embed.title || undefined,
+              description: embed.description || undefined,
+              color: colorVal !== undefined ? colorVal : undefined,
+              author: embed.author?.name ? {
+                name: String(embed.author.name).slice(0, 256),
+                icon_url: embed.author.icon_url || embed.author.iconURL || undefined,
+                url: embed.author.url || undefined
+              } : undefined,
+              footer: embed.footer?.text ? {
+                text: String(embed.footer.text).slice(0, 2048),
+                icon_url: embed.footer.icon_url || embed.footer.iconURL || undefined
+              } : undefined,
+              image: embed.image?.url ? { url: embed.image.url } : undefined,
+              thumbnail: embed.thumbnail?.url ? { url: embed.thumbnail.url } : undefined,
+              timestamp: embed.timestamp ? (embed.timestamp === true ? new Date().toISOString() : new Date(embed.timestamp).toISOString()) : undefined,
+              fields: Array.isArray(embed.fields) && embed.fields.length > 0 ? embed.fields
+                .filter(f => f && f.name && f.name.trim() && f.value && f.value.trim())
+                .slice(0, 25)
+                .map(f => ({ name: String(f.name).slice(0, 256), value: String(f.value).slice(0, 1024), inline: Boolean(f.inline) })) : undefined
+            } : undefined;
+
+            const restBody = {};
+            if (content && content.trim()) restBody.content = content.trim();
+            if (rawRestEmbed) restBody.embeds = [rawRestEmbed];
+
+            const restUrl = messageId
+              ? `https://discord.com/api/v10/channels/${encodeURIComponent(channelId)}/messages/${encodeURIComponent(messageId)}`
+              : `https://discord.com/api/v10/channels/${encodeURIComponent(channelId)}/messages`;
+
+            const restMethod = messageId ? 'PATCH' : 'POST';
+
+            const discordRes = await fetch(restUrl, {
+              method: restMethod,
+              headers: {
+                'Authorization': `Bot ${botToken}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify(restBody)
+            });
+
+            const discordJson = await discordRes.json().catch(() => ({}));
+
+            if (!discordRes.ok) {
+              console.error('[Dashboard] Discord REST API message dispatch failed:', discordRes.status, discordJson);
+              res.writeHead(discordRes.status, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({
+                error: `Discord API Error (${discordRes.status}): ${discordJson.message || 'Failed to dispatch message to channel'}`,
+                details: discordJson
+              }));
               return;
             }
-            await existingMsg.edit(messagePayload);
-            sentMessageId = existingMsg.id;
-          } else {
-            const sent = await ch.send(messagePayload);
-            sentMessageId = sent.id;
+
+            sentMessageId = discordJson.id;
           }
-        } else {
-          // Sandbox / Mock simulation fallback
-          sentMessageId = messageId || `sim_msg_${Date.now()}`;
         }
 
         // Audit Log
@@ -2462,28 +2526,59 @@ async function handleDashboardRequest(req, res, client = null) {
             } catch (optErr) {}
           }
 
-          // 3. Publish to Discord channel if requested and bot client live
+          // 3. Publish to Discord channel if requested
           let publishedMessageId = null;
-          if (channelId && client) {
-            let g = client.guilds?.cache?.get(guildId);
-            if (!g && typeof client.guilds?.fetch === 'function') {
-              g = await client.guilds.fetch(guildId).catch(() => null);
-            }
-            if (g) {
-              const ch = await g.channels.fetch(channelId).catch(() => null);
-              if (ch && ch.isTextBased()) {
-                const panelMsgPayload = await rolePanelService.buildRolePanelMessage(panel);
-                const sent = await ch.send(panelMsgPayload);
-                publishedMessageId = sent.id;
-
-                // Record in panel_messages
-                await query(
-                  `INSERT INTO panel_messages (guild_id, panel_type, panel_ref, channel_id, message_id, active)
-                   VALUES ($1, 'role', $2, $3, $4, true)
-                   ON CONFLICT (guild_id, message_id) DO UPDATE SET active = true, updated_at = NOW()`,
-                  [guildId, panel.id, channelId, sent.id]
-                ).catch(() => {});
+          if (channelId) {
+            if (client) {
+              let g = client.guilds?.cache?.get(guildId);
+              if (!g && typeof client.guilds?.fetch === 'function') {
+                g = await client.guilds.fetch(guildId).catch(() => null);
               }
+              if (g) {
+                const ch = await g.channels.fetch(channelId).catch(() => null);
+                if (ch && ch.isTextBased()) {
+                  const panelMsgPayload = await rolePanelService.buildRolePanelMessage(panel);
+                  const sent = await ch.send(panelMsgPayload);
+                  publishedMessageId = sent.id;
+                }
+              }
+            }
+
+            // Fallback via Discord REST API v10
+            if (!publishedMessageId) {
+              const botToken = getDiscordBotToken();
+              if (botToken) {
+                const panelMsgPayload = await rolePanelService.buildRolePanelMessage(panel).catch(() => null);
+                if (panelMsgPayload) {
+                  const restBody = {
+                    embeds: panelMsgPayload.embeds?.map(e => typeof e.toJSON === 'function' ? e.toJSON() : e) || [],
+                    components: panelMsgPayload.components?.map(c => typeof c.toJSON === 'function' ? c.toJSON() : c) || []
+                  };
+
+                  const res = await fetch(`https://discord.com/api/v10/channels/${encodeURIComponent(channelId)}/messages`, {
+                    method: 'POST',
+                    headers: {
+                      'Authorization': `Bot ${botToken}`,
+                      'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(restBody)
+                  });
+
+                  if (res.ok) {
+                    const sentJson = await res.json();
+                    publishedMessageId = sentJson.id;
+                  }
+                }
+              }
+            }
+
+            if (publishedMessageId) {
+              await query(
+                `INSERT INTO panel_messages (guild_id, panel_type, panel_ref, channel_id, message_id, active)
+                 VALUES ($1, 'role', $2, $3, $4, true)
+                 ON CONFLICT (guild_id, message_id) DO UPDATE SET active = true, updated_at = NOW()`,
+                [guildId, panel.id, channelId, publishedMessageId]
+              ).catch(() => {});
             }
           }
 
