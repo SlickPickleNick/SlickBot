@@ -434,23 +434,19 @@ async function getGuildStructure(guildId, client = null) {
     }
   }
 
-  // 2. Fetch directly from Discord REST API if Bot Token is available
+  // 2. Fetch directly from Discord REST API using Bot Token
   const botToken = (process.env.DISCORD_BOT_TOKEN || process.env.DISCORD_TOKEN || env?.DISCORD_TOKEN || '').trim().replace(/["']/g, '');
   if (botToken) {
     try {
       const [chRes, roRes] = await Promise.all([
-        makeHttpsRequest({
-          hostname: 'discord.com',
-          path: `/api/v10/guilds/${guildId}/channels`,
+        fetch(`https://discord.com/api/v10/guilds/${guildId}/channels`, {
           method: 'GET',
           headers: {
             Authorization: `Bot ${botToken}`,
             'User-Agent': 'DiscordBot (https://github.com/SlickPickleNick/SlickBot, 0.9.8)'
           }
         }),
-        makeHttpsRequest({
-          hostname: 'discord.com',
-          path: `/api/v10/guilds/${guildId}/roles`,
+        fetch(`https://discord.com/api/v10/guilds/${guildId}/roles`, {
           method: 'GET',
           headers: {
             Authorization: `Bot ${botToken}`,
@@ -459,73 +455,84 @@ async function getGuildStructure(guildId, client = null) {
         })
       ]);
 
-      if (Array.isArray(chRes.data) && chRes.data.length > 0) {
-        const parentLookup = new Map(chRes.data.map(c => [c.id, c.name]));
-        const channels = chRes.data
-          .filter(c => c && c.id && c.name)
-          .map(c => ({
-            id: c.id,
-            name: c.name,
-            type: normalizeChannelType(c.type),
-            rawType: c.type,
-            parentId: c.parent_id || null,
-            parentName: c.parent_id ? parentLookup.get(c.parent_id) || null : null,
-            position: c.position ?? 0,
-            canSend: [0, 2, 5, 10, 11, 12, 13, 15, 16].includes(Number(c.type))
-          }))
-          .sort((a, b) => (a.parentName || '').localeCompare(b.parentName || '') || a.position - b.position || a.name.localeCompare(b.name));
+      if (chRes.ok) {
+        const chData = await chRes.json();
+        const roData = roRes.ok ? await roRes.json() : [];
 
-        const roles = (Array.isArray(roRes.data) ? roRes.data : [])
-          .filter(r => r.name !== '@everyone')
-          .map(r => ({
-            id: r.id,
-            name: r.name,
-            color: r.color ? '#' + r.color.toString(16).padStart(6, '0') : '#94a3b8',
-            position: r.position ?? 0
-          }))
-          .sort((a, b) => b.position - a.position);
+        if (Array.isArray(chData) && chData.length > 0) {
+          const parentLookup = new Map(chData.map(c => [c.id, c.name]));
+          const channels = chData
+            .filter(c => c && c.id && c.name)
+            .map(c => ({
+              id: c.id,
+              name: c.name,
+              type: normalizeChannelType(c.type),
+              rawType: c.type,
+              parentId: c.parent_id || null,
+              parentName: c.parent_id ? parentLookup.get(c.parent_id) || null : null,
+              position: c.position ?? 0,
+              canSend: [0, 2, 5, 10, 11, 12, 13, 15, 16].includes(Number(c.type))
+            }))
+            .sort((a, b) => (a.parentName || '').localeCompare(b.parentName || '') || a.position - b.position || a.name.localeCompare(b.name));
 
-        return { channels, roles };
+          const roles = (Array.isArray(roData) ? roData : [])
+            .filter(r => r.name !== '@everyone')
+            .map(r => ({
+              id: r.id,
+              name: r.name,
+              color: r.color ? '#' + r.color.toString(16).padStart(6, '0') : '#94a3b8',
+              position: r.position ?? 0
+            }))
+            .sort((a, b) => b.position - a.position);
+
+          return { channels, roles };
+        }
       }
     } catch (apiErr) {
       console.warn('[Dashboard] Discord REST API channel fetch error:', apiErr.message);
     }
   }
 
-  // 3. Fallback standard server structure to ensure dashboard is always editable and functional
-  return {
-    channels: [
-      { id: '100000000000000001', name: 'general-chat', type: 'text', parentName: 'Text Channels', position: 1 },
-      { id: '100000000000000002', name: 'announcements', type: 'announcement', parentName: 'Information', position: 1 },
-      { id: '100000000000000003', name: 'stream-alerts', type: 'announcement', parentName: 'Information', position: 2 },
-      { id: '100000000000000004', name: 'welcome-and-rules', type: 'text', parentName: 'Information', position: 3 },
-      { id: '100000000000000005', name: 'mod-audit-logs', type: 'text', parentName: 'Staff & Logs', position: 1 },
-      { id: '100000000000000006', name: 'bot-config-logs', type: 'text', parentName: 'Staff & Logs', position: 2 },
-      { id: '100000000000000007', name: 'support-tickets', type: 'text', parentName: 'Support Desk', position: 1 },
-      { id: '100000000000000008', name: 'ticket-transcripts', type: 'text', parentName: 'Support Desk', position: 2 },
-      { id: '100000000000000009', name: 'member-reports', type: 'text', parentName: 'Support Desk', position: 3 },
-      { id: '100000000000000010', name: 'staff-applications', type: 'text', parentName: 'Staff & Logs', position: 3 },
-      { id: '100000000000000011', name: 'ban-appeals', type: 'text', parentName: 'Support Desk', position: 4 },
-      { id: '100000000000000012', name: 'community-faq', type: 'forum', parentName: 'Information', position: 4 },
-      { id: '100000000000000013', name: 'starboard', type: 'text', parentName: 'Community', position: 2 },
-      { id: '100000000000000014', name: 'community-suggestions', type: 'text', parentName: 'Community', position: 3 },
-      { id: '100000000000000015', name: 'bot-commands', type: 'text', parentName: 'Community', position: 4 },
-      { id: '100000000000000016', name: 'patch-notes', type: 'announcement', parentName: 'Information', position: 5 },
-      { id: '100000000000000017', name: 'media-and-clips', type: 'media', parentName: 'Community', position: 5 },
-      { id: '100000000000000018', name: 'General Voice Lounge', type: 'voice', parentName: 'Voice Lounges', position: 1 },
-      { id: '100000000000000019', name: 'Gaming Lounge 1', type: 'voice', parentName: 'Voice Lounges', position: 2 },
-      { id: '100000000000000020', name: 'Community Stage', type: 'stage', parentName: 'Voice Lounges', position: 3 }
-    ],
-    roles: [
-      { id: '200000000000000001', name: 'Administrator', color: '#ef4444', position: 10 },
-      { id: '200000000000000002', name: 'Moderator', color: '#3b82f6', position: 9 },
-      { id: '200000000000000003', name: 'Support Staff', color: '#10b981', position: 8 },
-      { id: '200000000000000004', name: 'Stream Alert Ping', color: '#8b5cf6', position: 7 },
-      { id: '200000000000000005', name: 'Verified Member', color: '#f59e0b', position: 6 },
-      { id: '200000000000000006', name: 'VIP', color: '#ec4899', position: 5 },
-      { id: '200000000000000007', name: 'Member', color: '#94a3b8', position: 1 }
-    ]
-  };
+  // 3. Fallback ONLY for sandbox demo session guilds
+  const isDemoGuild = ['123456789012345678', '887766554433221100', '998877665544332211', '554433221100998877'].includes(guildId);
+  if (isDemoGuild) {
+    return {
+      channels: [
+        { id: '100000000000000001', name: 'general-chat', type: 'text', parentName: 'Text Channels', position: 1 },
+        { id: '100000000000000002', name: 'announcements', type: 'announcement', parentName: 'Information', position: 1 },
+        { id: '100000000000000003', name: 'stream-alerts', type: 'announcement', parentName: 'Information', position: 2 },
+        { id: '100000000000000004', name: 'welcome-and-rules', type: 'text', parentName: 'Information', position: 3 },
+        { id: '100000000000000005', name: 'mod-audit-logs', type: 'text', parentName: 'Staff & Logs', position: 1 },
+        { id: '100000000000000006', name: 'bot-config-logs', type: 'text', parentName: 'Staff & Logs', position: 2 },
+        { id: '100000000000000007', name: 'support-tickets', type: 'text', parentName: 'Support Desk', position: 1 },
+        { id: '100000000000000008', name: 'ticket-transcripts', type: 'text', parentName: 'Support Desk', position: 2 },
+        { id: '100000000000000009', name: 'member-reports', type: 'text', parentName: 'Support Desk', position: 3 },
+        { id: '100000000000000010', name: 'staff-applications', type: 'text', parentName: 'Staff & Logs', position: 3 },
+        { id: '100000000000000011', name: 'ban-appeals', type: 'text', parentName: 'Support Desk', position: 4 },
+        { id: '100000000000000012', name: 'community-faq', type: 'forum', parentName: 'Information', position: 4 },
+        { id: '100000000000000013', name: 'starboard', type: 'text', parentName: 'Community', position: 2 },
+        { id: '100000000000000014', name: 'community-suggestions', type: 'text', parentName: 'Community', position: 3 },
+        { id: '100000000000000015', name: 'bot-commands', type: 'text', parentName: 'Community', position: 4 },
+        { id: '100000000000000016', name: 'patch-notes', type: 'announcement', parentName: 'Information', position: 5 },
+        { id: '100000000000000017', name: 'media-and-clips', type: 'media', parentName: 'Community', position: 5 },
+        { id: '100000000000000018', name: 'General Voice Lounge', type: 'voice', parentName: 'Voice Lounges', position: 1 },
+        { id: '100000000000000019', name: 'Gaming Lounge 1', type: 'voice', parentName: 'Voice Lounges', position: 2 },
+        { id: '100000000000000020', name: 'Community Stage', type: 'stage', parentName: 'Voice Lounges', position: 3 }
+      ],
+      roles: [
+        { id: '200000000000000001', name: 'Administrator', color: '#ef4444', position: 10 },
+        { id: '200000000000000002', name: 'Moderator', color: '#3b82f6', position: 9 },
+        { id: '200000000000000003', name: 'Support Staff', color: '#10b981', position: 8 },
+        { id: '200000000000000004', name: 'Stream Alert Ping', color: '#8b5cf6', position: 7 },
+        { id: '200000000000000005', name: 'Verified Member', color: '#f59e0b', position: 6 },
+        { id: '200000000000000006', name: 'VIP', color: '#ec4899', position: 5 },
+        { id: '200000000000000007', name: 'Member', color: '#94a3b8', position: 1 }
+      ]
+    };
+  }
+
+  // Real servers return empty structure if not found in Discord
+  return { channels: [], roles: [] };
 }
 
 // Dynamically determine base URL from environment or request headers, ensuring valid formatting
@@ -987,7 +994,7 @@ async function handleDashboardRequest(req, res, client = null) {
         // Resolve real Discord Channels & Roles for this server
         const { channels, roles } = await getGuildStructure(guildId, client);
 
-        // Build comprehensive settings payload
+        // Build comprehensive settings payload with real DB values (or null if unconfigured)
         const settings = {
           general: {
             timezone: guildConfig.timezone || 'America/New_York',
@@ -996,9 +1003,9 @@ async function handleDashboardRequest(req, res, client = null) {
           },
           moderation: {
             mute_duration_ms: 600000,
-            mod_audit_channel_id: '100000000000000005',
+            mod_audit_channel_id: null,
             warn_threshold: 3,
-            staff_role_id: '200000000000000002'
+            staff_role_id: null
           },
           automod: {
             filter_invites: automodConfig?.filter_invites ?? true,
@@ -1006,63 +1013,63 @@ async function handleDashboardRequest(req, res, client = null) {
             max_mentions: automodConfig?.max_mentions || 5
           },
           lockdown: {
-            channel_id: '100000000000000002',
+            channel_id: null,
             quarantine_role_id: null,
             message: 'Server is temporarily locked down by administration.'
           },
           support: {
-            ticket_panel_channel_id: ticketConfig?.category_id || '100000000000000007',
-            ticket_transcript_channel_id: ticketConfig?.log_channel_id || '100000000000000008',
-            ticket_staff_role_id: ticketConfig?.staff_role_id || '200000000000000003',
+            ticket_panel_channel_id: ticketConfig?.category_id || null,
+            ticket_transcript_channel_id: ticketConfig?.log_channel_id || null,
+            ticket_staff_role_id: ticketConfig?.staff_role_id || null,
             ticket_auto_close_hours: 24,
-            report_review_channel_id: reportConfig?.review_channel_id || '100000000000000009',
-            report_ping_role_id: reportConfig?.ping_role_id || '200000000000000003',
+            report_review_channel_id: reportConfig?.review_channel_id || null,
+            report_ping_role_id: reportConfig?.ping_role_id || null,
             report_anonymous: true,
-            app_submission_channel_id: '100000000000000010',
-            app_reviewer_role_id: '200000000000000001',
-            appeal_review_channel_id: appealConfig?.review_channel_id || '100000000000000011',
-            appeal_reviewer_role_id: '200000000000000001',
-            faq_forum_channel_id: '100000000000000012',
+            app_submission_channel_id: null,
+            app_reviewer_role_id: null,
+            appeal_review_channel_id: appealConfig?.review_channel_id || null,
+            appeal_reviewer_role_id: null,
+            faq_forum_channel_id: null,
             faq_auto_reply_mode: 'ENABLED'
           },
           feeds: {
-            directory_channel_id: socialFeedConfig?.live_directory_channel_id || '100000000000000003',
+            directory_channel_id: socialFeedConfig?.live_directory_channel_id || null,
             refresh_interval: socialFeedConfig?.check_interval_seconds || 120
           },
           onboarding: {
-            welcome_channel_id: welcomeConfig?.channel_id || '100000000000000004',
-            welcome_role_id: '200000000000000007',
+            welcome_channel_id: welcomeConfig?.channel_id || null,
+            welcome_role_id: null,
             welcome_message: welcomeConfig?.message_template || 'Welcome {user} to **{server}**! 🎉',
             welcome_embed_title: welcomeConfig?.embed_title || 'Welcome to {server}',
             welcome_embed_desc: welcomeConfig?.embed_description || 'Glad to have you here, {user}. Grab your roles and check out our channels!',
             welcome_dm_enabled: welcomeConfig?.dm_enabled ?? false,
-            birthday_channel_id: birthdayConfig?.channel_id || '100000000000000002',
-            birthday_role_id: birthdayConfig?.birthday_role_id || '200000000000000006',
+            birthday_channel_id: birthdayConfig?.channel_id || null,
+            birthday_role_id: birthdayConfig?.birthday_role_id || null,
             birthday_message: birthdayConfig?.announcement_template || 'Happy birthday, {user}! Have an amazing day! 🎂🎉'
           },
           community: {
-            starboard_channel_id: starboardConfig?.channel_id || '100000000000000013',
+            starboard_channel_id: starboardConfig?.channel_id || null,
             starboard_threshold: starboardConfig?.star_threshold || 3,
             starboard_emoji: starboardConfig?.star_emoji || '⭐',
-            leveling_channel_id: levelingConfig?.announcement_channel_id || '100000000000000001',
-            leveling_multiplier_role_id: '200000000000000006',
+            leveling_channel_id: levelingConfig?.announcement_channel_id || null,
+            leveling_multiplier_role_id: null,
             leveling_message: 'GG {user}, you leveled up to **Level {level}**! 🎉',
-            suggest_channel_id: '100000000000000014',
-            suggest_review_channel_id: '100000000000000005'
+            suggest_channel_id: null,
+            suggest_review_channel_id: null
           },
           logging: {
-            config_audit_channel_id: guildConfig.config_audit_channel_id || '100000000000000006',
-            log_msg_channel_id: '100000000000000005',
-            log_member_channel_id: '100000000000000005',
-            log_voice_channel_id: '100000000000000005',
-            log_role_channel_id: '100000000000000005',
-            stats_member_channel_id: '100000000000000015',
-            stats_bot_channel_id: '100000000000000016'
+            config_audit_channel_id: guildConfig.config_audit_channel_id || null,
+            log_msg_channel_id: null,
+            log_member_channel_id: null,
+            log_voice_channel_id: null,
+            log_role_channel_id: null,
+            stats_member_channel_id: null,
+            stats_bot_channel_id: null
           },
           voice: {
-            jtc_hub_channel_id: '100000000000000015',
+            jtc_hub_channel_id: null,
             jtc_name_template: "{user}'s Lounge",
-            util_poll_channel_id: '100000000000000001',
+            util_poll_channel_id: null,
             util_snipe_limit: 25
           }
         };
@@ -1617,9 +1624,7 @@ async function handleDashboardRequest(req, res, client = null) {
           res.end(JSON.stringify(resRows.rows || []));
         } catch (e) {
           res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify([
-            { id: 'feed-1', platform: 'TWITCH', account_name: 'slickbot_live', channel_id: '100000000000000003', ping_role_id: '200000000000000004', enabled: true, last_status: 'OFFLINE' }
-          ]));
+          res.end(JSON.stringify([]));
         }
         return;
       }
@@ -1769,10 +1774,10 @@ async function handleDashboardRequest(req, res, client = null) {
         try {
           const resRows = await query(`SELECT * FROM starboard_configs WHERE guild_id = $1 LIMIT 1`, [guildId]);
           res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify(resRows.rows[0] || { enabled: true, channel_id: '100000000000000013', star_threshold: 3, star_emoji: '⭐' }));
+          res.end(JSON.stringify(resRows.rows[0] || { enabled: true, channel_id: null, star_threshold: 3, star_emoji: '⭐' }));
         } catch (e) {
           res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ enabled: true, channel_id: '100000000000000013', star_threshold: 3, star_emoji: '⭐' }));
+          res.end(JSON.stringify({ enabled: true, channel_id: null, star_threshold: 3, star_emoji: '⭐' }));
         }
         return;
       }
@@ -2372,121 +2377,145 @@ async function handleDashboardRequest(req, res, client = null) {
     // 12. Server Analytics & Activity Heatmap Insights
     if (subRoute === 'analytics' && req.method === 'GET') {
       try {
-        // Query real Discord Guild and real DB stats
         let g = client?.guilds?.cache?.get(guildId);
         if (!g && typeof client?.guilds?.fetch === 'function') {
           g = await client.guilds.fetch(guildId).catch(() => null);
         }
 
-        const [modCountRes, ticketCountRes, levelUsersRes, auditCountRes] = await Promise.all([
-          query(`SELECT COUNT(*)::int AS count FROM mod_cases WHERE guild_id = $1`, [guildId]).catch(() => ({ rows: [{ count: 0 }] })),
-          query(`SELECT COUNT(*)::int AS count FROM ticket_records WHERE guild_id = $1`, [guildId]).catch(() => ({ rows: [{ count: 0 }] })),
-          query(`SELECT COUNT(*)::int AS count FROM level_users WHERE guild_id = $1`, [guildId]).catch(() => ({ rows: [{ count: 0 }] })),
-          query(`SELECT COUNT(*)::int AS count FROM config_audit_logs WHERE guild_id = $1`, [guildId]).catch(() => ({ rows: [{ count: 0 }] }))
+        // Query real database metrics from actual tables
+        const [modCasesRes, ticketsRes, reportsRes, auditRes, levelsRes, appsRes] = await Promise.all([
+          query(`SELECT COUNT(*)::int AS count FROM moderation_cases WHERE guild_id = $1`, [guildId]).catch(() => ({ rows: [{ count: 0 }] })),
+          query(`SELECT COUNT(*)::int AS count FROM tickets WHERE guild_id = $1`, [guildId]).catch(() => ({ rows: [{ count: 0 }] })),
+          query(`SELECT COUNT(*)::int AS count FROM reports WHERE guild_id = $1`, [guildId]).catch(() => ({ rows: [{ count: 0 }] })),
+          query(`SELECT COUNT(*)::int AS count FROM config_audit_logs WHERE guild_id = $1`, [guildId]).catch(() => ({ rows: [{ count: 0 }] })),
+          query(`SELECT COUNT(*)::int AS count, COALESCE(SUM(message_count), 0)::int AS total_msgs, COALESCE(SUM(voice_minutes), 0)::int AS total_voice_min FROM leveling_profiles WHERE guild_id = $1`, [guildId]).catch(() => ({ rows: [{ count: 0, total_msgs: 0, total_voice_min: 0 }] })),
+          query(`SELECT COUNT(*)::int AS count FROM application_submissions WHERE guild_id = $1`, [guildId]).catch(() => ({ rows: [{ count: 0 }] }))
         ]);
 
-        const totalModCases = modCountRes.rows[0]?.count || 0;
-        const totalTickets = ticketCountRes.rows[0]?.count || 0;
-        const totalLevelUsers = levelUsersRes.rows[0]?.count || 0;
-        const totalAuditLogs = auditCountRes.rows[0]?.count || 0;
+        const totalModCases = modCasesRes.rows[0]?.count || 0;
+        const totalTickets = ticketsRes.rows[0]?.count || 0;
+        const totalReports = reportsRes.rows[0]?.count || 0;
+        const totalAuditLogs = auditRes.rows[0]?.count || 0;
+        const totalLevelUsers = levelsRes.rows[0]?.count || 0;
+        const totalMsgsLogged = levelsRes.rows[0]?.total_msgs || 0;
+        const totalVoiceMinLogged = levelsRes.rows[0]?.total_voice_min || 0;
         const liveMemberCount = g?.memberCount || totalLevelUsers || 0;
 
-        // Base activity multiplier derived from real members and database records
-        const baseVolume = Math.max(25, (liveMemberCount || 35) * 4 + totalAuditLogs * 3 + totalLevelUsers * 2 + totalTickets * 4 + totalModCases * 5);
-        
-        // Dynamic 24-hour activity curve (peaks between 16:00 and 22:00)
+        // Query real hourly event counts in the last 24h
+        const [hourlyAudit, hourlyMod, hourlyTickets] = await Promise.all([
+          query(`SELECT EXTRACT(HOUR FROM created_at)::int AS hr, COUNT(*)::int AS count FROM config_audit_logs WHERE guild_id = $1 AND created_at >= NOW() - INTERVAL '24 hours' GROUP BY hr`, [guildId]).catch(() => ({ rows: [] })),
+          query(`SELECT EXTRACT(HOUR FROM created_at)::int AS hr, COUNT(*)::int AS count FROM moderation_cases WHERE guild_id = $1 AND created_at >= NOW() - INTERVAL '24 hours' GROUP BY hr`, [guildId]).catch(() => ({ rows: [] })),
+          query(`SELECT EXTRACT(HOUR FROM created_at)::int AS hr, COUNT(*)::int AS count FROM tickets WHERE guild_id = $1 AND created_at >= NOW() - INTERVAL '24 hours' GROUP BY hr`, [guildId]).catch(() => ({ rows: [] }))
+        ]);
+
+        const hourlyMap = new Map();
+        [...hourlyAudit.rows, ...hourlyMod.rows, ...hourlyTickets.rows].forEach(r => {
+          hourlyMap.set(r.hr, (hourlyMap.get(r.hr) || 0) + Number(r.count));
+        });
+
         const now = new Date();
         const velocity24h = [];
-        let total24hMsgs = 0;
-        let total24hVoiceMin = 0;
-
+        let msgs24h = 0;
         for (let i = 23; i >= 0; i--) {
           const d = new Date(now.getTime() - i * 60 * 60 * 1000);
           const hr = d.getHours();
-          const hourLabel = `${hr.toString().padStart(2, '0')}:00`;
-          
-          // Realistic diurnal curve factor (0.2 in early morning to 1.0 at peak evening)
-          const timeFactor = 0.25 + 0.75 * Math.sin(Math.max(0, (hr - 6) / 18) * Math.PI);
-          const variance = 0.85 + (((d.getDate() * 17 + hr * 23) % 31) / 100);
-          const msgs = Math.max(1, Math.round((baseVolume / 24) * timeFactor * variance));
-          const voiceMin = Math.round(msgs * 1.6);
-
-          total24hMsgs += msgs;
-          total24hVoiceMin += voiceMin;
-          velocity24h.push({ hour: hourLabel, messages: msgs, voiceMinutes: voiceMin });
+          const count = hourlyMap.get(hr) || 0;
+          msgs24h += count;
+          velocity24h.push({
+            hour: `${hr.toString().padStart(2, '0')}:00`,
+            messages: count,
+            voiceMinutes: 0
+          });
         }
 
-        // 7-day velocity
+        // 7-day velocity from real daily audit/ticket/mod events
         const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        const [dailyAudit, dailyMod, dailyTickets] = await Promise.all([
+          query(`SELECT DATE_TRUNC('day', created_at) AS day_ts, COUNT(*)::int AS count FROM config_audit_logs WHERE guild_id = $1 AND created_at >= NOW() - INTERVAL '7 days' GROUP BY day_ts`, [guildId]).catch(() => ({ rows: [] })),
+          query(`SELECT DATE_TRUNC('day', created_at) AS day_ts, COUNT(*)::int AS count FROM moderation_cases WHERE guild_id = $1 AND created_at >= NOW() - INTERVAL '7 days' GROUP BY day_ts`, [guildId]).catch(() => ({ rows: [] })),
+          query(`SELECT DATE_TRUNC('day', created_at) AS day_ts, COUNT(*)::int AS count FROM tickets WHERE guild_id = $1 AND created_at >= NOW() - INTERVAL '7 days' GROUP BY day_ts`, [guildId]).catch(() => ({ rows: [] }))
+        ]);
+
+        const dailyMap = new Map();
+        [...dailyAudit.rows, ...dailyMod.rows, ...dailyTickets.rows].forEach(r => {
+          const key = new Date(r.day_ts).toDateString();
+          dailyMap.set(key, (dailyMap.get(key) || 0) + Number(r.count));
+        });
+
         const velocity7d = [];
         for (let i = 6; i >= 0; i--) {
           const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
-          const dayName = days[d.getDay()];
-          const weekendBoost = (d.getDay() === 0 || d.getDay() === 6) ? 1.35 : 1.0;
-          const dayMsgs = Math.round(baseVolume * weekendBoost * (0.9 + ((d.getDate() * 13) % 20) / 100));
-          const dayVoice = Math.round(dayMsgs * 1.5);
-          velocity7d.push({ day: dayName, date: `${d.getMonth() + 1}/${d.getDate()}`, messages: dayMsgs, voiceMinutes: dayVoice });
+          const key = d.toDateString();
+          const count = dailyMap.get(key) || 0;
+          velocity7d.push({
+            day: days[d.getDay()],
+            date: `${d.getMonth() + 1}/${d.getDate()}`,
+            messages: count,
+            voiceMinutes: 0
+          });
         }
 
-        // 7x24 Peak Activity Heatmap (0=Sunday ... 6=Saturday)
+        // Real 7x24 Heatmap from all recorded DB timestamps
+        const [dowAudit, dowMod, dowTickets] = await Promise.all([
+          query(`SELECT EXTRACT(DOW FROM created_at)::int AS day, EXTRACT(HOUR FROM created_at)::int AS hour, COUNT(*)::int AS count FROM config_audit_logs WHERE guild_id = $1 GROUP BY day, hour`, [guildId]).catch(() => ({ rows: [] })),
+          query(`SELECT EXTRACT(DOW FROM created_at)::int AS day, EXTRACT(HOUR FROM created_at)::int AS hour, COUNT(*)::int AS count FROM moderation_cases WHERE guild_id = $1 GROUP BY day, hour`, [guildId]).catch(() => ({ rows: [] })),
+          query(`SELECT EXTRACT(DOW FROM created_at)::int AS day, EXTRACT(HOUR FROM created_at)::int AS hour, COUNT(*)::int AS count FROM tickets WHERE guild_id = $1 GROUP BY day, hour`, [guildId]).catch(() => ({ rows: [] }))
+        ]);
+
+        const heatmapCounts = new Map();
+        [...dowAudit.rows, ...dowMod.rows, ...dowTickets.rows].forEach(r => {
+          const key = `${r.day}_${r.hour}`;
+          heatmapCounts.set(key, (heatmapCounts.get(key) || 0) + Number(r.count));
+        });
+
         const heatmap = [];
         for (let day = 0; day < 7; day++) {
           for (let hour = 0; hour < 24; hour++) {
-            const isWeekend = (day === 0 || day === 6);
-            const peakHrFactor = hour >= 15 && hour <= 23 ? 1.4 : (hour >= 2 && hour <= 8 ? 0.3 : 0.8);
-            const rawCount = Math.round((baseVolume / 40) * (isWeekend ? 1.3 : 0.9) * peakHrFactor + ((day * 7 + hour * 11) % 5));
-            let intensity = 1;
-            if (rawCount > 40) intensity = 5;
-            else if (rawCount > 28) intensity = 4;
-            else if (rawCount > 18) intensity = 3;
-            else if (rawCount > 9) intensity = 2;
-            else if (rawCount <= 3) intensity = 0;
-
-            heatmap.push({ day, hour, intensity, count: Math.max(1, rawCount) });
+            const count = heatmapCounts.get(`${day}_${hour}`) || 0;
+            let intensity = 0;
+            if (count >= 15) intensity = 5;
+            else if (count >= 10) intensity = 4;
+            else if (count >= 6) intensity = 3;
+            else if (count >= 3) intensity = 2;
+            else if (count >= 1) intensity = 1;
+            heatmap.push({ day, hour, intensity, count });
           }
         }
 
-        // Resolve top channels from live guild or fallback structure
+        // Real server top channels
         const struct = await getGuildStructure(guildId, client);
         const resolvedChannels = (struct.channels || []).filter(c => c.type !== 'category');
-        const topChannels = resolvedChannels.slice(0, 5).map((ch, idx) => {
-          const isVoice = ch.type === 'voice' || ch.type === 'stage';
-          const pct = idx === 0 ? 38 : idx === 1 ? 26 : idx === 2 ? 18 : idx === 3 ? 11 : 7;
-          return {
-            name: ch.name,
-            type: ch.type,
-            activityPercent: pct,
-            messages: isVoice ? undefined : Math.round(total24hMsgs * (pct / 100)),
-            voiceHours: isVoice ? Number(((total24hVoiceMin / 60) * (pct / 100)).toFixed(1)) : undefined
-          };
-        });
+        const topChannels = resolvedChannels.slice(0, 5).map(ch => ({
+          name: ch.name,
+          type: ch.type,
+          activityPercent: 0,
+          messages: 0
+        }));
 
-        // Dynamic 7-day member flow
+        // Real Member Flow
         const memberFlow = [];
         for (let i = 6; i >= 0; i--) {
           const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
-          const dayName = days[d.getDay()];
-          const joined = Math.max(1, Math.round(((liveMemberCount || 20) * 0.05) + ((d.getDate() * 7) % 4)));
-          const left = Math.max(0, Math.round(joined * 0.3));
-          memberFlow.push({ day: dayName, joined, left, net: joined - left });
+          memberFlow.push({ day: days[d.getDay()], joined: 0, left: 0, net: 0 });
         }
 
-        // Health Score derived from server features and logging coverage
-        let healthScore = 85;
-        if (totalAuditLogs > 0) healthScore += 4;
-        if (totalModCases > 0) healthScore += 4;
-        if (totalTickets > 0) healthScore += 4;
-        if (totalLevelUsers > 0) healthScore += 3;
+        // Calculate health score from actual configuration completeness
+        let configuredFeatures = 0;
+        if (totalAuditLogs > 0) configuredFeatures += 25;
+        if (totalModCases > 0) configuredFeatures += 25;
+        if (totalTickets > 0) configuredFeatures += 25;
+        if (liveMemberCount > 0) configuredFeatures += 25;
+        const healthScore = Math.max(10, configuredFeatures);
 
         const analyticsPayload = {
           ok: true,
           summary: {
-            messages24h: total24hMsgs,
-            voiceHours24h: (total24hVoiceMin / 60).toFixed(1),
-            activeMembers: Math.max(liveMemberCount, Math.round(total24hMsgs * 0.25)),
+            messages24h: msgs24h || totalMsgsLogged,
+            voiceHours24h: (totalVoiceMinLogged / 60).toFixed(1),
+            activeMembers: liveMemberCount,
             totalModCases,
             totalTickets,
-            healthScore: Math.min(100, healthScore)
+            healthScore
           },
           velocity24h,
           velocity7d,
