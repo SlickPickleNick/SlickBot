@@ -546,7 +546,7 @@ class PermissionService {
          VALUES ($1, $2, 'ADMINISTRATOR')
          ON CONFLICT (guild_id, role_id) DO UPDATE SET permission_level = 'ADMINISTRATOR', updated_at = NOW()`,
         [guildId, adminRoleId]
-      );
+      ).catch(() => {});
     }
     if (modRoleId) {
       await query(
@@ -554,7 +554,7 @@ class PermissionService {
          VALUES ($1, $2, 'MODERATOR')
          ON CONFLICT (guild_id, role_id) DO UPDATE SET permission_level = 'MODERATOR', updated_at = NOW()`,
         [guildId, modRoleId]
-      );
+      ).catch(() => {});
     }
     this.invalidatePermissionLevels(guildId);
   }

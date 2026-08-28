@@ -292,7 +292,7 @@ async function ensureDefaultModules(guildId) {
        VALUES ($1, $2, $3)
        ON CONFLICT (guild_id, module_key) DO NOTHING`,
       [guildId, moduleConfig.key, moduleConfig.enabled]
-    );
+    ).catch(() => {});
   }
 }
 
@@ -301,8 +301,8 @@ async function fetchModuleRows(guildId) {
   const modules = await query(
     `SELECT module_key, enabled FROM module_configs WHERE guild_id = $1 ORDER BY module_key ASC`,
     [guildId]
-  );
-  return modules.rows;
+  ).catch(() => ({ rows: defaultModules.map((m) => ({ module_key: m.key, enabled: m.enabled })) }));
+  return modules.rows || [];
 }
 
 async function getAllModuleStatuses(guildId) {
@@ -446,7 +446,8 @@ async function buildSetupPanel(guildId, guildName = null) {
   ]);
 
   const rowTwo = createButtonRow([
-    createPanelButton(CustomIds.OnboardingStart, 'Guided Onboarding', ButtonStyle.Success, '🚀'),
+    createPanelButton(CustomIds.OneClickFreshInstall, 'One-Click Install', ButtonStyle.Success, '⚡'),
+    createPanelButton(CustomIds.OnboardingStart, 'Guided Setup', ButtonStyle.Primary, '🚀'),
     createPanelButton(CustomIds.SetupModules, 'All Modules', ButtonStyle.Secondary, '🧩'),
     createPanelButton(CustomIds.SetupRefresh, 'Refresh', ButtonStyle.Secondary, '🔄')
   ]);

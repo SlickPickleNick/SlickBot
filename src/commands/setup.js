@@ -32,6 +32,12 @@ module.exports = {
     )
     .addBooleanOption((option) =>
       option
+        .setName('one_click_install')
+        .setDescription('Instantly provision all standard categories, channels, starter roles, and default systems.')
+        .setRequired(false)
+    )
+    .addBooleanOption((option) =>
+      option
         .setName('start_onboarding')
         .setDescription('Launch the interactive guided setup wizard.')
         .setRequired(false)
@@ -138,8 +144,27 @@ module.exports = {
       }
     });
 
+    const oneClickInstall = interaction.options.getBoolean('one_click_install', false);
     const startOnboarding = interaction.options.getBoolean('start_onboarding', false);
     const targetModule = interaction.options.getString('module', false);
+
+    if (oneClickInstall) {
+      const { OnboardingService } = require('../modules/onboarding/onboardingService');
+      const onboarding = new OnboardingService();
+      const results = await onboarding.executeOneClickFreshInstall(interaction.guild);
+
+      await ctx.logger.writeAudit({
+        guildId: interaction.guildId,
+        actorUserId: interaction.user.id,
+        actionKey: ActionKeys.Setup,
+        targetType: 'GuildConfig',
+        targetId: interaction.guildId,
+        summary: `One-Click Fresh Install executed via /setup by <@${interaction.user.id}> (${results.completedSteps} steps completed in ${((results.durationMs || 0)/1000).toFixed(1)}s).`,
+        metadata: results
+      }).catch(() => {});
+
+      return replyPrivate(interaction, onboarding.buildOneClickInstallSuccessPayload(interaction.guild, results));
+    }
 
     if (startOnboarding || targetModule) {
       const { OnboardingService } = require('../modules/onboarding/onboardingService');

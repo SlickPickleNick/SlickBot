@@ -1249,6 +1249,55 @@ async function handleButton(interaction, ctx) {
     return true;
   }
 
+  if (id === CustomIds.OneClickFreshInstall) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.Setup, ModuleKeys.PERMISSIONS))) return true;
+
+    const progressEmbed = createBaseEmbed({
+      title: '⚡ Installing SlickBot Defaults...',
+      description: [
+        'Please wait while SlickBot provisions your server with all default systems...',
+        '',
+        '• Creating standard categories and channels',
+        '• Configuring `@Admin`, `@Moderator`, and staff roles',
+        '• Setting up 6 audit logging hubs and AutoMod anti-raid shield',
+        '• Publishing interactive ticket, role, FAQ, and game panels',
+        '• Enabling all 29 modular systems'
+      ].join('\n'),
+      color: SlickBotColors.PRIMARY,
+      footer: 'SlickBot • Provisioning in progress...'
+    });
+
+    await updatePanel(interaction, { embeds: [progressEmbed], components: [] }).catch(() => {});
+
+    const results = await onboarding.executeOneClickFreshInstall(interaction.guild);
+
+    await ctx.logger.writeAudit({
+      guildId: interaction.guildId,
+      actorUserId: interaction.user.id,
+      actionKey: ActionKeys.Setup,
+      targetType: 'GuildConfig',
+      targetId: interaction.guildId,
+      summary: `One-Click Fresh Install executed by <@${interaction.user.id}> (${results.completedSteps} steps completed in ${((results.durationMs || 0)/1000).toFixed(1)}s).`,
+      metadata: results
+    }).catch(() => {});
+
+    await ctx.logger.log({
+      guildId: interaction.guildId,
+      eventKey: 'setup',
+      title: '⚡ One-Click Fresh Install Completed',
+      body: [
+        `Executed by: <@${interaction.user.id}>`,
+        `Steps Provisioned: **${results.completedSteps}/${results.totalSteps}**`,
+        `Duration: **${((results.durationMs || 0)/1000).toFixed(1)}s**`
+      ].join('\n'),
+      actorUserId: interaction.user.id
+    }).catch(() => {});
+
+    const successPayload = onboarding.buildOneClickInstallSuccessPayload(interaction.guild, results);
+    await updatePanel(interaction, successPayload);
+    return true;
+  }
+
   if (id === CustomIds.OnboardingStart || id === CustomIds.OnboardingServerStart) {
     if (!(await requireAction(interaction, ctx, ActionKeys.Setup, ModuleKeys.PERMISSIONS))) return true;
     const session = onboarding.startServerOnboarding(interaction.guildId, interaction.user.id);

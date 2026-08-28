@@ -19,6 +19,7 @@ const CustomIds = Object.freeze({
   SetupOpenManagerPrefix: 'slickbot:setup:openmgr:',
   CategoryToggleSelectPrefix: 'slickbot:setup:cattoggle:',
   ModuleTogglePrefix: 'slickbot:mod:toggle:',
+  OneClickFreshInstall: 'slickbot:setup:oneclick_install',
   OnboardingStart: 'slickbot:onboarding:start',
   OnboardingServerStart: 'slickbot:onboarding:server-start',
   OnboardingModulePrefix: 'slickbot:onboarding:mod:',

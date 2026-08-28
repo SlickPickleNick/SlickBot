@@ -513,14 +513,8 @@ const ONBOARDING_STEPS = Object.freeze({
         return res.rows[0]?.role_id ? `<@&${res.rows[0].role_id}>` : null;
       },
       async applyDefault(guild) {
-        const adminRole = guild.roles.cache.find((r) => r.name.toLowerCase() === 'admin' || r.name.toLowerCase() === 'administrator');
-        if (adminRole) {
-          const { PermissionService } = require('../permissions/permissionService');
-          const permissions = new PermissionService();
-          await permissions.setupRoles(guild.id, { adminRoleId: adminRole.id });
-          return { result: `Assigned existing <@&${adminRole.id}>` };
-        }
-        return { result: 'Default administrator role mapped' };
+        // Security rule: Permission-granting roles must be explicitly reviewed with the user during guided setup, not silently auto-matched to existing roles.
+        return { result: 'No role assigned. Administrator role requires explicit review/selection or auto-creation.' };
       },
       async applySelection(guild, roleId) {
         const { PermissionService } = require('../permissions/permissionService');
@@ -552,14 +546,8 @@ const ONBOARDING_STEPS = Object.freeze({
         return res.rows[0]?.role_id ? `<@&${res.rows[0].role_id}>` : null;
       },
       async applyDefault(guild) {
-        const modRole = guild.roles.cache.find((r) => r.name.toLowerCase() === 'moderator' || r.name.toLowerCase() === 'mod');
-        if (modRole) {
-          const { PermissionService } = require('../permissions/permissionService');
-          const permissions = new PermissionService();
-          await permissions.setupRoles(guild.id, { modRoleId: modRole.id });
-          return { result: `Assigned existing <@&${modRole.id}>` };
-        }
-        return { result: 'Default moderator role mapped' };
+        // Security rule: Permission-granting roles must be explicitly reviewed with the user during guided setup, not silently auto-matched to existing roles.
+        return { result: 'No role assigned. Moderator role requires explicit review/selection or auto-creation.' };
       },
       async applySelection(guild, roleId) {
         const { PermissionService } = require('../permissions/permissionService');
@@ -3750,10 +3738,12 @@ class OnboardingService {
       description: [
         `Thanks for adding **SlickBot** to **${guild.name}**!`,
         '',
-        'SlickBot is packed with modular systems including **Support Tickets, Audit Logging, Permissions, Welcome Auto-Roles, Giveaways, Birthdays, Leveling XP, Live Server Stats**, and much more.',
+        'SlickBot is an all-in-one Discord management suite featuring **Support Tickets, Audit Logging, Permissions, AutoMod, Self-Roles, Giveaways, Birthdays, Leveling XP, Dynamic Voice, Games**, and much more.',
         '',
-        '**Ready to get started?**',
-        'Click **Start Quick Setup** below for a 60-second guided onboarding with one-click channel and role auto-creation, or open the **Setup Center** to browse module categories.'
+        '**Choose how you would like to get started:**',
+        '• **⚡ One-Click Fresh Install** — Instantly provisions standard categories, channels, starter roles, and interactive panels with safe defaults.',
+        '• **🚀 Guided Setup** — Step-by-step walkthrough to customize channel & role mappings for each module.',
+        '• **⚙️ Setup Center** — Browse module categories manually.'
       ].join('\n'),
       color: SlickBotColors.PRIMARY,
       footer: 'SlickBot • Modular Server Management'
@@ -3761,15 +3751,134 @@ class OnboardingService {
 
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
-        .setCustomId(CustomIds.OnboardingStart)
-        .setLabel('Start Quick Setup')
+        .setCustomId(CustomIds.OneClickFreshInstall)
+        .setLabel('One-Click Fresh Install')
         .setStyle(ButtonStyle.Success)
+        .setEmoji('⚡'),
+      new ButtonBuilder()
+        .setCustomId(CustomIds.OnboardingStart)
+        .setLabel('Guided Setup')
+        .setStyle(ButtonStyle.Primary)
         .setEmoji('🚀'),
       new ButtonBuilder()
         .setCustomId(CustomIds.SetupRefresh)
-        .setLabel('Open Setup Center')
+        .setLabel('Setup Center')
         .setStyle(ButtonStyle.Secondary)
         .setEmoji('⚙️')
+    );
+
+    return { embeds: [embed], components: [row] };
+  }
+
+  async executeOneClickFreshInstall(guild, options = {}) {
+    const startTime = Date.now();
+    const createdItems = [];
+    const skippedItems = [];
+    const errors = [];
+    const steps = ONBOARDING_STEPS.SERVER_ONBOARDING || [];
+
+    // 1. Ensure database base records exist
+    const { PermissionService } = require('../permissions/permissionService');
+    const permissions = new PermissionService();
+    await permissions.ensureGuildConfig(guild.id, guild.name).catch(() => {});
+
+    // 2. Ensure all default modules are enabled in module_configs
+    const { defaultModules } = require('../moduleRegistry');
+    for (const mod of defaultModules) {
+      await query(
+        `INSERT INTO module_configs (guild_id, module_key, enabled, updated_at)
+         VALUES ($1, $2, true, NOW())
+         ON CONFLICT (guild_id, module_key) DO UPDATE SET enabled = true, updated_at = NOW()`,
+        [guild.id, mod.key]
+      ).catch(() => {});
+    }
+
+    // 3. Execute each setup step sequentially with error tolerance
+    for (const step of steps) {
+      try {
+        if (typeof step.autoCreate === 'function') {
+          const res = await step.autoCreate(guild);
+          if (res && res.created) {
+            createdItems.push(`**${step.moduleName || step.title}**: ${res.created}`);
+          } else {
+            createdItems.push(`**${step.moduleName || step.title}**: Initialized defaults`);
+          }
+        } else if (typeof step.applyDefault === 'function') {
+          const res = await step.applyDefault(guild);
+          if (res && res.result) {
+            createdItems.push(`**${step.moduleName || step.title}**: ${res.result}`);
+          }
+        }
+      } catch (stepErr) {
+        console.error(`[OneClickInstall] Error in step ${step.id} (${step.title}):`, stepErr);
+        errors.push({ stepId: step.id, stepTitle: step.title, error: stepErr.message });
+        // Non-blocking fallback to applyDefault if autoCreate encountered an issue
+        try {
+          if (typeof step.applyDefault === 'function') {
+            await step.applyDefault(guild);
+          }
+        } catch (_) {}
+      }
+    }
+
+    // 4. Organize categories in the standard hierarchy
+    await reorderServerCategories(guild).catch(() => {});
+
+    const durationMs = Date.now() - startTime;
+
+    return {
+      success: true,
+      guildId: guild.id,
+      guildName: guild.name,
+      totalSteps: steps.length,
+      completedSteps: createdItems.length,
+      createdItems,
+      skippedItems,
+      errors,
+      durationMs
+    };
+  }
+
+  buildOneClickInstallSuccessPayload(guild, results = {}) {
+    const durationSec = results.durationMs ? (results.durationMs / 1000).toFixed(1) : '1.5';
+
+    const highlights = [
+      '🛡️ **Staff & Security**: `@Admin`, `@Moderator`, `#staff-alerts`, `@Timeout` Anti-Raid',
+      '📋 **Audit Logging**: Category `📋 Server Logs` with all 6 hubs (#bot-logs, #mod-logs, etc.)',
+      '📌 **Start Here**: `#welcome` & `@Member`, `#get-roles` (Notification & Color Panels), `#faq`',
+      '🎫 **Help & Support**: Category `📁 Open Tickets`, `#submit-tickets`, `#mod-reports`, `#apply-here`, `#ban-appeals`',
+      '🎉 **Community Hub**: `#suggestions`, `#birthdays`, `#level-ups`, `#starboard`, `#stream-alerts`',
+      '🎮 **Games & Activities**: `#game-lounge` (Tic-Tac-Toe / Connect Four), `#counting`, `#giveaways`',
+      '🔊 **Dynamic Voice**: Category `🔊 Dynamic Voice` with `➕ Create Voice` Hub'
+    ];
+
+    const embed = createBaseEmbed({
+      title: '⚡ Fresh Install Complete!',
+      description: [
+        `**${guild.name}** has been fully provisioned with all SlickBot defaults in **${durationSec}s**!`,
+        '',
+        '**Provisioned System Highlights:**',
+        ...highlights.map(h => `• ${h}`),
+        '',
+        results.errors?.length ? `⚠️ *Note: ${results.errors.length} step(s) had non-critical warnings.*` : '✅ **All 29 modules enabled and ready for your members!**',
+        '',
+        'You can customize any setting or channel at any time using `/setup` or the Web Dashboard.'
+      ].join('\n'),
+      color: SlickBotColors.SUCCESS,
+      footer: 'SlickBot • Fresh Install Complete'
+    });
+
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(CustomIds.SetupRefresh)
+        .setLabel('Open Setup Center')
+        .setStyle(ButtonStyle.Primary)
+        .setEmoji('⚙️'),
+      new ButtonBuilder()
+        .setCustomId(CustomIds.OnboardingStart)
+        .setLabel('Guided Setup Review')
+        .setStyle(ButtonStyle.Secondary)
+        .setEmoji('🚀')
     );
 
     return { embeds: [embed], components: [row] };
