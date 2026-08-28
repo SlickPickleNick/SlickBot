@@ -21,6 +21,8 @@
       <nav class="nav-links">
         <button class="nav-link" id="nav-btn-home" onclick="navigateTo('home')">Overview</button>
         <button class="nav-link" id="nav-btn-servers" onclick="navigateTo('servers')" style="display: none;">My Servers</button>
+        <button class="nav-link" id="nav-btn-terms" onclick="navigateTo('terms')">Terms</button>
+        <button class="nav-link" id="nav-btn-privacy" onclick="navigateTo('privacy')">Privacy</button>
         <a href="https://github.com/SlickPickleNick/SlickBot" target="_blank" rel="noreferrer" class="nav-link">GitHub</a>
       </nav>
 
@@ -163,9 +165,27 @@
 
       <!-- Split Layout: Left Sidebar + Right Content Area -->
       <div class="server-manage-layout">
-        <!-- Left Sidebar Navigation (8 Categories) -->
+        <!-- Left Sidebar Navigation (Management Modules + Visual Studio Suite) -->
         <aside class="sidebar-nav">
-          <div class="sidebar-group-label">Management Modules</div>
+          <div class="sidebar-group-label">Visual Studio Suite</div>
+          <button class="sidebar-item" id="sidebar-tab-embed" onclick="switchManageTab('embed-studio', this)">
+            <span class="sidebar-icon">🎨</span>
+            <span>Embed & Announcements</span>
+          </button>
+          <button class="sidebar-item" id="sidebar-tab-roles" onclick="switchManageTab('role-studio', this)">
+            <span class="sidebar-icon">🎭</span>
+            <span>Role Panels Studio</span>
+          </button>
+          <button class="sidebar-item" id="sidebar-tab-custom" onclick="switchManageTab('custom-studio', this)">
+            <span class="sidebar-icon">⚡</span>
+            <span>Custom Commands</span>
+          </button>
+          <button class="sidebar-item" id="sidebar-tab-analytics" onclick="switchManageTab('analytics-studio', this)">
+            <span class="sidebar-icon">📈</span>
+            <span>Server Analytics</span>
+          </button>
+
+          <div class="sidebar-group-label" style="margin-top: 14px;">Module Configurations</div>
           <button class="sidebar-item active" onclick="switchManageTab('general', this)">
             <span class="sidebar-icon">📊</span>
             <span>Overview & Switchboard</span>
@@ -1072,6 +1092,584 @@
             </div>
           </div>
 
+          <!-- STUDIO 1: INTERACTIVE LIVE DISCORD EMBED & ANNOUNCEMENT STUDIO -->
+          <div id="tab-panel-embed-studio" class="manage-panel">
+            <div class="panel-header">
+              <div class="section-header-flex">
+                <div>
+                  <h2 class="panel-title">🎨 Discord Embed & Announcement Studio</h2>
+                  <p class="panel-subtitle">Design rich Discord embeds with live preview, import/export Discohook JSON, load existing messages to edit, and dispatch announcements.</p>
+                </div>
+                <div style="display: flex; gap: 8px;">
+                  <button class="btn btn-outline btn-sm" onclick="openJsonImportModal()">📥 Import JSON</button>
+                  <button class="btn btn-outline btn-sm" onclick="handleExportEmbedJson()">📋 Copy JSON</button>
+                  <button class="btn btn-outline btn-sm" onclick="resetEmbedStudio()">✨ Clear Form</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Message Link / ID Loader Card -->
+            <div class="panel-card-section" style="border-left: 4px solid var(--discord-brand);">
+              <div class="section-header-flex" style="margin-bottom: 8px;">
+                <div>
+                  <h3 class="card-section-title" style="margin-bottom: 2px;">✏️ Load & Edit Existing Discord Message</h3>
+                  <div class="setting-desc" style="margin-bottom: 0;">Paste a Discord message link (e.g. <code>https://discord.com/channels/.../.../...</code>) or Message ID to load and edit its content in-place.</div>
+                </div>
+                <div id="embed-edit-badge" class="badge-status-active" style="display: none; background: rgba(88, 101, 242, 0.2); color: #5865f2; border: 1px solid rgba(88, 101, 242, 0.4);">
+                  Editing Message: <span id="embed-editing-id-text">--</span>
+                </div>
+              </div>
+              <div class="form-grid-3">
+                <div class="form-group span-2">
+                  <label class="form-label">Discord Message Link or Message ID</label>
+                  <input type="text" id="embed-load-input" class="form-input" placeholder="https://discord.com/channels/123456789/100000000000000002/100000000000000099">
+                </div>
+                <div class="form-group" style="display: flex; align-items: flex-end; gap: 8px;">
+                  <button type="button" class="btn btn-primary" style="width: 100%;" onclick="handleLoadExistingMessage()">📥 Load Message</button>
+                  <button type="button" class="btn btn-outline" id="btn-cancel-edit-mode" style="display: none;" onclick="cancelMessageEditMode()" title="Cancel editing mode">Cancel</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Two-Column Studio Layout: Form on Left, Live Discord Simulator on Right -->
+            <div class="studio-split-grid">
+              
+              <!-- Left Column: Form Controls -->
+              <div class="studio-form-column">
+                
+                <!-- Preset Template Selector -->
+                <div class="panel-card-section">
+                  <h3 class="card-section-title">📋 Preset Announcement Templates</h3>
+                  <div class="form-group" style="margin-bottom: 0;">
+                    <select id="embed-template-select" class="form-select" onchange="handleApplyEmbedTemplate(this.value)">
+                      <option value="">-- Choose a Preset Template --</option>
+                      <option value="welcome">Server Welcome & Community Guidelines</option>
+                      <option value="announcement">Important Server Announcement</option>
+                      <option value="patch_notes">Bot Update & Patch Notes</option>
+                      <option value="event">Upcoming Community Event Notice</option>
+                      <option value="stream">Live Stream & Content Creator Alert</option>
+                      <option value="giveaway">Special Server Giveaway</option>
+                      <option value="support">Support & Help Desk Guide</option>
+                      <option value="blank">Blank Canvas</option>
+                    </select>
+                  </div>
+                </div>
+
+                <!-- Message Plain Text Content -->
+                <div class="panel-card-section">
+                  <h3 class="card-section-title">💬 Message Text Content (Above Embed)</h3>
+                  <div class="form-group" style="margin-bottom: 0;">
+                    <textarea id="embed-content" class="form-textarea" rows="2" placeholder="Optional text above embed (e.g. Hey @everyone! Check out the announcement below...)" oninput="updateEmbedPreview()"></textarea>
+                  </div>
+                </div>
+
+                <!-- Author & Title -->
+                <div class="panel-card-section">
+                  <h3 class="card-section-title">👤 Embed Author & Title</h3>
+                  <div class="form-grid-2">
+                    <div class="form-group">
+                      <label class="form-label">Author Name</label>
+                      <input type="text" id="embed-author-name" class="form-input" placeholder="SlickBot Community" oninput="updateEmbedPreview()">
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">Author Icon URL</label>
+                      <input type="text" id="embed-author-icon" class="form-input" placeholder="https://..." oninput="updateEmbedPreview()">
+                    </div>
+                    <div class="form-group span-full">
+                      <label class="form-label">Author Link URL</label>
+                      <input type="text" id="embed-author-url" class="form-input" placeholder="https://..." oninput="updateEmbedPreview()">
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">Embed Title</label>
+                      <input type="text" id="embed-title" class="form-input" placeholder="🌟 Official Community Announcement" oninput="updateEmbedPreview()">
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">Title Link URL</label>
+                      <input type="text" id="embed-title-url" class="form-input" placeholder="https://..." oninput="updateEmbedPreview()">
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Description & Accent Color -->
+                <div class="panel-card-section">
+                  <h3 class="card-section-title">📝 Embed Description & Theme Color</h3>
+                  <div class="form-group">
+                    <label class="form-label">Description (Supports Markdown: **bold**, *italic*, `code`, lists)</label>
+                    <textarea id="embed-description" class="form-textarea" rows="5" placeholder="Write your announcement details here..." oninput="updateEmbedPreview()"></textarea>
+                  </div>
+
+                  <div class="form-group">
+                    <label class="form-label">Embed Accent Color</label>
+                    <div class="color-picker-row">
+                      <input type="color" id="embed-color-picker" class="color-picker-input" value="#5865f2" oninput="handleEmbedColorPicker(this.value)">
+                      <input type="text" id="embed-color-hex" class="form-input" style="max-width: 120px;" value="#5865f2" oninput="handleEmbedColorHex(this.value)">
+                      
+                      <!-- Quick Swatches -->
+                      <div class="color-swatches">
+                        <button type="button" class="swatch" style="background: #5865f2;" onclick="setEmbedColor('#5865f2')" title="Blurple"></button>
+                        <button type="button" class="swatch" style="background: #10b981;" onclick="setEmbedColor('#10b981')" title="Emerald"></button>
+                        <button type="button" class="swatch" style="background: #f59e0b;" onclick="setEmbedColor('#f59e0b')" title="Amber"></button>
+                        <button type="button" class="swatch" style="background: #ef4444;" onclick="setEmbedColor('#ef4444')" title="Ruby"></button>
+                        <button type="button" class="swatch" style="background: #8b5cf6;" onclick="setEmbedColor('#8b5cf6')" title="Amethyst"></button>
+                        <button type="button" class="swatch" style="background: #ec4899;" onclick="setEmbedColor('#ec4899')" title="Pink"></button>
+                        <button type="button" class="swatch" style="background: #1e1f22;" onclick="setEmbedColor('#1e1f22')" title="Obsidian"></button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Custom Fields Builder -->
+                <div class="panel-card-section">
+                  <div class="section-header-flex" style="margin-bottom: 12px;">
+                    <div>
+                      <h3 class="card-section-title" style="margin-bottom: 2px;">🧱 Embed Fields (<span id="embed-fields-count">0</span>/25)</h3>
+                      <div class="setting-desc" style="margin-bottom: 0;">Add multi-column or stacked information blocks.</div>
+                    </div>
+                    <button type="button" class="btn btn-outline btn-sm" onclick="handleAddEmbedField()">+ Add Field</button>
+                  </div>
+                  <div id="embed-fields-container" class="embed-fields-list"></div>
+                </div>
+
+                <!-- Images & Media -->
+                <div class="panel-card-section">
+                  <h3 class="card-section-title">🖼️ Media & Banner Images</h3>
+                  <div class="form-grid-2">
+                    <div class="form-group">
+                      <label class="form-label">Thumbnail URL (Top-Right Icon)</label>
+                      <input type="text" id="embed-thumbnail-url" class="form-input" placeholder="https://..." oninput="updateEmbedPreview()">
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">Main Image URL (Large Banner)</label>
+                      <input type="text" id="embed-image-url" class="form-input" placeholder="https://..." oninput="updateEmbedPreview()">
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Footer & Timestamp -->
+                <div class="panel-card-section">
+                  <h3 class="card-section-title">🏷️ Footer & Timestamp</h3>
+                  <div class="form-grid-2">
+                    <div class="form-group">
+                      <label class="form-label">Footer Text</label>
+                      <input type="text" id="embed-footer-text" class="form-input" placeholder="SlickBot Announcement Engine" oninput="updateEmbedPreview()">
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">Footer Icon URL</label>
+                      <input type="text" id="embed-footer-icon" class="form-input" placeholder="https://..." oninput="updateEmbedPreview()">
+                    </div>
+                    <div class="form-group span-full">
+                      <label class="checkbox-label">
+                        <input type="checkbox" id="embed-timestamp-toggle" checked onchange="updateEmbedPreview()">
+                        <span>Include Current Live Timestamp in Footer</span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Dispatch Action Bar -->
+                <div class="panel-card-section" style="border: 1px solid var(--border-strong); background: var(--bg-surface);">
+                  <h3 class="card-section-title">🚀 Dispatch to Discord Channel</h3>
+                  <div class="form-grid-2" style="align-items: flex-end;">
+                    <div class="form-group" style="margin-bottom: 0;">
+                      <label class="form-label">Select Target Channel</label>
+                      <select id="embed-target-channel" class="form-select channel-select" data-allow-none="false"></select>
+                    </div>
+                    <div class="form-group" style="margin-bottom: 0;">
+                      <button type="button" class="btn btn-primary" id="btn-dispatch-embed" style="width: 100%; height: 42px;" onclick="handleDispatchEmbed()">
+                        🚀 Dispatch Embed to Discord
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+
+              <!-- Right Column: Authentic Discord Message Simulator -->
+              <div class="studio-preview-column">
+                <div class="discord-preview-sticky-wrapper">
+                  <div class="preview-header-bar">
+                    <span class="preview-dot"></span>
+                    <span class="preview-title">Live Discord Message Simulator</span>
+                  </div>
+
+                  <!-- Authentic Discord Dark Theme Box -->
+                  <div class="discord-chat-container">
+                    <div class="discord-message">
+                      <div class="discord-avatar">
+                        <img src="https://cdn.discordapp.com/embed/avatars/0.png" alt="SlickBot Avatar" id="discord-sim-avatar">
+                      </div>
+                      <div class="discord-message-content-wrapper">
+                        <div class="discord-user-header">
+                          <span class="discord-username">SlickBot</span>
+                          <span class="discord-bot-tag">APP</span>
+                          <span class="discord-timestamp" id="discord-sim-timestamp">Today at 2:30 PM</span>
+                        </div>
+
+                        <!-- Plain text content -->
+                        <div class="discord-text-body" id="discord-sim-text-content" style="display: none;"></div>
+
+                        <!-- Discord Embed Card -->
+                        <div class="discord-embed-card" id="discord-sim-embed-card" style="border-left-color: #5865f2;">
+                          <div class="discord-embed-inner">
+                            <div class="discord-embed-left-col">
+                              
+                              <!-- Author -->
+                              <div class="discord-embed-author" id="discord-sim-author" style="display: none;">
+                                <img src="" alt="" class="discord-author-icon" id="discord-sim-author-icon">
+                                <span class="discord-author-name" id="discord-sim-author-name"></span>
+                              </div>
+
+                              <!-- Title -->
+                              <div class="discord-embed-title" id="discord-sim-title">🌟 Official Community Announcement</div>
+
+                              <!-- Description -->
+                              <div class="discord-embed-description" id="discord-sim-description">Write your announcement details here...</div>
+
+                              <!-- Dynamic Fields Grid -->
+                              <div class="discord-embed-fields-grid" id="discord-sim-fields-grid"></div>
+
+                              <!-- Main Image Banner -->
+                              <div class="discord-embed-image-container" id="discord-sim-image-container" style="display: none;">
+                                <img src="" alt="Main Banner" id="discord-sim-image" class="discord-embed-image">
+                              </div>
+
+                              <!-- Footer -->
+                              <div class="discord-embed-footer" id="discord-sim-footer">
+                                <img src="" alt="" class="discord-footer-icon" id="discord-sim-footer-icon" style="display: none;">
+                                <span id="discord-sim-footer-text">SlickBot Announcement Engine</span>
+                                <span class="discord-footer-bullet" id="discord-sim-footer-bullet">&bull;</span>
+                                <span class="discord-footer-timestamp" id="discord-sim-footer-time">Today at 2:30 PM</span>
+                              </div>
+
+                            </div>
+
+                            <!-- Floating Thumbnail -->
+                            <div class="discord-embed-thumbnail-container" id="discord-sim-thumbnail-container" style="display: none;">
+                              <img src="" alt="Thumbnail" id="discord-sim-thumbnail" class="discord-embed-thumbnail">
+                            </div>
+
+                          </div>
+                        </div>
+
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div class="preview-footer-note">
+                    Real-time rendering reflects exact Discord markdown, inline fields grid layout, and color borders.
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- STUDIO 2: VISUAL ROLE PANELS STUDIO -->
+          <div id="tab-panel-role-studio" class="manage-panel">
+            <div class="panel-header">
+              <div class="section-header-flex">
+                <div>
+                  <h2 class="panel-title">🎭 Visual Role Panels & Self-Roles Studio</h2>
+                  <p class="panel-subtitle">Create interactive self-assignable role panels with customizable buttons, emojis, and dropdown menus, and publish them live to Discord.</p>
+                </div>
+                <button class="btn btn-outline btn-sm" onclick="loadRolePanelsList()">🔄 Re-sync Panels</button>
+              </div>
+            </div>
+
+            <div class="studio-split-grid">
+              <!-- Left Column: Form Controls -->
+              <div class="studio-form-column">
+                <div class="panel-card-section">
+                  <h3 class="card-section-title">⚙️ Role Panel Configuration</h3>
+                  <div class="form-grid-2">
+                    <div class="form-group">
+                      <label class="form-label">Panel Identifier (Slug)</label>
+                      <input type="text" id="rp-name" class="form-input" placeholder="notification-roles" oninput="updateRolePanelPreview()">
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">Panel Title</label>
+                      <input type="text" id="rp-title" class="form-input" value="📢 Stream & Announcement Roles" oninput="updateRolePanelPreview()">
+                    </div>
+                    <div class="form-group span-full">
+                      <label class="form-label">Description Instructions</label>
+                      <textarea id="rp-description" class="form-textarea" rows="2" placeholder="Select an option below to toggle a role." oninput="updateRolePanelPreview()">Click a button below to toggle your notification alerts.</textarea>
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">Selection Rule</label>
+                      <select id="rp-mode" class="form-select" onchange="updateRolePanelPreview()">
+                        <option value="MULTI">Multi-Role (Toggle Any Number)</option>
+                        <option value="SINGLE">Single-Role (Exclusive Radio Choice)</option>
+                      </select>
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">Display Style</label>
+                      <select id="rp-display-mode" class="form-select" onchange="updateRolePanelPreview()">
+                        <option value="BUTTONS">Interactive Buttons Grid</option>
+                        <option value="DROPDOWN">Dropdown Select Menu</option>
+                      </select>
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">Accent Color</label>
+                      <input type="color" id="rp-color" class="color-picker-input" value="#5865f2" oninput="updateRolePanelPreview()">
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">Header Banner URL (Optional)</label>
+                      <input type="text" id="rp-header-image" class="form-input" placeholder="https://..." oninput="updateRolePanelPreview()">
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Role Items Manager -->
+                <div class="panel-card-section">
+                  <div class="section-header-flex" style="margin-bottom: 12px;">
+                    <div>
+                      <h3 class="card-section-title" style="margin-bottom: 2px;">🏷️ Role Buttons / Options</h3>
+                      <div class="setting-desc" style="margin-bottom: 0;">Add roles with custom emojis, button colors, and labels.</div>
+                    </div>
+                    <button type="button" class="btn btn-outline btn-sm" onclick="handleAddRolePanelOption()">+ Add Role Option</button>
+                  </div>
+                  <div id="rp-options-container" class="role-options-list"></div>
+                </div>
+
+                <!-- Target Channel & Publish Button -->
+                <div class="panel-card-section" style="border: 1px solid var(--border-strong); background: var(--bg-surface);">
+                  <h3 class="card-section-title">🚀 Publish Panel to Channel</h3>
+                  <div class="form-grid-2" style="align-items: flex-end;">
+                    <div class="form-group" style="margin-bottom: 0;">
+                      <label class="form-label">Destination Channel</label>
+                      <select id="rp-target-channel" class="form-select channel-select" data-allow-none="false"></select>
+                    </div>
+                    <div class="form-group" style="margin-bottom: 0;">
+                      <button type="button" class="btn btn-primary" style="width: 100%; height: 42px;" onclick="handlePublishRolePanel()">
+                        🚀 Publish Role Panel to Discord
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Existing Published Panels Table -->
+                <div class="panel-card-section">
+                  <h3 class="card-section-title">📋 Active Published Panels</h3>
+                  <div id="rp-published-table-container">
+                    <div style="color: var(--text-faint); font-size: 13px;">Loading published panels...</div>
+                  </div>
+                </div>
+
+              </div>
+
+              <!-- Right Column: Live Role Panel Simulator -->
+              <div class="studio-preview-column">
+                <div class="discord-preview-sticky-wrapper">
+                  <div class="preview-header-bar">
+                    <span class="preview-dot"></span>
+                    <span class="preview-title">Live Role Panel Component Preview</span>
+                  </div>
+
+                  <div class="discord-chat-container">
+                    <div class="discord-message">
+                      <div class="discord-avatar">
+                        <img src="https://cdn.discordapp.com/embed/avatars/0.png" alt="Avatar">
+                      </div>
+                      <div class="discord-message-content-wrapper">
+                        <div class="discord-user-header">
+                          <span class="discord-username">SlickBot</span>
+                          <span class="discord-bot-tag">APP</span>
+                          <span class="discord-timestamp">Today at 2:30 PM</span>
+                        </div>
+
+                        <div class="discord-embed-card" id="rp-sim-embed-card" style="border-left-color: #5865f2;">
+                          <div class="discord-embed-inner">
+                            <div class="discord-embed-left-col">
+                              <div class="discord-embed-title" id="rp-sim-title">📢 Stream & Announcement Roles</div>
+                              <div class="discord-embed-description" id="rp-sim-description">Click a button below to toggle your notification alerts.</div>
+                              <div class="discord-embed-footer">
+                                <span>SlickBot Role Panel &bull; Multi role &bull; Buttons</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <!-- Live Simulated Action Rows (Buttons / Select Menu) -->
+                        <div class="discord-sim-components-wrapper" id="rp-sim-components"></div>
+
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- STUDIO 3: CUSTOM COMMANDS & TRIGGERS STUDIO -->
+          <div id="tab-panel-custom-studio" class="manage-panel">
+            <div class="panel-header">
+              <div class="section-header-flex">
+                <div>
+                  <h2 class="panel-title">⚡ Custom Commands & Triggers Studio</h2>
+                  <p class="panel-subtitle">Create custom commands with variable interpolation tags, test responses in real-time, and manage automated responses.</p>
+                </div>
+                <button class="btn btn-outline btn-sm" onclick="loadCustomCommandsList()">🔄 Refresh</button>
+              </div>
+            </div>
+
+            <!-- Variable Tags Catalog Toolbar -->
+            <div class="panel-card-section" style="border-left: 4px solid var(--accent-amber);">
+              <h3 class="card-section-title">🏷️ Clickable Dynamic Variable Tags</h3>
+              <div class="setting-desc" style="margin-bottom: 8px;">Click any tag below to insert it at your cursor in the command response editor.</div>
+              <div class="variable-pill-bar">
+                <button type="button" class="var-pill" onclick="insertVariableTag('{user}')"><code>{user}</code> Mention</button>
+                <button type="button" class="var-pill" onclick="insertVariableTag('{username}')"><code>{username}</code> Name</button>
+                <button type="button" class="var-pill" onclick="insertVariableTag('{server}')"><code>{server}</code> Server Name</button>
+                <button type="button" class="var-pill" onclick="insertVariableTag('{channel}')"><code>{channel}</code> Channel</button>
+                <button type="button" class="var-pill" onclick="insertVariableTag('{memberCount}')"><code>{memberCount}</code> Total Members</button>
+                <button type="button" class="var-pill" onclick="insertVariableTag('{trigger}')"><code>{trigger}</code> Command Trigger</button>
+                <button type="button" class="var-pill" onclick="insertVariableTag('{uses}')"><code>{uses}</code> Usage Counter</button>
+              </div>
+            </div>
+
+            <!-- Command Creator / Editor Card -->
+            <div class="panel-card-section">
+              <h3 class="card-section-title" id="cc-editor-heading">➕ Add / Edit Custom Command</h3>
+              <div class="form-grid-2">
+                <div class="form-group">
+                  <label class="form-label">Command Trigger Name (Without Prefix)</label>
+                  <input type="text" id="cc-name" class="form-input" placeholder="rules" oninput="updateCustomCommandPreview()">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Response Format</label>
+                  <select id="cc-mode" class="form-select" onchange="handleCustomCommandModeChange(this.value)">
+                    <option value="text">Plain Text Message</option>
+                    <option value="embed">Rich Embed Card</option>
+                  </select>
+                </div>
+                <div class="form-group span-full">
+                  <label class="form-label">Command Response Content</label>
+                  <textarea id="cc-response" class="form-textarea" rows="3" placeholder="Hello {user}! Check out our server rules in {channel}." oninput="updateCustomCommandPreview()"></textarea>
+                </div>
+                
+                <!-- Embed Specific Options -->
+                <div id="cc-embed-options" class="span-full form-grid-2" style="display: none;">
+                  <div class="form-group">
+                    <label class="form-label">Embed Card Title</label>
+                    <input type="text" id="cc-embed-title" class="form-input" placeholder="🌟 Server Information" oninput="updateCustomCommandPreview()">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Embed Accent Color</label>
+                    <input type="color" id="cc-embed-color" class="color-picker-input" value="#5865f2" oninput="updateCustomCommandPreview()">
+                  </div>
+                </div>
+
+                <!-- Real-Time Variable Interpolation Simulator -->
+                <div class="form-group span-full">
+                  <label class="form-label">⚡ Real-Time Output Simulation Preview</label>
+                  <div class="simulated-output-box" id="cc-sim-output">
+                    Hello <span class="mention">@SlickPickleNick</span>! Check out our server rules in <span class="mention">#rules</span>.
+                  </div>
+                </div>
+
+                <div class="form-group span-full" style="display: flex; gap: 8px;">
+                  <button type="button" class="btn btn-primary" onclick="handleSaveCustomCommand()">💾 Save Custom Command</button>
+                  <button type="button" class="btn btn-outline" onclick="resetCustomCommandForm()">Clear Form</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Existing Commands Table -->
+            <div class="panel-card-section">
+              <h3 class="card-section-title">📋 Active Custom Commands</h3>
+              <div id="cc-table-container">
+                <div style="color: var(--text-faint); font-size: 13px;">Loading custom commands...</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- STUDIO 4: SERVER ANALYTICS & PEAK ACTIVITY HEATMAPS -->
+          <div id="tab-panel-analytics-studio" class="manage-panel">
+            <div class="panel-header">
+              <div class="section-header-flex">
+                <div>
+                  <h2 class="panel-title">📈 Server Analytics & Peak Engagement Heatmaps</h2>
+                  <p class="panel-subtitle">Real-time chat velocity curves, voice channel participation, 7x24 peak activity heatmaps, and retention funnels.</p>
+                </div>
+                <button class="btn btn-outline btn-sm" onclick="loadServerAnalytics()">🔄 Refresh Analytics</button>
+              </div>
+            </div>
+
+            <!-- Metric Velocity Cards -->
+            <div class="metrics-grid">
+              <div class="metric-card">
+                <div class="metric-label">24h Message Velocity</div>
+                <div class="metric-value text-emerald" id="analytics-metric-msgs">--</div>
+                <div class="metric-meta">Chat activity in last 24 hours</div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-label">Voice Channel Hours</div>
+                <div class="metric-value text-blue" id="analytics-metric-voice">-- hrs</div>
+                <div class="metric-meta">Total voice participation</div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-label">Active Members</div>
+                <div class="metric-value text-amber" id="analytics-metric-members">--</div>
+                <div class="metric-meta">Unique active participants</div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-label">Community Health Score</div>
+                <div class="metric-value text-emerald" id="analytics-metric-health">94%</div>
+                <div class="metric-meta">Engagement & moderation pulse</div>
+              </div>
+            </div>
+
+            <!-- Activity Velocity Area Chart -->
+            <div class="panel-card-section">
+              <div class="section-header-flex" style="margin-bottom: 12px;">
+                <div>
+                  <h3 class="card-section-title" style="margin-bottom: 2px;">📊 Activity Velocity Curve (Messages vs Voice)</h3>
+                  <div class="setting-desc" style="margin-bottom: 0;">Interactive hourly chat and voice activity volume.</div>
+                </div>
+                <div class="category-tags">
+                  <button type="button" class="cat-btn active" id="btn-chart-24h" onclick="switchAnalyticsRange('24h')">24 Hours</button>
+                  <button type="button" class="cat-btn" id="btn-chart-7d" onclick="switchAnalyticsRange('7d')">7 Days</button>
+                </div>
+              </div>
+              <div class="chart-wrapper" id="analytics-chart-container">
+                <!-- Dynamically rendered responsive SVG Area Chart -->
+                <svg id="analytics-svg-chart" viewBox="0 0 800 240" class="analytics-svg"></svg>
+              </div>
+            </div>
+
+            <!-- 7x24 Peak Activity Heatmap Matrix Grid -->
+            <div class="panel-card-section">
+              <h3 class="card-section-title">🔥 7-Day &times; 24-Hour Peak Activity Heatmap</h3>
+              <div class="setting-desc" style="margin-bottom: 12px;">Identifies exactly when your community is most active by day of week and hour of day.</div>
+              <div class="heatmap-wrapper">
+                <div class="heatmap-grid" id="analytics-heatmap-grid"></div>
+              </div>
+              <div class="heatmap-legend">
+                <span>Less Active</span>
+                <span class="heatmap-cell lvl-0"></span>
+                <span class="heatmap-cell lvl-1"></span>
+                <span class="heatmap-cell lvl-2"></span>
+                <span class="heatmap-cell lvl-3"></span>
+                <span class="heatmap-cell lvl-4"></span>
+                <span class="heatmap-cell lvl-5"></span>
+                <span>Peak Activity</span>
+              </div>
+            </div>
+
+            <!-- Channel Breakdown & Member Flow -->
+            <div class="form-grid-2">
+              <div class="panel-card-section">
+                <h3 class="card-section-title">🏆 Top Channel Engagement</h3>
+                <div id="analytics-top-channels-list"></div>
+              </div>
+              <div class="panel-card-section">
+                <h3 class="card-section-title">👥 Member Flow & Growth Funnel</h3>
+                <div id="analytics-member-flow-list"></div>
+              </div>
+            </div>
+          </div>
+
         </main>
       </div>
     </div>
@@ -1088,6 +1686,109 @@
       </div>
     </div>
   </section>
+
+  <!-- VIEW 4: PUBLIC TERMS OF SERVICE (Discord Verification Compliance) -->
+  <section id="view-terms" class="page-view">
+    <div class="container">
+      <div class="legal-doc-card">
+        <div class="legal-header">
+          <span class="brand-tag">Legal Disclosure</span>
+          <h1 class="page-title" style="margin-top: 8px;">Terms of Service</h1>
+          <p class="page-subtitle">Effective Date: August 28, 2026 &bull; SlickBot Platform</p>
+        </div>
+
+        <div class="legal-content">
+          <h3>1. Acceptance of Terms</h3>
+          <p>By inviting <strong>SlickBot</strong> to your Discord server or accessing the SlickBot Web Management Dashboard, you agree to be bound by these Terms of Service and Discord's Terms of Service and Community Guidelines. If you do not agree to these terms, do not install or use SlickBot.</p>
+
+          <h3>2. Description of Service</h3>
+          <p>SlickBot provides modular Discord server automation, moderation logging, support workflows, role assignment panels, leveling XP tracking, social feed alerts, and configuration management tools.</p>
+
+          <h3>3. Bot Permissions & Access</h3>
+          <p>SlickBot requires specific Discord gateway permissions (including <code>Manage Roles</code>, <code>Manage Channels</code>, <code>View Audit Log</code>, <code>Send Messages</code>, and <code>Embed Links</code>) to execute administrator-configured actions. The bot only acts within the scopes explicitly granted by server administrators.</p>
+
+          <h3>4. User Conduct & Abuse Prevention</h3>
+          <p>You agree not to use SlickBot to engage in spamming, harassment, mass DM distribution, malicious raid attacks, or any actions that violate Discord's Developer Terms of Service. SlickBot administrators reserve the right to restrict service access to servers or users violating these standards.</p>
+
+          <h3>5. Data Deletion & Privacy</h3>
+          <p>Server administrators may request or execute automated data deletion of their server configurations and member records via the <code>/reset</code> command or by contacting the developer team.</p>
+
+          <h3>6. Limitation of Liability</h3>
+          <p>SlickBot is provided on an "as is" and "as available" basis without warranties of any kind. The developers are not liable for any server disruptions, lost Discord permissions, or downtime resulting from third-party hosting or Discord API outages.</p>
+
+          <h3>7. Contact Information</h3>
+          <p>For questions or support regarding these terms, visit our official community support channels or open an issue on our <a href="https://github.com/SlickPickleNick/SlickBot" target="_blank" rel="noreferrer">GitHub Repository</a>.</p>
+        </div>
+
+        <div style="margin-top: 24px; text-align: center;">
+          <button class="btn btn-outline" onclick="navigateTo('home')">&larr; Return to Overview</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- VIEW 5: PUBLIC PRIVACY POLICY (Discord Verification Compliance) -->
+  <section id="view-privacy" class="page-view">
+    <div class="container">
+      <div class="legal-doc-card">
+        <div class="legal-header">
+          <span class="brand-tag">Data Governance</span>
+          <h1 class="page-title" style="margin-top: 8px;">Privacy Policy</h1>
+          <p class="page-subtitle">Effective Date: August 28, 2026 &bull; SlickBot Platform</p>
+        </div>
+
+        <div class="legal-content">
+          <h3>1. Information We Collect</h3>
+          <p>SlickBot collects minimal, essential data required to provide its community management features:</p>
+          <ul style="margin-left: 20px; color: var(--text-muted); line-height: 1.8;">
+            <li><strong>Server Metadata:</strong> Discord Server ID, Server Name, Channel IDs, Role IDs, and configured timezone.</li>
+            <li><strong>Member Progression:</strong> Member IDs, Level XP, Voice minutes logged, and achievement unlocks.</li>
+            <li><strong>Audit & Moderation Records:</strong> Moderation case IDs, action types (warn/mute/kick/ban), timestamps, and staff actor tags.</li>
+            <li><strong>Support Transcripts:</strong> Ticket history and application responses stored within your server's designated log channels.</li>
+          </ul>
+
+          <h3>2. How Data is Used</h3>
+          <p>All collected data is used exclusively to facilitate bot commands, render rank cards, synchronize live social alerts, and maintain staff audit trails. We do not sell, monetize, or share member data with third parties or external advertisers.</p>
+
+          <h3>3. Data Storage & Security</h3>
+          <p>Data is stored in encrypted PostgreSQL database clusters with strict multi-tenant partitioning by <code>guild_id</code>. Only authorized server administrators can access their server's data via Discord OAuth2 authentication.</p>
+
+          <h3>4. Data Retention & Deletion</h3>
+          <p>Server owners have full sovereignty over their data. Running <code>/reset</code> or removing the bot from your Discord server halts data collection and allows full data archival or purge upon request.</p>
+
+          <h3>5. Changes to This Policy</h3>
+          <p>We may update this Privacy Policy periodically. Significant changes will be announced in our bot release notes and changelog channels.</p>
+        </div>
+
+        <div style="margin-top: 24px; text-align: center;">
+          <button class="btn btn-outline" onclick="navigateTo('home')">&larr; Return to Overview</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Global Footer -->
+  <footer class="global-footer">
+    <div class="footer-container">
+      <div class="footer-left">
+        <div class="brand">
+          <div class="brand-icon">S</div>
+          <span class="brand-title">SlickBot</span>
+        </div>
+        <p class="footer-desc">Enterprise-grade all-in-one Discord community infrastructure.</p>
+      </div>
+      <div class="footer-links">
+        <button class="footer-link" onclick="navigateTo('home')">Overview</button>
+        <button class="footer-link" onclick="navigateTo('servers')">My Servers</button>
+        <button class="footer-link" onclick="navigateTo('terms')">Terms of Service</button>
+        <button class="footer-link" onclick="navigateTo('privacy')">Privacy Policy</button>
+        <a href="https://github.com/SlickPickleNick/SlickBot" target="_blank" rel="noreferrer" class="footer-link">GitHub</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      &copy; 2026 SlickBot &bull; Built for the SlickPickleNick Community & Discord Ecosystem.
+    </div>
+  </footer>
 
   <script src="app.js"></script>
 </body>

@@ -48,6 +48,10 @@ function switchManageTab(tabId, buttonEl) {
     if (tabId === 'media') loadFeeds();
     if (tabId === 'safety') loadAutoMod();
     if (tabId === 'community') loadStarboard();
+    if (tabId === 'embed-studio') initEmbedStudio();
+    if (tabId === 'role-studio') { loadRolePanelsList(); updateRolePanelPreview(); }
+    if (tabId === 'custom-studio') { loadCustomCommandsList(); updateCustomCommandPreview(); }
+    if (tabId === 'analytics-studio') loadServerAnalytics();
   }
 }
 
@@ -1327,3 +1331,1216 @@ document.addEventListener('DOMContentLoaded', () => {
   fetchHealth();
   setInterval(fetchHealth, 15000);
 });
+
+// ==========================================================================
+// 🎨 DISCORD EMBED & ANNOUNCEMENT STUDIO ENGINE
+// ==========================================================================
+
+let embedFieldsList = [];
+let editingEmbedMessageId = null;
+let editingEmbedChannelId = null;
+
+function formatDiscordMarkdown(text) {
+  if (!text) return '';
+  let str = escapeHtml(text);
+  // Code block
+  str = str.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
+  // Inline code
+  str = str.replace(/`([^`]+)`/g, '<code>$1</code>');
+  // Bold
+  str = str.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  // Italic
+  str = str.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+  str = str.replace(/_([^_]+)_/g, '<em>$1</em>');
+  // Underline
+  str = str.replace(/__([^_]+)__/g, '<u>$1</u>');
+  // Strikethrough
+  str = str.replace(/~~([^~]+)~~/g, '<del>$1</del>');
+  // Mentions
+  str = str.replace(/&lt;@!?(\d+)&gt;/g, '<span class="mention">@user</span>');
+  str = str.replace(/&lt;@&amp;(\d+)&gt;/g, '<span class="mention">@role</span>');
+  str = str.replace(/&lt;#(\d+)&gt;/g, '<span class="mention">#channel</span>');
+  str = str.replace(/@(everyone|here)/g, '<span class="mention">@$1</span>');
+  return str;
+}
+
+function initEmbedStudio() {
+  if (embedFieldsList.length === 0) {
+    embedFieldsList = [
+      { id: 'f_1', name: '📌 Important Guidelines', value: 'Please respect all members and follow Discord TOS.', inline: false },
+      { id: 'f_2', name: '🎫 Need Help?', value: 'Open a ticket in #support-tickets', inline: true },
+      { id: 'f_3', name: '🔔 Stay Updated', value: 'Grab stream roles in #onboarding', inline: true }
+    ];
+    renderEmbedFieldsList();
+  }
+  updateEmbedPreview();
+}
+
+function resetEmbedStudio() {
+  cancelMessageEditMode();
+  document.getElementById('embed-template-select').value = '';
+  document.getElementById('embed-content').value = '';
+  document.getElementById('embed-author-name').value = '';
+  document.getElementById('embed-author-icon').value = '';
+  document.getElementById('embed-author-url').value = '';
+  document.getElementById('embed-title').value = '🌟 Official Community Announcement';
+  document.getElementById('embed-title-url').value = '';
+  document.getElementById('embed-description').value = 'Write your announcement details here...';
+  setEmbedColor('#5865f2');
+  document.getElementById('embed-thumbnail-url').value = '';
+  document.getElementById('embed-image-url').value = '';
+  document.getElementById('embed-footer-text').value = 'SlickBot Announcement Engine';
+  document.getElementById('embed-footer-icon').value = '';
+  document.getElementById('embed-timestamp-toggle').checked = true;
+  embedFieldsList = [];
+  renderEmbedFieldsList();
+  updateEmbedPreview();
+}
+
+function handleAddEmbedField(initialObj = null) {
+  if (embedFieldsList.length >= 25) {
+    alert('Maximum 25 fields allowed per Discord embed.');
+    return;
+  }
+  const fieldId = 'f_' + Math.random().toString(36).substring(7);
+  embedFieldsList.push(initialObj || {
+    id: fieldId,
+    name: 'New Section',
+    value: 'Section description text',
+    inline: false
+  });
+  renderEmbedFieldsList();
+  updateEmbedPreview();
+}
+
+function handleRemoveEmbedField(fieldId) {
+  embedFieldsList = embedFieldsList.filter(f => f.id !== fieldId);
+  renderEmbedFieldsList();
+  updateEmbedPreview();
+}
+
+function handleEmbedFieldChange(fieldId, key, value) {
+  const f = embedFieldsList.find(item => item.id === fieldId);
+  if (f) {
+    f[key] = value;
+    updateEmbedPreview();
+  }
+}
+
+function renderEmbedFieldsList() {
+  const container = document.getElementById('embed-fields-container');
+  const countEl = document.getElementById('embed-fields-count');
+  if (!container) return;
+
+  if (countEl) countEl.textContent = embedFieldsList.length;
+
+  if (embedFieldsList.length === 0) {
+    container.innerHTML = `<div style="color: var(--text-faint); font-size: 13px; padding: 6px 0;">No fields added yet. Click "+ Add Field" to create a section.</div>`;
+    return;
+  }
+
+  container.innerHTML = embedFieldsList.map((f, idx) => `
+    <div class="embed-field-row" data-field-id="${f.id}">
+      <div>
+        <input type="text" class="form-input" style="font-size: 13px; font-weight: 600;" placeholder="Field Name" value="${escapeHtml(f.name)}" oninput="handleEmbedFieldChange('${f.id}', 'name', this.value)">
+      </div>
+      <div>
+        <input type="text" class="form-input" style="font-size: 13px;" placeholder="Field Value" value="${escapeHtml(f.value)}" oninput="handleEmbedFieldChange('${f.id}', 'value', this.value)">
+      </div>
+      <div style="display: flex; align-items: center; gap: 4px;">
+        <label class="checkbox-label" style="font-size: 12px; margin-bottom: 0;">
+          <input type="checkbox" ${f.inline ? 'checked' : ''} onchange="handleEmbedFieldChange('${f.id}', 'inline', this.checked)">
+          <span>Inline</span>
+        </label>
+      </div>
+      <div>
+        <button type="button" class="btn btn-outline btn-sm" style="color: var(--accent-red); padding: 4px 8px;" onclick="handleRemoveEmbedField('${f.id}')" title="Delete Field">&times;</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function setEmbedColor(hex) {
+  const picker = document.getElementById('embed-color-picker');
+  const hexInput = document.getElementById('embed-color-hex');
+  if (picker) picker.value = hex;
+  if (hexInput) hexInput.value = hex;
+  updateEmbedPreview();
+}
+
+function handleEmbedColorPicker(val) {
+  const hexInput = document.getElementById('embed-color-hex');
+  if (hexInput) hexInput.value = val;
+  updateEmbedPreview();
+}
+
+function handleEmbedColorHex(val) {
+  let hex = val.trim();
+  if (!hex.startsWith('#')) hex = '#' + hex;
+  if (/^#[0-9A-Fa-f]{6}$/.test(hex)) {
+    const picker = document.getElementById('embed-color-picker');
+    if (picker) picker.value = hex;
+    updateEmbedPreview();
+  }
+}
+
+function handleApplyEmbedTemplate(templateKey) {
+  if (!templateKey) return;
+
+  if (templateKey === 'welcome') {
+    document.getElementById('embed-content').value = 'Welcome to the server @everyone!';
+    document.getElementById('embed-author-name').value = 'SlickBot Community Gateway';
+    document.getElementById('embed-title').value = '👋 Welcome to Our Server!';
+    document.getElementById('embed-description').value = 'We are thrilled to have you here! Please make sure to check out our rules, select your roles, and say hi in `#general-chat`.';
+    setEmbedColor('#5865f2');
+    embedFieldsList = [
+      { id: 'f_1', name: '📜 Rules & Guidelines', value: '1. Be kind & respectful\n2. No spam or self-promo\n3. Keep channels relevant', inline: false },
+      { id: 'f_2', name: '🎭 Self Roles', value: 'Head over to #roles to pick your stream pings.', inline: true },
+      { id: 'f_3', name: '🎫 Need Help?', value: 'Open a ticket in #support-tickets anytime.', inline: true }
+    ];
+  } else if (templateKey === 'announcement') {
+    document.getElementById('embed-content').value = '📢 @everyone Attention Community Members!';
+    document.getElementById('embed-author-name').value = 'Server Leadership Team';
+    document.getElementById('embed-title').value = '🌟 Important Community Announcement';
+    document.getElementById('embed-description').value = 'We are excited to share some major updates regarding our server infrastructure, upcoming events, and new bot features.';
+    setEmbedColor('#f59e0b');
+    embedFieldsList = [
+      { id: 'f_1', name: '🚀 What is New?', value: 'SlickBot 29 modular systems have been deployed across our community.', inline: false },
+      { id: 'f_2', name: '🏆 Progression Rewards', value: 'Earn voice XP and milestone roles simply by hanging out!', inline: true },
+      { id: 'f_3', name: '📅 Date & Time', value: 'Effective immediately.', inline: true }
+    ];
+  } else if (templateKey === 'patch_notes') {
+    document.getElementById('embed-content').value = '';
+    document.getElementById('embed-author-name').value = 'SlickBot Releases';
+    document.getElementById('embed-title').value = '⚡ Bot Release v0.9.8 Changelog';
+    document.getElementById('embed-description').value = 'A brand new update has been pushed to SlickBot! Here is what changed:';
+    setEmbedColor('#10b981');
+    embedFieldsList = [
+      { id: 'f_1', name: '✨ New Features', value: '• Interactive Visual Embed Builder\n• Custom Command Studio\n• Role Panels Live Preview\n• Server Analytics & Heatmaps', inline: false },
+      { id: 'f_2', name: '🛠️ Fixes & Polish', value: '• Zero command duplication\n• Faster database connection pooling\n• Responsive web console', inline: false }
+    ];
+  } else if (templateKey === 'event') {
+    document.getElementById('embed-content').value = '🎉 @everyone Community Game Night is happening this weekend!';
+    document.getElementById('embed-author-name').value = 'Community Events Team';
+    document.getElementById('embed-title').value = '🎮 Weekend Community Game Night';
+    document.getElementById('embed-description').value = 'Join us this Saturday for community trivia, Jackbox games, and voice lounge hangouts with special prizes!';
+    setEmbedColor('#8b5cf6');
+    embedFieldsList = [
+      { id: 'f_1', name: '🕒 Time & Location', value: 'Saturday @ 8:00 PM ET in General Voice Lounge', inline: true },
+      { id: 'f_2', name: '🎁 Prizes & Rewards', value: 'VIP Role, 5,000 XP & Discord Nitro', inline: true },
+      { id: 'f_3', name: '📝 How to RSVP', value: 'Click the RSVP button in the event card below!', inline: false }
+    ];
+  } else if (templateKey === 'stream') {
+    document.getElementById('embed-content').value = '🔴 @everyone SlickPickleNick is now LIVE!';
+    document.getElementById('embed-author-name').value = 'Twitch Alerts';
+    document.getElementById('embed-title').value = '🔴 LIVE NOW: Playing Community Games with Viewers!';
+    document.getElementById('embed-title-url').value = 'https://twitch.tv/slickpicklenick';
+    document.getElementById('embed-description').value = 'Come hang out in chat, earn drop codes, and join multiplayer matches!';
+    setEmbedColor('#9146ff');
+    embedFieldsList = [
+      { id: 'f_1', name: '🎮 Category', value: 'Just Chatting / Gaming', inline: true },
+      { id: 'f_2', name: '🎁 Stream Drops', value: 'Type /redeem in Discord for stream XP!', inline: true }
+    ];
+  } else if (templateKey === 'giveaway') {
+    document.getElementById('embed-content').value = '🎉 SPECIAL GIVEAWAY @everyone!';
+    document.getElementById('embed-author-name').value = 'SlickBot Giveaways';
+    document.getElementById('embed-title').value = '🎁 Discord Nitro (1 Month) Giveaway!';
+    document.getElementById('embed-description').value = 'To celebrate our community milestone, we are giving away 1 Month of Discord Nitro to one lucky member!';
+    setEmbedColor('#ec4899');
+    embedFieldsList = [
+      { id: 'f_1', name: '👑 Hosted By', value: 'SlickPickleNick', inline: true },
+      { id: 'f_2', name: '⏰ Ends In', value: '48 Hours', inline: true },
+      { id: 'f_3', name: '🎉 How to Enter', value: 'Click the 🎉 button on this giveaway message!', inline: false }
+    ];
+  } else if (templateKey === 'support') {
+    document.getElementById('embed-content').value = '';
+    document.getElementById('embed-author-name').value = 'SlickBot Support Desk';
+    document.getElementById('embed-title').value = '🎫 Need Assistance? Open a Support Ticket';
+    document.getElementById('embed-description').value = 'Our staff team is here to assist you with any questions, member reports, or appeals.';
+    setEmbedColor('#5865f2');
+    embedFieldsList = [
+      { id: 'f_1', name: '❓ General Support', value: 'Questions about server perks, roles, or bot commands.', inline: true },
+      { id: 'f_2', name: '🛡️ Member Reports', value: 'Confidential reporting for rule violations.', inline: true },
+      { id: 'f_3', name: '⚖️ Ban Appeals', value: 'Submit an appeal for moderated accounts.', inline: true }
+    ];
+  } else if (templateKey === 'blank') {
+    resetEmbedStudio();
+    return;
+  }
+
+  renderEmbedFieldsList();
+  updateEmbedPreview();
+}
+
+function updateEmbedPreview() {
+  const content = document.getElementById('embed-content')?.value || '';
+  const authorName = document.getElementById('embed-author-name')?.value || '';
+  const authorIcon = document.getElementById('embed-author-icon')?.value || '';
+  const authorUrl = document.getElementById('embed-author-url')?.value || '';
+  const title = document.getElementById('embed-title')?.value || '';
+  const titleUrl = document.getElementById('embed-title-url')?.value || '';
+  const description = document.getElementById('embed-description')?.value || '';
+  const color = document.getElementById('embed-color-hex')?.value || '#5865f2';
+  const thumbnailUrl = document.getElementById('embed-thumbnail-url')?.value || '';
+  const imageUrl = document.getElementById('embed-image-url')?.value || '';
+  const footerText = document.getElementById('embed-footer-text')?.value || '';
+  const footerIcon = document.getElementById('embed-footer-icon')?.value || '';
+  const showTimestamp = document.getElementById('embed-timestamp-toggle')?.checked ?? true;
+
+  // 1. Text body above embed
+  const simTextContent = document.getElementById('discord-sim-text-content');
+  if (simTextContent) {
+    if (content.trim()) {
+      simTextContent.style.display = 'block';
+      simTextContent.innerHTML = formatDiscordMarkdown(content);
+    } else {
+      simTextContent.style.display = 'none';
+    }
+  }
+
+  // 2. Embed Card Border Color
+  const embedCard = document.getElementById('discord-sim-embed-card');
+  if (embedCard) {
+    embedCard.style.borderLeftColor = color;
+  }
+
+  // 3. Author
+  const authorEl = document.getElementById('discord-sim-author');
+  const authorIconEl = document.getElementById('discord-sim-author-icon');
+  const authorNameEl = document.getElementById('discord-sim-author-name');
+  if (authorEl && authorNameEl) {
+    if (authorName.trim()) {
+      authorEl.style.display = 'flex';
+      authorNameEl.textContent = authorName;
+      if (authorIcon && authorIconEl) {
+        authorIconEl.src = authorIcon;
+        authorIconEl.style.display = 'inline-block';
+      } else if (authorIconEl) {
+        authorIconEl.style.display = 'none';
+      }
+    } else {
+      authorEl.style.display = 'none';
+    }
+  }
+
+  // 4. Title
+  const titleEl = document.getElementById('discord-sim-title');
+  if (titleEl) {
+    if (title.trim()) {
+      titleEl.style.display = 'block';
+      if (titleUrl && (titleUrl.startsWith('http://') || titleUrl.startsWith('https://'))) {
+        titleEl.innerHTML = `<a href="${escapeHtml(titleUrl)}" target="_blank" rel="noreferrer">${escapeHtml(title)}</a>`;
+      } else {
+        titleEl.textContent = title;
+      }
+    } else {
+      titleEl.style.display = 'none';
+    }
+  }
+
+  // 5. Description
+  const descEl = document.getElementById('discord-sim-description');
+  if (descEl) {
+    if (description.trim()) {
+      descEl.style.display = 'block';
+      descEl.innerHTML = formatDiscordMarkdown(description);
+    } else {
+      descEl.style.display = 'none';
+    }
+  }
+
+  // 6. Fields Grid
+  const fieldsGrid = document.getElementById('discord-sim-fields-grid');
+  if (fieldsGrid) {
+    if (embedFieldsList.length > 0) {
+      fieldsGrid.style.display = 'grid';
+      fieldsGrid.innerHTML = embedFieldsList.map(f => `
+        <div class="discord-field-item ${f.inline ? '' : 'full-width'}">
+          <div class="discord-field-name">${escapeHtml(f.name || '\u200B')}</div>
+          <div class="discord-field-val">${formatDiscordMarkdown(f.value || '\u200B')}</div>
+        </div>
+      `).join('');
+    } else {
+      fieldsGrid.style.display = 'none';
+      fieldsGrid.innerHTML = '';
+    }
+  }
+
+  // 7. Thumbnail
+  const thumbContainer = document.getElementById('discord-sim-thumbnail-container');
+  const thumbImg = document.getElementById('discord-sim-thumbnail');
+  if (thumbContainer && thumbImg) {
+    if (thumbnailUrl.trim() && (thumbnailUrl.startsWith('http://') || thumbnailUrl.startsWith('https://'))) {
+      thumbContainer.style.display = 'block';
+      thumbImg.src = thumbnailUrl;
+    } else {
+      thumbContainer.style.display = 'none';
+    }
+  }
+
+  // 8. Image
+  const imageContainer = document.getElementById('discord-sim-image-container');
+  const imageImg = document.getElementById('discord-sim-image');
+  if (imageContainer && imageImg) {
+    if (imageUrl.trim() && (imageUrl.startsWith('http://') || imageUrl.startsWith('https://'))) {
+      imageContainer.style.display = 'block';
+      imageImg.src = imageUrl;
+    } else {
+      imageContainer.style.display = 'none';
+    }
+  }
+
+  // 9. Footer & Timestamp
+  const footerEl = document.getElementById('discord-sim-footer');
+  const footerTextEl = document.getElementById('discord-sim-footer-text');
+  const footerIconEl = document.getElementById('discord-sim-footer-icon');
+  const bulletEl = document.getElementById('discord-sim-footer-bullet');
+  const timeEl = document.getElementById('discord-sim-footer-time');
+
+  if (footerEl && footerTextEl) {
+    if (footerText.trim() || showTimestamp) {
+      footerEl.style.display = 'flex';
+      footerTextEl.textContent = footerText || '';
+
+      if (footerIcon && footerIconEl) {
+        footerIconEl.src = footerIcon;
+        footerIconEl.style.display = 'inline-block';
+      } else if (footerIconEl) {
+        footerIconEl.style.display = 'none';
+      }
+
+      if (showTimestamp && timeEl) {
+        timeEl.style.display = 'inline';
+        if (bulletEl) bulletEl.style.display = footerText.trim() ? 'inline' : 'none';
+      } else if (timeEl) {
+        timeEl.style.display = 'none';
+        if (bulletEl) bulletEl.style.display = 'none';
+      }
+    } else {
+      footerEl.style.display = 'none';
+    }
+  }
+}
+
+// --- Load Existing Message for In-Place Editing ---
+async function handleLoadExistingMessage() {
+  const rawInput = document.getElementById('embed-load-input')?.value || '';
+  if (!rawInput.trim()) {
+    alert('Please paste a Discord message link or Message ID.');
+    return;
+  }
+
+  let messageId = rawInput.trim();
+  let channelId = '';
+
+  // Extract from Discord Message Link: https://discord.com/channels/guildId/channelId/messageId
+  const match = rawInput.match(/discord(?:app)?\.com\/channels\/(\d+)\/(\d+)\/(\d+)/i);
+  if (match) {
+    channelId = match[2];
+    messageId = match[3];
+  } else {
+    // If not a link, check selected channel in target dropdown
+    channelId = document.getElementById('embed-target-channel')?.value || '';
+  }
+
+  try {
+    const res = await fetch(`/api/guilds/${activeGuildId}/messages/${encodeURIComponent(messageId)}?channelId=${encodeURIComponent(channelId)}`);
+    const data = await res.json();
+
+    if (!res.ok || !data.ok || !data.message) {
+      throw new Error(data.error || 'Could not fetch message from Discord.');
+    }
+
+    const msg = data.message;
+    editingEmbedMessageId = msg.id;
+    editingEmbedChannelId = msg.channelId || channelId;
+
+    // Show active editing badge & cancel button
+    const badge = document.getElementById('embed-edit-badge');
+    const badgeText = document.getElementById('embed-editing-id-text');
+    const cancelBtn = document.getElementById('btn-cancel-edit-mode');
+    const dispatchBtn = document.getElementById('btn-dispatch-embed');
+
+    if (badge && badgeText) {
+      badge.style.display = 'inline-flex';
+      badgeText.textContent = `#${msg.id}`;
+    }
+    if (cancelBtn) cancelBtn.style.display = 'inline-block';
+    if (dispatchBtn) {
+      dispatchBtn.innerHTML = '💾 Update Existing Discord Message';
+      dispatchBtn.classList.remove('btn-primary');
+      dispatchBtn.classList.add('btn-discord');
+    }
+
+    // Set Target Channel if matched
+    const targetChannelSelect = document.getElementById('embed-target-channel');
+    if (targetChannelSelect && msg.channelId) {
+      targetChannelSelect.value = msg.channelId;
+    }
+
+    // Populate Content & Embed
+    document.getElementById('embed-content').value = msg.content || '';
+
+    if (msg.embed) {
+      const e = msg.embed;
+      document.getElementById('embed-title').value = e.title || '';
+      document.getElementById('embed-title-url').value = e.url || '';
+      document.getElementById('embed-description').value = e.description || '';
+      if (e.color) setEmbedColor(e.color);
+      document.getElementById('embed-author-name').value = e.author?.name || '';
+      document.getElementById('embed-author-icon').value = e.author?.icon_url || e.author?.iconURL || '';
+      document.getElementById('embed-author-url').value = e.author?.url || '';
+      document.getElementById('embed-thumbnail-url').value = e.thumbnail?.url || '';
+      document.getElementById('embed-image-url').value = e.image?.url || '';
+      document.getElementById('embed-footer-text').value = e.footer?.text || '';
+      document.getElementById('embed-footer-icon').value = e.footer?.icon_url || e.footer?.iconURL || '';
+      document.getElementById('embed-timestamp-toggle').checked = Boolean(e.timestamp);
+
+      embedFieldsList = (e.fields || []).map((f, i) => ({
+        id: 'f_' + i + '_' + Math.random().toString(36).substring(7),
+        name: f.name || '',
+        value: f.value || '',
+        inline: Boolean(f.inline)
+      }));
+      renderEmbedFieldsList();
+    }
+
+    updateEmbedPreview();
+    alert(`Loaded message #${msg.id} successfully! You can now edit its embed and click "Update Existing Discord Message".`);
+  } catch (err) {
+    alert('Error loading message: ' + err.message);
+  }
+}
+
+function cancelMessageEditMode() {
+  editingEmbedMessageId = null;
+  editingEmbedChannelId = null;
+  const badge = document.getElementById('embed-edit-badge');
+  const cancelBtn = document.getElementById('btn-cancel-edit-mode');
+  const dispatchBtn = document.getElementById('btn-dispatch-embed');
+  const loadInput = document.getElementById('embed-load-input');
+
+  if (badge) badge.style.display = 'none';
+  if (cancelBtn) cancelBtn.style.display = 'none';
+  if (loadInput) loadInput.value = '';
+  if (dispatchBtn) {
+    dispatchBtn.innerHTML = '🚀 Dispatch Embed to Discord';
+    dispatchBtn.classList.remove('btn-discord');
+    dispatchBtn.classList.add('btn-primary');
+  }
+}
+
+// --- Dispatch or Edit Discord Embed ---
+async function handleDispatchEmbed() {
+  const channelId = document.getElementById('embed-target-channel')?.value;
+  if (!channelId) {
+    alert('Please select a target Discord channel.');
+    return;
+  }
+
+  const content = document.getElementById('embed-content')?.value || '';
+  const authorName = document.getElementById('embed-author-name')?.value || '';
+  const authorIcon = document.getElementById('embed-author-icon')?.value || '';
+  const authorUrl = document.getElementById('embed-author-url')?.value || '';
+  const title = document.getElementById('embed-title')?.value || '';
+  const titleUrl = document.getElementById('embed-title-url')?.value || '';
+  const description = document.getElementById('embed-description')?.value || '';
+  const color = document.getElementById('embed-color-hex')?.value || '#5865f2';
+  const thumbnailUrl = document.getElementById('embed-thumbnail-url')?.value || '';
+  const imageUrl = document.getElementById('embed-image-url')?.value || '';
+  const footerText = document.getElementById('embed-footer-text')?.value || '';
+  const footerIcon = document.getElementById('embed-footer-icon')?.value || '';
+  const showTimestamp = document.getElementById('embed-timestamp-toggle')?.checked ?? true;
+
+  const embedPayload = {
+    title: title || undefined,
+    url: titleUrl || undefined,
+    description: description || undefined,
+    color,
+    author: authorName ? { name: authorName, icon_url: authorIcon || undefined, url: authorUrl || undefined } : undefined,
+    thumbnail: thumbnailUrl ? { url: thumbnailUrl } : undefined,
+    image: imageUrl ? { url: imageUrl } : undefined,
+    footer: footerText ? { text: footerText, icon_url: footerIcon || undefined } : undefined,
+    timestamp: showTimestamp,
+    fields: embedFieldsList.map(f => ({ name: f.name, value: f.value, inline: f.inline }))
+  };
+
+  const dispatchBtn = document.getElementById('btn-dispatch-embed');
+  const origBtnText = dispatchBtn ? dispatchBtn.innerHTML : '';
+  if (dispatchBtn) {
+    dispatchBtn.disabled = true;
+    dispatchBtn.innerHTML = '⏳ Sending to Discord...';
+  }
+
+  try {
+    const res = await fetch(`/api/guilds/${activeGuildId}/send-embed`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        channelId,
+        messageId: editingEmbedMessageId,
+        content: content || undefined,
+        embed: (title || description || embedFieldsList.length > 0) ? embedPayload : null
+      })
+    });
+
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || 'Failed to dispatch message');
+
+    alert(`Success! ${data.message} (Message ID: ${data.messageId})`);
+    if (editingEmbedMessageId) {
+      cancelMessageEditMode();
+    }
+  } catch (err) {
+    alert('Error dispatching message: ' + err.message);
+  } finally {
+    if (dispatchBtn) {
+      dispatchBtn.disabled = false;
+      dispatchBtn.innerHTML = origBtnText;
+    }
+  }
+}
+
+// --- JSON Export & Import ---
+function handleExportEmbedJson() {
+  const content = document.getElementById('embed-content')?.value || '';
+  const authorName = document.getElementById('embed-author-name')?.value || '';
+  const authorIcon = document.getElementById('embed-author-icon')?.value || '';
+  const authorUrl = document.getElementById('embed-author-url')?.value || '';
+  const title = document.getElementById('embed-title')?.value || '';
+  const titleUrl = document.getElementById('embed-title-url')?.value || '';
+  const description = document.getElementById('embed-description')?.value || '';
+  const color = document.getElementById('embed-color-hex')?.value || '#5865f2';
+  const thumbnailUrl = document.getElementById('embed-thumbnail-url')?.value || '';
+  const imageUrl = document.getElementById('embed-image-url')?.value || '';
+  const footerText = document.getElementById('embed-footer-text')?.value || '';
+  const footerIcon = document.getElementById('embed-footer-icon')?.value || '';
+  const showTimestamp = document.getElementById('embed-timestamp-toggle')?.checked ?? true;
+
+  const colorInt = parseInt(color.replace('#', ''), 16) || 0x5865f2;
+
+  const payload = {
+    content: content || undefined,
+    embeds: [{
+      title: title || undefined,
+      url: titleUrl || undefined,
+      description: description || undefined,
+      color: colorInt,
+      author: authorName ? { name: authorName, icon_url: authorIcon || undefined, url: authorUrl || undefined } : undefined,
+      thumbnail: thumbnailUrl ? { url: thumbnailUrl } : undefined,
+      image: imageUrl ? { url: imageUrl } : undefined,
+      footer: footerText ? { text: footerText, icon_url: footerIcon || undefined } : undefined,
+      timestamp: showTimestamp ? new Date().toISOString() : undefined,
+      fields: embedFieldsList.map(f => ({ name: f.name, value: f.value, inline: f.inline }))
+    }]
+  };
+
+  const jsonStr = JSON.stringify(payload, null, 2);
+  navigator.clipboard.writeText(jsonStr).then(() => {
+    alert('Discord / Discohook JSON copied to clipboard!');
+  }).catch(() => {
+    prompt('Copy JSON below:', jsonStr);
+  });
+}
+
+function openJsonImportModal() {
+  const raw = prompt('Paste Discord / Discohook Embed JSON here:');
+  if (!raw) return;
+
+  try {
+    const data = JSON.parse(raw);
+    const embed = (Array.isArray(data.embeds) && data.embeds[0]) ? data.embeds[0] : data;
+
+    if (data.content) document.getElementById('embed-content').value = data.content;
+    if (embed.title) document.getElementById('embed-title').value = embed.title;
+    if (embed.url) document.getElementById('embed-title-url').value = embed.url;
+    if (embed.description) document.getElementById('embed-description').value = embed.description;
+    if (embed.color) {
+      const hex = typeof embed.color === 'number' ? '#' + embed.color.toString(16).padStart(6, '0') : embed.color;
+      setEmbedColor(hex);
+    }
+    if (embed.author?.name) document.getElementById('embed-author-name').value = embed.author.name;
+    if (embed.author?.icon_url || embed.author?.iconURL) document.getElementById('embed-author-icon').value = embed.author.icon_url || embed.author.iconURL;
+    if (embed.author?.url) document.getElementById('embed-author-url').value = embed.author.url;
+    if (embed.thumbnail?.url) document.getElementById('embed-thumbnail-url').value = embed.thumbnail.url;
+    if (embed.image?.url) document.getElementById('embed-image-url').value = embed.image.url;
+    if (embed.footer?.text) document.getElementById('embed-footer-text').value = embed.footer.text;
+    if (embed.footer?.icon_url || embed.footer?.iconURL) document.getElementById('embed-footer-icon').value = embed.footer.icon_url || embed.footer.iconURL;
+
+    if (Array.isArray(embed.fields)) {
+      embedFieldsList = embed.fields.map((f, i) => ({
+        id: 'f_' + i + '_' + Math.random().toString(36).substring(7),
+        name: f.name || '',
+        value: f.value || '',
+        inline: Boolean(f.inline)
+      }));
+      renderEmbedFieldsList();
+    }
+
+    updateEmbedPreview();
+    alert('Embed JSON imported successfully!');
+  } catch (err) {
+    alert('Invalid JSON: ' + err.message);
+  }
+}
+
+// ==========================================================================
+// 🎭 VISUAL ROLE PANELS STUDIO ENGINE
+// ==========================================================================
+
+let rolePanelOptionItems = [];
+
+async function loadRolePanelsList() {
+  const container = document.getElementById('rp-published-table-container');
+  if (!container || !activeGuildId) return;
+
+  try {
+    const res = await fetch(`/api/guilds/${activeGuildId}/role-panels`);
+    const data = await res.json();
+    const panels = data.panels || [];
+
+    if (panels.length === 0) {
+      container.innerHTML = `<div style="color: var(--text-faint); font-size: 13px; padding: 6px 0;">No active role panels created for this server yet. Create one above!</div>`;
+      return;
+    }
+
+    container.innerHTML = `
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Slug</th>
+            <th>Title</th>
+            <th>Style</th>
+            <th>Options</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${panels.map(p => `
+            <tr>
+              <td><code>${escapeHtml(p.name)}</code></td>
+              <td><strong>${escapeHtml(p.title || p.name)}</strong></td>
+              <td><span class="badge-status-active">${escapeHtml(p.panel_display_mode || 'BUTTONS')}</span></td>
+              <td>${p.options?.length || p.option_count || 0} Roles</td>
+              <td>
+                <button type="button" class="btn btn-outline btn-sm" style="color: var(--accent-red); padding: 2px 8px;" onclick="handleDeleteRolePanel('${escapeHtml(p.name)}')">Delete</button>
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+  } catch (e) {
+    container.innerHTML = `<div style="color: var(--accent-red); font-size: 13px;">Failed to load role panels.</div>`;
+  }
+}
+
+function handleAddRolePanelOption(opt = null) {
+  if (rolePanelOptionItems.length >= 25) {
+    alert('Maximum 25 roles per panel.');
+    return;
+  }
+
+  const optId = 'ro_' + Math.random().toString(36).substring(7);
+  rolePanelOptionItems.push(opt || {
+    id: optId,
+    roleId: '',
+    label: 'Notification Alert',
+    emoji: '🔔',
+    buttonColor: '#5865f2'
+  });
+  renderRolePanelOptions();
+  updateRolePanelPreview();
+}
+
+function handleRemoveRolePanelOption(optId) {
+  rolePanelOptionItems = rolePanelOptionItems.filter(item => item.id !== optId);
+  renderRolePanelOptions();
+  updateRolePanelPreview();
+}
+
+function handleRoleOptionChange(optId, key, value) {
+  const item = rolePanelOptionItems.find(o => o.id === optId);
+  if (item) {
+    item[key] = value;
+    updateRolePanelPreview();
+  }
+}
+
+function renderRolePanelOptions() {
+  const container = document.getElementById('rp-options-container');
+  if (!container) return;
+
+  if (rolePanelOptionItems.length === 0) {
+    container.innerHTML = `<div style="color: var(--text-faint); font-size: 13px; padding: 6px 0;">No role options added. Click "+ Add Role Option".</div>`;
+    return;
+  }
+
+  const roleOptionsHtml = (selectedId) => {
+    let html = `<option value="">-- Select Role --</option>`;
+    if (currentGuildConfig?.roles) {
+      currentGuildConfig.roles.forEach(r => {
+        html += `<option value="${escapeHtml(r.id)}" ${r.id === selectedId ? 'selected' : ''}>@${escapeHtml(r.name)}</option>`;
+      });
+    }
+    return html;
+  };
+
+  container.innerHTML = rolePanelOptionItems.map(item => `
+    <div class="role-option-card" data-opt-id="${item.id}">
+      <div>
+        <select class="form-select role-select" style="font-size: 13px;" onchange="handleRoleOptionChange('${item.id}', 'roleId', this.value)">
+          ${roleOptionsHtml(item.roleId)}
+        </select>
+      </div>
+      <div>
+        <input type="text" class="form-input" style="font-size: 13px;" placeholder="Label" value="${escapeHtml(item.label)}" oninput="handleRoleOptionChange('${item.id}', 'label', this.value)">
+      </div>
+      <div>
+        <input type="text" class="form-input" style="font-size: 13px; text-align: center;" placeholder="🔔" value="${escapeHtml(item.emoji || '')}" oninput="handleRoleOptionChange('${item.id}', 'emoji', this.value)">
+      </div>
+      <div>
+        <select class="form-select" style="font-size: 12px;" onchange="handleRoleOptionChange('${item.id}', 'buttonColor', this.value)">
+          <option value="#5865f2" ${item.buttonColor === '#5865f2' ? 'selected' : ''}>Blurple</option>
+          <option value="#248046" ${item.buttonColor === '#248046' ? 'selected' : ''}>Green</option>
+          <option value="#da373c" ${item.buttonColor === '#da373c' ? 'selected' : ''}>Red</option>
+          <option value="#4e5058" ${item.buttonColor === '#4e5058' ? 'selected' : ''}>Gray</option>
+        </select>
+      </div>
+      <div>
+        <button type="button" class="btn btn-outline btn-sm" style="color: var(--accent-red); padding: 4px 8px;" onclick="handleRemoveRolePanelOption('${item.id}')">&times;</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function updateRolePanelPreview() {
+  const title = document.getElementById('rp-title')?.value || '📢 Stream & Announcement Roles';
+  const desc = document.getElementById('rp-description')?.value || 'Click a button below to toggle your notification alerts.';
+  const color = document.getElementById('rp-color')?.value || '#5865f2';
+  const displayMode = document.getElementById('rp-display-mode')?.value || 'BUTTONS';
+
+  const titleEl = document.getElementById('rp-sim-title');
+  const descEl = document.getElementById('rp-sim-description');
+  const cardEl = document.getElementById('rp-sim-embed-card');
+  const compEl = document.getElementById('rp-sim-components');
+
+  if (titleEl) titleEl.textContent = title;
+  if (descEl) descEl.textContent = desc;
+  if (cardEl) cardEl.style.borderLeftColor = color;
+
+  if (compEl) {
+    if (displayMode === 'DROPDOWN') {
+      compEl.innerHTML = `
+        <div class="d-select-menu">
+          <span>Choose a role to toggle...</span>
+          <span>▼</span>
+        </div>
+      `;
+    } else {
+      if (rolePanelOptionItems.length === 0) {
+        compEl.innerHTML = `
+          <button type="button" class="d-btn d-btn-primary">🔔 Stream Alerts</button>
+          <button type="button" class="d-btn d-btn-success">🎉 Giveaways</button>
+        `;
+      } else {
+        compEl.innerHTML = rolePanelOptionItems.map(item => {
+          let btnClass = 'd-btn-primary';
+          if (item.buttonColor === '#248046') btnClass = 'd-btn-success';
+          else if (item.buttonColor === '#da373c') btnClass = 'd-btn-danger';
+          else if (item.buttonColor === '#4e5058') btnClass = 'd-btn-secondary';
+          return `<button type="button" class="d-btn ${btnClass}">${escapeHtml(item.emoji || '')} ${escapeHtml(item.label || 'Role')}</button>`;
+        }).join('');
+      }
+    }
+  }
+}
+
+async function handlePublishRolePanel() {
+  const name = document.getElementById('rp-name')?.value;
+  const title = document.getElementById('rp-title')?.value;
+  const description = document.getElementById('rp-description')?.value;
+  const mode = document.getElementById('rp-mode')?.value;
+  const displayMode = document.getElementById('rp-display-mode')?.value;
+  const color = document.getElementById('rp-color')?.value;
+  const headerImageUrl = document.getElementById('rp-header-image')?.value;
+  const channelId = document.getElementById('rp-target-channel')?.value;
+
+  if (!name || !title) {
+    alert('Please provide a panel slug identifier and title.');
+    return;
+  }
+
+  try {
+    const res = await fetch(`/api/guilds/${activeGuildId}/role-panels`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name,
+        title,
+        description,
+        mode,
+        displayMode,
+        color,
+        headerImageUrl: headerImageUrl || null,
+        channelId: channelId || null,
+        options: rolePanelOptionItems
+      })
+    });
+
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || 'Failed to publish role panel');
+
+    alert(`Role panel "${title}" successfully configured and saved!`);
+    loadRolePanelsList();
+  } catch (e) {
+    alert('Error: ' + e.message);
+  }
+}
+
+async function handleDeleteRolePanel(panelName) {
+  if (!confirm(`Are you sure you want to delete role panel "${panelName}"?`)) return;
+
+  try {
+    const res = await fetch(`/api/guilds/${activeGuildId}/role-panels/${encodeURIComponent(panelName)}`, {
+      method: 'DELETE'
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || 'Failed to delete panel');
+    loadRolePanelsList();
+  } catch (e) {
+    alert('Error deleting panel: ' + e.message);
+  }
+}
+
+// ==========================================================================
+// ⚡ CUSTOM COMMANDS STUDIO ENGINE
+// ==========================================================================
+
+async function loadCustomCommandsList() {
+  const container = document.getElementById('cc-table-container');
+  if (!container || !activeGuildId) return;
+
+  try {
+    const res = await fetch(`/api/guilds/${activeGuildId}/custom-commands`);
+    const data = await res.json();
+    const commands = data.commands || [];
+
+    if (commands.length === 0) {
+      container.innerHTML = `<div style="color: var(--text-faint); font-size: 13px; padding: 6px 0;">No custom commands created yet. Create your first trigger above!</div>`;
+      return;
+    }
+
+    container.innerHTML = `
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Trigger</th>
+            <th>Type</th>
+            <th>Response Preview</th>
+            <th>Uses</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${commands.map(cmd => `
+            <tr>
+              <td><code>!${escapeHtml(cmd.name)}</code></td>
+              <td><span class="badge-status-active">${cmd.embed_enabled ? 'Embed' : 'Text'}</span></td>
+              <td style="max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(cmd.response || cmd.embed_description || '')}</td>
+              <td>${cmd.usage_count || 0}</td>
+              <td>
+                <div style="display: flex; gap: 6px;">
+                  <button type="button" class="btn btn-outline btn-sm" style="padding: 2px 8px;" onclick="handleEditCustomCommand('${escapeHtml(cmd.name)}', '${escapeHtml(cmd.response || '')}', '${escapeHtml(cmd.embed_title || '')}', '${escapeHtml(cmd.embed_color || '#5865f2')}', ${Boolean(cmd.embed_enabled)})">Edit</button>
+                  <button type="button" class="btn btn-outline btn-sm" style="color: var(--accent-red); padding: 2px 8px;" onclick="handleDeleteCustomCommand('${escapeHtml(cmd.name)}')">Delete</button>
+                </div>
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+  } catch (e) {
+    container.innerHTML = `<div style="color: var(--accent-red); font-size: 13px;">Failed to load custom commands.</div>`;
+  }
+}
+
+function insertVariableTag(tag) {
+  const textarea = document.getElementById('cc-response');
+  if (!textarea) return;
+
+  const start = textarea.selectionStart || 0;
+  const end = textarea.selectionEnd || 0;
+  const current = textarea.value;
+
+  textarea.value = current.substring(0, start) + tag + current.substring(end);
+  textarea.focus();
+  textarea.selectionStart = textarea.selectionEnd = start + tag.length;
+
+  updateCustomCommandPreview();
+}
+
+function updateCustomCommandPreview() {
+  const response = document.getElementById('cc-response')?.value || 'Hello {user}! Check out our server rules in {channel}.';
+  const simBox = document.getElementById('cc-sim-output');
+  if (!simBox) return;
+
+  let simulated = escapeHtml(response)
+    .replaceAll('{user}', '<span class="mention">@SlickPickleNick</span>')
+    .replaceAll('{username}', 'SlickPickleNick')
+    .replaceAll('{server}', 'Slick Community')
+    .replaceAll('{channel}', '<span class="mention">#general-chat</span>')
+    .replaceAll('{memberCount}', '1,420')
+    .replaceAll('{trigger}', '!rules')
+    .replaceAll('{uses}', '42');
+
+  simBox.innerHTML = simulated;
+}
+
+function handleCustomCommandModeChange(mode) {
+  const embedOpts = document.getElementById('cc-embed-options');
+  if (embedOpts) {
+    embedOpts.style.display = mode === 'embed' ? 'grid' : 'none';
+  }
+}
+
+function resetCustomCommandForm() {
+  document.getElementById('cc-name').value = '';
+  document.getElementById('cc-response').value = '';
+  document.getElementById('cc-mode').value = 'text';
+  document.getElementById('cc-embed-title').value = '';
+  document.getElementById('cc-embed-color').value = '#5865f2';
+  handleCustomCommandModeChange('text');
+  updateCustomCommandPreview();
+  const heading = document.getElementById('cc-editor-heading');
+  if (heading) heading.textContent = '➕ Add / Edit Custom Command';
+}
+
+function handleEditCustomCommand(name, response, embedTitle, embedColor, embedEnabled) {
+  document.getElementById('cc-name').value = name;
+  document.getElementById('cc-response').value = response;
+  document.getElementById('cc-mode').value = embedEnabled ? 'embed' : 'text';
+  document.getElementById('cc-embed-title').value = embedTitle || '';
+  document.getElementById('cc-embed-color').value = embedColor || '#5865f2';
+  handleCustomCommandModeChange(embedEnabled ? 'embed' : 'text');
+  updateCustomCommandPreview();
+
+  const heading = document.getElementById('cc-editor-heading');
+  if (heading) heading.textContent = `✏️ Edit Custom Command !${name}`;
+  window.scrollTo({ top: document.getElementById('cc-name').offsetTop - 100, behavior: 'smooth' });
+}
+
+async function handleSaveCustomCommand() {
+  const name = document.getElementById('cc-name')?.value;
+  const response = document.getElementById('cc-response')?.value;
+  const mode = document.getElementById('cc-mode')?.value;
+  const embedTitle = document.getElementById('cc-embed-title')?.value;
+  const embedColor = document.getElementById('cc-embed-color')?.value;
+
+  if (!name || !response) {
+    alert('Please provide a command trigger name and response.');
+    return;
+  }
+
+  try {
+    const res = await fetch(`/api/guilds/${activeGuildId}/custom-commands`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name,
+        response,
+        embedEnabled: mode === 'embed',
+        embedTitle: mode === 'embed' ? embedTitle : null,
+        embedColor: mode === 'embed' ? embedColor : null
+      })
+    });
+
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || 'Failed to save custom command');
+
+    alert(`Custom command !${name} saved successfully!`);
+    resetCustomCommandForm();
+    loadCustomCommandsList();
+  } catch (e) {
+    alert('Error saving command: ' + e.message);
+  }
+}
+
+async function handleDeleteCustomCommand(name) {
+  if (!confirm(`Delete custom command !${name}?`)) return;
+
+  try {
+    const res = await fetch(`/api/guilds/${activeGuildId}/custom-commands/${encodeURIComponent(name)}`, {
+      method: 'DELETE'
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || 'Failed to delete command');
+    loadCustomCommandsList();
+  } catch (e) {
+    alert('Error: ' + e.message);
+  }
+}
+
+// ==========================================================================
+// 📈 SERVER ANALYTICS & PEAK ACTIVITY HEATMAPS ENGINE
+// ==========================================================================
+
+let cachedAnalyticsData = null;
+let currentAnalyticsRange = '24h';
+
+async function loadServerAnalytics() {
+  if (!activeGuildId) return;
+
+  try {
+    const res = await fetch(`/api/guilds/${activeGuildId}/analytics`);
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || 'Failed to fetch analytics');
+
+    cachedAnalyticsData = data;
+
+    // 1. Metric Cards
+    const m = data.summary || {};
+    document.getElementById('analytics-metric-msgs').textContent = (m.messages24h || 0).toLocaleString();
+    document.getElementById('analytics-metric-voice').textContent = `${m.voiceHours24h || 0} hrs`;
+    document.getElementById('analytics-metric-members').textContent = (m.activeMembers || 0).toLocaleString();
+    document.getElementById('analytics-metric-health').textContent = `${m.healthScore || 94}%`;
+
+    // 2. SVG Area Chart
+    renderAnalyticsSvgChart(data, currentAnalyticsRange);
+
+    // 3. Heatmap
+    renderAnalyticsHeatmap(data.heatmap || []);
+
+    // 4. Top Channels & Member Flow
+    renderAnalyticsTopChannels(data.topChannels || []);
+    renderAnalyticsMemberFlow(data.memberFlow || []);
+  } catch (e) {
+    console.error('Analytics load error:', e);
+  }
+}
+
+function switchAnalyticsRange(range) {
+  currentAnalyticsRange = range;
+  document.getElementById('btn-chart-24h')?.classList.toggle('active', range === '24h');
+  document.getElementById('btn-chart-7d')?.classList.toggle('active', range === '7d');
+
+  if (cachedAnalyticsData) {
+    renderAnalyticsSvgChart(cachedAnalyticsData, range);
+  }
+}
+
+function renderAnalyticsSvgChart(data, range) {
+  const svg = document.getElementById('analytics-svg-chart');
+  if (!svg) return;
+
+  const points = range === '24h' ? (data.velocity24h || []) : (data.velocity7d || []);
+  if (points.length === 0) return;
+
+  const width = 800;
+  const height = 240;
+  const padLeft = 40;
+  const padRight = 20;
+  const padTop = 20;
+  const padBottom = 40;
+
+  const chartW = width - padLeft - padRight;
+  const chartH = height - padTop - padBottom;
+
+  const maxVal = Math.max(...points.map(p => p.messages), 50);
+
+  // Build message points & voice points
+  const msgCoords = points.map((p, i) => {
+    const x = padLeft + (i / (points.length - 1)) * chartW;
+    const y = padTop + chartH - (p.messages / maxVal) * chartH;
+    return { x, y, val: p.messages, label: range === '24h' ? p.hour : p.day };
+  });
+
+  const pathD = msgCoords.reduce((acc, pt, i) => `${acc} ${i === 0 ? 'M' : 'L'} ${pt.x.toFixed(1)} ${pt.y.toFixed(1)}`, '');
+  const areaD = `${pathD} L ${msgCoords[msgCoords.length - 1].x} ${padTop + chartH} L ${padLeft} ${padTop + chartH} Z`;
+
+  svg.innerHTML = `
+    <defs>
+      <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#3b82f6" stop-opacity="0.4"/>
+        <stop offset="100%" stop-color="#3b82f6" stop-opacity="0.0"/>
+      </linearGradient>
+    </defs>
+
+    <!-- Grid Horizontal Lines -->
+    <line x1="${padLeft}" y1="${padTop}" x2="${width - padRight}" y2="${padTop}" stroke="#2e2b27" stroke-dasharray="3,3"/>
+    <line x1="${padLeft}" y1="${padTop + chartH * 0.5}" x2="${width - padRight}" y2="${padTop + chartH * 0.5}" stroke="#2e2b27" stroke-dasharray="3,3"/>
+    <line x1="${padLeft}" y1="${padTop + chartH}" x2="${width - padRight}" y2="${padTop + chartH}" stroke="#44403c"/>
+
+    <!-- Area Fill -->
+    <path d="${areaD}" fill="url(#areaGrad)"/>
+
+    <!-- Smooth Velocity Line -->
+    <path d="${pathD}" fill="none" stroke="#3b82f6" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+
+    <!-- Data Nodes & Labels -->
+    ${msgCoords.filter((_, i) => i % (range === '24h' ? 3 : 1) === 0).map(pt => `
+      <circle cx="${pt.x.toFixed(1)}" cy="${pt.y.toFixed(1)}" r="4" fill="#3b82f6" stroke="#0c0a09" stroke-width="2">
+        <title>${pt.label}: ${pt.val} messages</title>
+      </circle>
+      <text x="${pt.x.toFixed(1)}" y="${height - 15}" font-size="10" fill="#a8a29e" text-anchor="middle">${pt.label}</text>
+    `).join('')}
+  `;
+}
+
+function renderAnalyticsHeatmap(heatmapData) {
+  const container = document.getElementById('analytics-heatmap-grid');
+  if (!container) return;
+
+  const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  let html = '';
+
+  for (let day = 0; day < 7; day++) {
+    html += `<div class="heatmap-label">${dayLabels[day]}</div>`;
+    for (let hour = 0; hour < 24; hour++) {
+      const item = heatmapData.find(h => h.day === day && h.hour === hour) || { intensity: 1, count: 5 };
+      html += `<div class="heatmap-cell lvl-${item.intensity}" title="${dayLabels[day]} ${hour.toString().padStart(2, '0')}:00 &bull; ${item.count} interactions"></div>`;
+    }
+  }
+
+  container.innerHTML = html;
+}
+
+function renderAnalyticsTopChannels(channels) {
+  const container = document.getElementById('analytics-top-channels-list');
+  if (!container) return;
+
+  container.innerHTML = channels.map(ch => `
+    <div class="channel-bar-item">
+      <div style="width: 140px; font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+        ${ch.type === 'voice' ? '🔊' : '#'} ${escapeHtml(ch.name)}
+      </div>
+      <div class="channel-bar-track">
+        <div class="channel-bar-fill" style="width: ${ch.activityPercent}%;"></div>
+      </div>
+      <div style="width: 50px; text-align: right; font-size: 12px; font-weight: 600; color: var(--text-muted);">
+        ${ch.activityPercent}%
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderAnalyticsMemberFlow(flow) {
+  const container = document.getElementById('analytics-member-flow-list');
+  if (!container) return;
+
+  container.innerHTML = `
+    <div style="display: flex; flex-direction: column; gap: 8px;">
+      ${flow.map(f => `
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border-subtle); font-size: 13px;">
+          <span style="font-weight: 600; width: 40px;">${f.day}</span>
+          <span style="color: var(--accent-emerald);">+${f.joined} Joins</span>
+          <span style="color: var(--accent-red);">-${f.left} Leaves</span>
+          <span style="font-weight: 700; color: ${f.net >= 0 ? 'var(--accent-emerald)' : 'var(--accent-red)'}; width: 60px; text-align: right;">
+            ${f.net >= 0 ? '+' : ''}${f.net} Net
+          </span>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
