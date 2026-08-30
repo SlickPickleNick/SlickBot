@@ -12,8 +12,9 @@ async function deployCommands(options = {}) {
     throw new Error(`Invalid command payload:\n- ${validationErrors.join('\n- ')}`);
   }
 
-  const isGlobal = options.global || process.argv.includes('--global') || (!env.DISCORD_GUILD_ID && !options.guildId);
-  const targetGuildId = options.guildId || (!isGlobal ? env.DISCORD_GUILD_ID : null);
+  // Multi-server mode: default to global deployment unless explicitly specified with options.guildId or --guild
+  const targetGuildId = options.guildId || (process.argv.includes('--guild') ? process.argv[process.argv.indexOf('--guild') + 1] : null);
+  const isGlobal = options.global ?? (targetGuildId ? false : true);
   const clearGuildId = options.clearGuildId || (process.argv.includes('--clear-guild') ? process.argv[process.argv.indexOf('--clear-guild') + 1] : null);
 
   // If requested, clear commands from a specific guild
@@ -23,11 +24,11 @@ async function deployCommands(options = {}) {
   }
 
   if (isGlobal) {
-    // If DISCORD_GUILD_ID is set in environment, clear legacy guild commands to prevent duplicate entries
-    if (env.DISCORD_GUILD_ID && (options.clearLegacyGuild !== false || process.argv.includes('--clear-legacy'))) {
+    // If DISCORD_GUILD_ID is set in environment, clear legacy guild commands to prevent command shadowing
+    if (env.DISCORD_GUILD_ID) {
       try {
         await rest.put(Routes.applicationGuildCommands(env.DISCORD_CLIENT_ID, env.DISCORD_GUILD_ID), { body: [] });
-        console.log(`Purged legacy guild commands from ${env.DISCORD_GUILD_ID} to prevent duplicates.`);
+        console.log(`Purged legacy guild commands from ${env.DISCORD_GUILD_ID} to prevent command shadowing.`);
       } catch (purgeErr) {
         console.warn(`Note: Could not clear legacy guild commands for ${env.DISCORD_GUILD_ID}:`, purgeErr.message);
       }
@@ -36,7 +37,7 @@ async function deployCommands(options = {}) {
     await rest.put(Routes.applicationCommands(env.DISCORD_CLIENT_ID), {
       body: payload
     });
-    console.log(`Registered ${payload.length} global command(s). (Global commands propagate across Discord within a few minutes)`);
+    console.log(`Registered ${payload.length} global command(s). (Available across all servers)`);
     return { global: true, count: payload.length };
   }
 
