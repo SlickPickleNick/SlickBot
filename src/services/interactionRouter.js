@@ -1,4 +1,4 @@
-const { ActionRowBuilder, MessageFlags, UserSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
+const { ActionRowBuilder, AttachmentBuilder, MessageFlags, UserSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 const { CustomIds } = require('../modules/ui/customIds');
 const { ActionKeys } = require('../modules/permissions/actionKeys');
 const { ModuleKeys, isCoreModule } = require('../modules/moduleRegistry');

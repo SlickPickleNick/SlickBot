@@ -12,7 +12,6 @@ async function deployCommands(options = {}) {
     throw new Error(`Invalid command payload:\n- ${validationErrors.join('\n- ')}`);
   }
 
-  const primaryGuildId = options.guildId || env.DISCORD_GUILD_ID || (process.argv.includes('--guild') ? process.argv[process.argv.indexOf('--guild') + 1] : null);
   const clearGuildId = options.clearGuildId || (process.argv.includes('--clear-guild') ? process.argv[process.argv.indexOf('--clear-guild') + 1] : null);
 
   // If requested, clear commands from a specific guild
@@ -21,27 +20,23 @@ async function deployCommands(options = {}) {
     console.log(`Cleared all guild commands for ${clearGuildId}.`);
   }
 
-  // 1. Deploy Global Commands (covers all servers in the multi-server network)
-  await rest.put(Routes.applicationCommands(env.DISCORD_CLIENT_ID), {
-    body: payload
-  });
-  console.log(`Registered ${payload.length} global command(s). (Multi-server coverage)`);
-
-  // 2. Also deploy directly to the primary/initial guild for INSTANT 0-delay availability
-  let deployedGuildId = null;
-  if (primaryGuildId) {
+  // If DISCORD_GUILD_ID is configured, purge legacy guild commands to prevent shadowing global commands
+  if (env.DISCORD_GUILD_ID && options.purgeLegacyGuild !== false) {
     try {
-      await rest.put(Routes.applicationGuildCommands(env.DISCORD_CLIENT_ID, primaryGuildId), {
-        body: payload
-      });
-      console.log(`Registered ${payload.length} guild command(s) for primary guild ${primaryGuildId} (instant 0-delay updates).`);
-      deployedGuildId = primaryGuildId;
-    } catch (guildErr) {
-      console.warn(`Note: Could not deploy direct guild commands to ${primaryGuildId}:`, guildErr.message);
+      await rest.put(Routes.applicationGuildCommands(env.DISCORD_CLIENT_ID, env.DISCORD_GUILD_ID), { body: [] });
+      console.log(`Purged legacy guild commands from ${env.DISCORD_GUILD_ID} to enable clean global command display.`);
+    } catch (purgeErr) {
+      console.warn(`Note: Could not clear legacy guild commands for ${env.DISCORD_GUILD_ID}:`, purgeErr.message);
     }
   }
 
-  return { global: true, count: payload.length, guildId: deployedGuildId };
+  // Deploy Global Commands across all servers
+  await rest.put(Routes.applicationCommands(env.DISCORD_CLIENT_ID), {
+    body: payload
+  });
+  console.log(`Registered ${payload.length} global command(s) across all servers.`);
+
+  return { global: true, count: payload.length };
 }
 
 if (require.main === module) {
