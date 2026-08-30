@@ -1650,7 +1650,23 @@ async function initDatabase() {
   await query(`CREATE INDEX IF NOT EXISTS idx_moderation_cases_guild_number ON moderation_cases(guild_id, case_number);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_user_notes_guild_target ON user_notes(guild_id, target_user_id, created_at DESC);`);
 
+  // Deduplicate case-variant entries before lowercasing to prevent unique constraint conflicts
+  await query(`
+    DELETE FROM log_module_settings a
+    USING log_module_settings b
+    WHERE a.guild_id = b.guild_id
+      AND LOWER(a.module_key) = LOWER(b.module_key)
+      AND (a.updated_at < b.updated_at OR (a.updated_at = b.updated_at AND a.id < b.id));
+  `).catch(() => {});
   await query(`UPDATE log_module_settings SET module_key = LOWER(module_key) WHERE module_key != LOWER(module_key);`).catch(() => {});
+
+  await query(`
+    DELETE FROM log_settings a
+    USING log_settings b
+    WHERE a.guild_id = b.guild_id
+      AND LOWER(a.event_key) = LOWER(b.event_key)
+      AND (a.updated_at < b.updated_at OR (a.updated_at = b.updated_at AND a.id < b.id));
+  `).catch(() => {});
   await query(`UPDATE log_settings SET event_key = LOWER(event_key) WHERE event_key != LOWER(event_key);`).catch(() => {});
 
 

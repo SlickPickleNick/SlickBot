@@ -1497,16 +1497,16 @@ async function handleDashboardRequest(req, res, client = null) {
               await configAuditService.setConfigAuditChannel(guildId, configAuditChannelId);
             }
             if (logMsgChannelId) {
-              await query(`INSERT INTO log_module_settings (guild_id, module_key, channel_id, enabled, updated_at) VALUES ($1, 'MESSAGE', $2, true, NOW()) ON CONFLICT (guild_id, module_key) DO UPDATE SET channel_id = EXCLUDED.channel_id, updated_at = NOW()`, [guildId, logMsgChannelId]).catch(() => {});
+              await query(`INSERT INTO log_module_settings (guild_id, module_key, channel_id, enabled, updated_at) VALUES ($1, 'message', $2, true, NOW()) ON CONFLICT (guild_id, module_key) DO UPDATE SET channel_id = EXCLUDED.channel_id, updated_at = NOW()`, [guildId, logMsgChannelId]).catch(() => {});
             }
             if (logMemberChannelId) {
-              await query(`INSERT INTO log_module_settings (guild_id, module_key, channel_id, enabled, updated_at) VALUES ($1, 'MEMBER', $2, true, NOW()) ON CONFLICT (guild_id, module_key) DO UPDATE SET channel_id = EXCLUDED.channel_id, updated_at = NOW()`, [guildId, logMemberChannelId]).catch(() => {});
+              await query(`INSERT INTO log_module_settings (guild_id, module_key, channel_id, enabled, updated_at) VALUES ($1, 'member', $2, true, NOW()) ON CONFLICT (guild_id, module_key) DO UPDATE SET channel_id = EXCLUDED.channel_id, updated_at = NOW()`, [guildId, logMemberChannelId]).catch(() => {});
             }
             if (logVoiceChannelId) {
-              await query(`INSERT INTO log_module_settings (guild_id, module_key, channel_id, enabled, updated_at) VALUES ($1, 'VOICE', $2, true, NOW()) ON CONFLICT (guild_id, module_key) DO UPDATE SET channel_id = EXCLUDED.channel_id, updated_at = NOW()`, [guildId, logVoiceChannelId]).catch(() => {});
+              await query(`INSERT INTO log_module_settings (guild_id, module_key, channel_id, enabled, updated_at) VALUES ($1, 'voice', $2, true, NOW()) ON CONFLICT (guild_id, module_key) DO UPDATE SET channel_id = EXCLUDED.channel_id, updated_at = NOW()`, [guildId, logVoiceChannelId]).catch(() => {});
             }
             if (logRoleChannelId) {
-              await query(`INSERT INTO log_module_settings (guild_id, module_key, channel_id, enabled, updated_at) VALUES ($1, 'ROLE', $2, true, NOW()) ON CONFLICT (guild_id, module_key) DO UPDATE SET channel_id = EXCLUDED.channel_id, updated_at = NOW()`, [guildId, logRoleChannelId]).catch(() => {});
+              await query(`INSERT INTO log_module_settings (guild_id, module_key, channel_id, enabled, updated_at) VALUES ($1, 'role', $2, true, NOW()) ON CONFLICT (guild_id, module_key) DO UPDATE SET channel_id = EXCLUDED.channel_id, updated_at = NOW()`, [guildId, logRoleChannelId]).catch(() => {});
             }
             if (statsMemberChannelId || statsBotChannelId) {
               await query(`INSERT INTO server_stats_configs (guild_id, member_channel_id, bot_channel_id, enabled, updated_at) VALUES ($1, $2, $3, true, NOW()) ON CONFLICT (guild_id) DO UPDATE SET member_channel_id = EXCLUDED.member_channel_id, bot_channel_id = EXCLUDED.bot_channel_id, updated_at = NOW()`, [guildId, statsMemberChannelId || null, statsBotChannelId || null]).catch(() => {});
@@ -1731,16 +1731,16 @@ async function handleDashboardRequest(req, res, client = null) {
             await configAuditService.setConfigAuditChannel(guildId, s.logging.config_audit_channel_id).catch(() => {});
           }
           if (s.logging.log_msg_channel_id) {
-            await query(`INSERT INTO log_module_settings (guild_id, module_key, channel_id, enabled, updated_at) VALUES ($1, 'MESSAGE', $2, true, NOW()) ON CONFLICT (guild_id, module_key) DO UPDATE SET channel_id = EXCLUDED.channel_id, updated_at = NOW()`, [guildId, s.logging.log_msg_channel_id]).catch(() => {});
+            await query(`INSERT INTO log_module_settings (guild_id, module_key, channel_id, enabled, updated_at) VALUES ($1, 'message', $2, true, NOW()) ON CONFLICT (guild_id, module_key) DO UPDATE SET channel_id = EXCLUDED.channel_id, updated_at = NOW()`, [guildId, s.logging.log_msg_channel_id]).catch(() => {});
           }
           if (s.logging.log_member_channel_id) {
-            await query(`INSERT INTO log_module_settings (guild_id, module_key, channel_id, enabled, updated_at) VALUES ($1, 'MEMBER', $2, true, NOW()) ON CONFLICT (guild_id, module_key) DO UPDATE SET channel_id = EXCLUDED.channel_id, updated_at = NOW()`, [guildId, s.logging.log_member_channel_id]).catch(() => {});
+            await query(`INSERT INTO log_module_settings (guild_id, module_key, channel_id, enabled, updated_at) VALUES ($1, 'member', $2, true, NOW()) ON CONFLICT (guild_id, module_key) DO UPDATE SET channel_id = EXCLUDED.channel_id, updated_at = NOW()`, [guildId, s.logging.log_member_channel_id]).catch(() => {});
           }
           if (s.logging.log_voice_channel_id) {
-            await query(`INSERT INTO log_module_settings (guild_id, module_key, channel_id, enabled, updated_at) VALUES ($1, 'VOICE', $2, true, NOW()) ON CONFLICT (guild_id, module_key) DO UPDATE SET channel_id = EXCLUDED.channel_id, updated_at = NOW()`, [guildId, s.logging.log_voice_channel_id]).catch(() => {});
+            await query(`INSERT INTO log_module_settings (guild_id, module_key, channel_id, enabled, updated_at) VALUES ($1, 'voice', $2, true, NOW()) ON CONFLICT (guild_id, module_key) DO UPDATE SET channel_id = EXCLUDED.channel_id, updated_at = NOW()`, [guildId, s.logging.log_voice_channel_id]).catch(() => {});
           }
           if (s.logging.log_role_channel_id) {
-            await query(`INSERT INTO log_module_settings (guild_id, module_key, channel_id, enabled, updated_at) VALUES ($1, 'ROLE', $2, true, NOW()) ON CONFLICT (guild_id, module_key) DO UPDATE SET channel_id = EXCLUDED.channel_id, updated_at = NOW()`, [guildId, s.logging.log_role_channel_id]).catch(() => {});
+            await query(`INSERT INTO log_module_settings (guild_id, module_key, channel_id, enabled, updated_at) VALUES ($1, 'role', $2, true, NOW()) ON CONFLICT (guild_id, module_key) DO UPDATE SET channel_id = EXCLUDED.channel_id, updated_at = NOW()`, [guildId, s.logging.log_role_channel_id]).catch(() => {});
           }
           if (s.logging.stats_member_channel_id || s.logging.stats_bot_channel_id) {
             await query(`INSERT INTO server_stats_configs (guild_id, member_channel_id, bot_channel_id, enabled, updated_at) VALUES ($1, $2, $3, true, NOW()) ON CONFLICT (guild_id) DO UPDATE SET member_channel_id = EXCLUDED.member_channel_id, bot_channel_id = EXCLUDED.bot_channel_id, updated_at = NOW()`, [guildId, s.logging.stats_member_channel_id || null, s.logging.stats_bot_channel_id || null]).catch(() => {});

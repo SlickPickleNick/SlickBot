@@ -226,6 +226,13 @@ client.once(Events.ClientReady, async (readyClient) => {
     }
   }
 
+  // Auto-Deploy Slash Commands on startup if enabled
+  if (shouldAutoDeployCommands) {
+    deployCommands({ global: !env.DISCORD_GUILD_ID, guildId: env.DISCORD_GUILD_ID || null })
+      .then((res) => console.log(`[AutoDeploy] Successfully deployed ${res.count} ${res.global ? 'global' : 'guild'} slash command(s).`))
+      .catch((err) => console.error('[AutoDeploy] Failed to deploy slash commands on startup:', err.message));
+  }
+
   // Command Deduplication: If running with global commands, sweep guilds to purge any leftover legacy guild-scoped commands
   if (!env.DISCORD_GUILD_ID) {
     for (const guild of readyClient.guilds.cache.values()) {

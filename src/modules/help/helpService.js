@@ -45,7 +45,9 @@ const MODULE_LABELS = Object.freeze({
   [ModuleKeys.CUSTOM_COMMANDS]: 'Custom Commands',
   [ModuleKeys.SCHEDULED_MESSAGES]: 'Scheduled Announcements',
   [ModuleKeys.BOT_UPDATES]: 'Bot Changelogs',
-  [ModuleKeys.SOCIAL_FEEDS]: 'Social Feeds'
+  [ModuleKeys.SOCIAL_FEEDS]: 'Social Feeds',
+  [ModuleKeys.STARBOARD]: 'Starboard',
+  [ModuleKeys.ANALYTICS]: 'Server Analytics & Pulse'
 });
 
 const HELP_CATEGORIES = Object.freeze([
@@ -604,6 +606,43 @@ const HELP_CATALOG = Object.freeze([
       '/automod blacklist-add pattern:"scam-link" match_type:"Exact Word Match" action:"Timeout Member & Delete"',
       '/automod whitelist-add category:"Role Exemption" value:@VIP',
       '/automod raid enabled:true join_threshold:8 join_seconds:10'
+    ]
+  },
+  {
+    name: 'starboard',
+    command: '/starboard',
+    syntax: '/starboard <setup|manager|set-channel|set-threshold|set-emoji|leaderboard|reset>',
+    description: 'Pins high-voted community messages to a dedicated showcase channel when reaction star thresholds are reached.',
+    category: 'COMMUNITY',
+    moduleKey: ModuleKeys.STARBOARD,
+    actionKey: ActionKeys.StarboardView,
+    level: PermissionLevels.EVERYONE,
+    examples: [
+      '/starboard setup',
+      '/starboard set-channel channel:#starboard',
+      '/starboard set-threshold count:5',
+      '/starboard leaderboard',
+      '/starboard manager'
+    ]
+  },
+  {
+    name: 'analytics',
+    command: '/analytics',
+    syntax: '/analytics <overview|activity|retention|channels|staff|setup|export|manager>',
+    description: 'Server engagement pulse, peak announcement heatmaps, retention funnel, channel ghost audits, and staff KPIs.',
+    category: 'CORE',
+    moduleKey: ModuleKeys.ANALYTICS,
+    actionKey: ActionKeys.AnalyticsView,
+    level: PermissionLevels.MODERATOR,
+    examples: [
+      '/analytics overview timeframe:30d',
+      '/analytics activity metric:messages',
+      '/analytics retention',
+      '/analytics channels sort:ghost',
+      '/analytics staff',
+      '/analytics setup digest_channel:#staff-reports frequency:Weekly',
+      '/analytics export format:csv',
+      '/analytics manager'
     ]
   }
 ]);
