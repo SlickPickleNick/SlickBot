@@ -151,6 +151,20 @@ const MODULE_CHECKS = {
     { name: 'Active reminders', sql: "SELECT COUNT(*)::int AS count FROM utility_reminders WHERE guild_id = $1 AND status = 'PENDING'" },
     { name: 'Active polls', sql: "SELECT COUNT(*)::int AS count FROM utility_polls WHERE guild_id = $1 AND status = 'OPEN'" },
     { name: 'AFK users', sql: 'SELECT COUNT(*)::int AS count FROM utility_afk_users WHERE guild_id = $1' }
+  ],
+  [ModuleKeys.AUTOMOD]: [
+    { name: 'AutoMod config', sql: 'SELECT COUNT(*)::int AS count FROM automod_configs WHERE guild_id = $1' },
+    { name: 'Blacklist rules', sql: 'SELECT COUNT(*)::int AS count FROM automod_blacklist_rules WHERE guild_id = $1' },
+    { name: 'Exemptions', sql: 'SELECT COUNT(*)::int AS count FROM automod_exemptions WHERE guild_id = $1' }
+  ],
+  [ModuleKeys.STARBOARD]: [
+    { name: 'Starboard config', sql: 'SELECT COUNT(*)::int AS count FROM starboard_configs WHERE guild_id = $1' },
+    { name: 'Starred messages', sql: 'SELECT COUNT(*)::int AS count FROM starboard_messages WHERE guild_id = $1' }
+  ],
+  [ModuleKeys.ANALYTICS]: [
+    { name: 'Analytics config', sql: 'SELECT COUNT(*)::int AS count FROM analytics_configs WHERE guild_id = $1' },
+    { name: 'Hourly activity', sql: 'SELECT COUNT(*)::int AS count FROM analytics_hourly_activity WHERE guild_id = $1' },
+    { name: 'Channel activity', sql: 'SELECT COUNT(*)::int AS count FROM analytics_channel_activity WHERE guild_id = $1' }
   ]
 };
 
@@ -177,7 +191,10 @@ const MODULE_FIXES = Object.freeze({
   [ModuleKeys.SUGGESTIONS]: 'Run `/suggestion setup`, add/review categories, post a launcher with `/suggestion panel post`, and create a staff index with `/suggestion review-index`.',
   [ModuleKeys.REFERRALS]: 'Run `/referral setup`, then members can use `/referral submit` and staff can use `/referral set`.',
   [ModuleKeys.TEMP_ROLES]: 'Use `/temp-role add` to assign a role temporarily and `/temp-role active` to review active assignments.',
-  [ModuleKeys.UTILITY]: 'Run `/utility manager` or `/utility setup` to review and configure utility settings.'
+  [ModuleKeys.UTILITY]: 'Run `/utility manager` or `/utility setup` to review and configure utility settings.',
+  [ModuleKeys.AUTOMOD]: 'Run `/automod setup` or `/automod manager` to customize filter rules and raid shields.',
+  [ModuleKeys.STARBOARD]: 'Run `/starboard setup` and choose a showcase channel for starred messages.',
+  [ModuleKeys.ANALYTICS]: 'Run `/analytics overview` to view server pulse or `/analytics setup` to configure digests.'
 });
 
 function statusIcon(status) {
