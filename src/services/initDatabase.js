@@ -2235,6 +2235,86 @@ async function initDatabase() {
   await query(`CREATE INDEX IF NOT EXISTS idx_starboard_entries_stars ON starboard_entries(guild_id, star_count DESC);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_guild_daily_analytics_lookup ON guild_daily_analytics(guild_id, record_date DESC);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_guild_hourly_activity_lookup ON guild_hourly_activity(guild_id, hour_timestamp DESC);`);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS analytics_configs (
+      guild_id TEXT PRIMARY KEY REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      enabled BOOLEAN NOT NULL DEFAULT true,
+      digest_channel_id TEXT,
+      digest_frequency TEXT NOT NULL DEFAULT 'WEEKLY',
+      digest_day_of_week INTEGER NOT NULL DEFAULT 1,
+      digest_hour_utc INTEGER NOT NULL DEFAULT 14,
+      retention_days INTEGER NOT NULL DEFAULT 90,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS analytics_hourly_activity (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      bucket_hour TIMESTAMPTZ NOT NULL,
+      message_count INTEGER NOT NULL DEFAULT 0,
+      unique_chatters_count INTEGER NOT NULL DEFAULT 0,
+      voice_minutes INTEGER NOT NULL DEFAULT 0,
+      active_voice_count INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(guild_id, bucket_hour)
+    );
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS analytics_channel_activity (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      channel_id TEXT NOT NULL,
+      bucket_date DATE NOT NULL,
+      message_count INTEGER NOT NULL DEFAULT 0,
+      unique_authors_count INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(guild_id, channel_id, bucket_date)
+    );
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS analytics_member_flow (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      bucket_date DATE NOT NULL,
+      joins_count INTEGER NOT NULL DEFAULT 0,
+      leaves_count INTEGER NOT NULL DEFAULT 0,
+      verified_count INTEGER NOT NULL DEFAULT 0,
+      retained_day_1 INTEGER NOT NULL DEFAULT 0,
+      retained_day_7 INTEGER NOT NULL DEFAULT 0,
+      retained_day_30 INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(guild_id, bucket_date)
+    );
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS analytics_staff_activity (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      guild_id TEXT NOT NULL REFERENCES guild_configs(guild_id) ON DELETE CASCADE,
+      staff_user_id TEXT NOT NULL,
+      bucket_date DATE NOT NULL,
+      warns_count INTEGER NOT NULL DEFAULT 0,
+      timeouts_count INTEGER NOT NULL DEFAULT 0,
+      kicks_count INTEGER NOT NULL DEFAULT 0,
+      bans_count INTEGER NOT NULL DEFAULT 0,
+      tickets_claimed_count INTEGER NOT NULL DEFAULT 0,
+      tickets_closed_count INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(guild_id, staff_user_id, bucket_date)
+    );
+  `);
+
+  await query(`CREATE INDEX IF NOT EXISTS idx_analytics_configs_enabled ON analytics_configs(guild_id, enabled);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_analytics_hourly_lookup ON analytics_hourly_activity(guild_id, bucket_hour DESC);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_analytics_channel_lookup ON analytics_channel_activity(guild_id, bucket_date DESC, message_count DESC);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_analytics_member_flow_lookup ON analytics_member_flow(guild_id, bucket_date DESC);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_analytics_staff_lookup ON analytics_staff_activity(guild_id, bucket_date DESC);`);
 }
 
 if (require.main === module) {

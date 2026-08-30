@@ -194,6 +194,15 @@ const ActionKeys = Object.freeze({
   StarboardManage: 'starboard.manage',
   StarboardReset: 'starboard.reset',
 
+  AnalyticsView: 'analytics.view',
+  AnalyticsActivity: 'analytics.activity',
+  AnalyticsRetention: 'analytics.retention',
+  AnalyticsChannels: 'analytics.channels',
+  AnalyticsStaff: 'analytics.staff',
+  AnalyticsManage: 'analytics.manage',
+  AnalyticsExport: 'analytics.export',
+  AnalyticsReset: 'analytics.reset',
+
   PanelsConfigure: 'panels.configure',
 
   ServerReset: 'server.reset'
@@ -412,6 +421,15 @@ const defaultActionLevels = Object.freeze({
   [ActionKeys.StarboardManage]: PermissionLevels.SENIOR_MODERATOR,
   [ActionKeys.StarboardReset]: PermissionLevels.OWNER,
 
+  [ActionKeys.AnalyticsView]: PermissionLevels.MODERATOR,
+  [ActionKeys.AnalyticsActivity]: PermissionLevels.MODERATOR,
+  [ActionKeys.AnalyticsRetention]: PermissionLevels.MODERATOR,
+  [ActionKeys.AnalyticsChannels]: PermissionLevels.MODERATOR,
+  [ActionKeys.AnalyticsStaff]: PermissionLevels.SENIOR_MODERATOR,
+  [ActionKeys.AnalyticsManage]: PermissionLevels.SENIOR_MODERATOR,
+  [ActionKeys.AnalyticsExport]: PermissionLevels.SENIOR_MODERATOR,
+  [ActionKeys.AnalyticsReset]: PermissionLevels.OWNER,
+
   [ActionKeys.ServerReset]: PermissionLevels.OWNER
 });
 
@@ -444,7 +462,8 @@ const defaultModuleLevels = Object.freeze({
   [ModuleKeys.SOCIAL_FEEDS]: PermissionLevels.EVERYONE,
   [ModuleKeys.UTILITY]: PermissionLevels.EVERYONE,
   [ModuleKeys.AUTOMOD]: PermissionLevels.MODERATOR,
-  [ModuleKeys.STARBOARD]: PermissionLevels.EVERYONE
+  [ModuleKeys.STARBOARD]: PermissionLevels.EVERYONE,
+  [ModuleKeys.ANALYTICS]: PermissionLevels.MODERATOR
 });
 
 const defaultPublicActions = Object.freeze([

@@ -14,6 +14,7 @@ const { query } = require('../../services/db');
 const { CustomIds } = require('../ui/customIds');
 const { createBaseEmbed, createSuccessEmbed, SlickBotColors } = require('../ui/uiService');
 const { truncate } = require('../../utils/format');
+const { analyticsBuffer } = require('../analytics/analyticsBuffer');
 
 function nextNumberQuery(table, numberColumn) {
   return `SELECT COALESCE(MAX(${numberColumn}), 0) + 1 AS next_number FROM ${table} WHERE guild_id = $1`;
@@ -871,6 +872,7 @@ class TicketService {
 
     const result = await query(`UPDATE tickets SET claimed_by_user_id = $1, updated_at = NOW() WHERE id = $2 RETURNING *`, [interaction.user.id, ticket.id]);
     const updatedTicket = result.rows[0];
+    analyticsBuffer.recordStaffAction(interaction.guildId, interaction.user.id, 'ticket_claim');
     await this.refreshTicketControlMessage({ interaction, ticket: updatedTicket }).catch(() => {});
     await logger.log({ guildId: interaction.guildId, eventKey: 'ticket-claim', title: 'Ticket Claimed', body: `Ticket #${ticket.ticket_number} claimed by ${interaction.user.tag}.`, actorUserId: interaction.user.id, metadata: { ticketId: ticket.id } }).catch(() => {});
     if (client) await this.refreshReviewIndexes({ client, guildId: interaction.guildId }).catch(() => {});
@@ -1042,6 +1044,7 @@ class TicketService {
     );
 
     const closedTicket = result.rows[0];
+    analyticsBuffer.recordStaffAction(interaction.guildId, interaction.user.id, 'ticket_close');
     await this.refreshTicketControlMessage({ interaction, ticket: closedTicket }).catch(() => {});
     await interaction.channel.permissionOverwrites.edit(ticket.opener_user_id, { SendMessages: false }).catch(() => {});
     await interaction.channel.setName(`closed-${interaction.channel.name}`.slice(0, 95)).catch(() => {});

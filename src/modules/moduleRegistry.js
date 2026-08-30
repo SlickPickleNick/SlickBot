@@ -27,7 +27,8 @@ const ModuleKeys = Object.freeze({
   SOCIAL_FEEDS: 'SOCIAL_FEEDS',
   UTILITY: 'UTILITY',
   AUTOMOD: 'AUTOMOD',
-  STARBOARD: 'STARBOARD'
+  STARBOARD: 'STARBOARD',
+  ANALYTICS: 'ANALYTICS'
 });
 
 const coreModules = [ModuleKeys.PERMISSIONS, ModuleKeys.LOGGING, ModuleKeys.STATUS];
@@ -61,7 +62,8 @@ const defaultModules = [
   { key: ModuleKeys.SOCIAL_FEEDS, enabled: true },
   { key: ModuleKeys.UTILITY, enabled: true },
   { key: ModuleKeys.AUTOMOD, enabled: true },
-  { key: ModuleKeys.STARBOARD, enabled: true }
+  { key: ModuleKeys.STARBOARD, enabled: true },
+  { key: ModuleKeys.ANALYTICS, enabled: true }
 ];
 
 function isCoreModule(moduleKey) {
@@ -98,7 +100,8 @@ const implementedModules = Object.freeze([
   ModuleKeys.SOCIAL_FEEDS,
   ModuleKeys.UTILITY,
   ModuleKeys.AUTOMOD,
-  ModuleKeys.STARBOARD
+  ModuleKeys.STARBOARD,
+  ModuleKeys.ANALYTICS
 ]);
 
 function isImplementedModule(moduleKey) {

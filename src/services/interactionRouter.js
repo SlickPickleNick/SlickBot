@@ -63,6 +63,9 @@ const {
   buildStarboardThresholdModal,
   buildStarboardEmojiModal
 } = require('../modules/community/starboardUi');
+const { analyticsService } = require('../modules/analytics/analyticsService');
+const { analyticsDigest } = require('../modules/analytics/analyticsDigest');
+const { buildAnalyticsManagerPanel } = require('../modules/analytics/analyticsUi');
 const {
   TicketService,
   ReportService,
@@ -996,6 +999,49 @@ async function handleButton(interaction, ctx) {
     await updatePanel(interaction, {
       embeds: [createSuccessEmbed('Reset Cancelled', 'Starboard settings were not changed.')],
       components: []
+    });
+    return true;
+  }
+
+  // --- Analytics Interactions ---
+
+  if (id === CustomIds.AnalyticsRefresh) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.AnalyticsView, ModuleKeys.ANALYTICS))) return true;
+    const config = await analyticsService.getConfig(interaction.guildId);
+    const overview = await analyticsService.getOverview(interaction.guildId, 30);
+    await updatePanel(interaction, buildAnalyticsManagerPanel(config, overview, interaction.guild?.name || 'Server'));
+    return true;
+  }
+
+  if (id === CustomIds.AnalyticsToggle) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.AnalyticsManage, ModuleKeys.ANALYTICS))) return true;
+    const config = await analyticsService.getConfig(interaction.guildId);
+    const updated = await analyticsService.updateConfig(interaction.guildId, { enabled: !config.enabled });
+    const overview = await analyticsService.getOverview(interaction.guildId, 30);
+    await updatePanel(interaction, buildAnalyticsManagerPanel(updated, overview, interaction.guild?.name || 'Server'));
+    return true;
+  }
+
+  if (id === CustomIds.AnalyticsSendDigestNow) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.AnalyticsManage, ModuleKeys.ANALYTICS))) return true;
+    const res = await analyticsDigest.sendGuildDigest(interaction.guildId, ctx.client, ctx.logger, true);
+    if (!res.ok) {
+      await replyPrivate(interaction, { embeds: [createWarningEmbed('Digest Dispatch Failed', res.reason)] });
+      return true;
+    }
+    await replyPrivate(interaction, { embeds: [createSuccessEmbed('Executive Digest Dispatched', `Successfully dispatched executive summary to <#${res.channelId}>.`)] });
+    return true;
+  }
+
+  if (id === CustomIds.AnalyticsExportModal) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.AnalyticsExport, ModuleKeys.ANALYTICS))) return true;
+    const payload = await analyticsService.exportData(interaction.guildId, 30, 'csv');
+    const file = new AttachmentBuilder(Buffer.from(payload, 'utf8'), {
+      name: `slickbot-analytics-${interaction.guildId}-30d.csv`
+    });
+    await replyPrivate(interaction, {
+      content: 'Here is your **30-day** server analytics data export in **CSV** format:',
+      files: [file]
     });
     return true;
   }
@@ -2914,6 +2960,24 @@ async function handleSelect(interaction, ctx) {
   if (id === CustomIds.PermissionsTeamSelect) {
     if (!(await requireAction(interaction, ctx, ActionKeys.PermissionsPanel, ModuleKeys.PERMISSIONS))) return true;
     await updatePanel(interaction, await buildPermissionsPanel(interaction.guildId, interaction.values[0]));
+    return true;
+  }
+
+  if (id === CustomIds.AnalyticsDigestChannelSelect) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.AnalyticsManage, ModuleKeys.ANALYTICS))) return true;
+    const channelId = interaction.values[0];
+    const updated = await analyticsService.updateConfig(interaction.guildId, { digest_channel_id: channelId });
+    const overview = await analyticsService.getOverview(interaction.guildId, 30);
+    await updatePanel(interaction, buildAnalyticsManagerPanel(updated, overview, interaction.guild?.name || 'Server'));
+    return true;
+  }
+
+  if (id === CustomIds.AnalyticsFrequencySelect) {
+    if (!(await requireAction(interaction, ctx, ActionKeys.AnalyticsManage, ModuleKeys.ANALYTICS))) return true;
+    const freq = interaction.values[0];
+    const updated = await analyticsService.updateConfig(interaction.guildId, { digest_frequency: freq });
+    const overview = await analyticsService.getOverview(interaction.guildId, 30);
+    await updatePanel(interaction, buildAnalyticsManagerPanel(updated, overview, interaction.guild?.name || 'Server'));
     return true;
   }
 

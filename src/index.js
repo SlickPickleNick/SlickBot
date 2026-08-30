@@ -33,6 +33,9 @@ const { handleComponentInteraction } = require('./services/interactionRouter');
 const { ActionKeys } = require('./modules/permissions/actionKeys');
 const { ModuleKeys } = require('./modules/moduleRegistry');
 const { guildAnalyticsService } = require('./modules/logging/analyticsService');
+const { analyticsBuffer } = require('./modules/analytics/analyticsBuffer');
+const { analyticsService } = require('./modules/analytics/analyticsService');
+const { analyticsDigest } = require('./modules/analytics/analyticsDigest');
 
 const client = new Client({
   intents: [
@@ -157,7 +160,6 @@ taskScheduler
   .registerTask({
     name: 'serverStats',
     intervalMs: 15 * 60 * 1000,
-    initialDelayMs: 30 * 1000,
     immediate: false,
     run: async (readyClient, log) => {
       const guilds = Array.from(readyClient.guilds.cache.values());
@@ -169,6 +171,27 @@ taskScheduler
         }
       }
     }
+  })
+  .registerTask({
+    name: 'analyticsFlush',
+    intervalMs: 5 * 60 * 1000,
+    initialDelayMs: 25 * 1000,
+    immediate: false,
+    run: (readyClient, log) => analyticsBuffer.flush(readyClient, log)
+  })
+  .registerTask({
+    name: 'analyticsCleanup',
+    intervalMs: 24 * 60 * 60 * 1000,
+    initialDelayMs: 60 * 1000,
+    immediate: false,
+    run: (readyClient, log) => analyticsService.pruneOldRecords(90)
+  })
+  .registerTask({
+    name: 'analyticsDigests',
+    intervalMs: 60 * 60 * 1000,
+    initialDelayMs: 45 * 1000,
+    immediate: false,
+    run: (readyClient, log) => analyticsDigest.processScheduledDigests(readyClient, log)
   });
 
 client.once(Events.ClientReady, async (readyClient) => {
@@ -578,9 +601,13 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
   if (!oldChannelId && newChannelId) {
     action = 'Voice Channel Joined';
     body = `<@${user ? user.id : 'Unknown'}> joined <#${newChannelId}>.`;
+    analyticsBuffer.recordVoiceMinutes(guildId, user?.id, 1);
   } else if (oldChannelId && !newChannelId) {
     action = 'Voice Channel Left';
     body = `<@${user ? user.id : 'Unknown'}> left <#${oldChannelId}>.`;
+    analyticsBuffer.recordVoiceMinutes(guildId, user?.id, 1);
+  } else if (oldChannelId && newChannelId) {
+    analyticsBuffer.recordVoiceMinutes(guildId, user?.id, 1);
   }
 
   await logger.log({
@@ -617,7 +644,8 @@ client.on(Events.MessageCreate, async (message) => {
   if (message.author?.bot) return;
 
   if (message.guild) {
-    guildAnalyticsService.trackMessage(message.guild.id, message.author.id);
+    analyticsBuffer.recordMessage(message.guild.id, message.channelId, message.author.id);
+    guildAnalyticsService.trackMessage(message.guild.id, message.author.id, message.channelId);
     if (await permissions.isIgnored(message.guild.id, message.author.id).catch(() => false)) return;
 
     const autoModEnabled = await permissions.isModuleEnabled(message.guild.id, ModuleKeys.AUTOMOD).catch(() => false);

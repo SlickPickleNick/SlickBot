@@ -381,6 +381,18 @@ const CustomIds = Object.freeze({
   StarboardResetConfirmPrefix: 'slickbot:starboard:reset:confirm:',
   StarboardResetCancelPrefix: 'slickbot:starboard:reset:cancel:',
 
+  AnalyticsRefresh: 'slickbot:analytics:refresh',
+  AnalyticsToggle: 'slickbot:analytics:toggle',
+  AnalyticsConfigModal: 'slickbot:analytics:config-modal',
+  AnalyticsConfigModalSubmit: 'slickbot:modal:analytics-config',
+  AnalyticsExportModal: 'slickbot:analytics:export-modal',
+  AnalyticsExportModalSubmit: 'slickbot:modal:analytics-export',
+  AnalyticsDigestChannelSelect: 'slickbot:analytics:digest-channel',
+  AnalyticsFrequencySelect: 'slickbot:analytics:frequency-select',
+  AnalyticsSendDigestNow: 'slickbot:analytics:digest-send-now',
+  AnalyticsResetConfirmPrefix: 'slickbot:analytics:reset:confirm:',
+  AnalyticsResetCancelPrefix: 'slickbot:analytics:reset:cancel:',
+
   GiveawaysRefresh: 'slickbot:giveaways:refresh',
   GiveawaysEnterPrefix: 'slickbot:giveaway:enter:',
   GiveawaysQuickStart: 'slickbot:giveaways:quick-start',

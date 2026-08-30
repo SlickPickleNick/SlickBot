@@ -1,5 +1,6 @@
 const { query } = require('../../services/db');
 const { truncate } = require('../../utils/format');
+const { analyticsBuffer } = require('../analytics/analyticsBuffer');
 
 class ModerationService {
   async createCase(input) {
@@ -31,6 +32,10 @@ class ModerationService {
         input.metadata ? JSON.stringify(input.metadata) : null
       ]
     );
+
+    if (input.actorUserId) {
+      analyticsBuffer.recordStaffAction(input.guildId, input.actorUserId, input.actionType);
+    }
 
     return result.rows[0];
   }

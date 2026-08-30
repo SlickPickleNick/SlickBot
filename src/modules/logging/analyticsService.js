@@ -1,91 +1,30 @@
+const { analyticsBuffer } = require('../analytics/analyticsBuffer');
+const { analyticsService } = require('../analytics/analyticsService');
 const { query } = require('../../services/db');
 
 class GuildAnalyticsService {
   /**
-   * Track message activity in hourly and daily analytics rollups
+   * Track message activity via buffer
    */
-  async trackMessage(guildId, userId) {
+  async trackMessage(guildId, userId, channelId = null) {
     if (!guildId) return;
-    try {
-      const now = new Date();
-      const hourTs = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours());
-      const dateStr = now.toISOString().split('T')[0];
-
-      await Promise.all([
-        query(
-          `INSERT INTO guild_hourly_activity (guild_id, hour_timestamp, messages_count, updated_at)
-           VALUES ($1, $2, 1, NOW())
-           ON CONFLICT (guild_id, hour_timestamp)
-           DO UPDATE SET messages_count = guild_hourly_activity.messages_count + 1, updated_at = NOW()`,
-          [guildId, hourTs]
-        ).catch(() => {}),
-        query(
-          `INSERT INTO guild_daily_analytics (guild_id, record_date, messages_count, updated_at)
-           VALUES ($1, $2, 1, NOW())
-           ON CONFLICT (guild_id, record_date)
-           DO UPDATE SET messages_count = guild_daily_analytics.messages_count + 1, updated_at = NOW()`,
-          [guildId, dateStr]
-        ).catch(() => {})
-      ]);
-    } catch (e) {}
+    analyticsBuffer.recordMessage(guildId, channelId, userId);
   }
 
   /**
-   * Track member joins
+   * Track member joins via buffer
    */
-  async trackMemberJoin(guildId) {
+  async trackMemberJoin(guildId, userId = null) {
     if (!guildId) return;
-    try {
-      const now = new Date();
-      const hourTs = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours());
-      const dateStr = now.toISOString().split('T')[0];
-
-      await Promise.all([
-        query(
-          `INSERT INTO guild_hourly_activity (guild_id, hour_timestamp, joins_count, updated_at)
-           VALUES ($1, $2, 1, NOW())
-           ON CONFLICT (guild_id, hour_timestamp)
-           DO UPDATE SET joins_count = guild_hourly_activity.joins_count + 1, updated_at = NOW()`,
-          [guildId, hourTs]
-        ).catch(() => {}),
-        query(
-          `INSERT INTO guild_daily_analytics (guild_id, record_date, joins_count, updated_at)
-           VALUES ($1, $2, 1, NOW())
-           ON CONFLICT (guild_id, record_date)
-           DO UPDATE SET joins_count = guild_daily_analytics.joins_count + 1, updated_at = NOW()`,
-          [guildId, dateStr]
-        ).catch(() => {})
-      ]);
-    } catch (e) {}
+    analyticsBuffer.recordMemberJoin(guildId, userId);
   }
 
   /**
-   * Track member leaves
+   * Track member leaves via buffer
    */
-  async trackMemberLeave(guildId) {
+  async trackMemberLeave(guildId, userId = null) {
     if (!guildId) return;
-    try {
-      const now = new Date();
-      const hourTs = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours());
-      const dateStr = now.toISOString().split('T')[0];
-
-      await Promise.all([
-        query(
-          `INSERT INTO guild_hourly_activity (guild_id, hour_timestamp, leaves_count, updated_at)
-           VALUES ($1, $2, 1, NOW())
-           ON CONFLICT (guild_id, hour_timestamp)
-           DO UPDATE SET leaves_count = guild_hourly_activity.leaves_count + 1, updated_at = NOW()`,
-          [guildId, hourTs]
-        ).catch(() => {}),
-        query(
-          `INSERT INTO guild_daily_analytics (guild_id, record_date, leaves_count, updated_at)
-           VALUES ($1, $2, 1, NOW())
-           ON CONFLICT (guild_id, record_date)
-           DO UPDATE SET leaves_count = guild_daily_analytics.leaves_count + 1, updated_at = NOW()`,
-          [guildId, dateStr]
-        ).catch(() => {})
-      ]);
-    } catch (e) {}
+    analyticsBuffer.recordMemberLeave(guildId, userId);
   }
 
   /**
@@ -93,57 +32,15 @@ class GuildAnalyticsService {
    */
   async trackCommand(guildId) {
     if (!guildId) return;
-    try {
-      const now = new Date();
-      const hourTs = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours());
-      const dateStr = now.toISOString().split('T')[0];
-
-      await Promise.all([
-        query(
-          `INSERT INTO guild_hourly_activity (guild_id, hour_timestamp, commands_count, updated_at)
-           VALUES ($1, $2, 1, NOW())
-           ON CONFLICT (guild_id, hour_timestamp)
-           DO UPDATE SET commands_count = guild_hourly_activity.commands_count + 1, updated_at = NOW()`,
-          [guildId, hourTs]
-        ).catch(() => {}),
-        query(
-          `INSERT INTO guild_daily_analytics (guild_id, record_date, commands_count, updated_at)
-           VALUES ($1, $2, 1, NOW())
-           ON CONFLICT (guild_id, record_date)
-           DO UPDATE SET commands_count = guild_daily_analytics.commands_count + 1, updated_at = NOW()`,
-          [guildId, dateStr]
-        ).catch(() => {})
-      ]);
-    } catch (e) {}
+    // Command activity is logged to standard audit and commands
   }
 
   /**
-   * Track voice participation in minutes
+   * Track voice participation in minutes via buffer
    */
-  async trackVoiceMinutes(guildId, minutes = 1) {
+  async trackVoiceMinutes(guildId, minutes = 1, userId = null) {
     if (!guildId || minutes <= 0) return;
-    try {
-      const now = new Date();
-      const hourTs = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours());
-      const dateStr = now.toISOString().split('T')[0];
-
-      await Promise.all([
-        query(
-          `INSERT INTO guild_hourly_activity (guild_id, hour_timestamp, voice_minutes, updated_at)
-           VALUES ($1, $2, $3, NOW())
-           ON CONFLICT (guild_id, hour_timestamp)
-           DO UPDATE SET voice_minutes = guild_hourly_activity.voice_minutes + $3, updated_at = NOW()`,
-          [guildId, hourTs, minutes]
-        ).catch(() => {}),
-        query(
-          `INSERT INTO guild_daily_analytics (guild_id, record_date, voice_minutes, updated_at)
-           VALUES ($1, $2, $3, NOW())
-           ON CONFLICT (guild_id, record_date)
-           DO UPDATE SET voice_minutes = guild_daily_analytics.voice_minutes + $3, updated_at = NOW()`,
-          [guildId, dateStr, minutes]
-        ).catch(() => {})
-      ]);
-    } catch (e) {}
+    analyticsBuffer.recordVoiceMinutes(guildId, userId, minutes);
   }
 
   /**

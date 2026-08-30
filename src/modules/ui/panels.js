@@ -56,7 +56,7 @@ const STATUS_META = Object.freeze({
 });
 
 const MODULE_CATEGORIES = Object.freeze([
-  { key: 'CORE', label: 'Core Setup', modules: [ModuleKeys.PERMISSIONS, ModuleKeys.LOGGING, ModuleKeys.STATUS, ModuleKeys.MODERATION, ModuleKeys.LOCKDOWN, ModuleKeys.AUTOMOD, ModuleKeys.TEMP_ROLES, ModuleKeys.UTILITY] },
+  { key: 'CORE', label: 'Core Setup', modules: [ModuleKeys.PERMISSIONS, ModuleKeys.LOGGING, ModuleKeys.STATUS, ModuleKeys.MODERATION, ModuleKeys.LOCKDOWN, ModuleKeys.AUTOMOD, ModuleKeys.TEMP_ROLES, ModuleKeys.UTILITY, ModuleKeys.ANALYTICS] },
   { key: 'SUPPORT', label: 'Support Systems', modules: [ModuleKeys.TICKETS, ModuleKeys.REPORTS, ModuleKeys.APPLICATIONS, ModuleKeys.APPEALS] },
   { key: 'COMMUNITY', label: 'Community Systems', modules: [ModuleKeys.WELCOME, ModuleKeys.REACTION_ROLES, ModuleKeys.GIVEAWAYS, ModuleKeys.BIRTHDAYS, ModuleKeys.LEVELING, ModuleKeys.COMMUNITY_GAMES, ModuleKeys.FAQ, ModuleKeys.SUGGESTIONS, ModuleKeys.REFERRALS, ModuleKeys.ACHIEVEMENTS, ModuleKeys.SERVER_STATS, ModuleKeys.CUSTOM_COMMANDS, ModuleKeys.JOIN_TO_CREATE, ModuleKeys.STARBOARD] },
   { key: 'AUTOMATION', label: 'Automation Systems', modules: [ModuleKeys.SCHEDULED_MESSAGES, ModuleKeys.BOT_UPDATES, ModuleKeys.SOCIAL_FEEDS] },
@@ -249,6 +249,12 @@ const MODULE_SETUP_CATALOG = Object.freeze({
     managerCommand: '/starboard manager', setupCommand: '/starboard setup',
     nextSteps: ['Run `/starboard setup` and set a showcase channel.', 'Tune reaction star threshold with `/starboard set-threshold`.', 'View top community moments with `/starboard leaderboard`.'],
     usefulCommands: ['/starboard manager', '/starboard setup', '/starboard set-channel', '/starboard set-threshold', '/starboard set-emoji', '/starboard leaderboard', '/starboard reset']
+  },
+  [ModuleKeys.ANALYTICS]: {
+    name: 'Server Analytics & Pulse', category: 'Core Setup', description: 'Tracks real-time message velocity, voice engagement, member retention funnels, ghost channels, and staff KPIs.',
+    managerCommand: '/analytics manager', setupCommand: '/analytics setup',
+    nextSteps: ['View activity overview with `/analytics overview`.', 'Explore engagement heatmaps with `/analytics activity`.', 'Configure scheduled staff digests with `/analytics setup`.'],
+    usefulCommands: ['/analytics overview', '/analytics activity', '/analytics retention', '/analytics channels', '/analytics staff', '/analytics setup', '/analytics export', '/analytics manager']
   }
 });
 
@@ -892,6 +898,21 @@ async function getModuleStatus(guildId, row) {
     if (config.enabled === false) return { moduleKey: row.module_key, core: false, state: 'DISABLED', emoji: '⏸️', label: 'Disabled', note: 'Showcase paused' };
     if (config.channel_id) return { moduleKey: row.module_key, core: false, state: 'READY', emoji: '✅', label: 'Ready', note: `Threshold: ${config.star_threshold} ${config.star_emoji || '⭐'}` };
     return { moduleKey: row.module_key, core: false, state: 'NEEDS_CONFIG', emoji: '🟣', label: 'Needs Setup', note: 'Showcase channel missing' };
+  }
+
+  if (row.module_key === 'ANALYTICS') {
+    const res = await query(`SELECT enabled, digest_channel_id, digest_frequency FROM analytics_configs WHERE guild_id = $1 LIMIT 1`, [guildId]).catch(() => ({ rows: [] }));
+    const config = res.rows[0];
+    if (config && config.enabled === false) return { moduleKey: row.module_key, core: false, state: 'DISABLED', emoji: '⏸️', label: 'Disabled', note: 'Telemetry paused' };
+    const hasDigest = Boolean(config?.digest_channel_id);
+    return {
+      moduleKey: row.module_key,
+      core: false,
+      state: 'READY',
+      emoji: '✅',
+      label: 'Ready',
+      note: hasDigest ? `Buffer active · ${config.digest_frequency} digest` : 'Buffer & telemetry active'
+    };
   }
 
   return { moduleKey: row.module_key, core: false, state: 'PARTIAL', emoji: '🟠', label: 'Partially Configured', note: 'Module shell only' };

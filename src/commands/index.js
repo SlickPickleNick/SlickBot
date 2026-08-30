@@ -52,6 +52,7 @@ const emojisCommand = require('./emojis');
 const stickersCommand = require('./stickers');
 const automodCommand = require('./automod');
 const starboardCommand = require('./starboard');
+const analyticsCommand = require('./analytics');
 const vcCommand = require('./vc');
 const inviteCommand = require('./invite');
 const userInfoContextCommand = require('./userInfoContext');
@@ -113,6 +114,7 @@ const commands = [
   stickersCommand,
   automodCommand,
   starboardCommand,
+  analyticsCommand,
   inviteCommand,
   userInfoContextCommand,
   avatarContextCommand
