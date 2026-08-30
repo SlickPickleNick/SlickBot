@@ -226,23 +226,11 @@ client.once(Events.ClientReady, async (readyClient) => {
     }
   }
 
-  // Auto-Deploy Global Slash Commands on startup if enabled
+  // Auto-Deploy Slash Commands on startup if enabled (Global + Primary Guild for instant 0-delay updates)
   if (shouldAutoDeployCommands) {
-    deployCommands({ global: true })
-      .then((res) => console.log(`[AutoDeploy] Successfully deployed ${res.count} global slash command(s) across all servers.`))
+    deployCommands({ guildId: env.DISCORD_GUILD_ID || null })
+      .then((res) => console.log(`[AutoDeploy] Successfully deployed ${res.count} command(s) globally${res.guildId ? ` and instantly to primary guild ${res.guildId}` : ''}.`))
       .catch((err) => console.error('[AutoDeploy] Failed to deploy slash commands on startup:', err.message));
-  }
-
-  // Command Deduplication: Sweep all connected guilds to purge any leftover legacy guild-scoped commands that shadow global commands
-  for (const guild of readyClient.guilds.cache.values()) {
-    guild.commands.fetch().then((guildCommands) => {
-      if (guildCommands && guildCommands.size > 0) {
-        console.log(`[Command Deduplication] Detected ${guildCommands.size} legacy guild-scoped command(s) in "${guild.name}" (${guild.id}). Purging to un-shadow global commands...`);
-        guild.commands.set([]).then(() => {
-          console.log(`[Command Deduplication] Successfully cleared legacy guild commands for "${guild.name}". Fresh global commands active.`);
-        }).catch((err) => console.warn(`[Command Deduplication] Could not clear guild commands for "${guild.name}":`, err.message));
-      }
-    }).catch(() => {});
   }
 });
 
