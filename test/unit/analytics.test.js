@@ -393,6 +393,17 @@ test('Server Analytics & Engagement Pulse Module Tests', async (t) => {
     assert.ok(heatmapEmbed.data.title.includes('Peak Engagement Heatmap'));
     assert.ok(heatmapEmbed.data.description.includes('Friday | 20:00 – 23:00 UTC'));
 
+    // Test with dowTotals fallback and empty heatmap
+    const heatmapFallbackEmbed = buildActivityHeatmapEmbed({
+      metric: 'voice',
+      timeframeDays: 30,
+      heatmap: [],
+      peakWindowRecommendation: 'Saturday | 18:00 – 21:00 UTC',
+      dowTotals: [{ day: 'Saturday', total: 300 }]
+    }, 'Slick Community');
+    assert.ok(heatmapFallbackEmbed.data.title.includes('Peak Engagement Heatmap'));
+    assert.ok(heatmapFallbackEmbed.data.description.includes('Saturday | 18:00 – 21:00 UTC'));
+
     const panel = buildAnalyticsManagerPanel(DEFAULT_CONFIG, { totalMessages: 1000, voiceHours: 10, healthScore: 90 }, 'Slick Community');
     assert.equal(panel.embeds.length, 1);
     assert.equal(panel.components.length, 3);

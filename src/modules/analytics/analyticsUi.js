@@ -111,9 +111,10 @@ function buildActivityHeatmapEmbed(data, guildName = 'Server') {
     { label: '08 PM – 12 AM', sum: 0 }
   ];
 
-  data.heatmap.forEach((cell) => {
-    const blockIdx = Math.min(5, Math.floor(cell.hour / 4));
-    blockTotals[blockIdx].sum += cell.count;
+  const heatmap = Array.isArray(data?.heatmap) ? data.heatmap : [];
+  heatmap.forEach((cell) => {
+    const blockIdx = Math.min(5, Math.floor((cell.hour || 0) / 4));
+    blockTotals[blockIdx].sum += (cell.count || 0);
   });
 
   const maxBlock = Math.max(...blockTotals.map((b) => b.sum), 1);
@@ -125,12 +126,15 @@ function buildActivityHeatmapEmbed(data, guildName = 'Server') {
   });
 
   // Day of week bars
-  const maxDow = Math.max(...data.dowStats.map((d) => d.total), 1);
-  const dowLines = data.dowStats.map((d) => {
-    const bar = renderBarChart(d.total, maxDow, 8);
-    const shortDay = d.day.slice(0, 3);
-    return `\`${shortDay}\` ${bar} ${d.total.toLocaleString()}`;
-  });
+  const dowList = Array.isArray(data?.dowStats) ? data.dowStats : Array.isArray(data?.dowTotals) ? data.dowTotals : [];
+  const maxDow = Math.max(...dowList.map((d) => d.total || 0), 1);
+  const dowLines = dowList.length
+    ? dowList.map((d) => {
+        const bar = renderBarChart(d.total || 0, maxDow, 8);
+        const shortDay = (d.day || '').slice(0, 3);
+        return `\`${shortDay}\` ${bar} ${(d.total || 0).toLocaleString()}`;
+      })
+    : ['• *No daily activity recorded yet in this window.*'];
 
   const embed = createBaseEmbed({
     title: `🔥 Peak Engagement Heatmap • ${guildName}`,

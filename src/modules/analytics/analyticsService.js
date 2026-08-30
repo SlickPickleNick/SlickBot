@@ -284,6 +284,8 @@ class AnalyticsService {
     const startH = bestHourIdx.toString().padStart(2, '0') + ':00';
     const endH = ((bestHourIdx + 3) % 24).toString().padStart(2, '0') + ':00';
 
+    const dowList = dowTotals.map((tot, idx) => ({ day: dayNames[idx], total: tot }));
+
     return {
       metric,
       timeframeDays: daysInt,
@@ -291,7 +293,8 @@ class AnalyticsService {
       peakDay: dayNames[bestDayIdx],
       peakHour: `${startH} - ${endH} UTC`,
       peakWindowRecommendation: `${dayNames[bestDayIdx]} | ${startH} – ${endH} UTC`,
-      dowTotals: dowTotals.map((tot, idx) => ({ day: dayNames[idx], total: tot }))
+      dowStats: dowList,
+      dowTotals: dowList
     };
   }
 
