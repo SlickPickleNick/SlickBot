@@ -188,6 +188,18 @@ module.exports = {
   actionKey: ActionKeys.AnalyticsView,
   moduleKey: ModuleKeys.ANALYTICS,
 
+  getActionKey(interaction) {
+    const sub = interaction.options.getSubcommand?.();
+    if (sub === 'overview') return ActionKeys.AnalyticsView;
+    if (sub === 'activity') return ActionKeys.AnalyticsActivity;
+    if (sub === 'retention') return ActionKeys.AnalyticsRetention;
+    if (sub === 'channels') return ActionKeys.AnalyticsChannels;
+    if (sub === 'staff') return ActionKeys.AnalyticsStaff;
+    if (sub === 'setup' || sub === 'manager') return ActionKeys.AnalyticsManage;
+    if (sub === 'export') return ActionKeys.AnalyticsExport;
+    return ActionKeys.AnalyticsView;
+  },
+
   async execute(interaction, ctx) {
     const sub = interaction.options.getSubcommand();
     const guildId = interaction.guildId;

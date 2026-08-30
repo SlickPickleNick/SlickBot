@@ -3417,6 +3417,42 @@ const ONBOARDING_STEPS = Object.freeze({
         return { created: `#${channel.name} (${isForum ? 'Forum' : 'Text Channel with Threads'}) & 3 Starter FAQs` };
       }
     }
+  ],
+  [ModuleKeys.ANALYTICS]: [
+    {
+      id: 'analytics_digest_channel',
+      moduleKey: ModuleKeys.ANALYTICS,
+      title: 'Server Analytics Executive Digest Channel',
+      description: 'Select the staff channel where weekly/monthly executive health and activity summaries will be posted.',
+      pickerType: 'CHANNEL',
+      channelTypes: [ChannelType.GuildText, ChannelType.GuildAnnouncement],
+      autoCreateLabel: 'Auto-Create #staff-digest',
+      autoCreateDescription: 'Creates private #staff-digest in "🛡️ Staff Area" and schedules weekly executive pulse digests.',
+      async getCurrent(guild) {
+        const res = await query(`SELECT digest_channel_id, enabled FROM analytics_configs WHERE guild_id = $1 LIMIT 1`, [guild.id]).catch(() => ({ rows: [] }));
+        return res.rows[0]?.digest_channel_id ? `<#${res.rows[0].digest_channel_id}>` : null;
+      },
+      async applyDefault(guild) {
+        const cacheList = Array.from(guild.channels?.cache?.values?.() || guild.channels?.cache || []);
+        const existing = cacheList.find((c) => ['staff-digest', 'staff-reports', 'analytics', 'executive-pulse', 'staff-announcements'].includes(c?.name?.toLowerCase()));
+        const { analyticsService } = require('../analytics/analyticsService');
+        if (existing) {
+          await analyticsService.updateConfig(guild.id, { digest_channel_id: existing.id, enabled: true, digest_frequency: 'WEEKLY' });
+          return { result: `Assigned existing <#${existing.id}>` };
+        }
+        return { result: 'Server telemetry buffer active' };
+      },
+      async applySelection(guild, channelId) {
+        const { analyticsService } = require('../analytics/analyticsService');
+        await analyticsService.updateConfig(guild.id, { digest_channel_id: channelId, enabled: true, digest_frequency: 'WEEKLY' });
+      },
+      async autoCreate(guild) {
+        const channel = await autoCreateChannel(guild, { name: 'staff-digest', categoryName: STANDARD_CATEGORIES.STAFF.name, isPrivate: true, topic: 'Automated executive community analytics and health reports' });
+        const { analyticsService } = require('../analytics/analyticsService');
+        await analyticsService.updateConfig(guild.id, { digest_channel_id: channel.id, enabled: true, digest_frequency: 'WEEKLY' });
+        return { created: `#${channel.name} (Weekly Executive Digests active)` };
+      }
+    }
   ]
 });
 
@@ -3426,7 +3462,8 @@ const CATEGORY_ONBOARDING_MAP = Object.freeze({
     ONBOARDING_STEPS[ModuleKeys.LOGGING][0],
     ...ONBOARDING_STEPS[ModuleKeys.MODERATION],
     ...ONBOARDING_STEPS[ModuleKeys.LOCKDOWN],
-    ...ONBOARDING_STEPS[ModuleKeys.AUTOMOD]
+    ...ONBOARDING_STEPS[ModuleKeys.AUTOMOD],
+    ...ONBOARDING_STEPS[ModuleKeys.ANALYTICS]
   ],
   SUPPORT: [
     ...ONBOARDING_STEPS[ModuleKeys.TICKETS],

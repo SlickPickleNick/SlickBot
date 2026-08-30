@@ -2676,6 +2676,12 @@ async function routeModuleToManager(interaction, ctx, moduleKey) {
     case ModuleKeys.STARBOARD:
       await updatePanel(interaction, await buildStarboardPanel(interaction.guildId, 'OVERVIEW'));
       break;
+    case ModuleKeys.ANALYTICS: {
+      const config = await analyticsService.getConfig(interaction.guildId);
+      const overview = await analyticsService.getOverview(interaction.guildId, 30);
+      await updatePanel(interaction, buildAnalyticsManagerPanel(config, overview, interaction.guild?.name || 'Server'));
+      break;
+    }
     default:
       await updatePanel(interaction, await buildModuleDetailPanel(interaction.guildId, moduleKey));
       break;
