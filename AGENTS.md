@@ -131,10 +131,39 @@ npm run test:coverage
 
 ---
 
-## 5. Maintenance Protocol for AI Agents
+---
+
+## 5. Branching, Environments & Release Lifecycle
+
+To prevent production regressions and safely iterate between Mac and Windows development machines, SlickBot maintains a two-branch Git lifecycle:
+
+```text
+Feature / WIP Branch ➔ 'beta' (Staging) ➔ Pull Request ➔ 'main' (Production)
+```
+
+### 1. `beta` Branch (Staging & Active Development)
+- **Purpose**: All day-to-day feature development, cross-machine code synchronization, and experimental testing.
+- **Discord Bot App**: Must connect using a dedicated **SlickBot Beta** bot application (`DISCORD_TOKEN`).
+- **Command Scope**: Set `DISCORD_GUILD_ID=<dev_guild_id>` in development environments so new slash commands register immediately (0s propagation).
+- **Database**: Connects to a staging/development PostgreSQL instance.
+
+### 2. `main` Branch (Production Stable)
+- **Purpose**: Production-ready, verified releases deployed 24/7 to live Discord communities.
+- **Discord Bot App**: Connects using the production **SlickBot** token.
+- **Command Scope**: Deploys globally across all Discord servers (`npm run deploy:commands:global`).
+- **Database**: Production PostgreSQL database.
+
+> [!CAUTION]
+> **Never run two instances with the same `DISCORD_TOKEN` simultaneously.**
+> If staging and production services connect with the same token, Discord broadcasts gateway events to both instances, causing duplicate XP, counting game resets, and duplicate task execution.
+
+---
+
+## 6. Maintenance Protocol for AI Agents
 
 > [!IMPORTANT]
 > **Living Document Rule**: Whenever you introduce a new bot module, add database tables, modify command registration structures, or update core architecture:
 > 1. Update this [AGENTS.md](file:///Users/nicksilvestro/GitHub%20Repos/SlickBotRepo/SlickBot/AGENTS.md) to reflect new components and guidelines.
 > 2. Update or create corresponding rules in `.agents/rules/`.
 > 3. Verify all changes using `npm run validate:commands` and `npm test`.
+
